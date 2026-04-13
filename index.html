@@ -845,10 +845,19 @@ async function handleAuthState(user) {
   }
 }
 
+// 🔥 CONFIGURAÇÃO FIXA DO FIREBASE (copie do seu projeto)
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSy...",            // ← cole o seu
+  authDomain: "seu-projeto.firebaseapp.com",
+  projectId: "seu-projeto",
+  storageBucket: "seu-projeto.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
+};
+
 window.addEventListener('DOMContentLoaded', () => {
-  const cfg = loadStoredConfig();
-  if (!cfg) { showLoading(false); show('screen-setup'); return; }
-  initFirebase(cfg);
+  // Ignora qualquer configuração antiga no localStorage
+  initFirebase(FIREBASE_CONFIG);
 });
 
 // ════════════════════════════════════════════
