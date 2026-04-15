@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script>
   // Garante que o Firebase esteja disponível antes de qualquer uso
   window.__firebaseReady = new Promise((resolve) => {
@@ -513,9 +514,10 @@ a:hover{text-decoration:underline}
             onkeydown="if(event.key==='Enter') doLogin()">
         </div>
         <div id="login-error" class="alert alert-error" style="display:none"></div>
+        <div id="login-success" class="alert alert-success" style="display:none"></div>
         <button class="btn btn-primary btn-full" onclick="doLogin()">Entrar →</button>
         <p style="text-align:center;margin-top:12px;font-size:0.8rem">
-          <a href="#" onclick="showForgotPwd()">Esqueci minha senha</a>
+          <a href="#" onclick="event.preventDefault();showForgotPwd()">Esqueci minha senha</a>
         </p>
       </div>
 
@@ -560,6 +562,7 @@ a:hover{text-decoration:underline}
       <button class="nav-btn" data-page="palpites" onclick="navigateTo('palpites')">⚽ Palpites</button>
       <button class="nav-btn" data-page="tabelas" onclick="navigateTo('tabelas')">📊 Tabelas</button>
       <button class="nav-btn" data-page="chaveamento" onclick="navigateTo('chaveamento')">🔑 Chaves</button>
+      <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
       <button class="nav-btn" data-page="admin" id="admin-nav" style="display:none" onclick="navigateTo('admin')">⚙️ Admin</button>
     </nav>
     <div class="app-user">
@@ -573,7 +576,7 @@ a:hover{text-decoration:underline}
   <nav class="bottom-nav" id="bottom-nav">
     <button class="active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠<span>Ranking</span></button>
     <button data-page="palpites" onclick="navigateTo('palpites')">⚽<span>Palpites</span></button>
-    <button data-page="ver-palpites" onclick="navigateTo('ver-palpites')">👁️<span>Ver</span></button>
+    <button data-page="regras" onclick="navigateTo('regras')">📋<span>Regras</span></button>
     <button data-page="tabelas" onclick="navigateTo('tabelas')">📊<span>Tabelas</span></button>
     <button data-page="admin" id="admin-bottom-nav" style="display:none" onclick="navigateTo('admin')">⚙️<span>Admin</span></button>
   </nav>
@@ -610,6 +613,13 @@ a:hover{text-decoration:underline}
     <!-- ── VER PALPITES ── -->
     <div id="page-ver-palpites" class="page">
       <div class="container" id="ver-palpites-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ── REGRAS ── -->
+    <div id="page-regras" class="page">
+      <div class="container" id="regras-content">
         <div class="loading-wrap"><div class="spinner"></div></div>
       </div>
     </div>
@@ -788,7 +798,16 @@ const ALL_GAMES = [
 let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
-let CFG = { pts_exato:10, pts_resultado:5, nome_bolao:'Bolão ICN Copa 2026' };
+let CFG = {
+  pts_exato:10,
+  pts_resultado:5,
+  pts_vencedor_saldo:7,
+  pts_apenas_vencedor:5,
+  pts_bonus_classificacao:3,
+  pts_campeao:50,
+  pts_artilheiro:30,
+  nome_bolao:'Bolão ICN Copa 2026'
+};
 let myPalpites   = {};
 let resultados   = {};
 let palpitesEditing = null;
@@ -914,10 +933,17 @@ function showAuthTab(tab) {
 async function showForgotPwd() {
   const email = document.getElementById('login-email').value.trim();
   if (!email) { setAuthError('login','Insira seu e-mail acima primeiro'); return; }
+  setAuthError('login','');
   try {
     await auth_.sendPasswordResetEmail(email);
-    showToast('✉️ E-mail de recuperação enviado!','success');
-  } catch(e) { setAuthError('login',e.message); }
+    const successEl = document.getElementById('login-success');
+    successEl.innerHTML = '✉️ <strong>E-mail de recuperação enviado!</strong><br>Verifique sua caixa de entrada e a pasta de spam. O link para resetar sua senha expira em 24 horas.';
+    successEl.style.display = 'block';
+    showToast('✉️ E-mail enviado! Verifique sua caixa de entrada','success');
+  } catch(e) {
+    const msgs = {'auth/user-not-found':'E-mail não encontrado','auth/invalid-email':'E-mail inválido'};
+    setAuthError('login', msgs[e.code]||e.message);
+  }
 }
 
 // ════════════════════════════════════════════
@@ -961,6 +987,7 @@ function navigateTo(page) {
     case 'ver-palpites': renderVerPalpites(); break;
     case 'tabelas':     renderTabelas(); break;
     case 'chaveamento': renderChaveamento(); break;
+    case 'regras':      renderRegras(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
   window.scrollTo({top:0,behavior:'smooth'});
@@ -974,10 +1001,22 @@ function calcPontos(pal, res) {
   if (res===undefined || res.h_real===undefined || res.a_real===undefined) return null;
   const ph=parseInt(pal.h), pa=parseInt(pal.a);
   const rh=parseInt(res.h_real), ra=parseInt(res.a_real);
+
+  // 1. Placar exato
   if (ph===rh && pa===ra) return CFG.pts_exato;
+
+  // 2. Vencedor + Saldo de gols
+  const pSaldo = ph - pa;
+  const rSaldo = rh - ra;
   const pRes = ph>pa?'H':ph<pa?'A':'D';
   const rRes = rh>ra?'H':rh<ra?'A':'D';
-  return pRes===rRes ? CFG.pts_resultado : 0;
+  if (pRes===rRes && pSaldo===rSaldo) return CFG.pts_vencedor_saldo||7;
+
+  // 3. Apenas vencedor/empate
+  if (pRes===rRes) return CFG.pts_apenas_vencedor||5;
+
+  // 4. Errou
+  return 0;
 }
 
 function computeRanking(users, resultados, allPalpites) {
@@ -985,7 +1024,7 @@ function computeRanking(users, resultados, allPalpites) {
   return users
     .filter(u=>u.ativo!==false)
     .map(u=>{
-      let pontos=0, exatos=0, resultados_certos=0, jogos=0, erros=0;
+      let pontos=0, exatos=0, venc_saldo=0, apenas_venc=0, jogos=0, erros=0;
       const pals = allPalpites[u.uid]||{};
       jogosComResultado.forEach(jid=>{
         const p=pals[jid], r=resultados[jid];
@@ -994,12 +1033,13 @@ function computeRanking(users, resultados, allPalpites) {
         if (pts===null) return;
         jogos++; pontos+=pts;
         if (pts===CFG.pts_exato) exatos++;
-        else if (pts===CFG.pts_resultado) resultados_certos++;
-        else erros++;
+        else if (pts===(CFG.pts_vencedor_saldo||7)) venc_saldo++;
+        else if (pts===(CFG.pts_apenas_vencedor||5)) apenas_venc++;
+        else if (pts===0) erros++;
       });
-      return { ...u, pontos, exatos, resultados_certos, jogos, erros };
+      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
     })
-    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.resultados_certos-a.resultados_certos);
+    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
 }
 
 // ════════════════════════════════════════════
@@ -1079,7 +1119,7 @@ async function renderDashboard() {
         <table class="ranking-table">
           <thead><tr>
             <th>#</th><th>Participante</th><th>Pontos</th>
-            <th class="hide-mobile">Exatos</th><th class="hide-mobile">Resultados</th>
+            <th class="hide-mobile">Exatos</th><th class="hide-mobile">V+Saldo</th><th class="hide-mobile">Vencedor</th>
             <th class="hide-mobile">Jogos</th><th>%</th>
           </tr></thead><tbody>`;
 
@@ -1093,7 +1133,8 @@ async function renderDashboard() {
         <td><div class="fw-bold">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
         <td><span class="pts-badge">${u.pontos}</span></td>
         <td class="hide-mobile text-green">${u.exatos}</td>
-        <td class="hide-mobile text-gold">${u.resultados_certos}</td>
+        <td class="hide-mobile text-gold">${u.venc_saldo}</td>
+        <td class="hide-mobile text-gold">${u.apenas_venc}</td>
         <td class="hide-mobile text-muted">${u.jogos}</td>
         <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${maxPts>0?Math.round(u.pontos/maxPts*100):0}%"></div></div>
           <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
@@ -1102,7 +1143,7 @@ async function renderDashboard() {
 
     html += `</tbody></table></div>
     <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
-      ${CFG.pts_exato} pts placar exato · ${CFG.pts_resultado} pts acerto resultado</p>`;
+      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor</p>`;
     cont.innerHTML = html;
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${e.message}</div>`;
@@ -1374,6 +1415,86 @@ function switchVerPalGroup(grp) {
 }
 
 // ════════════════════════════════════════════
+// REGRAS PAGE
+// ════════════════════════════════════════════
+function renderRegras() {
+  const cont = document.getElementById('regras-content');
+  try {
+    let html = `<div class="section-title">📋 Regras de Pontuação</div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">🎯 Como Funciona</div>
+        <p class="text-muted" style="line-height:1.8">
+          No ${esc(CFG.nome_bolao)}, você ganha pontos acertando os placares e resultados dos jogos.
+          Quanto mais preciso for seu palpite, mais pontos você recebe!
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">⭐ Tabela de Pontos</div>
+        <table class="ranking-table" style="margin:0">
+          <thead><tr>
+            <th>Acerto</th><th>Descrição</th><th>Pontos</th>
+          </tr></thead><tbody>
+            <tr>
+              <td style="font-weight:700;color:var(--gold)">Placar Exato</td>
+              <td>Você acertou o placar exato do jogo (ex: 2-1)</td>
+              <td><span class="pts-badge">${CFG.pts_exato}</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:var(--gold)">Vencedor + Saldo</td>
+              <td>Você acertou quem venceu E a diferença de gols (ex: Brasil vence por 2)</td>
+              <td><span class="pts-badge">${CFG.pts_vencedor_saldo}</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:var(--orange)">Apenas Vencedor</td>
+              <td>Você acertou quem venceu ou que empataria, mas não o placar</td>
+              <td><span class="pts-badge">${CFG.pts_apenas_vencedor}</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:var(--red)">Errou</td>
+              <td>Seu palpite não corresponde ao resultado</td>
+              <td>0</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">🏆 Critério de Desempate</div>
+        <ol style="color:var(--text-muted);line-height:2;padding-left:20px">
+          <li><strong style="color:var(--white)">Maior pontuação total</strong></li>
+          <li><strong style="color:var(--white)">Mais placares exatos</strong></li>
+          <li><strong style="color:var(--white)">Mais acertos de vencedor + saldo</strong></li>
+          <li><strong style="color:var(--white)">Mais acertos de apenas vencedor</strong></li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">🔒 Jogos Bloqueados</div>
+        <p class="text-muted" style="line-height:1.8">
+          Quando um jogo é <strong>bloqueado</strong> 🔒, você não consegue mais alterar seu palpite.
+          Isso geralmente ocorre próximo à data da partida para manter a integridade da competição.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">💡 Dicas</div>
+        <ul style="color:var(--text-muted);line-height:2;padding-left:20px">
+          <li>Preencha seus palpites <strong>antes dos jogos começarem</strong></li>
+          <li>Verifique a data e horário de cada partida</li>
+          <li>Você pode alterar seus palpites até o jogo ser bloqueado</li>
+          <li>Acompanhe seu ranking na página inicial</li>
+          <li>Veja os palpites de outros participantes</li>
+        </ul>
+      </div>`;
+
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════
 // TABELAS PAGE
 // ════════════════════════════════════════════
 async function renderTabelas() {
@@ -1565,6 +1686,7 @@ async function renderAdminUsuarios() {
           <span style="font-size:0.78rem;color:var(--text-muted);min-width:40px">ADMIN</span>
           ${!isSelf?`<button class="btn ${u.ativo===false?'btn-green':'btn-red'} btn-sm" onclick="toggleAtivo('${u.uid}',${u.ativo!==false})">${u.ativo===false?'Ativar':'Desativar'}</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="adminGoEditPalpites('${u.uid}')">✏️ Palpites</button>
+          ${!isSelf?`<button class="btn btn-red btn-sm" onclick="deleteUserClick('${u.uid}','${esc(u.apelido)}')">🗑️ Excluir</button>`:''}
         </div>
       </div>`;
     });
@@ -1601,6 +1723,34 @@ async function toggleAtivo(uid, currentAtivo) {
     showToast('✅ Atualizado','success');
     renderAdminUsuarios();
   } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+function deleteUserClick(uid, apelido) {
+  if (!confirm(`⚠️ ATENÇÃO! Você está prestes a excluir permanentemente o usuário "${apelido}".\n\nTodos os seus palpites também serão removidos.\n\nEsta ação NÃO pode ser desfeita!\n\nTem certeza?`)) return;
+  deleteUser(uid);
+}
+
+async function deleteUser(uid) {
+  try {
+    showToast('⏳ Excluindo usuário...','');
+    const batch = db_.batch();
+
+    // Deletar todos os palpites do usuário
+    const pSnap = await db_.collection('palpites').doc(uid).collection('jogos').get();
+    pSnap.docs.forEach(d => batch.delete(d.ref));
+
+    // Deletar documento de palpites
+    batch.delete(db_.collection('palpites').doc(uid));
+
+    // Deletar usuário
+    batch.delete(db_.collection('usuarios').doc(uid));
+
+    await batch.commit();
+    showToast('✅ Usuário excluído com sucesso! (Remova manualmente do Firebase Auth no console)','success');
+    renderAdminUsuarios();
+  } catch(e) {
+    showToast('❌ Erro ao excluir: '+e.message,'error');
+  }
 }
 
 async function renderAdminEditPalpites(selectedUid=null) {
@@ -1672,10 +1822,25 @@ async function renderAdminConfig() {
     <div class="card">
       <div class="card-title" style="margin-bottom:16px">⚙️ Configurações do Bolão</div>
       <div class="form-group"><label>Nome do Bolão</label><input id="cfg-nome" value="${esc(CFG.nome_bolao)}"></div>
+
+      <div class="card-title" style="margin-top:20px;margin-bottom:12px;font-size:0.95rem">📊 Regras de Pontuação</div>
       <div class="form-row">
-        <div class="form-group"><label>Pontos — Placar Exato</label><input type="number" id="cfg-pts-exato" value="${CFG.pts_exato}" min="1" max="100"></div>
-        <div class="form-group"><label>Pontos — Resultado Correto</label><input type="number" id="cfg-pts-res" value="${CFG.pts_resultado}" min="1" max="100"></div>
+        <div class="form-group"><label>Placar Exato</label><input type="number" id="cfg-pts-exato" value="${CFG.pts_exato}" min="0" max="100"></div>
+        <div class="form-group"><label>Vencedor + Saldo</label><input type="number" id="cfg-pts-venc-saldo" value="${CFG.pts_vencedor_saldo||7}" min="0" max="100"></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>Apenas Vencedor</label><input type="number" id="cfg-pts-apenas-venc" value="${CFG.pts_apenas_vencedor||5}" min="0" max="100"></div>
+        <div class="form-group"><label>Bônus Classificação</label><input type="number" id="cfg-pts-bonus-class" value="${CFG.pts_bonus_classificacao||3}" min="0" max="100"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Palpite Campeão</label><input type="number" id="cfg-pts-campeao" value="${CFG.pts_campeao||50}" min="0" max="200"></div>
+        <div class="form-group"><label>Palpite Artilheiro</label><input type="number" id="cfg-pts-artilheiro" value="${CFG.pts_artilheiro||30}" min="0" max="200"></div>
+      </div>
+
+      <div class="alert alert-info" style="margin-top:16px">
+        💡 <strong>Hierarquia:</strong> Placar Exato (maior) → Vencedor+Saldo → Apenas Vencedor → 0 (menor)
+      </div>
+
       <div class="btn-group"><button class="btn btn-primary" onclick="saveCFGAdmin()">💾 Salvar</button></div>
     </div>
     <div class="card">
@@ -1693,11 +1858,27 @@ async function renderAdminConfig() {
 async function saveCFGAdmin() {
   const nome = document.getElementById('cfg-nome').value.trim();
   const ptsExato = parseInt(document.getElementById('cfg-pts-exato').value)||10;
-  const ptsRes   = parseInt(document.getElementById('cfg-pts-res').value)||5;
+  const ptsRes = parseInt(document.getElementById('cfg-pts-res').value)||5;
+  const ptsVencSaldo = parseInt(document.getElementById('cfg-pts-venc-saldo').value)||7;
+  const ptsApenasVenc = parseInt(document.getElementById('cfg-pts-apenas-venc').value)||5;
+  const ptsBonusClass = parseInt(document.getElementById('cfg-pts-bonus-class').value)||3;
+  const ptsCampeao = parseInt(document.getElementById('cfg-pts-campeao').value)||50;
+  const ptsArtilheiro = parseInt(document.getElementById('cfg-pts-artilheiro').value)||30;
+
   if (!nome) { showToast('Informe o nome do bolão','warning'); return; }
   try {
-    await db_.collection('config').doc('geral').set({ nome_bolao:nome, pts_exato:ptsExato, pts_resultado:ptsRes });
-    CFG = { nome_bolao:nome, pts_exato:ptsExato, pts_resultado:ptsRes };
+    const cfg = {
+      nome_bolao:nome,
+      pts_exato:ptsExato,
+      pts_resultado:ptsRes,
+      pts_vencedor_saldo:ptsVencSaldo,
+      pts_apenas_vencedor:ptsApenasVenc,
+      pts_bonus_classificacao:ptsBonusClass,
+      pts_campeao:ptsCampeao,
+      pts_artilheiro:ptsArtilheiro
+    };
+    await db_.collection('config').doc('geral').set(cfg);
+    CFG = { ...CFG, ...cfg };
     document.getElementById('bolao-nome').textContent = nome;
     showToast('✅ Configurações salvas!','success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
@@ -1722,11 +1903,12 @@ async function renderAdminExport() {
   cont.innerHTML = `
     <div class="card">
       <div class="card-title" style="margin-bottom:16px">⬇️ Exportar Dados</div>
-      <div class="alert alert-info">Exporte todos os dados para uma planilha Excel/CSV.</div>
+      <div class="alert alert-info">Exporte todos os dados para planilhas Excel profissionais.</div>
       <div class="btn-group">
-        <button class="btn btn-primary" onclick="exportAllCSV()">📊 Exportar Tudo (CSV)</button>
-        <button class="btn btn-secondary" onclick="exportRankingCSV()">🏆 Exportar Ranking</button>
-        <button class="btn btn-secondary" onclick="exportPalpitesCSV()">⚽ Exportar Palpites</button>
+        <button class="btn btn-primary" onclick="exportFullExcel()">📊 Exportar Tudo (Excel)</button>
+        <button class="btn btn-secondary" onclick="exportRankingExcel()">🏆 Exportar Ranking</button>
+        <button class="btn btn-secondary" onclick="exportPalpitesExcel()">⚽ Exportar Palpites</button>
+        <button class="btn btn-secondary" onclick="exportResultadosExcel()">🎯 Exportar Resultados</button>
       </div>
     </div>`;
 }
@@ -1785,6 +1967,123 @@ async function exportPalpitesCSV() {
     });
     downloadFile(csv, `bolao2026_palpites_${fmtDate()}.csv`, 'text/csv');
     showToast('✅ Palpites exportados!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// ════════════════════════════════════════════
+// EXCEL EXPORT
+// ════════════════════════════════════════════
+async function exportFullExcel() {
+  showToast('⏳ Gerando planilha...','');
+  try {
+    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const allPals = {};
+    await Promise.all(users.map(async u=>{ const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); }); }));
+    const ranking = computeRanking(users, res, allPals);
+
+    // Sheet 1 - Ranking
+    const rankingData = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','% Aproveito']];
+    ranking.forEach((u,i)=>{
+      const pct = u.jogos>0 ? Math.round(u.jogos/Object.keys(res).filter(id=>res[id].h_real!==undefined).length*100) : 0;
+      rankingData.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos, pct+'%']);
+    });
+
+    // Sheet 2 - Palpites (Matriz)
+    const palpitesData = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
+    ALL_GAMES.forEach(g=>{
+      const row = [g.id, g.h, g.a, g.date];
+      users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.h??''); });
+      users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.a??''); });
+      palpitesData.push(row);
+    });
+
+    // Sheet 3 - Resultados Oficiais
+    const resultadosData = [['JogoID','Time_Casa','Time_Fora','Resultado_Casa','Resultado_Fora','Bloqueado']];
+    ALL_GAMES.forEach(g=>{
+      const r = res[g.id];
+      resultadosData.push([g.id, g.h, g.a, r?.h_real??'', r?.a_real??'', r?.locked?'SIM':'NÃO']);
+    });
+
+    // Sheet 4 - Configurações
+    const cfgData = [['Configuração','Valor']];
+    cfgData.push(['Nome do Bolão', CFG.nome_bolao]);
+    cfgData.push(['Placar Exato', CFG.pts_exato]);
+    cfgData.push(['Vencedor + Saldo', CFG.pts_vencedor_saldo]);
+    cfgData.push(['Apenas Vencedor', CFG.pts_apenas_vencedor]);
+    cfgData.push(['Bônus Classificação', CFG.pts_bonus_classificacao]);
+    cfgData.push(['Palpite Campeão', CFG.pts_campeao]);
+    cfgData.push(['Palpite Artilheiro', CFG.pts_artilheiro]);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rankingData), 'Ranking');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(palpitesData), 'Palpites');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resultadosData), 'Resultados');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cfgData), 'Configurações');
+    XLSX.writeFile(wb, `Bolao_ICN_Copa2026_${fmtDate()}.xlsx`);
+    showToast('✅ Planilha gerada com sucesso!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function exportRankingExcel() {
+  showToast('⏳ Gerando ranking...','');
+  try {
+    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const allPals = {};
+    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const ranking = computeRanking(users, res, allPals);
+    const data = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos']];
+    ranking.forEach((u,i)=>{
+      data.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Ranking');
+    XLSX.writeFile(wb, `Bolao_Ranking_${fmtDate()}.xlsx`);
+    showToast('✅ Ranking exportado!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function exportPalpitesExcel() {
+  showToast('⏳ Gerando palpites...','');
+  try {
+    const [usersSnap] = await Promise.all([db_.collection('usuarios').get()]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const allPals = {};
+    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const data = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
+    ALL_GAMES.forEach(g=>{
+      const row = [g.id, g.h, g.a, g.date];
+      users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.h??''); });
+      users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.a??''); });
+      data.push(row);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Palpites');
+    XLSX.writeFile(wb, `Bolao_Palpites_${fmtDate()}.xlsx`);
+    showToast('✅ Palpites exportados!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function exportResultadosExcel() {
+  showToast('⏳ Gerando resultados...','');
+  try {
+    const resSnap = await db_.collection('resultados').get();
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const data = [['JogoID','Time_Casa','Time_Fora','Resultado_Casa','Resultado_Fora','Bloqueado']];
+    ALL_GAMES.forEach(g=>{
+      const r = res[g.id];
+      data.push([g.id, g.h, g.a, r?.h_real??'', r?.a_real??'', r?.locked?'SIM':'NÃO']);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Resultados');
+    XLSX.writeFile(wb, `Bolao_Resultados_${fmtDate()}.xlsx`);
+    showToast('✅ Resultados exportados!','success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
