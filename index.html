@@ -861,8 +861,25 @@ let CFG = {
   nome_bolao:'Bolão ICN Copa 2026'
 };
 
-// Bandeiras de países
-const COUNTRY_FLAGS = {
+// Horários dos jogos (Brasília - fuso -3)
+const GAME_TIMES = {
+  'A1':'13:00','A2':'16:00','A3':'13:00','A4':'16:00','A5':'21:00','A6':'21:00',
+  'B1':'16:00','B2':'19:00','B3':'13:00','B4':'16:00','B5':'18:00','B6':'18:00',
+  'C1':'19:00','C2':'19:00','C3':'16:00','C4':'13:00','C5':'21:00','C6':'21:00',
+  'D1':'15:00','D2':'18:00','D3':'13:00','D4':'20:00','D5':'21:00','D6':'21:00',
+  'E1':'18:00','E2':'18:00','E3':'13:00','E4':'16:00','E5':'21:00','E6':'21:00',
+  'F1':'13:00','F2':'16:00','F3':'16:00','F4':'13:00','F5':'18:00','F6':'18:00',
+  'G1':'16:00','G2':'13:00','G3':'13:00','G4':'20:00','G5':'21:00','G6':'21:00',
+  'H1':'16:00','H2':'19:00','H3':'13:00','H4':'16:00','H5':'21:00','H6':'21:00',
+  'I1':'19:00','I2':'16:00','I3':'13:00','I4':'16:00','I5':'21:00','I6':'21:00',
+  'J1':'15:00','J2':'18:00','J3':'16:00','J4':'16:00','J5':'21:00','J6':'21:00',
+  'K1':'13:00','K2':'16:00','K3':'16:00','K4':'13:00','K5':'18:00','K6':'18:00',
+  'L1':'13:00','L2':'16:00','L3':'13:00','L4':'16:00','L5':'21:00','L6':'21:00',
+  'O1':'15:00','O2':'18:00','O3':'16:00','O4':'19:00','O5':'15:00','O6':'18:00','O7':'16:00','O8':'19:00','O9':'15:00','O10':'18:00','O11':'16:00','O12':'19:00','O13':'17:00','O14':'20:00','O15':'15:00','O16':'18:00',
+  'Q1':'15:00','Q2':'18:00','Q3':'16:00','Q4':'19:00','Q5':'15:00','Q6':'18:00','Q7':'16:00','Q8':'19:00',
+  'S1':'16:00','S2':'16:00','S3':'20:00','S4':'20:00',
+  'T1':'17:00','T2':'17:00','F1':'20:00','F2':'20:00'
+};
   'EUA':'🇺🇸','Panamá':'🇵🇦','Guatemala':'🇬🇹','Jamaica':'🇯🇲',
   'México':'🇲🇽','Canadá':'🇨🇦','Trinidad e Tobago':'🇹🇹','Arábia Saudita':'🇸🇦',
   'Brasil':'🇧🇷','Japão':'🇯🇵','Sérvia':'🇷🇸','Escócia':'🇬🇧',
@@ -1314,8 +1331,9 @@ function buildPalRow(game) {
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = COUNTRY_FLAGS[game.h] || '';
   const flagA = COUNTRY_FLAGS[game.a] || '';
+  const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
+    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${disAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${disAttr} oninput="onPalInput('${game.id}','a',this.value)">
@@ -1433,7 +1451,11 @@ async function renderVerPalpites(selectedUid=null) {
       const userPals = {};
       pSnap.docs.forEach(d=>{ userPals[d.id]=d.data(); });
 
-      html += `<div class="alert alert-info">👁️ Visualizando palpites de <b>${esc(selectedUser.apelido)}</b> (${esc(selectedUser.nome)})</div>
+      html += `<div class="card" style="border:2px solid var(--gold);background:rgba(255,215,0,.08);text-align:center;padding:16px;margin-bottom:20px">
+        <div style="font-size:1.2rem;font-weight:800;color:var(--gold);margin-bottom:6px">👁️ Palpites de</div>
+        <div style="font-size:1.1rem;font-weight:700">${esc(selectedUser.apelido)}</div>
+        <div style="font-size:0.85rem;color:var(--text-muted)">${esc(selectedUser.nome)}</div>
+      </div>
         <div id="pal-view-progress-text" class="progress-text">Calculando...</div>
         <div class="progress-bar"><div class="progress-fill" id="pal-view-progress-fill" style="width:0%"></div></div>
         <div class="phase-tabs" id="phase-tabs-view">`;
@@ -1494,8 +1516,9 @@ function buildVerPalRow(game, userPals, res) {
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = COUNTRY_FLAGS[game.h] || '';
   const flagA = COUNTRY_FLAGS[game.a] || '';
+  const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
+    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.h!==undefined?pal.h:''}">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.a!==undefined?pal.a:''}">
