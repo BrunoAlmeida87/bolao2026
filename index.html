@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
+<!-- App Version -->
+<meta name="app-version" content="v1.0.2">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -356,6 +358,29 @@ a:hover{text-decoration:underline}
 .toggle-switch input:disabled+.toggle-slider:before{background:var(--text-muted)}
 
 /* ══════════════════════════════════════════
+   NAV DROPDOWN
+══════════════════════════════════════════ */
+.nav-dropdown{position:relative;display:inline-block}
+.dropdown-btn{
+  padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+  background:transparent;color:var(--text-muted);cursor:pointer;
+  font-size:0.85rem;font-weight:600;transition:all .2s;
+}
+.dropdown-btn:hover{border-color:var(--gold);color:var(--gold)}
+.dropdown-content{
+  display:none;position:absolute;top:100%;left:0;background:var(--mid-blue);
+  border:1px solid var(--border);border-radius:8px;z-index:150;min-width:180px;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);
+}
+.dropdown-content.show{display:block}
+.dropdown-content a{
+  display:block;padding:10px 14px;color:var(--text-muted);text-decoration:none;
+  transition:all .2s;cursor:pointer;font-size:0.88rem;
+}
+.dropdown-content a:hover{background:rgba(255,215,0,.1);color:var(--gold)}
+@media(min-width:601px){.nav-dropdown{display:none}}
+
+/* ══════════════════════════════════════════
    ALERTS & EMPTY STATES
 ══════════════════════════════════════════ */
 .alert{padding:14px 18px;border-radius:10px;margin-bottom:16px;font-size:0.88rem;line-height:1.6}
@@ -565,6 +590,20 @@ a:hover{text-decoration:underline}
       <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
       <button class="nav-btn" data-page="admin" id="admin-nav" style="display:none" onclick="navigateTo('admin')">⚙️ Admin</button>
     </nav>
+
+    <!-- Dropdown Nav (Mobile) -->
+    <div class="nav-dropdown">
+      <button class="dropdown-btn" onclick="toggleDropdown()">☰ Menu</button>
+      <div id="dropdown-menu" class="dropdown-content">
+        <a onclick="navigateTo('dashboard');toggleDropdown()">🏠 Ranking</a>
+        <a onclick="navigateTo('palpites');toggleDropdown()">⚽ Palpites</a>
+        <a onclick="navigateTo('tabelas');toggleDropdown()">📊 Tabelas</a>
+        <a onclick="navigateTo('chaveamento');toggleDropdown()">🔑 Chaveamento</a>
+        <a onclick="navigateTo('regras');toggleDropdown()">📋 Regras</a>
+        <a onclick="navigateTo('estatisticas');toggleDropdown()">📈 Estatísticas</a>
+        <a id="admin-dropdown" style="display:none" onclick="navigateTo('admin');toggleDropdown()">⚙️ Admin</a>
+      </div>
+    </div>
     <div class="app-user">
       <span class="user-name" id="header-apelido">—</span>
       <span class="badge-admin" id="header-admin-badge" style="display:none">ADMIN</span>
@@ -624,6 +663,13 @@ a:hover{text-decoration:underline}
       </div>
     </div>
 
+    <!-- ── ESTATÍSTICAS ── -->
+    <div id="page-estatisticas" class="page">
+      <div class="container" id="estatisticas-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
     <!-- ── ADMIN ── -->
     <div id="page-admin" class="page">
       <div class="container" id="admin-content">
@@ -631,6 +677,11 @@ a:hover{text-decoration:underline}
       </div>
     </div>
   </main>
+
+  <!-- Footer com versão -->
+  <footer style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.75rem;background:rgba(0,0,0,0.3);margin-top:40px">
+    <span id="app-version">Bolão ICN Copa 2026 • v1.0.2</span>
+  </footer>
 </div>
 
 <!-- TOAST -->
@@ -799,6 +850,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
+  app_version:'v1.0.2',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -807,6 +859,22 @@ let CFG = {
   pts_campeao:50,
   pts_artilheiro:30,
   nome_bolao:'Bolão ICN Copa 2026'
+};
+
+// Bandeiras de países
+const COUNTRY_FLAGS = {
+  'EUA':'🇺🇸','Panamá':'🇵🇦','Guatemala':'🇬🇹','Jamaica':'🇯🇲',
+  'México':'🇲🇽','Canadá':'🇨🇦','Trinidad e Tobago':'🇹🇹','Arábia Saudita':'🇸🇦',
+  'Brasil':'🇧🇷','Japão':'🇯🇵','Sérvia':'🇷🇸','Escócia':'🇬🇧',
+  'Argentina':'🇦🇷','Peru':'🇵🇪','Irã':'🇮🇷','Gabão':'🇬🇦',
+  'Espanha':'🇪🇸','Uzbequistão':'🇺🇿','Senegal':'🇸🇳','Noruega':'🇳🇴',
+  'França':'🇫🇷','Austrália':'🇦🇺','Hungria':'🇭🇺','Tunísia':'🇹🇳',
+  'Alemanha':'🇩🇪','Portugal':'🇵🇹','Turquia':'🇹🇷','Argélia':'🇩🇿',
+  'Holanda':'🇳🇱','Chile':'🇨🇱','Coreia do Sul':'🇰🇷','Venezuela':'🇻🇪',
+  'Bélgica':'🇧🇪','Afeganistão':'🇦🇫','Romênia':'🇷🇴','El Salvador':'🇸🇻',
+  'Inglaterra':'🇬🇧','Marrocos':'🇲🇦','Egito':'🇪🇬','Camarões':'🇨🇲',
+  'Itália':'🇮🇹','Equador':'🇪🇨','Croácia':'🇭🇷','Eslovênia':'🇸🇮',
+  'Uruguai':'🇺🇾','Nigéria':'🇳🇬','Suécia':'🇸🇪','Países Baixos':'🇳🇱'
 };
 let myPalpites   = {};
 let resultados   = {};
@@ -954,6 +1022,8 @@ async function loadCFG() {
     const snap = await db_.collection('config').doc('geral').get();
     if (snap.exists) CFG = { ...CFG, ...snap.data() };
     document.getElementById('bolao-nome').textContent = CFG.nome_bolao;
+    const appVersion = document.getElementById('app-version');
+    if (appVersion) appVersion.textContent = `${CFG.nome_bolao} • ${CFG.app_version}`;
   } catch(e) {}
 }
 
@@ -988,6 +1058,7 @@ function navigateTo(page) {
     case 'tabelas':     renderTabelas(); break;
     case 'chaveamento': renderChaveamento(); break;
     case 'regras':      renderRegras(); break;
+    case 'estatisticas': renderEstatisticas(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
   window.scrollTo({top:0,behavior:'smooth'});
@@ -1101,12 +1172,26 @@ async function renderDashboard() {
     }
 
     let html = `
-      <div class="section-title">🏆 ${esc(CFG.nome_bolao)} — Ranking</div>
-      <div class="stats-grid">
-        <div class="stat-card"><div class="val">${ranking.length}</div><div class="lbl">Participantes</div></div>
-        <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos c/ Resultado</div></div>
-        <div class="stat-card"><div class="val">${ALL_GAMES.length}</div><div class="lbl">Total de Jogos</div></div>
-        <div class="stat-card"><div class="val">${myRank||'—'}</div><div class="lbl">Minha Posição</div></div>
+      <div class="section-title">🏆 ${esc(CFG.nome_bolao)}</div>
+      <div style="background:linear-gradient(135deg,rgba(255,215,0,.1),rgba(255,215,0,.05));border:2px solid var(--gold);border-radius:12px;padding:20px;margin-bottom:24px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:var(--gold)">${ranking.length}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Participantes</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:var(--green)">${totalJogos}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Com Resultado</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:var(--accent)">${ALL_GAMES.length}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Total de Jogos</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:var(--orange)">${myRank||'—'}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Sua Posição</div>
+          </div>
+        </div>
       </div>`;
 
     if (totalJogos === 0) {
@@ -1227,12 +1312,14 @@ function buildPalRow(game) {
   const lockedBadge = locked?`<span class="locked-badge">🔒 Bloqueado</span>`:'';
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
+  const flagH = COUNTRY_FLAGS[game.h] || '';
+  const flagA = COUNTRY_FLAGS[game.a] || '';
   return `<div class="game-row">
-    <div><div class="team-name home">${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
+    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${disAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${disAttr} oninput="onPalInput('${game.id}','a',this.value)">
-    <div><div class="team-name">${esc(game.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
+    <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
 
@@ -1318,15 +1405,25 @@ async function renderVerPalpites(selectedUid=null) {
     const res = {};
     rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
 
-    let html = `<div class="section-title">👁️ Ver Palpites</div>
-      <div class="form-group"><label>Selecione um participante</label>
-        <select id="user-select" onchange="renderVerPalpites(this.value)">
-          <option value="">— Escolha um participante —</option>`;
+    let html = `<div class="section-title">👁️ Ver Palpites de Todos</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:24px">`;
 
     users.sort((a,b)=>a.apelido.localeCompare(b.apelido)).forEach(u=>{
-      html += `<option value="${u.uid}" ${selectedUid===u.uid?'selected':''}>${esc(u.apelido)} (${esc(u.nome)})</option>`;
+      const isSelected = selectedUid===u.uid;
+      html += `<button class="user-card ${isSelected?'active':''}" onclick="renderVerPalpites('${u.uid}')" style="${isSelected?'background:rgba(255,215,0,.15);border-color:var(--gold)':''}">
+        <div style="font-size:0.95rem;font-weight:600">${esc(u.apelido)}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted)">${esc(u.nome)}</div>
+      </button>`;
     });
-    html += `</select></div>`;
+    html += `</div>`;
+
+    // Adicionar CSS para user-card
+    if (!document.getElementById('user-card-style')) {
+      const style = document.createElement('style');
+      style.id = 'user-card-style';
+      style.textContent = `.user-card{padding:10px;border:1px solid var(--border);background:rgba(255,255,255,.03);border-radius:8px;cursor:pointer;transition:all .2s;text-align:center}.user-card:hover{border-color:var(--gold);background:rgba(255,215,0,.08)}`;
+      document.head.appendChild(style);
+    }
 
     if (selectedUid && selectedUid.trim()) {
       const selectedUser = users.find(u=>u.uid===selectedUid);
@@ -1395,12 +1492,14 @@ function buildVerPalRow(game, userPals, res) {
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
+  const flagH = COUNTRY_FLAGS[game.h] || '';
+  const flagA = COUNTRY_FLAGS[game.a] || '';
   return `<div class="game-row">
-    <div><div class="team-name home">${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
+    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.h!==undefined?pal.h:''}">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.a!==undefined?pal.a:''}">
-    <div><div class="team-name">${esc(game.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
+    <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
 
@@ -1486,6 +1585,105 @@ function renderRegras() {
           <li>Acompanhe seu ranking na página inicial</li>
           <li>Veja os palpites de outros participantes</li>
         </ul>
+      </div>`;
+
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════
+// ESTATÍSTICAS PAGE
+// ════════════════════════════════════════════
+async function renderEstatisticas() {
+  const cont = document.getElementById('estatisticas-content');
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const allPals = {};
+    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+
+    const jogosComResultado = Object.keys(res).filter(id=>res[id].h_real!==undefined);
+    const totalJogos = jogosComResultado.length;
+
+    // Análise por jogo
+    const analiseJogos = {};
+    jogosComResultado.forEach(jid=>{
+      analiseJogos[jid] = { exatos:0, venc_saldo:0, apenas_venc:0, erros:0, palpites:[] };
+      ALL_GAMES.forEach(g=>{ if(g.id===jid) analiseJogos[jid].game=g; });
+      users.forEach(u=>{
+        const p=allPals[u.uid]?.[jid];
+        if(!p) return;
+        const pts = calcPontos(p,res[jid]);
+        analiseJogos[jid].palpites.push({user:u,palpite:p,pts});
+        if(pts===CFG.pts_exato) analiseJogos[jid].exatos++;
+        else if(pts===(CFG.pts_vencedor_saldo||7)) analiseJogos[jid].venc_saldo++;
+        else if(pts===(CFG.pts_apenas_vencedor||5)) analiseJogos[jid].apenas_venc++;
+        else analiseJogos[jid].erros++;
+      });
+    });
+
+    // Encontrar jogo mais acertado
+    let maiorAcerto = {exatos:0,id:''};
+    Object.entries(analiseJogos).forEach(([id,data])=>{ if(data.exatos>maiorAcerto.exatos) maiorAcerto={exatos:data.exatos,id}; });
+
+    // Placar mais comum
+    const placarFreq = {};
+    jogosComResultado.forEach(jid=>{
+      analiseJogos[jid].palpites.forEach(p=>{
+        const key=`${p.palpite.h}-${p.palpite.a}`;
+        placarFreq[key]=(placarFreq[key]||0)+1;
+      });
+    });
+    const placarMaisComum = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1])[0];
+
+    // Resultado mais comum
+    const resultFreq = {};
+    jogosComResultado.forEach(jid=>{
+      const r=res[jid];
+      const key=`${r.h_real}-${r.a_real}`;
+      resultFreq[key]=(resultFreq[key]||0)+1;
+    });
+    const resultMaisComum = Object.entries(resultFreq).sort((a,b)=>b[1]-a[1])[0];
+
+    let html = `<div class="section-title">📈 Estatísticas & Curiosidades</div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="val">${users.length}</div><div class="lbl">Participantes</div></div>
+        <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos Resultado</div></div>
+        <div class="stat-card"><div class="val">${Object.values(analiseJogos).reduce((a,b)=>a+b.exatos,0)}</div><div class="lbl">Placares Exatos</div></div>
+        <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎯 Jogo Mais Acertado</div>
+        ${maiorAcerto.id ? `
+          <div style="margin-top:12px">
+            <p style="font-size:0.95rem;font-weight:600;margin-bottom:6px">${analiseJogos[maiorAcerto.id].game.h} vs ${analiseJogos[maiorAcerto.id].game.a}</p>
+            <p style="font-size:0.85rem;color:var(--text-muted)">
+              ${analiseJogos[maiorAcerto.id].exatos} placares exatos ·
+              ${analiseJogos[maiorAcerto.id].venc_saldo} vencedor+saldo ·
+              ${analiseJogos[maiorAcerto.id].apenas_venc} apenas vencedor
+            </p>
+          </div>
+        ` : '<p class="text-muted">Sem dados</p>'}
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔢 Placar Mais Palpitado</div>
+        ${placarMaisComum ? `
+          <p style="font-size:1.2rem;font-weight:700;color:var(--gold);margin-top:12px">${placarMaisComum[0]} <span style="font-size:0.85rem;color:var(--text-muted)">(${placarMaisComum[1]} palpites)</span></p>
+        ` : '<p class="text-muted">Sem dados</p>'}
+      </div>
+
+      <div class="card">
+        <div class="card-title">🏆 Resultado Mais Comum</div>
+        ${resultMaisComum ? `
+          <p style="font-size:1.2rem;font-weight:700;color:var(--green);margin-top:12px">${resultMaisComum[0]} <span style="font-size:0.85rem;color:var(--text-muted)">(${resultMaisComum[1]} jogos)</span></p>
+        ` : '<p class="text-muted">Sem dados</p>'}
       </div>`;
 
     cont.innerHTML = html;
@@ -2090,6 +2288,19 @@ async function exportResultadosExcel() {
 // ════════════════════════════════════════════
 // UTILS
 // ════════════════════════════════════════════
+function toggleDropdown() {
+  const menu = document.getElementById('dropdown-menu');
+  if (menu) menu.classList.toggle('show');
+}
+
+document.addEventListener('click', function(e) {
+  const dropdown = document.querySelector('.nav-dropdown');
+  if (dropdown && !dropdown.contains(e.target)) {
+    const menu = document.getElementById('dropdown-menu');
+    if (menu) menu.classList.remove('show');
+  }
+});
+
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
