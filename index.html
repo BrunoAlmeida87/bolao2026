@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🏆 Bolão Copa 2026</title>
+<title>🏆 Bolão ICN Copa 2026</title>
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -337,6 +337,24 @@ a:hover{text-decoration:underline}
 .badge-inactive{background:rgba(255,68,68,.2);color:var(--red)}
 
 /* ══════════════════════════════════════════
+   TOGGLE SWITCH
+══════════════════════════════════════════ */
+.toggle-switch{position:relative;display:inline-block;width:40px;height:22px}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{
+  position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;
+  background:var(--border);border-radius:22px;transition:.3s;
+}
+.toggle-slider:before{
+  content:'';position:absolute;height:16px;width:16px;
+  left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s;
+}
+.toggle-switch input:checked+.toggle-slider{background:var(--gold)}
+.toggle-switch input:checked+.toggle-slider:before{transform:translateX(18px)}
+.toggle-switch input:disabled+.toggle-slider{opacity:0.5;cursor:not-allowed}
+.toggle-switch input:disabled+.toggle-slider:before{background:var(--text-muted)}
+
+/* ══════════════════════════════════════════
    ALERTS & EMPTY STATES
 ══════════════════════════════════════════ */
 .alert{padding:14px 18px;border-radius:10px;margin-bottom:16px;font-size:0.88rem;line-height:1.6}
@@ -423,7 +441,28 @@ a:hover{text-decoration:underline}
 .flex{display:flex;align-items:center;gap:8px}
 .flex-between{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+/* ══════════════════════════════════════════
+   BOTTOM NAVIGATION (MOBILE)
+══════════════════════════════════════════ */
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;height:56px;
+  background:var(--mid-blue);border-top:1px solid var(--border);
+  z-index:200;display:none;align-items:stretch;
+}
+.bottom-nav button{
+  flex:1;background:transparent;border:none;
+  color:var(--text-muted);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;font-size:1.1rem;padding:4px 2px;transition:all .2s;
+}
+.bottom-nav button span{font-size:0.58rem;font-weight:600}
+.bottom-nav button.active{color:var(--gold)}
+.bottom-nav button.active span{color:var(--gold)}
+
 @media(max-width:600px){
+  .bottom-nav{display:flex}
+  .app-nav{display:none}
+  .container{padding-bottom:70px}
   .grid2{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
   .standings-grid{grid-template-columns:1fr}
@@ -455,7 +494,7 @@ a:hover{text-decoration:underline}
     <div class="auth-card">
       <div class="auth-logo">
         <div class="flags">🇺🇸 🇨🇦 🇲🇽</div>
-        <h1>🏆 Bolão Copa 2026</h1>
+        <h1>🏆 Bolão ICN Copa 2026</h1>
         <p id="auth-subtitle">Entre para fazer seus palpites</p>
       </div>
 
@@ -515,7 +554,7 @@ a:hover{text-decoration:underline}
 ══════════════════════════════════════════ -->
 <div id="screen-app" class="hidden">
   <header class="app-header">
-    <div class="app-logo">🏆 <span id="bolao-nome">Bolão Copa 2026</span></div>
+    <div class="app-logo">🏆 <span id="bolao-nome">Bolão ICN Copa 2026</span></div>
     <nav class="app-nav">
       <button class="nav-btn active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠 Ranking</button>
       <button class="nav-btn" data-page="palpites" onclick="navigateTo('palpites')">⚽ Palpites</button>
@@ -529,6 +568,15 @@ a:hover{text-decoration:underline}
       <button class="btn-logout" onclick="doLogout()">Sair</button>
     </div>
   </header>
+
+  <!-- Bottom Navigation (Mobile) -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠<span>Ranking</span></button>
+    <button data-page="palpites" onclick="navigateTo('palpites')">⚽<span>Palpites</span></button>
+    <button data-page="ver-palpites" onclick="navigateTo('ver-palpites')">👁️<span>Ver</span></button>
+    <button data-page="tabelas" onclick="navigateTo('tabelas')">📊<span>Tabelas</span></button>
+    <button data-page="admin" id="admin-bottom-nav" style="display:none" onclick="navigateTo('admin')">⚙️<span>Admin</span></button>
+  </nav>
 
   <main>
     <!-- ── DASHBOARD ── -->
@@ -555,6 +603,13 @@ a:hover{text-decoration:underline}
     <!-- ── CHAVEAMENTO ── -->
     <div id="page-chaveamento" class="page">
       <div class="container" id="chaveamento-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ── VER PALPITES ── -->
+    <div id="page-ver-palpites" class="page">
+      <div class="container" id="ver-palpites-content">
         <div class="loading-wrap"><div class="spinner"></div></div>
       </div>
     </div>
@@ -733,7 +788,7 @@ const ALL_GAMES = [
 let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
-let CFG = { pts_exato:10, pts_resultado:5, nome_bolao:'Bolão Copa 2026' };
+let CFG = { pts_exato:10, pts_resultado:5, nome_bolao:'Bolão ICN Copa 2026' };
 let myPalpites   = {};
 let resultados   = {};
 let palpitesEditing = null;
@@ -897,11 +952,13 @@ function showApp() {
 function navigateTo(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+  document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   const el = document.getElementById('page-'+page);
   if (el) el.classList.add('active');
   switch(page) {
     case 'dashboard':   renderDashboard(); break;
     case 'palpites':    renderPalpites(); break;
+    case 'ver-palpites': renderVerPalpites(); break;
     case 'tabelas':     renderTabelas(); break;
     case 'chaveamento': renderChaveamento(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
@@ -1206,6 +1263,117 @@ function updateGroupTabState() {
 }
 
 // ════════════════════════════════════════════
+// VER PALPITES PAGE (VISUALIZAÇÃO PÚBLICA)
+// ════════════════════════════════════════════
+async function renderVerPalpites(selectedUid=null) {
+  const cont = document.getElementById('ver-palpites-content');
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const [usersSnap, rSnap] = await Promise.all([
+      db_.collection('usuarios').get(),
+      db_.collection('resultados').get()
+    ]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const res = {};
+    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+
+    let html = `<div class="section-title">👁️ Ver Palpites</div>
+      <div class="form-group"><label>Selecione um participante</label>
+        <select id="user-select" onchange="renderVerPalpites(this.value)">
+          <option value="">— Escolha um participante —</option>`;
+
+    users.sort((a,b)=>a.apelido.localeCompare(b.apelido)).forEach(u=>{
+      html += `<option value="${u.uid}" ${selectedUid===u.uid?'selected':''}>${esc(u.apelido)} (${esc(u.nome)})</option>`;
+    });
+    html += `</select></div>`;
+
+    if (selectedUid && selectedUid.trim()) {
+      const selectedUser = users.find(u=>u.uid===selectedUid);
+      if (!selectedUser) { cont.innerHTML = `${html}<div class="alert alert-error">Usuário não encontrado</div>`; return; }
+
+      const pSnap = await db_.collection('palpites').doc(selectedUid).collection('jogos').get();
+      const userPals = {};
+      pSnap.docs.forEach(d=>{ userPals[d.id]=d.data(); });
+
+      html += `<div class="alert alert-info">👁️ Visualizando palpites de <b>${esc(selectedUser.apelido)}</b> (${esc(selectedUser.nome)})</div>
+        <div id="pal-view-progress-text" class="progress-text">Calculando...</div>
+        <div class="progress-bar"><div class="progress-fill" id="pal-view-progress-fill" style="width:0%"></div></div>
+        <div class="phase-tabs" id="phase-tabs-view">`;
+
+      const phases = [
+        {key:'grupos',label:'⚽ Grupos'},
+        ...Object.entries(ELIM_DATA).map(([k,v])=>({key:k,label:v.icon+' '+v.label}))
+      ];
+      phases.forEach((p,i)=>{ html += `<button class="phase-tab ${i===0?'active':''}" onclick="switchVerPalPhase('${p.key}')" data-phase="${p.key}">${p.label}</button>`; });
+      html += `</div><div id="pal-view-phases">`;
+
+      html += `<div class="pal-phase-view" data-phase="grupos">`;
+      const groupKeys = Object.keys(GRUPOS_DATA);
+      html += `<div class="group-tabs" id="group-tabs-view">`;
+      groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchVerPalGroup('${g}')" data-group="${g}">${g}</button>`; });
+      html += `</div>`;
+      groupKeys.forEach((g,i)=>{
+        html += `<div class="pal-group-view" data-group="${g}" style="${i===0?'':'display:none'}">
+          <p class="text-muted" style="font-size:0.8rem;margin-bottom:12px">Grupo ${g}: ${GRUPOS_DATA[g].teams.join(', ')}</p>`;
+        GRUPOS_DATA[g].games.forEach(game=>{ html += buildVerPalRow(game, userPals, res); });
+        html += `</div>`;
+      });
+      html += `</div>`;
+
+      Object.entries(ELIM_DATA).forEach(([key,data])=>{
+        html += `<div class="pal-phase-view" data-phase="${key}" style="display:none">
+          <p class="text-muted" style="font-size:0.8rem;margin-bottom:12px">${data.icon} ${data.label}</p>`;
+        data.games.forEach(game=>{ html += buildVerPalRow(game, userPals, res); });
+        html += `</div>`;
+      });
+
+      html += `</div>`;
+
+      const filled = Object.values(userPals).filter(p=>p.h!==undefined && p.a!==undefined).length;
+      const pct = Math.round(filled/ALL_GAMES.length*100);
+      const progEl = document.getElementById('pal-view-progress-fill');
+      const progTxt = document.getElementById('pal-view-progress-text');
+
+      setTimeout(()=>{
+        if (progEl) progEl.style.width = pct+'%';
+        if (progTxt) progTxt.textContent = `${filled} de ${ALL_GAMES.length} palpites preenchidos (${pct}%)`;
+      }, 100);
+    }
+
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+  }
+}
+
+function buildVerPalRow(game, userPals, res) {
+  const pal = userPals[game.id]||{};
+  const r = res[game.id]||{};
+  const hasResult = r.h_real!==undefined;
+  const pts = calcPontos(pal,r);
+  const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
+  const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
+  const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
+  return `<div class="game-row">
+    <div><div class="team-name home">${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
+    <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.h!==undefined?pal.h:''}">
+    <div class="vs-badge">✕</div>
+    <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.a!==undefined?pal.a:''}">
+    <div><div class="team-name">${esc(game.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
+  </div>`;
+}
+
+function switchVerPalPhase(key) {
+  document.querySelectorAll('.phase-tab').forEach(t=>t.classList.toggle('active',t.dataset.phase===key));
+  document.querySelectorAll('.pal-phase-view').forEach(p=>p.style.display=p.dataset.phase===key?'block':'none');
+}
+
+function switchVerPalGroup(grp) {
+  document.querySelectorAll('.group-tab').forEach(t=>t.classList.toggle('active',t.dataset.group===grp));
+  document.querySelectorAll('.pal-group-view').forEach(p=>p.style.display=p.dataset.group===grp?'block':'none');
+}
+
+// ════════════════════════════════════════════
 // TABELAS PAGE
 // ════════════════════════════════════════════
 async function renderTabelas() {
@@ -1390,7 +1558,11 @@ async function renderAdminUsuarios() {
           <div class="user-meta">UID: ${u.uid.slice(0,12)}…</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          ${!isSelf?`<button class="btn btn-secondary btn-sm" onclick="toggleAdmin('${u.uid}','${u.role}')">${u.role==='admin'?'Remover Admin':'Tornar Admin'}</button>`:''}
+          <label class="toggle-switch" title="${isSelf?'Você não pode remover seu próprio status de admin':''}">
+            <input type="checkbox" ${u.role==='admin'?'checked':''} ${isSelf?'disabled':''} onchange="toggleAdminCheckbox('${u.uid}',this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size:0.78rem;color:var(--text-muted);min-width:40px">ADMIN</span>
           ${!isSelf?`<button class="btn ${u.ativo===false?'btn-green':'btn-red'} btn-sm" onclick="toggleAtivo('${u.uid}',${u.ativo!==false})">${u.ativo===false?'Ativar':'Desativar'}</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="adminGoEditPalpites('${u.uid}')">✏️ Palpites</button>
         </div>
@@ -1398,6 +1570,18 @@ async function renderAdminUsuarios() {
     });
     cont.innerHTML = html;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+}
+
+async function toggleAdminCheckbox(uid, isChecked) {
+  const newRole = isChecked ? 'admin' : 'user';
+  try {
+    await db_.collection('usuarios').doc(uid).update({role:newRole});
+    showToast(`✅ Usuário agora é ${newRole}`, 'success');
+    renderAdminUsuarios();
+  } catch(e) {
+    showToast('Erro: '+e.message, 'error');
+    renderAdminUsuarios();
+  }
 }
 
 async function toggleAdmin(uid, currentRole) {
