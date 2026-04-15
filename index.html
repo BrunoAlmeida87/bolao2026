@@ -467,10 +467,10 @@ a:hover{text-decoration:underline}
       <!-- LOGIN -->
       <div id="auth-login">
         <div class="form-group"><label>E-mail</label>
-          <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
+          <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="off">
         </div>
         <div class="form-group"><label>Senha</label>
-          <input type="password" id="login-pwd" placeholder="••••••••" autocomplete="current-password"
+          <input type="password" id="login-pwd" placeholder="••••••••" autocomplete="off"
             onkeydown="if(event.key==='Enter') doLogin()">
         </div>
         <div id="login-error" class="alert alert-error" style="display:none"></div>
@@ -751,8 +751,9 @@ const FIREBASE_CONFIG = {
   appId: "1:161565328186:web:7599de410ac6ad2f864603"
 };
 
-// E-mail que receberá role 'admin' ao criar conta
-const ADMIN_EMAIL = "brunobvaz@gmail.com";
+// Remover este sistema - admins devem ser gerenciados pelo painel de admin
+// NUNCA use email hardcoded para conceder permissões de admin
+const ADMIN_EMAIL = null;
 
 function initFirebase(cfg) {
   try {
@@ -835,7 +836,13 @@ async function doRegister() {
   }
 }
 
-function doLogout() { auth_.signOut(); }
+function doLogout() {
+  currentUser = null;
+  currentUserDoc = null;
+  myPalpites = {};
+  resultados = {};
+  auth_.signOut();
+}
 
 function setAuthError(form, msg) {
   const el = document.getElementById(form==='login'?'login-error':'reg-error');
