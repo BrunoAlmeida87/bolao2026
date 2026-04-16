@@ -697,144 +697,146 @@ a:hover{text-decoration:underline}
 // GAME DATA — Copa 2026
 // ════════════════════════════════════════════
 const GRUPOS_DATA = {
-  A:{teams:['EUA','Panamá','Guatemala','Jamaica'],games:[
-    {id:'A1',r:1,h:'EUA',a:'Panamá',date:'Jun 12'},
-    {id:'A2',r:1,h:'Guatemala',a:'Jamaica',date:'Jun 13'},
-    {id:'A3',r:2,h:'EUA',a:'Guatemala',date:'Jun 17'},
-    {id:'A4',r:2,h:'Panamá',a:'Jamaica',date:'Jun 17'},
-    {id:'A5',r:3,h:'EUA',a:'Jamaica',date:'Jun 21'},
-    {id:'A6',r:3,h:'Panamá',a:'Guatemala',date:'Jun 21'},
+  A:{teams:['México','África do Sul','Coreia do Sul','Rep. Tcheca'],games:[
+    {id:'A1',r:1,h:'México',a:'África do Sul',date:'Jun 11'},
+    {id:'A2',r:1,h:'Coreia do Sul',a:'Rep. Tcheca',date:'Jun 11'},
+    {id:'A3',r:2,h:'México',a:'Coreia do Sul',date:'Jun 17'},
+    {id:'A4',r:2,h:'África do Sul',a:'Rep. Tcheca',date:'Jun 17'},
+    {id:'A5',r:3,h:'México',a:'Rep. Tcheca',date:'Jun 22'},
+    {id:'A6',r:3,h:'África do Sul',a:'Coreia do Sul',date:'Jun 22'},
   ]},
-  B:{teams:['México','Canadá','Trinidad e Tobago','Arábia Saudita'],games:[
-    {id:'B1',r:1,h:'México',a:'Trinidad e Tobago',date:'Jun 12'},
-    {id:'B2',r:1,h:'Canadá',a:'Arábia Saudita',date:'Jun 13'},
-    {id:'B3',r:2,h:'México',a:'Canadá',date:'Jun 17'},
-    {id:'B4',r:2,h:'Trinidad e Tobago',a:'Arábia Saudita',date:'Jun 18'},
-    {id:'B5',r:3,h:'México',a:'Arábia Saudita',date:'Jun 22'},
-    {id:'B6',r:3,h:'Canadá',a:'Trinidad e Tobago',date:'Jun 22'},
+  B:{teams:['Canadá','Bósnia e Herzegovina','Catar','Suíça'],games:[
+    {id:'B1',r:1,h:'Canadá',a:'Bósnia e Herzegovina',date:'Jun 12'},
+    {id:'B2',r:1,h:'Catar',a:'Suíça',date:'Jun 13'},
+    {id:'B3',r:2,h:'Canadá',a:'Catar',date:'Jun 17'},
+    {id:'B4',r:2,h:'Bósnia e Herzegovina',a:'Suíça',date:'Jun 18'},
+    {id:'B5',r:3,h:'Canadá',a:'Suíça',date:'Jun 22'},
+    {id:'B6',r:3,h:'Bósnia e Herzegovina',a:'Catar',date:'Jun 23'},
   ]},
-  C:{teams:['Brasil','Japão','Sérvia','Escócia'],games:[
-    {id:'C1',r:1,h:'Brasil',a:'Sérvia',date:'Jun 14'},
-    {id:'C2',r:1,h:'Japão',a:'Escócia',date:'Jun 14'},
-    {id:'C3',r:2,h:'Brasil',a:'Japão',date:'Jun 18'},
-    {id:'C4',r:2,h:'Sérvia',a:'Escócia',date:'Jun 19'},
+  C:{teams:['Brasil','Marrocos','Haiti','Escócia'],games:[
+    {id:'C1',r:1,h:'Brasil',a:'Marrocos',date:'Jun 13'},
+    {id:'C2',r:1,h:'Haiti',a:'Escócia',date:'Jun 13'},
+    {id:'C3',r:2,h:'Brasil',a:'Haiti',date:'Jun 18'},
+    {id:'C4',r:2,h:'Marrocos',a:'Escócia',date:'Jun 19'},
     {id:'C5',r:3,h:'Brasil',a:'Escócia',date:'Jun 23'},
-    {id:'C6',r:3,h:'Japão',a:'Sérvia',date:'Jun 23'},
+    {id:'C6',r:3,h:'Marrocos',a:'Haiti',date:'Jun 23'},
   ]},
-  D:{teams:['Argentina','Peru','Irã','Gabão'],games:[
-    {id:'D1',r:1,h:'Argentina',a:'Irã',date:'Jun 14'},
-    {id:'D2',r:1,h:'Peru',a:'Gabão',date:'Jun 15'},
-    {id:'D3',r:2,h:'Argentina',a:'Peru',date:'Jun 19'},
-    {id:'D4',r:2,h:'Irã',a:'Gabão',date:'Jun 19'},
-    {id:'D5',r:3,h:'Argentina',a:'Gabão',date:'Jun 23'},
-    {id:'D6',r:3,h:'Irã',a:'Peru',date:'Jun 23'},
+  D:{teams:['EUA','Turquia','Austrália','Paraguai'],games:[
+    {id:'D1',r:1,h:'EUA',a:'Paraguai',date:'Jun 12'},
+    {id:'D2',r:1,h:'Turquia',a:'Austrália',date:'Jun 14'},
+    {id:'D3',r:2,h:'EUA',a:'Turquia',date:'Jun 18'},
+    {id:'D4',r:2,h:'Austrália',a:'Paraguai',date:'Jun 19'},
+    {id:'D5',r:3,h:'EUA',a:'Austrália',date:'Jun 23'},
+    {id:'D6',r:3,h:'Turquia',a:'Paraguai',date:'Jun 24'},
   ]},
-  E:{teams:['Espanha','Uzbequistão','Senegal','Noruega'],games:[
-    {id:'E1',r:1,h:'Espanha',a:'Uzbequistão',date:'Jun 15'},
-    {id:'E2',r:1,h:'Senegal',a:'Noruega',date:'Jun 15'},
-    {id:'E3',r:2,h:'Espanha',a:'Senegal',date:'Jun 19'},
-    {id:'E4',r:2,h:'Uzbequistão',a:'Noruega',date:'Jun 20'},
-    {id:'E5',r:3,h:'Espanha',a:'Noruega',date:'Jun 24'},
-    {id:'E6',r:3,h:'Uzbequistão',a:'Senegal',date:'Jun 24'},
+  E:{teams:['Alemanha','Curaçao','Costa do Marfim','Equador'],games:[
+    {id:'E1',r:1,h:'Alemanha',a:'Curaçao',date:'Jun 14'},
+    {id:'E2',r:1,h:'Costa do Marfim',a:'Equador',date:'Jun 15'},
+    {id:'E3',r:2,h:'Alemanha',a:'Costa do Marfim',date:'Jun 19'},
+    {id:'E4',r:2,h:'Curaçao',a:'Equador',date:'Jun 20'},
+    {id:'E5',r:3,h:'Alemanha',a:'Equador',date:'Jun 24'},
+    {id:'E6',r:3,h:'Curaçao',a:'Costa do Marfim',date:'Jun 25'},
   ]},
-  F:{teams:['França','Austrália','Hungria','Tunísia'],games:[
-    {id:'F1',r:1,h:'França',a:'Hungria',date:'Jun 16'},
-    {id:'F2',r:1,h:'Austrália',a:'Tunísia',date:'Jun 16'},
-    {id:'F3',r:2,h:'França',a:'Austrália',date:'Jun 20'},
-    {id:'F4',r:2,h:'Hungria',a:'Tunísia',date:'Jun 21'},
-    {id:'F5',r:3,h:'França',a:'Tunísia',date:'Jun 25'},
-    {id:'F6',r:3,h:'Austrália',a:'Hungria',date:'Jun 25'},
+  F:{teams:['Países Baixos','Japão','Suécia','Tunísia'],games:[
+    {id:'F1',r:1,h:'Países Baixos',a:'Japão',date:'Jun 13'},
+    {id:'F2',r:1,h:'Suécia',a:'Tunísia',date:'Jun 14'},
+    {id:'F3',r:2,h:'Países Baixos',a:'Suécia',date:'Jun 18'},
+    {id:'F4',r:2,h:'Japão',a:'Tunísia',date:'Jun 19'},
+    {id:'F5',r:3,h:'Países Baixos',a:'Tunísia',date:'Jun 24'},
+    {id:'F6',r:3,h:'Japão',a:'Suécia',date:'Jun 24'},
   ]},
-  G:{teams:['Alemanha','Portugal','Turquia','Argélia'],games:[
-    {id:'G1',r:1,h:'Alemanha',a:'Turquia',date:'Jun 16'},
-    {id:'G2',r:1,h:'Portugal',a:'Argélia',date:'Jun 17'},
-    {id:'G3',r:2,h:'Alemanha',a:'Portugal',date:'Jun 21'},
-    {id:'G4',r:2,h:'Turquia',a:'Argélia',date:'Jun 21'},
-    {id:'G5',r:3,h:'Alemanha',a:'Argélia',date:'Jun 25'},
-    {id:'G6',r:3,h:'Portugal',a:'Turquia',date:'Jun 25'},
+  G:{teams:['Bélgica','Egito','Irã','Nova Zelândia'],games:[
+    {id:'G1',r:1,h:'Bélgica',a:'Egito',date:'Jun 15'},
+    {id:'G2',r:1,h:'Irã',a:'Nova Zelândia',date:'Jun 15'},
+    {id:'G3',r:2,h:'Bélgica',a:'Irã',date:'Jun 19'},
+    {id:'G4',r:2,h:'Egito',a:'Nova Zelândia',date:'Jun 20'},
+    {id:'G5',r:3,h:'Bélgica',a:'Nova Zelândia',date:'Jun 24'},
+    {id:'G6',r:3,h:'Egito',a:'Irã',date:'Jun 25'},
   ]},
-  H:{teams:['Holanda','Chile','Coreia do Sul','Venezuela'],games:[
-    {id:'H1',r:1,h:'Holanda',a:'Coreia do Sul',date:'Jun 13'},
-    {id:'H2',r:1,h:'Chile',a:'Venezuela',date:'Jun 13'},
-    {id:'H3',r:2,h:'Holanda',a:'Chile',date:'Jun 18'},
-    {id:'H4',r:2,h:'Coreia do Sul',a:'Venezuela',date:'Jun 18'},
-    {id:'H5',r:3,h:'Holanda',a:'Venezuela',date:'Jun 22'},
-    {id:'H6',r:3,h:'Coreia do Sul',a:'Chile',date:'Jun 22'},
+  H:{teams:['Espanha','Cabo Verde','Arábia Saudita','Uruguai'],games:[
+    {id:'H1',r:1,h:'Espanha',a:'Cabo Verde',date:'Jun 15'},
+    {id:'H2',r:1,h:'Arábia Saudita',a:'Uruguai',date:'Jun 16'},
+    {id:'H3',r:2,h:'Espanha',a:'Arábia Saudita',date:'Jun 20'},
+    {id:'H4',r:2,h:'Cabo Verde',a:'Uruguai',date:'Jun 20'},
+    {id:'H5',r:3,h:'Espanha',a:'Uruguai',date:'Jun 25'},
+    {id:'H6',r:3,h:'Cabo Verde',a:'Arábia Saudita',date:'Jun 25'},
   ]},
-  I:{teams:['Bélgica','Afeganistão','Romênia','El Salvador'],games:[
-    {id:'I1',r:1,h:'Bélgica',a:'El Salvador',date:'Jun 13'},
-    {id:'I2',r:1,h:'Afeganistão',a:'Romênia',date:'Jun 14'},
-    {id:'I3',r:2,h:'Bélgica',a:'Afeganistão',date:'Jun 18'},
-    {id:'I4',r:2,h:'El Salvador',a:'Romênia',date:'Jun 18'},
-    {id:'I5',r:3,h:'Bélgica',a:'Romênia',date:'Jun 22'},
-    {id:'I6',r:3,h:'Afeganistão',a:'El Salvador',date:'Jun 22'},
+  I:{teams:['França','Senegal','Iraque','Noruega'],games:[
+    {id:'I1',r:1,h:'França',a:'Senegal',date:'Jun 16'},
+    {id:'I2',r:1,h:'Iraque',a:'Noruega',date:'Jun 16'},
+    {id:'I3',r:2,h:'França',a:'Iraque',date:'Jun 20'},
+    {id:'I4',r:2,h:'Senegal',a:'Noruega',date:'Jun 21'},
+    {id:'I5',r:3,h:'França',a:'Noruega',date:'Jun 25'},
+    {id:'I6',r:3,h:'Senegal',a:'Iraque',date:'Jun 26'},
   ]},
-  J:{teams:['Inglaterra','Marrocos','Egito','Camarões'],games:[
-    {id:'J1',r:1,h:'Inglaterra',a:'Egito',date:'Jun 15'},
-    {id:'J2',r:1,h:'Marrocos',a:'Camarões',date:'Jun 15'},
-    {id:'J3',r:2,h:'Inglaterra',a:'Marrocos',date:'Jun 20'},
-    {id:'J4',r:2,h:'Egito',a:'Camarões',date:'Jun 20'},
-    {id:'J5',r:3,h:'Inglaterra',a:'Camarões',date:'Jun 24'},
-    {id:'J6',r:3,h:'Marrocos',a:'Egito',date:'Jun 24'},
+  J:{teams:['Argentina','Argélia','Áustria','Jordânia'],games:[
+    {id:'J1',r:1,h:'Argentina',a:'Argélia',date:'Jun 11'},
+    {id:'J2',r:1,h:'Áustria',a:'Jordânia',date:'Jun 12'},
+    {id:'J3',r:2,h:'Argentina',a:'Áustria',date:'Jun 16'},
+    {id:'J4',r:2,h:'Argélia',a:'Jordânia',date:'Jun 17'},
+    {id:'J5',r:3,h:'Argentina',a:'Jordânia',date:'Jun 21'},
+    {id:'J6',r:3,h:'Argélia',a:'Áustria',date:'Jun 22'},
   ]},
-  K:{teams:['Itália','Equador','Croácia','Eslovênia'],games:[
-    {id:'K1',r:1,h:'Itália',a:'Croácia',date:'Jun 16'},
-    {id:'K2',r:1,h:'Equador',a:'Eslovênia',date:'Jun 16'},
-    {id:'K3',r:2,h:'Itália',a:'Equador',date:'Jun 20'},
-    {id:'K4',r:2,h:'Croácia',a:'Eslovênia',date:'Jun 21'},
-    {id:'K5',r:3,h:'Itália',a:'Eslovênia',date:'Jun 25'},
-    {id:'K6',r:3,h:'Equador',a:'Croácia',date:'Jun 25'},
+  K:{teams:['Portugal','Colômbia','Rep. Dem. Congo','Uzbequistão'],games:[
+    {id:'K1',r:1,h:'Portugal',a:'Colômbia',date:'Jun 12'},
+    {id:'K2',r:1,h:'Rep. Dem. Congo',a:'Uzbequistão',date:'Jun 13'},
+    {id:'K3',r:2,h:'Portugal',a:'Rep. Dem. Congo',date:'Jun 17'},
+    {id:'K4',r:2,h:'Colômbia',a:'Uzbequistão',date:'Jun 18'},
+    {id:'K5',r:3,h:'Portugal',a:'Uzbequistão',date:'Jun 22'},
+    {id:'K6',r:3,h:'Colômbia',a:'Rep. Dem. Congo',date:'Jun 23'},
   ]},
-  L:{teams:['Uruguai','Nigéria','Suécia','Países Baixos'],games:[
-    {id:'L1',r:1,h:'Uruguai',a:'Nigéria',date:'Jun 12'},
-    {id:'L2',r:1,h:'Suécia',a:'Países Baixos',date:'Jun 12'},
-    {id:'L3',r:2,h:'Uruguai',a:'Suécia',date:'Jun 16'},
-    {id:'L4',r:2,h:'Nigéria',a:'Países Baixos',date:'Jun 16'},
-    {id:'L5',r:3,h:'Uruguai',a:'Países Baixos',date:'Jun 20'},
-    {id:'L6',r:3,h:'Nigéria',a:'Suécia',date:'Jun 20'},
+  L:{teams:['Inglaterra','Croácia','Gana','Panamá'],games:[
+    {id:'L1',r:1,h:'Inglaterra',a:'Croácia',date:'Jun 13'},
+    {id:'L2',r:1,h:'Gana',a:'Panamá',date:'Jun 14'},
+    {id:'L3',r:2,h:'Inglaterra',a:'Gana',date:'Jun 18'},
+    {id:'L4',r:2,h:'Croácia',a:'Panamá',date:'Jun 19'},
+    {id:'L5',r:3,h:'Inglaterra',a:'Panamá',date:'Jun 24'},
+    {id:'L6',r:3,h:'Croácia',a:'Gana',date:'Jun 24'},
   ]},
 };
 
 const ELIM_DATA = {
-  r32:{label:'Oitavas de Final',icon:'⚔️',games:[
-    {id:'O1',h:'1º A',a:'2º B',date:'Jul 2'},
-    {id:'O2',h:'1º C',a:'2º D',date:'Jul 2'},
-    {id:'O3',h:'1º E',a:'2º F',date:'Jul 3'},
-    {id:'O4',h:'1º G',a:'2º H',date:'Jul 3'},
-    {id:'O5',h:'1º B',a:'2º A',date:'Jul 4'},
-    {id:'O6',h:'1º D',a:'2º C',date:'Jul 4'},
-    {id:'O7',h:'1º F',a:'2º E',date:'Jul 5'},
-    {id:'O8',h:'1º H',a:'2º G',date:'Jul 5'},
-    {id:'O9',h:'1º I',a:'2º J',date:'Jul 6'},
-    {id:'O10',h:'1º K',a:'2º L',date:'Jul 6'},
-    {id:'O11',h:'1º J',a:'2º I',date:'Jul 7'},
-    {id:'O12',h:'1º L',a:'2º K',date:'Jul 7'},
-    {id:'O13',h:'Melhor 3º (A/B/C/D)',a:'Melhor 3º (E/F/G/H)',date:'Jul 8'},
-    {id:'O14',h:'Melhor 3º (I/J/K/L)',a:'Melhor 3º restante',date:'Jul 8'},
-    {id:'O15',h:'Melhor 3º restante',a:'Melhor 3º restante',date:'Jul 9'},
-    {id:'O16',h:'Melhor 3º restante',a:'Melhor 3º restante',date:'Jul 9'},
+  r32:{label:'Round of 32',icon:'⚔️',games:[
+    {id:'O1',h:'1º A',a:'2º B',date:'Jun 28'},
+    {id:'O2',h:'1º C',a:'2º D',date:'Jun 28'},
+    {id:'O3',h:'1º E',a:'2º F',date:'Jun 29'},
+    {id:'O4',h:'1º G',a:'2º H',date:'Jun 29'},
+    {id:'O5',h:'1º B',a:'2º A',date:'Jun 30'},
+    {id:'O6',h:'1º D',a:'2º C',date:'Jun 30'},
+    {id:'O7',h:'1º F',a:'2º E',date:'Jul 1'},
+    {id:'O8',h:'1º H',a:'2º G',date:'Jul 1'},
+    {id:'O9',h:'1º I',a:'2º J',date:'Jul 2'},
+    {id:'O10',h:'1º K',a:'2º L',date:'Jul 2'},
+    {id:'O11',h:'1º J',a:'2º I',date:'Jul 3'},
+    {id:'O12',h:'1º L',a:'2º K',date:'Jul 3'},
+    {id:'O13',h:'Melhor 3º (A/B/C/D)',a:'Melhor 3º (E/F/G/H)',date:'Jun 28'},
+    {id:'O14',h:'Melhor 3º (I/J/K/L)',a:'Melhor 3º restante',date:'Jun 29'},
+    {id:'O15',h:'Melhor 3º restante',a:'Melhor 3º restante',date:'Jun 30'},
+    {id:'O16',h:'Melhor 3º restante',a:'Melhor 3º restante',date:'Jul 1'},
   ]},
-  r16:{label:'Quartas de Final',icon:'🏅',games:[
-    {id:'Q1',h:'Venc. O1',a:'Venc. O2',date:'Jul 12'},
-    {id:'Q2',h:'Venc. O3',a:'Venc. O4',date:'Jul 12'},
-    {id:'Q3',h:'Venc. O5',a:'Venc. O6',date:'Jul 13'},
-    {id:'Q4',h:'Venc. O7',a:'Venc. O8',date:'Jul 13'},
-    {id:'Q5',h:'Venc. O9',a:'Venc. O10',date:'Jul 14'},
-    {id:'Q6',h:'Venc. O11',a:'Venc. O12',date:'Jul 14'},
-    {id:'Q7',h:'Venc. O13',a:'Venc. O14',date:'Jul 15'},
-    {id:'Q8',h:'Venc. O15',a:'Venc. O16',date:'Jul 15'},
+  r16:{label:'Oitavas de Final',icon:'🏅',games:[
+    {id:'Q1',h:'Venc. O1',a:'Venc. O2',date:'Jul 4'},
+    {id:'Q2',h:'Venc. O3',a:'Venc. O4',date:'Jul 4'},
+    {id:'Q3',h:'Venc. O5',a:'Venc. O6',date:'Jul 5'},
+    {id:'Q4',h:'Venc. O7',a:'Venc. O8',date:'Jul 5'},
+    {id:'Q5',h:'Venc. O9',a:'Venc. O10',date:'Jul 6'},
+    {id:'Q6',h:'Venc. O11',a:'Venc. O12',date:'Jul 6'},
+    {id:'Q7',h:'Venc. O13',a:'Venc. O14',date:'Jul 7'},
+    {id:'Q8',h:'Venc. O15',a:'Venc. O16',date:'Jul 7'},
   ]},
-  semi:{label:'Semifinais',icon:'🌟',games:[
-    {id:'S1',h:'Venc. Q1',a:'Venc. Q2',date:'Jul 18'},
-    {id:'S2',h:'Venc. Q3',a:'Venc. Q4',date:'Jul 18'},
-    {id:'S3',h:'Venc. Q5',a:'Venc. Q6',date:'Jul 19'},
-    {id:'S4',h:'Venc. Q7',a:'Venc. Q8',date:'Jul 19'},
+  quartas:{label:'Quartas de Final',icon:'🌟',games:[
+    {id:'S1',h:'Venc. Q1',a:'Venc. Q2',date:'Jul 9'},
+    {id:'S2',h:'Venc. Q3',a:'Venc. Q4',date:'Jul 10'},
+    {id:'S3',h:'Venc. Q5',a:'Venc. Q6',date:'Jul 11'},
+    {id:'S4',h:'Venc. Q7',a:'Venc. Q8',date:'Jul 11'},
+  ]},
+  semi:{label:'Semifinais',icon:'💫',games:[
+    {id:'SF1',h:'Venc. S1',a:'Venc. S2',date:'Jul 14'},
+    {id:'SF2',h:'Venc. S3',a:'Venc. S4',date:'Jul 15'},
   ]},
   final:{label:'Final + 3º Lugar',icon:'🏆',games:[
-    {id:'T1',h:'Perd. S1',a:'Perd. S2',date:'Jul 25 (3º lugar)'},
-    {id:'T2',h:'Perd. S3',a:'Perd. S4',date:'Jul 25 (3º lugar)'},
-    {id:'F1',h:'Venc. S1',a:'Venc. S2',date:'Jul 29 🏆'},
-    {id:'F2',h:'Venc. S3',a:'Venc. S4',date:'Jul 29 🏆'},
+    {id:'T1',h:'Perd. SF1',a:'Perd. SF2',date:'Jul 18 (3º lugar)'},
+    {id:'F1',h:'Venc. SF1',a:'Venc. SF2',date:'Jul 19 🏆'},
   ]},
 };
 
@@ -878,25 +880,31 @@ const GAME_TIMES = {
   'O1':'15:00','O2':'18:00','O3':'16:00','O4':'19:00','O5':'15:00','O6':'18:00','O7':'16:00','O8':'19:00','O9':'15:00','O10':'18:00','O11':'16:00','O12':'19:00','O13':'17:00','O14':'20:00','O15':'15:00','O16':'18:00',
   'Q1':'15:00','Q2':'18:00','Q3':'16:00','Q4':'19:00','Q5':'15:00','Q6':'18:00','Q7':'16:00','Q8':'19:00',
   'S1':'16:00','S2':'16:00','S3':'20:00','S4':'20:00',
-  'T1':'17:00','T2':'17:00','F1':'20:00','F2':'20:00'
+  'SF1':'21:00','SF2':'21:00',
+  'T1':'17:00','F1':'20:00'
 };
-  'EUA':'🇺🇸','Panamá':'🇵🇦','Guatemala':'🇬🇹','Jamaica':'🇯🇲',
-  'México':'🇲🇽','Canadá':'🇨🇦','Trinidad e Tobago':'🇹🇹','Arábia Saudita':'🇸🇦',
-  'Brasil':'🇧🇷','Japão':'🇯🇵','Sérvia':'🇷🇸','Escócia':'🇬🇧',
-  'Argentina':'🇦🇷','Peru':'🇵🇪','Irã':'🇮🇷','Gabão':'🇬🇦',
-  'Espanha':'🇪🇸','Uzbequistão':'🇺🇿','Senegal':'🇸🇳','Noruega':'🇳🇴',
-  'França':'🇫🇷','Austrália':'🇦🇺','Hungria':'🇭🇺','Tunísia':'🇹🇳',
-  'Alemanha':'🇩🇪','Portugal':'🇵🇹','Turquia':'🇹🇷','Argélia':'🇩🇿',
-  'Holanda':'🇳🇱','Chile':'🇨🇱','Coreia do Sul':'🇰🇷','Venezuela':'🇻🇪',
-  'Bélgica':'🇧🇪','Afeganistão':'🇦🇫','Romênia':'🇷🇴','El Salvador':'🇸🇻',
-  'Inglaterra':'🇬🇧','Marrocos':'🇲🇦','Egito':'🇪🇬','Camarões':'🇨🇲',
-  'Itália':'🇮🇹','Equador':'🇪🇨','Croácia':'🇭🇷','Eslovênia':'🇸🇮',
-  'Uruguai':'🇺🇾','Nigéria':'🇳🇬','Suécia':'🇸🇪','Países Baixos':'🇳🇱'
+
+const COUNTRY_FLAGS = {
+  'EUA':'🇺🇸','México':'🇲🇽','Canadá':'🇨🇦','Panamá':'🇵🇦',
+  'Brasil':'🇧🇷','Argentina':'🇦🇷','Uruguai':'🇺🇾','Equador':'🇪🇨',
+  'Colômbia':'🇨🇴','Paraguai':'🇵🇾','Haiti':'🇭🇹',
+  'Inglaterra':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Escócia':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','França':'🇫🇷','Espanha':'🇪🇸',
+  'Alemanha':'🇩🇪','Portugal':'🇵🇹','Países Baixos':'🇳🇱','Bélgica':'🇧🇪',
+  'Croácia':'🇭🇷','Suécia':'🇸🇪','Noruega':'🇳🇴','Áustria':'🇦🇹',
+  'Suíça':'🇨🇭','Bósnia e Herzegovina':'🇧🇦','Rep. Tcheca':'🇨🇿','Uzbequistão':'🇺🇿',
+  'Japão':'🇯🇵','Coreia do Sul':'🇰🇷','Austrália':'🇦🇺','Nova Zelândia':'🇳🇿',
+  'Irã':'🇮🇷','Arábia Saudita':'🇸🇦','Iraque':'🇮🇶','Jordânia':'🇯🇴','Catar':'🇶🇦',
+  'Marrocos':'🇲🇦','Egito':'🇪🇬','Senegal':'🇸🇳','Gana':'🇬🇭',
+  'Costa do Marfim':'🇨🇮','África do Sul':'🇿🇦','Rep. Dem. Congo':'🇨🇩','Cabo Verde':'🇨🇻',
+  'Turquia':'🇹🇷','Argélia':'🇩🇿','Curaçao':'🇨🇼','Tunísia':'🇹🇳',
 };
+
 let myPalpites   = {};
 let resultados   = {};
 let palpitesEditing = null;
 let saveDebounce = {};
+let isLoadingPage = false;
+let eliminationCache = {};
 
 // ════════════════════════════════════════════
 // FIREBASE CONFIG — PRODUÇÃO
@@ -910,9 +918,6 @@ const FIREBASE_CONFIG = {
   appId: "1:161565328186:web:7599de410ac6ad2f864603"
 };
 
-// Remover este sistema - admins devem ser gerenciados pelo painel de admin
-// NUNCA use email hardcoded para conceder permissões de admin
-const ADMIN_EMAIL = null;
 
 function initFirebase(cfg) {
   try {
@@ -983,7 +988,7 @@ async function doRegister() {
   try {
     show('screen-loading'); hide('screen-auth');
     const cred = await auth_.createUserWithEmailAndPassword(email, pwd);
-    const role = (ADMIN_EMAIL && email.toLowerCase()===ADMIN_EMAIL.toLowerCase()) ? 'admin' : 'user';
+    const role = 'user';
     await db_.collection('usuarios').doc(cred.user.uid).set({
       nome, apelido, email, role, ativo:true,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1128,6 +1133,277 @@ function computeRanking(users, resultados, allPalpites) {
       return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
     })
     .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
+}
+
+// ════════════════════════════════════════════
+// AUTOMATIC ELIMINATION UPDATE
+// ════════════════════════════════════════════
+async function updateEliminationTeams() {
+  try {
+    isLoadingPage = true;
+    const rSnap = await db_.collection('resultados').get();
+    const res = {};
+    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+
+    // Check se todos os grupos foram preenchidos
+    const grupoIds = Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(game=>game.id));
+    const todosGruposCompletos = grupoIds.every(id=>res[id]?.h_real!==undefined);
+
+    if (!todosGruposCompletos) {
+      isLoadingPage = false;
+      return;
+    }
+
+    // Calcular 1º e 2º de cada grupo
+    const winners = {};
+    Object.entries(GRUPOS_DATA).forEach(([grp, data])=>{
+      const standings = computeStandings(grp, res);
+      winners[`1_${grp}`] = standings[0]?.team || `1º ${grp}`;
+      winners[`2_${grp}`] = standings[1]?.team || `2º ${grp}`;
+    });
+
+    // Atualizar oitavas
+    const novasOitavas = ELIM_DATA.r32.games.map(game=>{
+      let h = game.h, a = game.a;
+      for (let g of 'ABCDEFGHIJKL') {
+        h = h.replace(`1º ${g}`, winners[`1_${g}`] || `1º ${g}`);
+        h = h.replace(`2º ${g}`, winners[`2_${g}`] || `2º ${g}`);
+        a = a.replace(`1º ${g}`, winners[`1_${g}`] || `1º ${g}`);
+        a = a.replace(`2º ${g}`, winners[`2_${g}`] || `2º ${g}`);
+      }
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    // Atualizar resultados das oitavas
+    let houveMudanca = false;
+    for (const novo of novasOitavas) {
+      if (novo.h_atualizado !== novo.h_original && res[novo.id]) {
+        houveMudanca = true;
+        await db_.collection('resultados').doc(novo.id).update({h_team:novo.h_atualizado, a_team:novo.a_atualizado}, {merge:true});
+      }
+    }
+
+    // Se oitavas foram atualizadas, atualizar quartas
+    if (houveMudanca) {
+      await updateQuarterfinals(res);
+    } else {
+      isLoadingPage = false;
+      // Re-render admin page if it's currently displayed
+      if (document.getElementById('page-admin')?.classList.contains('active')) {
+        setTimeout(() => renderAdminResultados(), 300);
+      }
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar eliminatórias:', e);
+    isLoadingPage = false;
+  }
+}
+
+async function updateQuarterfinals(res) {
+  try {
+    // Refetch para ter dados atualizados
+    const rSnap = await db_.collection('resultados').get();
+    const updatedRes = {};
+    rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
+
+    // Verificar se todas oitavas estão com resultado
+    const oitavaIds = ELIM_DATA.r32.games.map(g=>g.id);
+    const todasOitavasCompletas = oitavaIds.every(id=>updatedRes[id]?.h_real!==undefined);
+
+    if (!todasOitavasCompletas) {
+      isLoadingPage = false;
+      return;
+    }
+
+    // Calcular vencedores das oitavas e atualizar quartas
+    const quartaGames = ELIM_DATA.r16.games.map(game=>{
+      let h = game.h, a = game.a;
+      ELIM_DATA.r32.games.forEach(oitava=>{
+        const oitavaRes = updatedRes[oitava.id];
+        if (!oitavaRes?.h_real) return;
+        const h_real = parseInt(oitavaRes.h_real);
+        const a_real = parseInt(oitavaRes.a_real);
+        const vencedor = h_real > a_real ? (oitavaRes.h_team || oitava.h) : (oitavaRes.a_team || oitava.a);
+        h = h.replace(`Venc. ${oitava.id}`, vencedor);
+        a = a.replace(`Venc. ${oitava.id}`, vencedor);
+      });
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    let houveMudancaQuartas = false;
+    for (const q of quartaGames) {
+      if (q.h_atualizado !== q.h_original && updatedRes[q.id]) {
+        houveMudancaQuartas = true;
+        await db_.collection('resultados').doc(q.id).update({h_team:q.h_atualizado, a_team:q.a_atualizado}, {merge:true});
+      }
+    }
+
+    if (houveMudancaQuartas) {
+      await updateQuartas(updatedRes);
+    } else {
+      isLoadingPage = false;
+      // Re-render admin page if it's currently displayed
+      if (document.getElementById('page-admin')?.classList.contains('active')) {
+        setTimeout(() => renderAdminResultados(), 300);
+      }
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar quartas:', e);
+    isLoadingPage = false;
+  }
+}
+
+async function updateQuartas(res) {
+  try {
+    const rSnap = await db_.collection('resultados').get();
+    const updatedRes = {};
+    rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
+
+    const r16Ids = ELIM_DATA.r16.games.map(g=>g.id);
+    const todasR16Completas = r16Ids.every(id=>updatedRes[id]?.h_real!==undefined);
+
+    if (!todasR16Completas) {
+      isLoadingPage = false;
+      return;
+    }
+
+    const quartaGames = ELIM_DATA.quartas.games.map(game=>{
+      let h = game.h, a = game.a;
+      ELIM_DATA.r16.games.forEach(r16=>{
+        const r16Res = updatedRes[r16.id];
+        if (!r16Res?.h_real) return;
+        const h_real = parseInt(r16Res.h_real);
+        const a_real = parseInt(r16Res.a_real);
+        const vencedor = h_real > a_real ? (r16Res.h_team || r16.h) : (r16Res.a_team || r16.a);
+        h = h.replace(`Venc. ${r16.id}`, vencedor);
+        a = a.replace(`Venc. ${r16.id}`, vencedor);
+      });
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    let houveMudanca = false;
+    for (const q of quartaGames) {
+      if (q.h_atualizado !== q.h_original && updatedRes[q.id]) {
+        houveMudanca = true;
+        await db_.collection('resultados').doc(q.id).update({h_team:q.h_atualizado, a_team:q.a_atualizado}, {merge:true});
+      }
+    }
+
+    if (houveMudanca) {
+      await updateSemifinals(updatedRes);
+    } else {
+      isLoadingPage = false;
+      if (document.getElementById('page-admin')?.classList.contains('active')) {
+        setTimeout(() => renderAdminResultados(), 300);
+      }
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar quartas de final:', e);
+    isLoadingPage = false;
+  }
+}
+
+async function updateSemifinals(res) {
+  try {
+    // Refetch para ter dados atualizados
+    const rSnap = await db_.collection('resultados').get();
+    const updatedRes = {};
+    rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
+
+    // Verificar se todas quartas estão com resultado
+    const quartaIds = ELIM_DATA.quartas.games.map(g=>g.id);
+    const todasQuartasCompletas = quartaIds.every(id=>updatedRes[id]?.h_real!==undefined);
+
+    if (!todasQuartasCompletas) {
+      isLoadingPage = false;
+      return;
+    }
+
+    // Calcular vencedores das quartas e atualizar semis
+    const semiGames = ELIM_DATA.semi.games.map(game=>{
+      let h = game.h, a = game.a;
+      ELIM_DATA.quartas.games.forEach(quarta=>{
+        const quartaRes = updatedRes[quarta.id];
+        if (!quartaRes?.h_real) return;
+        const h_real = parseInt(quartaRes.h_real);
+        const a_real = parseInt(quartaRes.a_real);
+        const vencedor = h_real > a_real ? (quartaRes.h_team || quarta.h) : (quartaRes.a_team || quarta.a);
+        h = h.replace(`Venc. ${quarta.id}`, vencedor);
+        a = a.replace(`Venc. ${quarta.id}`, vencedor);
+      });
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    let houveMudancaSemis = false;
+    for (const s of semiGames) {
+      if (s.h_atualizado !== s.h_original && updatedRes[s.id]) {
+        houveMudancaSemis = true;
+        await db_.collection('resultados').doc(s.id).update({h_team:s.h_atualizado, a_team:s.a_atualizado}, {merge:true});
+      }
+    }
+
+    if (houveMudancaSemis) {
+      await updateFinal(updatedRes);
+    } else {
+      isLoadingPage = false;
+      // Re-render admin page if it's currently displayed
+      if (document.getElementById('page-admin')?.classList.contains('active')) {
+        setTimeout(() => renderAdminResultados(), 300);
+      }
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar semis:', e);
+    isLoadingPage = false;
+  }
+}
+
+async function updateFinal(res) {
+  try {
+    // Refetch para ter dados atualizados
+    const rSnap = await db_.collection('resultados').get();
+    const updatedRes = {};
+    rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
+
+    // Verificar se todas semis estão com resultado
+    const semiIds = ELIM_DATA.semi.games.map(g=>g.id);
+    const todasSemisCompletas = semiIds.every(id=>updatedRes[id]?.h_real!==undefined);
+
+    if (!todasSemisCompletas) {
+      isLoadingPage = false;
+      return;
+    }
+
+    // Calcular vencedores das semis (para Final e 3º lugar)
+    const finalGames = ELIM_DATA.final.games.map(game=>{
+      let h = game.h, a = game.a;
+      ELIM_DATA.semi.games.forEach(semi=>{
+        const semiRes = updatedRes[semi.id];
+        if (!semiRes?.h_real) return;
+        const h_real = parseInt(semiRes.h_real);
+        const a_real = parseInt(semiRes.a_real);
+        const vencedor = h_real > a_real ? (semiRes.h_team || semi.h) : (semiRes.a_team || semi.a);
+        const perdedor = h_real > a_real ? (semiRes.a_team || semi.a) : (semiRes.h_team || semi.h);
+        h = h.replace(`Venc. ${semi.id}`, vencedor).replace(`Perd. ${semi.id}`, perdedor);
+        a = a.replace(`Venc. ${semi.id}`, vencedor).replace(`Perd. ${semi.id}`, perdedor);
+      });
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    for (const f of finalGames) {
+      if (f.h_atualizado !== f.h_original && updatedRes[f.id]) {
+        await db_.collection('resultados').doc(f.id).update({h_team:f.h_atualizado, a_team:f.a_atualizado}, {merge:true});
+      }
+    }
+
+    isLoadingPage = false;
+    // Re-render admin page if it's currently displayed
+    if (document.getElementById('page-admin')?.classList.contains('active')) {
+      setTimeout(() => renderAdminResultados(), 300);
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar final:', e);
+    isLoadingPage = false;
+  }
 }
 
 // ════════════════════════════════════════════
@@ -1867,7 +2143,17 @@ async function saveResultado(gameId) {
     delete resultBuf[gameId];
     ['h','a'].forEach(s=>{ const inp=document.getElementById(`r${s}_${gameId}`); if(inp) inp.classList.add('saved'); });
     showToast('✅ Resultado salvo','success');
-  } catch(e) { showToast('Erro: '+e.message,'error'); }
+    // Atualizar eliminatórias automaticamente se resultado foi inserido nos grupos
+    const grupoIds = Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(game=>game.id));
+    if (grupoIds.includes(gameId)) {
+      await updateEliminationTeams();
+    } else {
+      isLoadingPage = false;
+    }
+  } catch(e) {
+    showToast('Erro: '+e.message,'error');
+    isLoadingPage = false;
+  }
 }
 
 async function toggleLock(gameId) {
@@ -2079,7 +2365,6 @@ async function renderAdminConfig() {
 async function saveCFGAdmin() {
   const nome = document.getElementById('cfg-nome').value.trim();
   const ptsExato = parseInt(document.getElementById('cfg-pts-exato').value)||10;
-  const ptsRes = parseInt(document.getElementById('cfg-pts-res').value)||5;
   const ptsVencSaldo = parseInt(document.getElementById('cfg-pts-venc-saldo').value)||7;
   const ptsApenasVenc = parseInt(document.getElementById('cfg-pts-apenas-venc').value)||5;
   const ptsBonusClass = parseInt(document.getElementById('cfg-pts-bonus-class').value)||3;
@@ -2091,7 +2376,6 @@ async function saveCFGAdmin() {
     const cfg = {
       nome_bolao:nome,
       pts_exato:ptsExato,
-      pts_resultado:ptsRes,
       pts_vencedor_saldo:ptsVencSaldo,
       pts_apenas_vencedor:ptsApenasVenc,
       pts_bonus_classificacao:ptsBonusClass,
@@ -2165,8 +2449,8 @@ async function exportRankingCSV() {
     const allPals = {};
     await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
     const ranking = computeRanking(users, res, allPals);
-    let csv = 'Posição,Participante,Apelido,Pontos,Exatos,Resultados,Jogos\n';
-    ranking.forEach((u,i)=>{ csv+=`${i+1},"${u.nome}","${u.apelido}",${u.pontos},${u.exatos},${u.resultados_certos},${u.jogos}\n`; });
+    let csv = 'Posição,Participante,Apelido,Pontos,Exatos,Venc+Saldo,Apenas Venc,Jogos\n';
+    ranking.forEach((u,i)=>{ csv+=`${i+1},"${u.nome}","${u.apelido}",${u.pontos},${u.exatos},${u.venc_saldo},${u.apenas_venc},${u.jogos}\n`; });
     downloadFile(csv, `bolao2026_ranking_${fmtDate()}.csv`, 'text/csv');
     showToast('✅ Ranking exportado!','success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
