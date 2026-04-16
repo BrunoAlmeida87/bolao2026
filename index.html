@@ -880,6 +880,8 @@ const GAME_TIMES = {
   'S1':'16:00','S2':'16:00','S3':'20:00','S4':'20:00',
   'T1':'17:00','T2':'17:00','F1':'20:00','F2':'20:00'
 };
+
+const COUNTRY_FLAGS = {
   'EUA':'🇺🇸','Panamá':'🇵🇦','Guatemala':'🇬🇹','Jamaica':'🇯🇲',
   'México':'🇲🇽','Canadá':'🇨🇦','Trinidad e Tobago':'🇹🇹','Arábia Saudita':'🇸🇦',
   'Brasil':'🇧🇷','Japão':'🇯🇵','Sérvia':'🇷🇸','Escócia':'🇬🇧',
@@ -893,10 +895,13 @@ const GAME_TIMES = {
   'Itália':'🇮🇹','Equador':'🇪🇨','Croácia':'🇭🇷','Eslovênia':'🇸🇮',
   'Uruguai':'🇺🇾','Nigéria':'🇳🇬','Suécia':'🇸🇪','Países Baixos':'🇳🇱'
 };
+
 let myPalpites   = {};
 let resultados   = {};
 let palpitesEditing = null;
 let saveDebounce = {};
+let isLoadingPage = false;
+let eliminationCache = {};
 
 // ════════════════════════════════════════════
 // FIREBASE CONFIG — PRODUÇÃO
@@ -1128,6 +1133,227 @@ function computeRanking(users, resultados, allPalpites) {
       return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
     })
     .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
+}
+
+// ════════════════════════════════════════════
+// AUTOMATIC ELIMINATION UPDATE
+// ════════════════════════════════════════════
+async function updateEliminationTeams() {
+  try {
+    isLoadingPage = true;
+    const rSnap = await db_.collection('resultados').get();
+    const res = {};
+    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+
+    // Check se todos os grupos foram preenchidos
+    const grupoIds = Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(game=>game.id));
+    const todosGruposCompletos = grupoIds.every(id=>res[id]?.h_real!==undefined);
+
+    if (!todosGruposCompletos) {
+      isLoadingPage = false;
+      return;
+    }
+
+    // Calcular 1º e 2º de cada grupo
+    const winners = {};
+    Object.entries(GRUPOS_DATA).forEach(([grp, data])=>{
+      const standings = computeStandings(grp, res);
+      winners[`1_${grp}`] = standings[0]?.team || `1º ${grp}`;
+      winners[`2_${grp}`] = standings[1]?.team || `2º ${grp}`;
+    });
+
+    // Atualizar oitavas
+    const novasOitavas = ELIM_DATA.r32.games.map(game=>{
+      let h = game.h, a = game.a;
+      for (let g of 'ABCDEFGHIJKL') {
+        h = h.replace(`1º ${g}`, winners[`1_${g}`] || `1º ${g}`);
+        h = h.replace(`2º ${g}`, winners[`2_${g}`] || `2º ${g}`);
+        a = a.replace(`1º ${g}`, winners[`1_${g}`] || `1º ${g}`);
+        a = a.replace(`2º ${g}`, winners[`2_${g}`] || `2º ${g}`);
+      }
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    // Atualizar resultados das oitavas
+    let houveMudanca = false;
+    for (const novo of novasOitavas) {
+      if (novo.h_atualizado !== novo.h_original && res[novo.id]) {
+        houveMudanca = true;
+        await db_.collection('resultados').doc(novo.id).update({h_team:novo.h_atualizado, a_team:novo.a_atualizado}, {merge:true});
+      }
+    }
+
+    // Se oitavas foram atualizadas, atualizar quartas
+    if (houveMudanca) {
+      await updateQuarterfinals(res);
+    } else {
+      isLoadingPage = false;
+      // Re-render admin page if it's currently displayed
+      if (document.getElementById('page-admin')?.classList.contains('active')) {
+        setTimeout(() => renderAdminResultados(), 300);
+      }
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar eliminatórias:', e);
+    isLoadingPage = false;
+  }
+}
+
+async function updateQuarterfinals(res) {
+  try {
+    // Refetch para ter dados atualizados
+    const rSnap = await db_.collection('resultados').get();
+    const updatedRes = {};
+    rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
+
+    // Verificar se todas oitavas estão com resultado
+    const oitavaIds = ELIM_DATA.r32.games.map(g=>g.id);
+    const todasOitavasCompletas = oitavaIds.every(id=>updatedRes[id]?.h_real!==undefined);
+
+    if (!todasOitavasCompletas) {
+      isLoadingPage = false;
+      return;
+    }
+
+    // Calcular vencedores das oitavas e atualizar quartas
+    const quartaGames = ELIM_DATA.r16.games.map(game=>{
+      let h = game.h, a = game.a;
+      ELIM_DATA.r32.games.forEach(oitava=>{
+        const oitavaRes = updatedRes[oitava.id];
+        if (!oitavaRes?.h_real) return;
+        const h_real = parseInt(oitavaRes.h_real);
+        const a_real = parseInt(oitavaRes.a_real);
+        const vencedor = h_real > a_real ? (oitavaRes.h_team || oitava.h) : (oitavaRes.a_team || oitava.a);
+        h = h.replace(`Venc. ${oitava.id}`, vencedor);
+        a = a.replace(`Venc. ${oitava.id}`, vencedor);
+      });
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    let houveMudancaQuartas = false;
+    for (const q of quartaGames) {
+      if (q.h_atualizado !== q.h_original && updatedRes[q.id]) {
+        houveMudancaQuartas = true;
+        await db_.collection('resultados').doc(q.id).update({h_team:q.h_atualizado, a_team:q.a_atualizado}, {merge:true});
+      }
+    }
+
+    if (houveMudancaQuartas) {
+      await updateSemifinals(updatedRes);
+    } else {
+      isLoadingPage = false;
+      // Re-render admin page if it's currently displayed
+      if (document.getElementById('page-admin')?.classList.contains('active')) {
+        setTimeout(() => renderAdminResultados(), 300);
+      }
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar quartas:', e);
+    isLoadingPage = false;
+  }
+}
+
+async function updateSemifinals(res) {
+  try {
+    // Refetch para ter dados atualizados
+    const rSnap = await db_.collection('resultados').get();
+    const updatedRes = {};
+    rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
+
+    // Verificar se todas quartas estão com resultado
+    const quartaIds = ELIM_DATA.r16.games.map(g=>g.id);
+    const todasQuartasCompletas = quartaIds.every(id=>updatedRes[id]?.h_real!==undefined);
+
+    if (!todasQuartasCompletas) {
+      isLoadingPage = false;
+      return;
+    }
+
+    // Calcular vencedores das quartas e atualizar semis
+    const semiGames = ELIM_DATA.semi.games.map(game=>{
+      let h = game.h, a = game.a;
+      ELIM_DATA.r16.games.forEach(quarta=>{
+        const quartaRes = updatedRes[quarta.id];
+        if (!quartaRes?.h_real) return;
+        const h_real = parseInt(quartaRes.h_real);
+        const a_real = parseInt(quartaRes.a_real);
+        const vencedor = h_real > a_real ? (quartaRes.h_team || quarta.h) : (quartaRes.a_team || quarta.a);
+        h = h.replace(`Venc. ${quarta.id}`, vencedor);
+        a = a.replace(`Venc. ${quarta.id}`, vencedor);
+      });
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    let houveMudancaSemis = false;
+    for (const s of semiGames) {
+      if (s.h_atualizado !== s.h_original && updatedRes[s.id]) {
+        houveMudancaSemis = true;
+        await db_.collection('resultados').doc(s.id).update({h_team:s.h_atualizado, a_team:s.a_atualizado}, {merge:true});
+      }
+    }
+
+    if (houveMudancaSemis) {
+      await updateFinal(updatedRes);
+    } else {
+      isLoadingPage = false;
+      // Re-render admin page if it's currently displayed
+      if (document.getElementById('page-admin')?.classList.contains('active')) {
+        setTimeout(() => renderAdminResultados(), 300);
+      }
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar semis:', e);
+    isLoadingPage = false;
+  }
+}
+
+async function updateFinal(res) {
+  try {
+    // Refetch para ter dados atualizados
+    const rSnap = await db_.collection('resultados').get();
+    const updatedRes = {};
+    rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
+
+    // Verificar se todas semis estão com resultado
+    const semiIds = ELIM_DATA.semi.games.map(g=>g.id);
+    const todasSemisCompletas = semiIds.every(id=>updatedRes[id]?.h_real!==undefined);
+
+    if (!todasSemisCompletas) {
+      isLoadingPage = false;
+      return;
+    }
+
+    // Calcular vencedores das semis (para Final e 3º lugar)
+    const finalGames = ELIM_DATA.final.games.map(game=>{
+      let h = game.h, a = game.a;
+      ELIM_DATA.semi.games.forEach(semi=>{
+        const semiRes = updatedRes[semi.id];
+        if (!semiRes?.h_real) return;
+        const h_real = parseInt(semiRes.h_real);
+        const a_real = parseInt(semiRes.a_real);
+        const vencedor = h_real > a_real ? (semiRes.h_team || semi.h) : (semiRes.a_team || semi.a);
+        const perdedor = h_real > a_real ? (semiRes.a_team || semi.a) : (semiRes.h_team || semi.h);
+        h = h.replace(`Venc. ${semi.id}`, vencedor).replace(`Perd. ${semi.id}`, perdedor);
+        a = a.replace(`Venc. ${semi.id}`, vencedor).replace(`Perd. ${semi.id}`, perdedor);
+      });
+      return {id:game.id, h_atualizado:h, a_atualizado:a, h_original:game.h, a_original:game.a};
+    });
+
+    for (const f of finalGames) {
+      if (f.h_atualizado !== f.h_original && updatedRes[f.id]) {
+        await db_.collection('resultados').doc(f.id).update({h_team:f.h_atualizado, a_team:f.a_atualizado}, {merge:true});
+      }
+    }
+
+    isLoadingPage = false;
+    // Re-render admin page if it's currently displayed
+    if (document.getElementById('page-admin')?.classList.contains('active')) {
+      setTimeout(() => renderAdminResultados(), 300);
+    }
+  } catch(e) {
+    console.error('Erro ao atualizar final:', e);
+    isLoadingPage = false;
+  }
 }
 
 // ════════════════════════════════════════════
@@ -1867,7 +2093,17 @@ async function saveResultado(gameId) {
     delete resultBuf[gameId];
     ['h','a'].forEach(s=>{ const inp=document.getElementById(`r${s}_${gameId}`); if(inp) inp.classList.add('saved'); });
     showToast('✅ Resultado salvo','success');
-  } catch(e) { showToast('Erro: '+e.message,'error'); }
+    // Atualizar eliminatórias automaticamente se resultado foi inserido nos grupos
+    const grupoIds = Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(game=>game.id));
+    if (grupoIds.includes(gameId)) {
+      await updateEliminationTeams();
+    } else {
+      isLoadingPage = false;
+    }
+  } catch(e) {
+    showToast('Erro: '+e.message,'error');
+    isLoadingPage = false;
+  }
 }
 
 async function toggleLock(gameId) {
