@@ -4,10 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
+<!-- App Version -->
+<meta name="app-version" content="v1.0.2">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script>
   // Garante que o Firebase esteja disponível antes de qualquer uso
   window.__firebaseReady = new Promise((resolve) => {
@@ -355,6 +358,29 @@ a:hover{text-decoration:underline}
 .toggle-switch input:disabled+.toggle-slider:before{background:var(--text-muted)}
 
 /* ══════════════════════════════════════════
+   NAV DROPDOWN
+══════════════════════════════════════════ */
+.nav-dropdown{position:relative;display:inline-block}
+.dropdown-btn{
+  padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+  background:transparent;color:var(--text-muted);cursor:pointer;
+  font-size:0.85rem;font-weight:600;transition:all .2s;
+}
+.dropdown-btn:hover{border-color:var(--gold);color:var(--gold)}
+.dropdown-content{
+  display:none;position:absolute;top:100%;left:0;background:var(--mid-blue);
+  border:1px solid var(--border);border-radius:8px;z-index:150;min-width:180px;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);
+}
+.dropdown-content.show{display:block}
+.dropdown-content a{
+  display:block;padding:10px 14px;color:var(--text-muted);text-decoration:none;
+  transition:all .2s;cursor:pointer;font-size:0.88rem;
+}
+.dropdown-content a:hover{background:rgba(255,215,0,.1);color:var(--gold)}
+@media(min-width:601px){.nav-dropdown{display:none}}
+
+/* ══════════════════════════════════════════
    ALERTS & EMPTY STATES
 ══════════════════════════════════════════ */
 .alert{padding:14px 18px;border-radius:10px;margin-bottom:16px;font-size:0.88rem;line-height:1.6}
@@ -513,9 +539,10 @@ a:hover{text-decoration:underline}
             onkeydown="if(event.key==='Enter') doLogin()">
         </div>
         <div id="login-error" class="alert alert-error" style="display:none"></div>
+        <div id="login-success" class="alert alert-success" style="display:none"></div>
         <button class="btn btn-primary btn-full" onclick="doLogin()">Entrar →</button>
         <p style="text-align:center;margin-top:12px;font-size:0.8rem">
-          <a href="#" onclick="showForgotPwd()">Esqueci minha senha</a>
+          <a href="#" onclick="event.preventDefault();showForgotPwd()">Esqueci minha senha</a>
         </p>
       </div>
 
@@ -560,8 +587,23 @@ a:hover{text-decoration:underline}
       <button class="nav-btn" data-page="palpites" onclick="navigateTo('palpites')">⚽ Palpites</button>
       <button class="nav-btn" data-page="tabelas" onclick="navigateTo('tabelas')">📊 Tabelas</button>
       <button class="nav-btn" data-page="chaveamento" onclick="navigateTo('chaveamento')">🔑 Chaves</button>
+      <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
       <button class="nav-btn" data-page="admin" id="admin-nav" style="display:none" onclick="navigateTo('admin')">⚙️ Admin</button>
     </nav>
+
+    <!-- Dropdown Nav (Mobile) -->
+    <div class="nav-dropdown">
+      <button class="dropdown-btn" onclick="toggleDropdown()">☰ Menu</button>
+      <div id="dropdown-menu" class="dropdown-content">
+        <a onclick="navigateTo('dashboard');toggleDropdown()">🏠 Ranking</a>
+        <a onclick="navigateTo('palpites');toggleDropdown()">⚽ Palpites</a>
+        <a onclick="navigateTo('tabelas');toggleDropdown()">📊 Tabelas</a>
+        <a onclick="navigateTo('chaveamento');toggleDropdown()">🔑 Chaveamento</a>
+        <a onclick="navigateTo('regras');toggleDropdown()">📋 Regras</a>
+        <a onclick="navigateTo('estatisticas');toggleDropdown()">📈 Estatísticas</a>
+        <a id="admin-dropdown" style="display:none" onclick="navigateTo('admin');toggleDropdown()">⚙️ Admin</a>
+      </div>
+    </div>
     <div class="app-user">
       <span class="user-name" id="header-apelido">—</span>
       <span class="badge-admin" id="header-admin-badge" style="display:none">ADMIN</span>
@@ -573,7 +615,7 @@ a:hover{text-decoration:underline}
   <nav class="bottom-nav" id="bottom-nav">
     <button class="active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠<span>Ranking</span></button>
     <button data-page="palpites" onclick="navigateTo('palpites')">⚽<span>Palpites</span></button>
-    <button data-page="ver-palpites" onclick="navigateTo('ver-palpites')">👁️<span>Ver</span></button>
+    <button data-page="regras" onclick="navigateTo('regras')">📋<span>Regras</span></button>
     <button data-page="tabelas" onclick="navigateTo('tabelas')">📊<span>Tabelas</span></button>
     <button data-page="admin" id="admin-bottom-nav" style="display:none" onclick="navigateTo('admin')">⚙️<span>Admin</span></button>
   </nav>
@@ -614,6 +656,20 @@ a:hover{text-decoration:underline}
       </div>
     </div>
 
+    <!-- ── REGRAS ── -->
+    <div id="page-regras" class="page">
+      <div class="container" id="regras-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ── ESTATÍSTICAS ── -->
+    <div id="page-estatisticas" class="page">
+      <div class="container" id="estatisticas-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
     <!-- ── ADMIN ── -->
     <div id="page-admin" class="page">
       <div class="container" id="admin-content">
@@ -621,6 +677,11 @@ a:hover{text-decoration:underline}
       </div>
     </div>
   </main>
+
+  <!-- Footer com versão -->
+  <footer style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.75rem;background:rgba(0,0,0,0.3);margin-top:40px">
+    <span id="app-version">Bolão ICN Copa 2026 • v1.0.2</span>
+  </footer>
 </div>
 
 <!-- TOAST -->
@@ -788,7 +849,50 @@ const ALL_GAMES = [
 let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
-let CFG = { pts_exato:10, pts_resultado:5, nome_bolao:'Bolão ICN Copa 2026' };
+let CFG = {
+  app_version:'v1.0.2',
+  pts_exato:10,
+  pts_resultado:5,
+  pts_vencedor_saldo:7,
+  pts_apenas_vencedor:5,
+  pts_bonus_classificacao:3,
+  pts_campeao:50,
+  pts_artilheiro:30,
+  nome_bolao:'Bolão ICN Copa 2026'
+};
+
+// Horários dos jogos (Brasília - fuso -3)
+const GAME_TIMES = {
+  'A1':'13:00','A2':'16:00','A3':'13:00','A4':'16:00','A5':'21:00','A6':'21:00',
+  'B1':'16:00','B2':'19:00','B3':'13:00','B4':'16:00','B5':'18:00','B6':'18:00',
+  'C1':'19:00','C2':'19:00','C3':'16:00','C4':'13:00','C5':'21:00','C6':'21:00',
+  'D1':'15:00','D2':'18:00','D3':'13:00','D4':'20:00','D5':'21:00','D6':'21:00',
+  'E1':'18:00','E2':'18:00','E3':'13:00','E4':'16:00','E5':'21:00','E6':'21:00',
+  'F1':'13:00','F2':'16:00','F3':'16:00','F4':'13:00','F5':'18:00','F6':'18:00',
+  'G1':'16:00','G2':'13:00','G3':'13:00','G4':'20:00','G5':'21:00','G6':'21:00',
+  'H1':'16:00','H2':'19:00','H3':'13:00','H4':'16:00','H5':'21:00','H6':'21:00',
+  'I1':'19:00','I2':'16:00','I3':'13:00','I4':'16:00','I5':'21:00','I6':'21:00',
+  'J1':'15:00','J2':'18:00','J3':'16:00','J4':'16:00','J5':'21:00','J6':'21:00',
+  'K1':'13:00','K2':'16:00','K3':'16:00','K4':'13:00','K5':'18:00','K6':'18:00',
+  'L1':'13:00','L2':'16:00','L3':'13:00','L4':'16:00','L5':'21:00','L6':'21:00',
+  'O1':'15:00','O2':'18:00','O3':'16:00','O4':'19:00','O5':'15:00','O6':'18:00','O7':'16:00','O8':'19:00','O9':'15:00','O10':'18:00','O11':'16:00','O12':'19:00','O13':'17:00','O14':'20:00','O15':'15:00','O16':'18:00',
+  'Q1':'15:00','Q2':'18:00','Q3':'16:00','Q4':'19:00','Q5':'15:00','Q6':'18:00','Q7':'16:00','Q8':'19:00',
+  'S1':'16:00','S2':'16:00','S3':'20:00','S4':'20:00',
+  'T1':'17:00','T2':'17:00','F1':'20:00','F2':'20:00'
+};
+  'EUA':'🇺🇸','Panamá':'🇵🇦','Guatemala':'🇬🇹','Jamaica':'🇯🇲',
+  'México':'🇲🇽','Canadá':'🇨🇦','Trinidad e Tobago':'🇹🇹','Arábia Saudita':'🇸🇦',
+  'Brasil':'🇧🇷','Japão':'🇯🇵','Sérvia':'🇷🇸','Escócia':'🇬🇧',
+  'Argentina':'🇦🇷','Peru':'🇵🇪','Irã':'🇮🇷','Gabão':'🇬🇦',
+  'Espanha':'🇪🇸','Uzbequistão':'🇺🇿','Senegal':'🇸🇳','Noruega':'🇳🇴',
+  'França':'🇫🇷','Austrália':'🇦🇺','Hungria':'🇭🇺','Tunísia':'🇹🇳',
+  'Alemanha':'🇩🇪','Portugal':'🇵🇹','Turquia':'🇹🇷','Argélia':'🇩🇿',
+  'Holanda':'🇳🇱','Chile':'🇨🇱','Coreia do Sul':'🇰🇷','Venezuela':'🇻🇪',
+  'Bélgica':'🇧🇪','Afeganistão':'🇦🇫','Romênia':'🇷🇴','El Salvador':'🇸🇻',
+  'Inglaterra':'🇬🇧','Marrocos':'🇲🇦','Egito':'🇪🇬','Camarões':'🇨🇲',
+  'Itália':'🇮🇹','Equador':'🇪🇨','Croácia':'🇭🇷','Eslovênia':'🇸🇮',
+  'Uruguai':'🇺🇾','Nigéria':'🇳🇬','Suécia':'🇸🇪','Países Baixos':'🇳🇱'
+};
 let myPalpites   = {};
 let resultados   = {};
 let palpitesEditing = null;
@@ -914,10 +1018,17 @@ function showAuthTab(tab) {
 async function showForgotPwd() {
   const email = document.getElementById('login-email').value.trim();
   if (!email) { setAuthError('login','Insira seu e-mail acima primeiro'); return; }
+  setAuthError('login','');
   try {
     await auth_.sendPasswordResetEmail(email);
-    showToast('✉️ E-mail de recuperação enviado!','success');
-  } catch(e) { setAuthError('login',e.message); }
+    const successEl = document.getElementById('login-success');
+    successEl.innerHTML = '✉️ <strong>E-mail de recuperação enviado!</strong><br>Verifique sua caixa de entrada e a pasta de spam. O link para resetar sua senha expira em 24 horas.';
+    successEl.style.display = 'block';
+    showToast('✉️ E-mail enviado! Verifique sua caixa de entrada','success');
+  } catch(e) {
+    const msgs = {'auth/user-not-found':'E-mail não encontrado','auth/invalid-email':'E-mail inválido'};
+    setAuthError('login', msgs[e.code]||e.message);
+  }
 }
 
 // ════════════════════════════════════════════
@@ -928,6 +1039,8 @@ async function loadCFG() {
     const snap = await db_.collection('config').doc('geral').get();
     if (snap.exists) CFG = { ...CFG, ...snap.data() };
     document.getElementById('bolao-nome').textContent = CFG.nome_bolao;
+    const appVersion = document.getElementById('app-version');
+    if (appVersion) appVersion.textContent = `${CFG.nome_bolao} • ${CFG.app_version}`;
   } catch(e) {}
 }
 
@@ -961,6 +1074,8 @@ function navigateTo(page) {
     case 'ver-palpites': renderVerPalpites(); break;
     case 'tabelas':     renderTabelas(); break;
     case 'chaveamento': renderChaveamento(); break;
+    case 'regras':      renderRegras(); break;
+    case 'estatisticas': renderEstatisticas(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
   window.scrollTo({top:0,behavior:'smooth'});
@@ -974,10 +1089,22 @@ function calcPontos(pal, res) {
   if (res===undefined || res.h_real===undefined || res.a_real===undefined) return null;
   const ph=parseInt(pal.h), pa=parseInt(pal.a);
   const rh=parseInt(res.h_real), ra=parseInt(res.a_real);
+
+  // 1. Placar exato
   if (ph===rh && pa===ra) return CFG.pts_exato;
+
+  // 2. Vencedor + Saldo de gols
+  const pSaldo = ph - pa;
+  const rSaldo = rh - ra;
   const pRes = ph>pa?'H':ph<pa?'A':'D';
   const rRes = rh>ra?'H':rh<ra?'A':'D';
-  return pRes===rRes ? CFG.pts_resultado : 0;
+  if (pRes===rRes && pSaldo===rSaldo) return CFG.pts_vencedor_saldo||7;
+
+  // 3. Apenas vencedor/empate
+  if (pRes===rRes) return CFG.pts_apenas_vencedor||5;
+
+  // 4. Errou
+  return 0;
 }
 
 function computeRanking(users, resultados, allPalpites) {
@@ -985,7 +1112,7 @@ function computeRanking(users, resultados, allPalpites) {
   return users
     .filter(u=>u.ativo!==false)
     .map(u=>{
-      let pontos=0, exatos=0, resultados_certos=0, jogos=0, erros=0;
+      let pontos=0, exatos=0, venc_saldo=0, apenas_venc=0, jogos=0, erros=0;
       const pals = allPalpites[u.uid]||{};
       jogosComResultado.forEach(jid=>{
         const p=pals[jid], r=resultados[jid];
@@ -994,12 +1121,13 @@ function computeRanking(users, resultados, allPalpites) {
         if (pts===null) return;
         jogos++; pontos+=pts;
         if (pts===CFG.pts_exato) exatos++;
-        else if (pts===CFG.pts_resultado) resultados_certos++;
-        else erros++;
+        else if (pts===(CFG.pts_vencedor_saldo||7)) venc_saldo++;
+        else if (pts===(CFG.pts_apenas_vencedor||5)) apenas_venc++;
+        else if (pts===0) erros++;
       });
-      return { ...u, pontos, exatos, resultados_certos, jogos, erros };
+      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
     })
-    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.resultados_certos-a.resultados_certos);
+    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
 }
 
 // ════════════════════════════════════════════
@@ -1061,12 +1189,26 @@ async function renderDashboard() {
     }
 
     let html = `
-      <div class="section-title">🏆 ${esc(CFG.nome_bolao)} — Ranking</div>
-      <div class="stats-grid">
-        <div class="stat-card"><div class="val">${ranking.length}</div><div class="lbl">Participantes</div></div>
-        <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos c/ Resultado</div></div>
-        <div class="stat-card"><div class="val">${ALL_GAMES.length}</div><div class="lbl">Total de Jogos</div></div>
-        <div class="stat-card"><div class="val">${myRank||'—'}</div><div class="lbl">Minha Posição</div></div>
+      <div class="section-title">🏆 ${esc(CFG.nome_bolao)}</div>
+      <div style="background:linear-gradient(135deg,rgba(255,215,0,.1),rgba(255,215,0,.05));border:2px solid var(--gold);border-radius:12px;padding:20px;margin-bottom:24px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:var(--gold)">${ranking.length}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Participantes</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:var(--green)">${totalJogos}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Com Resultado</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:var(--accent)">${ALL_GAMES.length}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Total de Jogos</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:var(--orange)">${myRank||'—'}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Sua Posição</div>
+          </div>
+        </div>
       </div>`;
 
     if (totalJogos === 0) {
@@ -1079,7 +1221,7 @@ async function renderDashboard() {
         <table class="ranking-table">
           <thead><tr>
             <th>#</th><th>Participante</th><th>Pontos</th>
-            <th class="hide-mobile">Exatos</th><th class="hide-mobile">Resultados</th>
+            <th class="hide-mobile">Exatos</th><th class="hide-mobile">V+Saldo</th><th class="hide-mobile">Vencedor</th>
             <th class="hide-mobile">Jogos</th><th>%</th>
           </tr></thead><tbody>`;
 
@@ -1093,7 +1235,8 @@ async function renderDashboard() {
         <td><div class="fw-bold">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
         <td><span class="pts-badge">${u.pontos}</span></td>
         <td class="hide-mobile text-green">${u.exatos}</td>
-        <td class="hide-mobile text-gold">${u.resultados_certos}</td>
+        <td class="hide-mobile text-gold">${u.venc_saldo}</td>
+        <td class="hide-mobile text-gold">${u.apenas_venc}</td>
         <td class="hide-mobile text-muted">${u.jogos}</td>
         <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${maxPts>0?Math.round(u.pontos/maxPts*100):0}%"></div></div>
           <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
@@ -1102,7 +1245,7 @@ async function renderDashboard() {
 
     html += `</tbody></table></div>
     <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
-      ${CFG.pts_exato} pts placar exato · ${CFG.pts_resultado} pts acerto resultado</p>`;
+      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor</p>`;
     cont.innerHTML = html;
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${e.message}</div>`;
@@ -1186,12 +1329,15 @@ function buildPalRow(game) {
   const lockedBadge = locked?`<span class="locked-badge">🔒 Bloqueado</span>`:'';
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
+  const flagH = COUNTRY_FLAGS[game.h] || '';
+  const flagA = COUNTRY_FLAGS[game.a] || '';
+  const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
-    <div><div class="team-name home">${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
+    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${disAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${disAttr} oninput="onPalInput('${game.id}','a',this.value)">
-    <div><div class="team-name">${esc(game.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
+    <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
 
@@ -1277,15 +1423,25 @@ async function renderVerPalpites(selectedUid=null) {
     const res = {};
     rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
 
-    let html = `<div class="section-title">👁️ Ver Palpites</div>
-      <div class="form-group"><label>Selecione um participante</label>
-        <select id="user-select" onchange="renderVerPalpites(this.value)">
-          <option value="">— Escolha um participante —</option>`;
+    let html = `<div class="section-title">👁️ Ver Palpites de Todos</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:24px">`;
 
     users.sort((a,b)=>a.apelido.localeCompare(b.apelido)).forEach(u=>{
-      html += `<option value="${u.uid}" ${selectedUid===u.uid?'selected':''}>${esc(u.apelido)} (${esc(u.nome)})</option>`;
+      const isSelected = selectedUid===u.uid;
+      html += `<button class="user-card ${isSelected?'active':''}" onclick="renderVerPalpites('${u.uid}')" style="${isSelected?'background:rgba(255,215,0,.15);border-color:var(--gold)':''}">
+        <div style="font-size:0.95rem;font-weight:600">${esc(u.apelido)}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted)">${esc(u.nome)}</div>
+      </button>`;
     });
-    html += `</select></div>`;
+    html += `</div>`;
+
+    // Adicionar CSS para user-card
+    if (!document.getElementById('user-card-style')) {
+      const style = document.createElement('style');
+      style.id = 'user-card-style';
+      style.textContent = `.user-card{padding:10px;border:1px solid var(--border);background:rgba(255,255,255,.03);border-radius:8px;cursor:pointer;transition:all .2s;text-align:center}.user-card:hover{border-color:var(--gold);background:rgba(255,215,0,.08)}`;
+      document.head.appendChild(style);
+    }
 
     if (selectedUid && selectedUid.trim()) {
       const selectedUser = users.find(u=>u.uid===selectedUid);
@@ -1295,7 +1451,11 @@ async function renderVerPalpites(selectedUid=null) {
       const userPals = {};
       pSnap.docs.forEach(d=>{ userPals[d.id]=d.data(); });
 
-      html += `<div class="alert alert-info">👁️ Visualizando palpites de <b>${esc(selectedUser.apelido)}</b> (${esc(selectedUser.nome)})</div>
+      html += `<div class="card" style="border:2px solid var(--gold);background:rgba(255,215,0,.08);text-align:center;padding:16px;margin-bottom:20px">
+        <div style="font-size:1.2rem;font-weight:800;color:var(--gold);margin-bottom:6px">👁️ Palpites de</div>
+        <div style="font-size:1.1rem;font-weight:700">${esc(selectedUser.apelido)}</div>
+        <div style="font-size:0.85rem;color:var(--text-muted)">${esc(selectedUser.nome)}</div>
+      </div>
         <div id="pal-view-progress-text" class="progress-text">Calculando...</div>
         <div class="progress-bar"><div class="progress-fill" id="pal-view-progress-fill" style="width:0%"></div></div>
         <div class="phase-tabs" id="phase-tabs-view">`;
@@ -1354,12 +1514,15 @@ function buildVerPalRow(game, userPals, res) {
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
+  const flagH = COUNTRY_FLAGS[game.h] || '';
+  const flagA = COUNTRY_FLAGS[game.a] || '';
+  const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
-    <div><div class="team-name home">${esc(game.h)}</div><div class="game-meta">${game.date}</div></div>
+    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.h!==undefined?pal.h:''}">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.a!==undefined?pal.a:''}">
-    <div><div class="team-name">${esc(game.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
+    <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
 
@@ -1371,6 +1534,185 @@ function switchVerPalPhase(key) {
 function switchVerPalGroup(grp) {
   document.querySelectorAll('.group-tab').forEach(t=>t.classList.toggle('active',t.dataset.group===grp));
   document.querySelectorAll('.pal-group-view').forEach(p=>p.style.display=p.dataset.group===grp?'block':'none');
+}
+
+// ════════════════════════════════════════════
+// REGRAS PAGE
+// ════════════════════════════════════════════
+function renderRegras() {
+  const cont = document.getElementById('regras-content');
+  try {
+    let html = `<div class="section-title">📋 Regras de Pontuação</div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">🎯 Como Funciona</div>
+        <p class="text-muted" style="line-height:1.8">
+          No ${esc(CFG.nome_bolao)}, você ganha pontos acertando os placares e resultados dos jogos.
+          Quanto mais preciso for seu palpite, mais pontos você recebe!
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">⭐ Tabela de Pontos</div>
+        <table class="ranking-table" style="margin:0">
+          <thead><tr>
+            <th>Acerto</th><th>Descrição</th><th>Pontos</th>
+          </tr></thead><tbody>
+            <tr>
+              <td style="font-weight:700;color:var(--gold)">Placar Exato</td>
+              <td>Você acertou o placar exato do jogo (ex: 2-1)</td>
+              <td><span class="pts-badge">${CFG.pts_exato}</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:var(--gold)">Vencedor + Saldo</td>
+              <td>Você acertou quem venceu E a diferença de gols (ex: Brasil vence por 2)</td>
+              <td><span class="pts-badge">${CFG.pts_vencedor_saldo}</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:var(--orange)">Apenas Vencedor</td>
+              <td>Você acertou quem venceu ou que empataria, mas não o placar</td>
+              <td><span class="pts-badge">${CFG.pts_apenas_vencedor}</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;color:var(--red)">Errou</td>
+              <td>Seu palpite não corresponde ao resultado</td>
+              <td>0</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">🏆 Critério de Desempate</div>
+        <ol style="color:var(--text-muted);line-height:2;padding-left:20px">
+          <li><strong style="color:var(--white)">Maior pontuação total</strong></li>
+          <li><strong style="color:var(--white)">Mais placares exatos</strong></li>
+          <li><strong style="color:var(--white)">Mais acertos de vencedor + saldo</strong></li>
+          <li><strong style="color:var(--white)">Mais acertos de apenas vencedor</strong></li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">🔒 Jogos Bloqueados</div>
+        <p class="text-muted" style="line-height:1.8">
+          Quando um jogo é <strong>bloqueado</strong> 🔒, você não consegue mais alterar seu palpite.
+          Isso geralmente ocorre próximo à data da partida para manter a integridade da competição.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">💡 Dicas</div>
+        <ul style="color:var(--text-muted);line-height:2;padding-left:20px">
+          <li>Preencha seus palpites <strong>antes dos jogos começarem</strong></li>
+          <li>Verifique a data e horário de cada partida</li>
+          <li>Você pode alterar seus palpites até o jogo ser bloqueado</li>
+          <li>Acompanhe seu ranking na página inicial</li>
+          <li>Veja os palpites de outros participantes</li>
+        </ul>
+      </div>`;
+
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════
+// ESTATÍSTICAS PAGE
+// ════════════════════════════════════════════
+async function renderEstatisticas() {
+  const cont = document.getElementById('estatisticas-content');
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const allPals = {};
+    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+
+    const jogosComResultado = Object.keys(res).filter(id=>res[id].h_real!==undefined);
+    const totalJogos = jogosComResultado.length;
+
+    // Análise por jogo
+    const analiseJogos = {};
+    jogosComResultado.forEach(jid=>{
+      analiseJogos[jid] = { exatos:0, venc_saldo:0, apenas_venc:0, erros:0, palpites:[] };
+      ALL_GAMES.forEach(g=>{ if(g.id===jid) analiseJogos[jid].game=g; });
+      users.forEach(u=>{
+        const p=allPals[u.uid]?.[jid];
+        if(!p) return;
+        const pts = calcPontos(p,res[jid]);
+        analiseJogos[jid].palpites.push({user:u,palpite:p,pts});
+        if(pts===CFG.pts_exato) analiseJogos[jid].exatos++;
+        else if(pts===(CFG.pts_vencedor_saldo||7)) analiseJogos[jid].venc_saldo++;
+        else if(pts===(CFG.pts_apenas_vencedor||5)) analiseJogos[jid].apenas_venc++;
+        else analiseJogos[jid].erros++;
+      });
+    });
+
+    // Encontrar jogo mais acertado
+    let maiorAcerto = {exatos:0,id:''};
+    Object.entries(analiseJogos).forEach(([id,data])=>{ if(data.exatos>maiorAcerto.exatos) maiorAcerto={exatos:data.exatos,id}; });
+
+    // Placar mais comum
+    const placarFreq = {};
+    jogosComResultado.forEach(jid=>{
+      analiseJogos[jid].palpites.forEach(p=>{
+        const key=`${p.palpite.h}-${p.palpite.a}`;
+        placarFreq[key]=(placarFreq[key]||0)+1;
+      });
+    });
+    const placarMaisComum = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1])[0];
+
+    // Resultado mais comum
+    const resultFreq = {};
+    jogosComResultado.forEach(jid=>{
+      const r=res[jid];
+      const key=`${r.h_real}-${r.a_real}`;
+      resultFreq[key]=(resultFreq[key]||0)+1;
+    });
+    const resultMaisComum = Object.entries(resultFreq).sort((a,b)=>b[1]-a[1])[0];
+
+    let html = `<div class="section-title">📈 Estatísticas & Curiosidades</div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="val">${users.length}</div><div class="lbl">Participantes</div></div>
+        <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos Resultado</div></div>
+        <div class="stat-card"><div class="val">${Object.values(analiseJogos).reduce((a,b)=>a+b.exatos,0)}</div><div class="lbl">Placares Exatos</div></div>
+        <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎯 Jogo Mais Acertado</div>
+        ${maiorAcerto.id ? `
+          <div style="margin-top:12px">
+            <p style="font-size:0.95rem;font-weight:600;margin-bottom:6px">${analiseJogos[maiorAcerto.id].game.h} vs ${analiseJogos[maiorAcerto.id].game.a}</p>
+            <p style="font-size:0.85rem;color:var(--text-muted)">
+              ${analiseJogos[maiorAcerto.id].exatos} placares exatos ·
+              ${analiseJogos[maiorAcerto.id].venc_saldo} vencedor+saldo ·
+              ${analiseJogos[maiorAcerto.id].apenas_venc} apenas vencedor
+            </p>
+          </div>
+        ` : '<p class="text-muted">Sem dados</p>'}
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔢 Placar Mais Palpitado</div>
+        ${placarMaisComum ? `
+          <p style="font-size:1.2rem;font-weight:700;color:var(--gold);margin-top:12px">${placarMaisComum[0]} <span style="font-size:0.85rem;color:var(--text-muted)">(${placarMaisComum[1]} palpites)</span></p>
+        ` : '<p class="text-muted">Sem dados</p>'}
+      </div>
+
+      <div class="card">
+        <div class="card-title">🏆 Resultado Mais Comum</div>
+        ${resultMaisComum ? `
+          <p style="font-size:1.2rem;font-weight:700;color:var(--green);margin-top:12px">${resultMaisComum[0]} <span style="font-size:0.85rem;color:var(--text-muted)">(${resultMaisComum[1]} jogos)</span></p>
+        ` : '<p class="text-muted">Sem dados</p>'}
+      </div>`;
+
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+  }
 }
 
 // ════════════════════════════════════════════
@@ -1565,6 +1907,7 @@ async function renderAdminUsuarios() {
           <span style="font-size:0.78rem;color:var(--text-muted);min-width:40px">ADMIN</span>
           ${!isSelf?`<button class="btn ${u.ativo===false?'btn-green':'btn-red'} btn-sm" onclick="toggleAtivo('${u.uid}',${u.ativo!==false})">${u.ativo===false?'Ativar':'Desativar'}</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="adminGoEditPalpites('${u.uid}')">✏️ Palpites</button>
+          ${!isSelf?`<button class="btn btn-red btn-sm" onclick="deleteUserClick('${u.uid}','${esc(u.apelido)}')">🗑️ Excluir</button>`:''}
         </div>
       </div>`;
     });
@@ -1601,6 +1944,34 @@ async function toggleAtivo(uid, currentAtivo) {
     showToast('✅ Atualizado','success');
     renderAdminUsuarios();
   } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+function deleteUserClick(uid, apelido) {
+  if (!confirm(`⚠️ ATENÇÃO! Você está prestes a excluir permanentemente o usuário "${apelido}".\n\nTodos os seus palpites também serão removidos.\n\nEsta ação NÃO pode ser desfeita!\n\nTem certeza?`)) return;
+  deleteUser(uid);
+}
+
+async function deleteUser(uid) {
+  try {
+    showToast('⏳ Excluindo usuário...','');
+    const batch = db_.batch();
+
+    // Deletar todos os palpites do usuário
+    const pSnap = await db_.collection('palpites').doc(uid).collection('jogos').get();
+    pSnap.docs.forEach(d => batch.delete(d.ref));
+
+    // Deletar documento de palpites
+    batch.delete(db_.collection('palpites').doc(uid));
+
+    // Deletar usuário
+    batch.delete(db_.collection('usuarios').doc(uid));
+
+    await batch.commit();
+    showToast('✅ Usuário excluído com sucesso! (Remova manualmente do Firebase Auth no console)','success');
+    renderAdminUsuarios();
+  } catch(e) {
+    showToast('❌ Erro ao excluir: '+e.message,'error');
+  }
 }
 
 async function renderAdminEditPalpites(selectedUid=null) {
@@ -1672,10 +2043,25 @@ async function renderAdminConfig() {
     <div class="card">
       <div class="card-title" style="margin-bottom:16px">⚙️ Configurações do Bolão</div>
       <div class="form-group"><label>Nome do Bolão</label><input id="cfg-nome" value="${esc(CFG.nome_bolao)}"></div>
+
+      <div class="card-title" style="margin-top:20px;margin-bottom:12px;font-size:0.95rem">📊 Regras de Pontuação</div>
       <div class="form-row">
-        <div class="form-group"><label>Pontos — Placar Exato</label><input type="number" id="cfg-pts-exato" value="${CFG.pts_exato}" min="1" max="100"></div>
-        <div class="form-group"><label>Pontos — Resultado Correto</label><input type="number" id="cfg-pts-res" value="${CFG.pts_resultado}" min="1" max="100"></div>
+        <div class="form-group"><label>Placar Exato</label><input type="number" id="cfg-pts-exato" value="${CFG.pts_exato}" min="0" max="100"></div>
+        <div class="form-group"><label>Vencedor + Saldo</label><input type="number" id="cfg-pts-venc-saldo" value="${CFG.pts_vencedor_saldo||7}" min="0" max="100"></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>Apenas Vencedor</label><input type="number" id="cfg-pts-apenas-venc" value="${CFG.pts_apenas_vencedor||5}" min="0" max="100"></div>
+        <div class="form-group"><label>Bônus Classificação</label><input type="number" id="cfg-pts-bonus-class" value="${CFG.pts_bonus_classificacao||3}" min="0" max="100"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Palpite Campeão</label><input type="number" id="cfg-pts-campeao" value="${CFG.pts_campeao||50}" min="0" max="200"></div>
+        <div class="form-group"><label>Palpite Artilheiro</label><input type="number" id="cfg-pts-artilheiro" value="${CFG.pts_artilheiro||30}" min="0" max="200"></div>
+      </div>
+
+      <div class="alert alert-info" style="margin-top:16px">
+        💡 <strong>Hierarquia:</strong> Placar Exato (maior) → Vencedor+Saldo → Apenas Vencedor → 0 (menor)
+      </div>
+
       <div class="btn-group"><button class="btn btn-primary" onclick="saveCFGAdmin()">💾 Salvar</button></div>
     </div>
     <div class="card">
@@ -1693,11 +2079,27 @@ async function renderAdminConfig() {
 async function saveCFGAdmin() {
   const nome = document.getElementById('cfg-nome').value.trim();
   const ptsExato = parseInt(document.getElementById('cfg-pts-exato').value)||10;
-  const ptsRes   = parseInt(document.getElementById('cfg-pts-res').value)||5;
+  const ptsRes = parseInt(document.getElementById('cfg-pts-res').value)||5;
+  const ptsVencSaldo = parseInt(document.getElementById('cfg-pts-venc-saldo').value)||7;
+  const ptsApenasVenc = parseInt(document.getElementById('cfg-pts-apenas-venc').value)||5;
+  const ptsBonusClass = parseInt(document.getElementById('cfg-pts-bonus-class').value)||3;
+  const ptsCampeao = parseInt(document.getElementById('cfg-pts-campeao').value)||50;
+  const ptsArtilheiro = parseInt(document.getElementById('cfg-pts-artilheiro').value)||30;
+
   if (!nome) { showToast('Informe o nome do bolão','warning'); return; }
   try {
-    await db_.collection('config').doc('geral').set({ nome_bolao:nome, pts_exato:ptsExato, pts_resultado:ptsRes });
-    CFG = { nome_bolao:nome, pts_exato:ptsExato, pts_resultado:ptsRes };
+    const cfg = {
+      nome_bolao:nome,
+      pts_exato:ptsExato,
+      pts_resultado:ptsRes,
+      pts_vencedor_saldo:ptsVencSaldo,
+      pts_apenas_vencedor:ptsApenasVenc,
+      pts_bonus_classificacao:ptsBonusClass,
+      pts_campeao:ptsCampeao,
+      pts_artilheiro:ptsArtilheiro
+    };
+    await db_.collection('config').doc('geral').set(cfg);
+    CFG = { ...CFG, ...cfg };
     document.getElementById('bolao-nome').textContent = nome;
     showToast('✅ Configurações salvas!','success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
@@ -1722,11 +2124,12 @@ async function renderAdminExport() {
   cont.innerHTML = `
     <div class="card">
       <div class="card-title" style="margin-bottom:16px">⬇️ Exportar Dados</div>
-      <div class="alert alert-info">Exporte todos os dados para uma planilha Excel/CSV.</div>
+      <div class="alert alert-info">Exporte todos os dados para planilhas Excel profissionais.</div>
       <div class="btn-group">
-        <button class="btn btn-primary" onclick="exportAllCSV()">📊 Exportar Tudo (CSV)</button>
-        <button class="btn btn-secondary" onclick="exportRankingCSV()">🏆 Exportar Ranking</button>
-        <button class="btn btn-secondary" onclick="exportPalpitesCSV()">⚽ Exportar Palpites</button>
+        <button class="btn btn-primary" onclick="exportFullExcel()">📊 Exportar Tudo (Excel)</button>
+        <button class="btn btn-secondary" onclick="exportRankingExcel()">🏆 Exportar Ranking</button>
+        <button class="btn btn-secondary" onclick="exportPalpitesExcel()">⚽ Exportar Palpites</button>
+        <button class="btn btn-secondary" onclick="exportResultadosExcel()">🎯 Exportar Resultados</button>
       </div>
     </div>`;
 }
@@ -1789,8 +2192,138 @@ async function exportPalpitesCSV() {
 }
 
 // ════════════════════════════════════════════
+// EXCEL EXPORT
+// ════════════════════════════════════════════
+async function exportFullExcel() {
+  showToast('⏳ Gerando planilha...','');
+  try {
+    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const allPals = {};
+    await Promise.all(users.map(async u=>{ const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); }); }));
+    const ranking = computeRanking(users, res, allPals);
+
+    // Sheet 1 - Ranking
+    const rankingData = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','% Aproveito']];
+    ranking.forEach((u,i)=>{
+      const pct = u.jogos>0 ? Math.round(u.jogos/Object.keys(res).filter(id=>res[id].h_real!==undefined).length*100) : 0;
+      rankingData.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos, pct+'%']);
+    });
+
+    // Sheet 2 - Palpites (Matriz)
+    const palpitesData = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
+    ALL_GAMES.forEach(g=>{
+      const row = [g.id, g.h, g.a, g.date];
+      users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.h??''); });
+      users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.a??''); });
+      palpitesData.push(row);
+    });
+
+    // Sheet 3 - Resultados Oficiais
+    const resultadosData = [['JogoID','Time_Casa','Time_Fora','Resultado_Casa','Resultado_Fora','Bloqueado']];
+    ALL_GAMES.forEach(g=>{
+      const r = res[g.id];
+      resultadosData.push([g.id, g.h, g.a, r?.h_real??'', r?.a_real??'', r?.locked?'SIM':'NÃO']);
+    });
+
+    // Sheet 4 - Configurações
+    const cfgData = [['Configuração','Valor']];
+    cfgData.push(['Nome do Bolão', CFG.nome_bolao]);
+    cfgData.push(['Placar Exato', CFG.pts_exato]);
+    cfgData.push(['Vencedor + Saldo', CFG.pts_vencedor_saldo]);
+    cfgData.push(['Apenas Vencedor', CFG.pts_apenas_vencedor]);
+    cfgData.push(['Bônus Classificação', CFG.pts_bonus_classificacao]);
+    cfgData.push(['Palpite Campeão', CFG.pts_campeao]);
+    cfgData.push(['Palpite Artilheiro', CFG.pts_artilheiro]);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rankingData), 'Ranking');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(palpitesData), 'Palpites');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resultadosData), 'Resultados');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cfgData), 'Configurações');
+    XLSX.writeFile(wb, `Bolao_ICN_Copa2026_${fmtDate()}.xlsx`);
+    showToast('✅ Planilha gerada com sucesso!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function exportRankingExcel() {
+  showToast('⏳ Gerando ranking...','');
+  try {
+    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const allPals = {};
+    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const ranking = computeRanking(users, res, allPals);
+    const data = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos']];
+    ranking.forEach((u,i)=>{
+      data.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Ranking');
+    XLSX.writeFile(wb, `Bolao_Ranking_${fmtDate()}.xlsx`);
+    showToast('✅ Ranking exportado!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function exportPalpitesExcel() {
+  showToast('⏳ Gerando palpites...','');
+  try {
+    const [usersSnap] = await Promise.all([db_.collection('usuarios').get()]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const allPals = {};
+    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const data = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
+    ALL_GAMES.forEach(g=>{
+      const row = [g.id, g.h, g.a, g.date];
+      users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.h??''); });
+      users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.a??''); });
+      data.push(row);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Palpites');
+    XLSX.writeFile(wb, `Bolao_Palpites_${fmtDate()}.xlsx`);
+    showToast('✅ Palpites exportados!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function exportResultadosExcel() {
+  showToast('⏳ Gerando resultados...','');
+  try {
+    const resSnap = await db_.collection('resultados').get();
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const data = [['JogoID','Time_Casa','Time_Fora','Resultado_Casa','Resultado_Fora','Bloqueado']];
+    ALL_GAMES.forEach(g=>{
+      const r = res[g.id];
+      data.push([g.id, g.h, g.a, r?.h_real??'', r?.a_real??'', r?.locked?'SIM':'NÃO']);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Resultados');
+    XLSX.writeFile(wb, `Bolao_Resultados_${fmtDate()}.xlsx`);
+    showToast('✅ Resultados exportados!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// ════════════════════════════════════════════
 // UTILS
 // ════════════════════════════════════════════
+function toggleDropdown() {
+  const menu = document.getElementById('dropdown-menu');
+  if (menu) menu.classList.toggle('show');
+}
+
+document.addEventListener('click', function(e) {
+  const dropdown = document.querySelector('.nav-dropdown');
+  if (dropdown && !dropdown.contains(e.target)) {
+    const menu = document.getElementById('dropdown-menu');
+    if (menu) menu.classList.remove('show');
+  }
+});
+
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
