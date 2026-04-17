@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.0.2">
+<meta name="app-version" content="v1.1.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -109,6 +109,7 @@ a:hover{text-decoration:underline}
 ══════════════════════════════════════════ */
 .screen{min-height:100vh}
 .hidden{display:none!important}
+#screen-app{min-height:100vh;display:flex;flex-direction:column}
 .page{display:none}
 .page.active{display:block}
 .container{max-width:1000px;margin:0 auto;padding:28px 16px 80px}
@@ -523,6 +524,12 @@ a:hover{text-decoration:underline}
 .bottom-nav button span{font-size:0.58rem;font-weight:600}
 .bottom-nav button.active{color:var(--gold)}
 .bottom-nav button.active span{color:var(--gold)}
+.app-main{flex:1}
+.app-footer{
+  text-align:center;padding:12px 16px;color:var(--text-muted);font-size:0.75rem;
+  background:rgba(0,0,0,0.3);margin-top:0;border-top:1px solid var(--border);
+}
+.footer-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 
 .stats-alt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .stats-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -549,6 +556,8 @@ a:hover{text-decoration:underline}
   .toast{bottom:68px;right:12px;left:12px;max-width:none;text-align:center}
   .pts-badge{padding:4px 8px;font-size:0.8rem}
   .app-user .user-name{font-size:0.8rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .app-footer{padding:10px 12px 72px}
+  .footer-row{gap:6px}
 }
 </style>
 </head>
@@ -680,7 +689,7 @@ a:hover{text-decoration:underline}
     <button data-page="admin" id="admin-bottom-nav" style="display:none" onclick="navigateTo('admin')">⚙️<span>Admin</span></button>
   </nav>
 
-  <main>
+  <main class="app-main">
     <!-- ── DASHBOARD ── -->
     <div id="page-dashboard" class="page active">
       <div class="container" id="dashboard-content">
@@ -746,8 +755,13 @@ a:hover{text-decoration:underline}
   </main>
 
   <!-- Footer com versão -->
-  <footer style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.75rem;background:rgba(0,0,0,0.3);margin-top:40px">
-    <span id="app-version">Bolão ICN Copa 2026 • v1.0.2</span>
+  <footer class="app-footer">
+    <div class="footer-row">
+      <span id="app-version">Bolão ICN Copa 2026 • v1.1.0</span>
+      <button id="btn-install-pwa" class="btn-install-pwa" style="display:none" onclick="installPwaApp()">
+        📲 Instalar app
+      </button>
+    </div>
   </footer>
 </div>
 
@@ -919,7 +933,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.0.2',
+  app_version:'v1.1.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
