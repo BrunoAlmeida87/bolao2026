@@ -14,9 +14,12 @@
 <script>
   // Garante que o Firebase esteja disponível antes de qualquer uso
   window.__firebaseReady = new Promise((resolve) => {
-    if (typeof firebase !== 'undefined') { resolve(); return; }
+    if (typeof firebase !== 'undefined') { resolve(true); return; }
+    const startedAt = Date.now();
+    const maxWaitMs = 10000;
     const check = setInterval(() => {
-      if (typeof firebase !== 'undefined') { clearInterval(check); resolve(); }
+      if (typeof firebase !== 'undefined') { clearInterval(check); resolve(true); return; }
+      if (Date.now() - startedAt >= maxWaitMs) { clearInterval(check); resolve(false); }
     }, 50);
   });
 </script>
@@ -132,6 +135,12 @@ a:hover{text-decoration:underline}
   color:var(--text-muted);cursor:pointer;font-weight:700;font-size:0.9rem;transition:all .2s;
 }
 .auth-tab.active{background:var(--gold);color:var(--dark-blue)}
+.auth-footer-actions{margin-top:14px;display:flex;justify-content:center}
+.btn-install-pwa{
+  border:1px dashed var(--border);background:transparent;color:var(--text-muted);
+  font-size:0.74rem;padding:6px 10px;border-radius:999px;cursor:pointer;
+}
+.btn-install-pwa:hover{border-color:var(--gold);color:var(--gold)}
 
 /* ══════════════════════════════════════════
    FORM ELEMENTS
@@ -613,6 +622,12 @@ a:hover{text-decoration:underline}
         <button class="btn btn-primary btn-full" onclick="doRegister()">Criar Conta →</button>
       </div>
 
+      <div class="auth-footer-actions">
+        <button id="btn-install-pwa" class="btn-install-pwa" style="display:none" onclick="installPwaApp()">
+          📲 Instalar app no celular
+        </button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -888,7 +903,7 @@ const ELIM_DATA = {
   ]},
   final:{label:'Final + 3º Lugar',icon:'🏆',games:[
     {id:'T1',h:'Perd. SF1',a:'Perd. SF2',date:'Jul 18 (3º lugar)'},
-    {id:'F1',h:'Venc. SF1',a:'Venc. SF2',date:'Jul 19 🏆'},
+    {id:'FIN1',h:'Venc. SF1',a:'Venc. SF2',date:'Jul 19 🏆'},
   ]},
 };
 
@@ -933,7 +948,7 @@ const GAME_TIMES = {
   'Q1':'15:00','Q2':'18:00','Q3':'16:00','Q4':'19:00','Q5':'15:00','Q6':'18:00','Q7':'16:00','Q8':'19:00',
   'S1':'16:00','S2':'16:00','S3':'20:00','S4':'20:00',
   'SF1':'21:00','SF2':'21:00',
-  'T1':'17:00','F1':'20:00'
+  'T1':'17:00','FIN1':'20:00'
 };
 
 const COUNTRY_FLAGS = {
@@ -957,6 +972,7 @@ let palpitesEditing = null;
 let saveDebounce = {};
 let isLoadingPage = false;
 let eliminationCache = {};
+let deferredPwaPrompt = null;
 
 // ════════════════════════════════════════════
 // FIREBASE CONFIG — PRODUÇÃO
@@ -1005,8 +1021,19 @@ async function handleAuthState(user) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  await window.__firebaseReady;
-  initFirebase(FIREBASE_CONFIG);
+  updatePwaInstallButton();
+  const firebaseReady = await window.__firebaseReady;
+  if (!firebaseReady) {
+    showLoading(false);
+    showAuth();
+    setAuthError('login','Falha ao carregar serviços do Firebase. Verifique sua conexão e recarregue a página.');
+    return;
+  }
+  if (!initFirebase(FIREBASE_CONFIG)) {
+    showLoading(false);
+    showAuth();
+    setAuthError('login','Erro ao iniciar o Firebase. Recarregue a página ou contate o suporte.');
+  }
 });
 
 // ════════════════════════════════════════════
@@ -1610,7 +1637,7 @@ async function renderDashboard() {
       ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor</p>`;
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -1676,7 +1703,7 @@ async function renderPalpites(editUid=null) {
     updatePalProgress();
     updateGroupTabState();
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -1868,7 +1895,7 @@ async function renderVerPalpites(selectedUid=null) {
 
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -2017,7 +2044,7 @@ function renderRegras() {
 
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -2098,7 +2125,7 @@ async function renderVerTodos() {
     html += `</tbody></table></div>`;
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -2389,7 +2416,7 @@ async function renderEstatisticas() {
 
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -2413,7 +2440,7 @@ async function renderTabelas() {
     });
     html += `</div><p class="text-muted" style="font-size:0.78rem;margin-top:12px">Verde = classificado · Laranja = possível 3º lugar · Baseado nos resultados lançados pelo admin.</p>`;
     cont.innerHTML = html;
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 // ════════════════════════════════════════════
@@ -2446,7 +2473,7 @@ async function renderChaveamento() {
     });
     html += `</div></div>`;
     cont.innerHTML = html;
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 // ════════════════════════════════════════════
@@ -2517,7 +2544,7 @@ async function renderAdminResultados() {
       html += `</div>`;
     });
     cont.innerHTML = html;
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 let resultBuf = {};
@@ -2578,7 +2605,10 @@ async function renderAdminUsuarios() {
     const snap = await db_.collection('usuarios').get();
     const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
     let html = `<div class="alert alert-info">${users.length} usuário(s) registrado(s).</div>`;
-    users.sort((a,b)=>a.role==='admin'?-1:1).forEach(u=>{
+    users.sort((a,b)=>{
+      if (a.role === b.role) return (a.apelido||'').localeCompare(b.apelido||'');
+      return a.role==='admin' ? -1 : 1;
+    }).forEach(u=>{
       const isSelf = u.uid===currentUser.uid;
       html += `<div class="user-row">
         <div class="user-info-col">
@@ -2600,7 +2630,7 @@ async function renderAdminUsuarios() {
       </div>`;
     });
     cont.innerHTML = html;
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 async function toggleAdminCheckbox(uid, isChecked) {
@@ -2679,7 +2709,7 @@ async function renderAdminEditPalpites(selectedUid=null) {
     }
     cont.innerHTML = html;
     if (selectedUid) await renderAdminPalpitesInline(selectedUid);
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 async function adminEditSelected(uid) { if (uid) renderAdminEditPalpites(uid); }
@@ -2719,7 +2749,7 @@ async function renderAdminPalpitesInline(uid) {
       html += `</div>`;
     });
     area.innerHTML = html;
-  } catch(e) { area.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { area.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 function adminGoEditPalpites(uid) { switchAdminTab('palpites-admin'); renderAdminEditPalpites(uid); }
@@ -3027,6 +3057,11 @@ document.addEventListener('click', function(e) {
   }
 });
 
+function errMsg(err) {
+  if (!err) return 'Erro desconhecido';
+  return err.message ? String(err.message) : String(err);
+}
+
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -3042,6 +3077,49 @@ function showToast(msg, type='') {
   t.textContent = msg; t.className = 'toast show'+(type?' '+type:'');
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>{ t.className='toast'; }, 3000);
+}
+
+function isMobileClient() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'');
+}
+
+function isStandalonePwa() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function updatePwaInstallButton() {
+  const btn = document.getElementById('btn-install-pwa');
+  if (!btn) return;
+  const shouldShow = isMobileClient() && !isStandalonePwa();
+  btn.style.display = shouldShow ? 'inline-flex' : 'none';
+  btn.disabled = !deferredPwaPrompt;
+  btn.title = deferredPwaPrompt ? 'Instalar app' : 'Instalação indisponível no momento';
+}
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredPwaPrompt = event;
+  updatePwaInstallButton();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPwaPrompt = null;
+  updatePwaInstallButton();
+  showToast('✅ App instalado com sucesso!', 'success');
+});
+
+async function installPwaApp() {
+  if (!deferredPwaPrompt) {
+    showToast('No iPhone, use Compartilhar → "Adicionar à Tela de Início".', 'warning');
+    return;
+  }
+  deferredPwaPrompt.prompt();
+  const choice = await deferredPwaPrompt.userChoice;
+  if (choice && choice.outcome === 'accepted') {
+    showToast('Instalação iniciada ✅', 'success');
+  }
+  deferredPwaPrompt = null;
+  updatePwaInstallButton();
 }
 </script>
 </body>
