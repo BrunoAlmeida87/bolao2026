@@ -136,16 +136,14 @@ a:hover{text-decoration:underline}
   color:var(--text-muted);cursor:pointer;font-weight:700;font-size:0.9rem;transition:all .2s;
 }
 .auth-tab.active{background:var(--gold);color:var(--dark-blue)}
-.btn-install-pwa{
-  border:1px dashed var(--border);background:transparent;color:var(--text-muted);
-  font-size:0.72rem;padding:5px 9px;border-radius:999px;cursor:pointer;
-  line-height:1.2;white-space:nowrap;
 .auth-footer-actions{margin-top:14px;display:flex;justify-content:center}
 .btn-install-pwa{
   border:1px dashed var(--border);background:transparent;color:var(--text-muted);
   font-size:0.74rem;padding:6px 10px;border-radius:999px;cursor:pointer;
+  line-height:1.2;white-space:nowrap;
 }
 .btn-install-pwa:hover{border-color:var(--gold);color:var(--gold)}
+.btn-install-pwa:disabled{opacity:.6;cursor:not-allowed}
 
 /* ══════════════════════════════════════════
    FORM ELEMENTS
@@ -670,7 +668,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
       </div>
 
       <div class="auth-footer-actions">
-        <button id="btn-install-pwa" class="btn-install-pwa" style="display:none" onclick="installPwaApp()">
+        <button id="btn-install-pwa" class="btn-install-pwa" hidden onclick="installPwaApp()">
           📲 Instalar app no celular
         </button>
       </div>
@@ -797,7 +795,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <footer class="app-footer">
     <div class="footer-row">
       <span id="app-version">Bolão ICN Copa 2026 • v1.1.0</span>
-      <button id="btn-install-pwa" class="btn-install-pwa" style="display:none" onclick="installPwaApp()">
+      <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
     </div>
@@ -1327,7 +1325,7 @@ async function updateEliminationTeams() {
     for (const novo of novasOitavas) {
       if (novo.h_atualizado !== novo.h_original && res[novo.id]) {
         houveMudanca = true;
-        await db_.collection('resultados').doc(novo.id).update({h_team:novo.h_atualizado, a_team:novo.a_atualizado}, {merge:true});
+        await db_.collection('resultados').doc(novo.id).update({h_team:novo.h_atualizado, a_team:novo.a_atualizado});
       }
     }
 
@@ -1382,7 +1380,7 @@ async function updateQuarterfinals(res) {
     for (const q of quartaGames) {
       if (q.h_atualizado !== q.h_original && updatedRes[q.id]) {
         houveMudancaQuartas = true;
-        await db_.collection('resultados').doc(q.id).update({h_team:q.h_atualizado, a_team:q.a_atualizado}, {merge:true});
+        await db_.collection('resultados').doc(q.id).update({h_team:q.h_atualizado, a_team:q.a_atualizado});
       }
     }
 
@@ -1433,7 +1431,7 @@ async function updateQuartas(res) {
     for (const q of quartaGames) {
       if (q.h_atualizado !== q.h_original && updatedRes[q.id]) {
         houveMudanca = true;
-        await db_.collection('resultados').doc(q.id).update({h_team:q.h_atualizado, a_team:q.a_atualizado}, {merge:true});
+        await db_.collection('resultados').doc(q.id).update({h_team:q.h_atualizado, a_team:q.a_atualizado});
       }
     }
 
@@ -1486,7 +1484,7 @@ async function updateSemifinals(res) {
     for (const s of semiGames) {
       if (s.h_atualizado !== s.h_original && updatedRes[s.id]) {
         houveMudancaSemis = true;
-        await db_.collection('resultados').doc(s.id).update({h_team:s.h_atualizado, a_team:s.a_atualizado}, {merge:true});
+        await db_.collection('resultados').doc(s.id).update({h_team:s.h_atualizado, a_team:s.a_atualizado});
       }
     }
 
@@ -1539,7 +1537,7 @@ async function updateFinal(res) {
 
     for (const f of finalGames) {
       if (f.h_atualizado !== f.h_original && updatedRes[f.id]) {
-        await db_.collection('resultados').doc(f.id).update({h_team:f.h_atualizado, a_team:f.a_atualizado}, {merge:true});
+        await db_.collection('resultados').doc(f.id).update({h_team:f.h_atualizado, a_team:f.a_atualizado});
       }
     }
 
@@ -1968,13 +1966,14 @@ async function renderVerPalpites(selectedUid=null) {
 
       const filled = Object.values(userPals).filter(p=>p.h!==undefined && p.a!==undefined).length;
       const pct = Math.round(filled/ALL_GAMES.length*100);
+
+      cont.innerHTML = html;
+
       const progEl = document.getElementById('pal-view-progress-fill');
       const progTxt = document.getElementById('pal-view-progress-text');
-
-      setTimeout(()=>{
-        if (progEl) progEl.style.width = pct+'%';
-        if (progTxt) progTxt.textContent = `${filled} de ${ALL_GAMES.length} palpites preenchidos (${pct}%)`;
-      }, 100);
+      if (progEl) progEl.style.width = pct+'%';
+      if (progTxt) progTxt.textContent = `${filled} de ${ALL_GAMES.length} palpites preenchidos (${pct}%)`;
+      return;
     }
 
     cont.innerHTML = html;
@@ -2642,10 +2641,6 @@ async function renderAdminResultados() {
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
-// Garante disponibilidade para handlers inline (onclick="...")
-window.fillResultadosTeste = fillResultadosTeste;
-window.clearResultadosTeste = clearResultadosTeste;
-
 let resultBuf = {};
 function onResultInput(gameId, side, value) {
   const v = value===''?undefined:Math.max(0,Math.min(20,parseInt(value)||0));
@@ -3215,12 +3210,18 @@ function isStandalonePwa() {
 }
 
 function updatePwaInstallButton() {
-  const btn = document.getElementById('btn-install-pwa');
-  if (!btn) return;
+  const btns = [
+    document.getElementById('btn-install-pwa'),
+    document.getElementById('btn-install-pwa-footer')
+  ].filter(Boolean);
+  if (!btns.length) return;
   const shouldShow = isMobileClient() && !isStandalonePwa();
-  btn.style.display = shouldShow ? 'inline-flex' : 'none';
-  btn.disabled = !deferredPwaPrompt;
-  btn.title = deferredPwaPrompt ? 'Instalar app' : 'Instalação indisponível no momento';
+  btns.forEach(btn => {
+    btn.hidden = !shouldShow;
+    btn.style.display = shouldShow ? 'inline-flex' : '';
+    btn.disabled = !deferredPwaPrompt;
+    btn.title = deferredPwaPrompt ? 'Instalar app' : 'Instalação indisponível no momento';
+  });
 }
 
 window.addEventListener('beforeinstallprompt', (event) => {
