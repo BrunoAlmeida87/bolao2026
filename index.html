@@ -559,63 +559,44 @@ a:hover{text-decoration:underline}
   .card-title{font-size:0.92rem}
   .toast{bottom:68px;right:12px;left:12px;max-width:none;text-align:center}
   .pts-badge{padding:4px 8px;font-size:0.8rem}
-  .app-user .user-name{font-size:0.8rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .app-user .user-name{font-size:0.75rem;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .app-user{gap:5px}
+  .theme-btn{padding:4px 6px;font-size:0.85rem}
+  .btn-logout{padding:4px 8px;font-size:0.72rem}
+  .badge-admin{display:none}
   .app-footer{padding:10px 12px 72px}
   .footer-row{gap:6px}
 }
 
-/* ══════════════════════════════════════════
-   LIGHT THEME EXTRA OVERRIDES
-══════════════════════════════════════════ */
-body.light-theme{
-  --dark-blue:#f0f4f8;--mid-blue:#ffffff;--light-blue:#e8edf5;
-  --white:#1a1a2e;--text-muted:#5a6a7a;--border:#c8d4e0;--card:#ffffff;
-  background:#f0f4f8;color:#1a1a2e;
-}
-body.light-theme .app-header{background:linear-gradient(135deg,#1A2E4A,#243857)}
 body.light-theme .auth-wrap{background:radial-gradient(ellipse at center top,#e8edf5 0%,#f0f4f8 60%)}
-body.light-theme .auth-card{background:#fff;border-color:#c8d4e0}
-body.light-theme .card{background:#fff;border-color:#c8d4e0}
-body.light-theme .ranking-table tr:nth-child(even){background:rgba(0,0,0,0.03)}
-body.light-theme .ranking-table th{background:#e8edf5;color:#1a1a2e}
-body.light-theme .pts-badge{background:#e8edf5;color:#1a1a2e}
+body.light-theme .auth-card,
+body.light-theme .card{background:#fff;border-color:var(--border)}
 body.light-theme .form-group input,
 body.light-theme .form-group select,
-body.light-theme .form-group textarea{background:#f8fafc;border-color:#c8d4e0;color:#1a1a2e}
-body.light-theme .form-group select option{background:#fff;color:#1a1a2e}
-body.light-theme .score-input{background:#f8fafc;border-color:#c8d4e0;color:#1a1a2e}
-body.light-theme .score-input.filled{background:#e8f5e9;border-color:#4caf50;color:#1a5e20}
-body.light-theme .result-input{background:#f8fafc;border-color:#c8d4e0;color:#1a1a2e}
-body.light-theme .result-input.saved{background:#e8f5e9;border-color:#4caf50}
-body.light-theme .btn-logout{border-color:#c8d4e0;color:#5a6a7a}
+body.light-theme .form-group textarea{background:#f8fafc;border-color:var(--border);color:var(--white)}
+body.light-theme .form-group select option{background:#fff;color:var(--white)}
+body.light-theme input.score-input.filled{background:#e8f5e9;border-color:#4caf50;color:#1a5e20}
+body.light-theme input.result-input.saved{background:#e8f5e9;border-color:#4caf50}
+body.light-theme .btn-logout{border-color:var(--border);color:var(--text-muted)}
 body.light-theme .btn-logout:hover{border-color:var(--red);color:var(--red)}
-body.light-theme .nav-btn{color:#5a6a7a}
-body.light-theme .nav-btn:hover,.light-theme .nav-btn.active{background:rgba(26,46,74,.1);color:#1a2e4a}
-body.light-theme .bottom-nav{background:#fff;border-top:1px solid #c8d4e0}
-body.light-theme .bottom-nav button{color:#5a6a7a}
+body.light-theme .nav-btn{color:var(--text-muted)}
+body.light-theme .nav-btn:hover,body.light-theme .nav-btn.active{background:rgba(26,46,74,.12);color:#1a2e4a}
+body.light-theme .bottom-nav button{color:var(--text-muted)}
 body.light-theme .bottom-nav button.active{color:var(--accent)}
-body.light-theme .phase-tab{background:#e8edf5;border-color:#c8d4e0;color:#5a6a7a}
+body.light-theme .phase-tab{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
 body.light-theme .phase-tab.active{background:var(--gold);color:#1a1a2e}
-body.light-theme .group-tab{background:#e8edf5;border-color:#c8d4e0;color:#5a6a7a}
+body.light-theme .group-tab{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
 body.light-theme .group-tab.active{background:var(--accent);color:#fff}
-body.light-theme .vs-badge{color:#5a6a7a}
-body.light-theme .game-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px}
-body.light-theme .progress-bar{background:#e2e8f0}
-body.light-theme .mini-bar{background:#e2e8f0}
-body.light-theme .stat-card{background:#fff;border-color:#c8d4e0}
-body.light-theme .standings-card{background:#fff;border-color:#c8d4e0}
-body.light-theme .user-card{background:#f8fafc;border-color:#c8d4e0;color:#1a1a2e}
-body.light-theme .user-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px}
-body.light-theme .alert-info{background:#e8f4fd;border-color:#90caf9;color:#0d47a1}
-body.light-theme .alert-warning{background:#fff8e1;border-color:#ffd54f;color:#e65100}
-body.light-theme .alert-error{background:#fce4ec;border-color:#ef9a9a;color:#b71c1c}
-body.light-theme .result-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}
-body.light-theme .nav-dropdown .dropdown-content{background:#fff;border-color:#c8d4e0}
-body.light-theme .nav-dropdown .dropdown-content a{color:#1a1a2e}
-body.light-theme .nav-dropdown .dropdown-content a:hover{background:#e8edf5}
+body.light-theme .vs-badge{color:var(--text-muted)}
+body.light-theme .game-row{background:#f8fafc;border:1px solid var(--border);border-radius:10px}
+body.light-theme .progress-bar,body.light-theme .mini-bar{background:var(--border)}
+body.light-theme .standings-card{background:#fff;border-color:var(--border)}
+body.light-theme .user-card{background:#f8fafc;border-color:var(--border);color:var(--white)}
+body.light-theme .user-row{background:#f8fafc;border:1px solid var(--border);border-radius:10px}
+body.light-theme .result-row{background:#f8fafc;border:1px solid var(--border);border-radius:8px}
 body.light-theme .toast{background:#1a2e4a;color:#fff}
-body.light-theme .section-title{border-color:#c8d4e0;color:#1a1a2e}
-body.light-theme footer{background:rgba(0,0,0,.05);color:#5a6a7a}
+body.light-theme .section-title{border-color:var(--border);color:var(--white)}
+body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 </style>
 </head>
 <body>
