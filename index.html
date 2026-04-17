@@ -2567,7 +2567,17 @@ async function renderAdminResultados() {
       {key:'grupos',label:'Fase de Grupos',games:Object.values(GRUPOS_DATA).flatMap(g=>g.games)},
       ...Object.entries(ELIM_DATA).map(([k,v])=>({key:k,label:v.icon+' '+v.label,games:v.games}))
     ];
-    let html = `<div class="alert alert-info">Insira os placares reais. Clique em 🔒 para bloquear o jogo (impede alterações nos palpites).</div>`;
+    let html = `<div class="alert alert-info">Insira os placares reais. Clique em 🔒 para bloquear o jogo (impede alterações nos palpites).</div>
+      <div class="alert alert-warning" style="margin-top:10px">
+        🧪 <strong>Modo de Teste:</strong> os botões abaixo preenchem/apagam resultados em massa para validação do sistema.
+        <br>⚠️ Remova esta funcionalidade antes de colocar em produção.
+      </div>
+      <div class="btn-group" style="margin-top:10px;margin-bottom:14px">
+        <button class="btn btn-secondary btn-sm" onclick="fillResultadosTeste('all')">🎲 Preencher todos aleatoriamente</button>
+        <button class="btn btn-secondary btn-sm" onclick="fillResultadosTeste('date')">🎲 Preencher aleatório por dia</button>
+        <button class="btn btn-red btn-sm" onclick="clearResultadosTeste('all')">🧹 Apagar todos os resultados</button>
+        <button class="btn btn-red btn-sm" onclick="clearResultadosTeste('date')">🧹 Apagar resultados por dia</button>
+      </div>`;
     phases.forEach(phase=>{
       html += `<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">${phase.label}</span></div>`;
       phase.games.forEach(game=>{
