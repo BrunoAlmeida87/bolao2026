@@ -30,6 +30,36 @@
   --red:#FF4444;--orange:#FF8C00;--white:#FFF;
   --text-muted:#8BA8C8;--border:#2D4870;--card:#1A2E4A;
 }
+body.light-theme{
+  --dark-blue:#EFF3FA;--mid-blue:#DDE5F4;--card:#FFFFFF;
+  --light-blue:#D0DAF0;--border:#B8C8E0;
+  --white:#1A2E4A;--text-muted:#4A6080;
+}
+body.light-theme .app-header{background:linear-gradient(135deg,#c8d8f0,#dde5f4)}
+body.light-theme .bottom-nav{background:#dde5f4;border-top-color:#b8c8e0}
+body.light-theme .ranking-table td,
+body.light-theme .ranking-table th{border-color:#d0daf0}
+body.light-theme .ranking-table tr:hover td{background:rgba(0,0,0,.03)}
+body.light-theme .ranking-table tr.is-me td{background:rgba(255,215,0,.12)}
+body.light-theme .stat-card{background:rgba(0,0,0,.04)}
+body.light-theme .pts-badge{background:rgba(255,215,0,.2);color:#8B6200}
+body.light-theme .result-badge{background:rgba(0,150,50,.15);color:#006020}
+body.light-theme .locked-badge{background:rgba(0,0,0,.08);color:#4A6080}
+body.light-theme input.score-input,
+body.light-theme input.result-input{background:#F8FAFF;border-color:#B8C8E0;color:#1A2E4A}
+body.light-theme .dropdown-content{background:#fff;border-color:#B8C8E0}
+body.light-theme .dropdown-content a:hover{background:rgba(255,215,0,.15)}
+body.light-theme .back-bar{background:rgba(0,0,0,.04);border-color:rgba(255,140,0,.3)}
+body.light-theme .alert-info{background:rgba(30,144,255,.08);border-color:rgba(30,144,255,.3);color:#1050A0}
+body.light-theme .alert-warning{background:rgba(255,140,0,.08);border-color:rgba(255,140,0,.3);color:#804000}
+body.light-theme .alert-success{background:rgba(0,200,81,.08);border-color:rgba(0,200,81,.3);color:#006030}
+body.light-theme .alert-error{background:rgba(255,68,68,.08);border-color:rgba(255,68,68,.3);color:#800020}
+.theme-btn{
+  padding:5px 8px;border-radius:6px;border:1px solid var(--border);
+  background:transparent;color:var(--text-muted);cursor:pointer;font-size:1rem;
+  transition:all .2s;line-height:1;
+}
+.theme-btn:hover{border-color:var(--gold);color:var(--gold)}
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--dark-blue);
@@ -621,6 +651,7 @@ a:hover{text-decoration:underline}
     <div class="app-user">
       <span class="user-name" id="header-apelido">—</span>
       <span class="badge-admin" id="header-admin-badge" style="display:none">ADMIN</span>
+      <button class="theme-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">🌙</button>
       <button class="btn-logout" onclick="doLogout()">Sair</button>
     </div>
   </header>
@@ -1774,7 +1805,7 @@ async function renderVerPalpites(selectedUid=null) {
     if (!document.getElementById('user-card-style')) {
       const style = document.createElement('style');
       style.id = 'user-card-style';
-      style.textContent = `.user-card{padding:10px;border:1px solid var(--border);background:rgba(255,255,255,.03);border-radius:8px;cursor:pointer;transition:all .2s;text-align:center}.user-card:hover{border-color:var(--gold);background:rgba(255,215,0,.08)}`;
+      style.textContent = `.user-card{padding:10px;border:1px solid var(--border);background:rgba(255,255,255,.03);border-radius:8px;cursor:pointer;transition:all .2s;text-align:center;color:var(--white)}.user-card:hover{border-color:var(--gold);background:rgba(255,215,0,.08)}`;
       document.head.appendChild(style);
     }
 
@@ -1877,40 +1908,77 @@ function switchVerPalGroup(grp) {
 function renderRegras() {
   const cont = document.getElementById('regras-content');
   try {
-    let html = `<div class="section-title">📋 Regras de Pontuação</div>
+    let html = `<div class="section-title">📋 Regras & Como Usar</div>
+
       <div class="card">
-        <div class="card-title" style="margin-bottom:16px">🎯 Como Funciona</div>
-        <p class="text-muted" style="line-height:1.8">
-          No ${esc(CFG.nome_bolao)}, você ganha pontos acertando os placares e resultados dos jogos.
-          Quanto mais preciso for seu palpite, mais pontos você recebe!
-        </p>
+        <div class="card-title" style="margin-bottom:16px">🚀 Como Usar o Sistema</div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <span style="font-size:1.5rem;min-width:32px">1️⃣</span>
+            <div>
+              <div style="font-weight:700;color:var(--white);margin-bottom:4px">Faça seus palpites</div>
+              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">Acesse a aba <strong>⚽ Palpites</strong> e preencha o placar que você acha que vai acontecer em cada jogo. Você pode preencher todos de uma vez ou ir preenchendo aos poucos.</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <span style="font-size:1.5rem;min-width:32px">2️⃣</span>
+            <div>
+              <div style="font-weight:700;color:var(--white);margin-bottom:4px">Fique de olho nos prazos</div>
+              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">Cada jogo tem data e horário exibidos na tela. Quando um jogo é <strong>🔒 bloqueado</strong> pelo administrador (geralmente pouco antes de começar), seu palpite fica travado e não pode ser alterado.</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <span style="font-size:1.5rem;min-width:32px">3️⃣</span>
+            <div>
+              <div style="font-weight:700;color:var(--white);margin-bottom:4px">Acompanhe o ranking</div>
+              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">Após o jogo, o administrador lança o resultado e seus pontos são calculados automaticamente. O <strong>🏠 Ranking</strong> se atualiza em tempo real. Você também vê a variação de posição <strong>↑↓</strong> a cada rodada.</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <span style="font-size:1.5rem;min-width:32px">4️⃣</span>
+            <div>
+              <div style="font-weight:700;color:var(--white);margin-bottom:4px">Compare com todo mundo</div>
+              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">Na aba <strong>👁️ Ver</strong> você pode ver os palpites de qualquer participante. Ou acesse <strong>📋 Todos os Palpites</strong> para ver a matrix completa jogo × pessoa, com cores mostrando quem acertou o quê.</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <span style="font-size:1.5rem;min-width:32px">5️⃣</span>
+            <div>
+              <div style="font-weight:700;color:var(--white);margin-bottom:4px">Explore as estatísticas</div>
+              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">A aba <strong>📈 Estatísticas</strong> traz precisão de acerto, sequências, rankings alternativos (🎯 Melhor Sniper, 💀 Mais Zicado, 🤝 Rei dos Empates) e insights automáticos sobre o bolão.</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="card">
-        <div class="card-title" style="margin-bottom:16px">⭐ Tabela de Pontos</div>
+        <div class="card-title" style="margin-bottom:16px">🎯 Como Funcionam os Pontos</div>
+        <p class="text-muted" style="line-height:1.8;margin-bottom:14px">
+          No ${esc(CFG.nome_bolao)}, você ganha pontos acertando os placares e resultados dos jogos.
+          Quanto mais preciso for seu palpite, mais pontos você recebe!
+        </p>
         <table class="ranking-table" style="margin:0">
-          <thead><tr>
-            <th>Acerto</th><th>Descrição</th><th>Pontos</th>
-          </tr></thead><tbody>
+          <thead><tr><th>Acerto</th><th>Descrição</th><th>Pts</th></tr></thead>
+          <tbody>
             <tr>
               <td style="font-weight:700;color:var(--gold)">Placar Exato</td>
-              <td>Você acertou o placar exato do jogo (ex: 2-1)</td>
+              <td style="font-size:0.85rem">Acertou o placar exato (ex: palpitou 2-1, deu 2-1)</td>
               <td><span class="pts-badge">${CFG.pts_exato}</span></td>
             </tr>
             <tr>
-              <td style="font-weight:700;color:var(--gold)">Vencedor + Saldo</td>
-              <td>Você acertou quem venceu E a diferença de gols (ex: Brasil vence por 2)</td>
+              <td style="font-weight:700;color:var(--accent)">Vencedor + Saldo</td>
+              <td style="font-size:0.85rem">Acertou o vencedor E a diferença de gols (ex: palpitou 2-0, deu 3-1)</td>
               <td><span class="pts-badge">${CFG.pts_vencedor_saldo}</span></td>
             </tr>
             <tr>
               <td style="font-weight:700;color:var(--orange)">Apenas Vencedor</td>
-              <td>Você acertou quem venceu ou que empataria, mas não o placar</td>
+              <td style="font-size:0.85rem">Acertou quem venceu (ou empate), mas não o placar nem a diferença</td>
               <td><span class="pts-badge">${CFG.pts_apenas_vencedor}</span></td>
             </tr>
             <tr>
               <td style="font-weight:700;color:var(--red)">Errou</td>
-              <td>Seu palpite não corresponde ao resultado</td>
-              <td>0</td>
+              <td style="font-size:0.85rem">Seu palpite não bate com o resultado</td>
+              <td style="font-weight:700;color:var(--text-muted)">0</td>
             </tr>
           </tbody>
         </table>
@@ -1918,7 +1986,8 @@ function renderRegras() {
 
       <div class="card">
         <div class="card-title" style="margin-bottom:16px">🏆 Critério de Desempate</div>
-        <ol style="color:var(--text-muted);line-height:2;padding-left:20px">
+        <p class="text-muted" style="font-size:0.85rem;margin-bottom:12px">Em caso de empate na pontuação, o desempate segue esta ordem:</p>
+        <ol style="color:var(--text-muted);line-height:2.2;padding-left:20px;font-size:0.9rem">
           <li><strong style="color:var(--white)">Maior pontuação total</strong></li>
           <li><strong style="color:var(--white)">Mais placares exatos</strong></li>
           <li><strong style="color:var(--white)">Mais acertos de vencedor + saldo</strong></li>
@@ -1927,21 +1996,22 @@ function renderRegras() {
       </div>
 
       <div class="card">
-        <div class="card-title" style="margin-bottom:16px">🔒 Jogos Bloqueados</div>
+        <div class="card-title" style="margin-bottom:16px">🔒 Palpites Bloqueados</div>
         <p class="text-muted" style="line-height:1.8">
-          Quando um jogo é <strong>bloqueado</strong> 🔒, você não consegue mais alterar seu palpite.
-          Isso geralmente ocorre próximo à data da partida para manter a integridade da competição.
+          Quando um jogo aparece com 🔒, o palpite está travado e <strong>não pode mais ser alterado</strong>.
+          O bloqueio é feito pelo administrador pouco antes do jogo começar.
+          Por isso, tente preencher seus palpites com antecedência!
         </p>
       </div>
 
       <div class="card">
-        <div class="card-title" style="margin-bottom:16px">💡 Dicas</div>
-        <ul style="color:var(--text-muted);line-height:2;padding-left:20px">
-          <li>Preencha seus palpites <strong>antes dos jogos começarem</strong></li>
-          <li>Verifique a data e horário de cada partida</li>
-          <li>Você pode alterar seus palpites até o jogo ser bloqueado</li>
-          <li>Acompanhe seu ranking na página inicial</li>
-          <li>Veja os palpites de outros participantes</li>
+        <div class="card-title" style="margin-bottom:16px">💡 Dicas Rápidas</div>
+        <ul style="color:var(--text-muted);line-height:2.2;padding-left:20px;font-size:0.9rem">
+          <li>Preencha todos os palpites antes da Copa começar</li>
+          <li>Jogos das eliminatórias só ficam disponíveis quando os confrontos são definidos</li>
+          <li>Use o tema ☀️/🌙 (canto superior direito) se preferir fundo claro</li>
+          <li>No celular, use a barra de navegação inferior para acessar as seções</li>
+          <li>Toque no nome de alguém no ranking para ver todos os palpites dela</li>
         </ul>
       </div>`;
 
@@ -2931,6 +3001,23 @@ function toggleDropdown() {
   const menu = document.getElementById('dropdown-menu');
   if (menu) menu.classList.toggle('show');
 }
+
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light-theme');
+  localStorage.setItem('bolao-theme', isLight ? 'light' : 'dark');
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) btn.textContent = isLight ? '☀️' : '🌙';
+}
+
+(function applyStoredTheme() {
+  if (localStorage.getItem('bolao-theme') === 'light') {
+    document.body.classList.add('light-theme');
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('theme-toggle-btn');
+      if (btn) btn.textContent = '☀️';
+    });
+  }
+})();
 
 document.addEventListener('click', function(e) {
   const dropdown = document.querySelector('.nav-dropdown');
