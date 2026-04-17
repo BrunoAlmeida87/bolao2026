@@ -1732,9 +1732,10 @@ function buildPalRow(game) {
   const locked = res.locked===true;
   const hasResult = res.h_real!==undefined;
   const pts = calcPontos(pal,res);
-  const disAttr = locked?'disabled':'';
+  const isClosed = locked || hasResult;
+  const closeAttr = isClosed ? `readonly onclick="showPalpiteClosedReason('${game.id}')" onfocus="showPalpiteClosedReason('${game.id}')"` : '';
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
-  const lockedBadge = locked?`<span class="locked-badge">🔒 Bloqueado</span>`:'';
+  const lockedBadge = isClosed?`<span class="locked-badge">🔒 Encerrado</span>`:'';
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = COUNTRY_FLAGS[game.h] || '';
@@ -1742,9 +1743,9 @@ function buildPalRow(game) {
   const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
     <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
-    <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${disAttr} oninput="onPalInput('${game.id}','h',this.value)">
+    <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
-    <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${disAttr} oninput="onPalInput('${game.id}','a',this.value)">
+    <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${closeAttr} oninput="onPalInput('${game.id}','a',this.value)">
     <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
@@ -1778,6 +1779,11 @@ function onPalInput(gameId, side, value) {
 async function savePalpite(gameId) {
   const pal = myPalpites[gameId];
   if (!pal||pal.h===undefined||pal.a===undefined) return;
+  const res = resultados[gameId]||{};
+  if (res.locked===true || res.h_real!==undefined) {
+    showPalpiteClosedReason(gameId);
+    return;
+  }
   const uid = palpitesEditing||currentUser.uid;
   const hInp = document.getElementById(`ph_${gameId}`);
   const aInp = document.getElementById(`pa_${gameId}`);
@@ -1799,6 +1805,19 @@ async function savePalpite(gameId) {
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('save-err'); }
     showToast('Erro ao salvar: '+e.message,'error');
   }
+}
+
+function showPalpiteClosedReason(gameId) {
+  const res = resultados[gameId] || {};
+  if (res.locked===true) {
+    showToast('Este jogo está bloqueado. Não é mais possível alterar palpites.','warning');
+    return;
+  }
+  if (res.h_real!==undefined) {
+    showToast('Resultado oficial já lançado. Não é mais possível alterar palpites.','warning');
+    return;
+  }
+  showToast('Este jogo está encerrado para palpites.','warning');
 }
 
 function updatePalProgress() {
