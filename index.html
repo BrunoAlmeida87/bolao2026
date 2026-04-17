@@ -136,10 +136,10 @@ a:hover{text-decoration:underline}
   color:var(--text-muted);cursor:pointer;font-weight:700;font-size:0.9rem;transition:all .2s;
 }
 .auth-tab.active{background:var(--gold);color:var(--dark-blue)}
+.auth-footer-actions{margin-top:14px;display:flex;justify-content:center}
 .btn-install-pwa{
   border:1px dashed var(--border);background:transparent;color:var(--text-muted);
-  font-size:0.72rem;padding:5px 9px;border-radius:999px;cursor:pointer;
-  line-height:1.2;white-space:nowrap;
+  font-size:0.74rem;padding:6px 10px;border-radius:999px;cursor:pointer;
 }
 .btn-install-pwa:hover{border-color:var(--gold);color:var(--gold)}
 
@@ -629,6 +629,12 @@ a:hover{text-decoration:underline}
         </div>
         <div id="reg-error" class="alert alert-error" style="display:none"></div>
         <button class="btn btn-primary btn-full" onclick="doRegister()">Criar Conta →</button>
+      </div>
+
+      <div class="auth-footer-actions">
+        <button id="btn-install-pwa" class="btn-install-pwa" style="display:none" onclick="installPwaApp()">
+          📲 Instalar app no celular
+        </button>
       </div>
 
     </div>
@@ -2591,75 +2597,6 @@ async function renderAdminResultados() {
     });
     cont.innerHTML = html;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
-}
-
-function pickRandomScore() { return Math.floor(Math.random()*6); }
-
-function pickGamesByDate(dateTxt) {
-  const normalized = (dateTxt||'').trim().toLowerCase();
-  return ALL_GAMES.filter(g => (g.date||'').trim().toLowerCase() === normalized);
-}
-
-async function fillResultadosTeste(mode='all') {
-  if (currentUserDoc?.role!=='admin') return;
-  let games = ALL_GAMES;
-  if (mode === 'date') {
-    const hint = 'Ex: Jun 11';
-    const dateTxt = prompt(`Preencher aleatoriamente apenas jogos de qual dia?\n${hint}`);
-    if (!dateTxt) return;
-    games = pickGamesByDate(dateTxt);
-    if (!games.length) { showToast('Nenhum jogo encontrado para esta data.', 'warning'); return; }
-  }
-  if (!confirm(`Confirmar preenchimento aleatório de ${games.length} jogo(s)?`)) return;
-  try {
-    const batch = db_.batch();
-    games.forEach(g=>{
-      batch.set(db_.collection('resultados').doc(g.id), {
-        h_real: pickRandomScore(),
-        a_real: pickRandomScore(),
-        locked: false,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        source: 'test-seed'
-      }, {merge:true});
-    });
-    await batch.commit();
-    await updateEliminationTeams();
-    showToast(`✅ ${games.length} jogo(s) preenchidos para teste.`, 'success');
-    renderAdminResultados();
-  } catch(e) {
-    showToast('Erro ao preencher resultados de teste: '+errMsg(e), 'error');
-  }
-}
-
-async function clearResultadosTeste(mode='all') {
-  if (currentUserDoc?.role!=='admin') return;
-  let games = ALL_GAMES;
-  if (mode === 'date') {
-    const hint = 'Ex: Jun 11';
-    const dateTxt = prompt(`Apagar resultados apenas de qual dia?\n${hint}`);
-    if (!dateTxt) return;
-    games = pickGamesByDate(dateTxt);
-    if (!games.length) { showToast('Nenhum jogo encontrado para esta data.', 'warning'); return; }
-  }
-  if (!confirm(`Confirmar remoção de resultados em ${games.length} jogo(s)?`)) return;
-  try {
-    const batch = db_.batch();
-    games.forEach(g=>{
-      batch.set(db_.collection('resultados').doc(g.id), {
-        h_real: firebase.firestore.FieldValue.delete(),
-        a_real: firebase.firestore.FieldValue.delete(),
-        locked: false,
-        source: firebase.firestore.FieldValue.delete(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, {merge:true});
-    });
-    await batch.commit();
-    await updateEliminationTeams();
-    showToast(`✅ Resultados removidos de ${games.length} jogo(s).`, 'success');
-    renderAdminResultados();
-  } catch(e) {
-    showToast('Erro ao apagar resultados de teste: '+errMsg(e), 'error');
-  }
 }
 
 let resultBuf = {};
