@@ -1453,6 +1453,24 @@ async function renderDashboard() {
     const totalJogos = Object.keys(res).filter(id=>res[id].h_real!==undefined).length;
     const myRank = ranking.findIndex(r=>r.uid===currentUser.uid)+1;
 
+    // Calcular variação de posição por rodada
+    const roundDefs = [
+      { id:'G1', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
+      { id:'G2', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
+      { id:'G3', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
+      ...Object.keys(ELIM_DATA).map(ph=>({ id:ph, gameIds: ELIM_DATA[ph].games.map(g=>g.id) }))
+    ];
+    const gamesWithRes = new Set(Object.keys(res).filter(id=>res[id].h_real!==undefined));
+    let latestRoundIdx = -1;
+    roundDefs.forEach((rd,idx)=>{ if(rd.gameIds.some(id=>gamesWithRes.has(id))) latestRoundIdx=idx; });
+    const positionDeltas = {};
+    if (latestRoundIdx > 0) {
+      const latestIds = new Set(roundDefs[latestRoundIdx].gameIds);
+      const resPrev = {};
+      Object.entries(res).forEach(([id,data])=>{ if(!latestIds.has(id)) resPrev[id]=data; });
+      computeRanking(users, resPrev, allPals).forEach((u,idx)=>{ positionDeltas[u.uid]=idx+1; });
+    }
+
     if (users.length === 0) {
       cont.innerHTML = `<div class="section-title">🏆 ${esc(CFG.nome_bolao)}</div>
         <div class="card" style="text-align:center;padding:40px 20px">
@@ -1498,7 +1516,7 @@ async function renderDashboard() {
           <thead><tr>
             <th>#</th><th>Participante</th><th>Pontos</th>
             <th class="hide-mobile">Exatos</th><th class="hide-mobile">V+Saldo</th><th class="hide-mobile">Vencedor</th>
-            <th class="hide-mobile">Jogos</th><th>%</th>
+            <th class="hide-mobile">Jogos</th><th>%</th><th class="hide-mobile" title="Distância para o líder">Dist.</th>
           </tr></thead><tbody>`;
 
     ranking.forEach((u,i)=>{
@@ -1506,8 +1524,15 @@ async function renderDashboard() {
       const pct = totalJogos>0 ? Math.round(u.jogos/totalJogos*100) : 0;
       const posClass = pos===1?'gold':pos===2?'silver':pos===3?'bronze':'';
       const isMe = u.uid===currentUser.uid;
+      const prevPos = positionDeltas[u.uid];
+      const delta = prevPos ? prevPos - pos : null;
+      const deltaBadge = delta === null ? '' :
+        delta > 0 ? `<span style="font-size:0.65rem;font-weight:700;color:var(--green);display:block;line-height:1">↑${delta}</span>` :
+        delta < 0 ? `<span style="font-size:0.65rem;font-weight:700;color:#ff6b6b;display:block;line-height:1">↓${Math.abs(delta)}</span>` :
+        `<span style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
+      const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
       html += `<tr class="${isMe?'is-me':''}">
-        <td><span class="rank-pos ${posClass}">${pos}</span></td>
+        <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}</td>
         <td><div class="fw-bold">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
         <td><span class="pts-badge">${u.pontos}</span></td>
         <td class="hide-mobile text-green">${u.exatos}</td>
@@ -1516,6 +1541,7 @@ async function renderDashboard() {
         <td class="hide-mobile text-muted">${u.jogos}</td>
         <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${maxPts>0?Math.round(u.pontos/maxPts*100):0}%"></div></div>
           <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
+        <td class="hide-mobile">${distLider}</td>
       </tr>`;
     });
 
@@ -1893,6 +1919,82 @@ function renderRegras() {
 }
 
 // ════════════════════════════════════════════
+// ESTATÍSTICAS — HELPERS
+// ════════════════════════════════════════════
+function calcUserAccuracyStats(uid, allPals, res) {
+  const gamesOrdered = ALL_GAMES.filter(g => res[g.id] && res[g.id].h_real !== undefined);
+  const userPals = allPals[uid] || {};
+  let acertos = 0, exatos = 0, totalGolDiff = 0, count = 0, maxStreak = 0, tempStreak = 0;
+  for (const g of gamesOrdered) {
+    const p = userPals[g.id];
+    if (!p) continue;
+    count++;
+    const pts = calcPontos(p, res[g.id]);
+    if (pts >= (CFG.pts_apenas_vencedor || 5)) {
+      acertos++; tempStreak++; maxStreak = Math.max(maxStreak, tempStreak);
+    } else { tempStreak = 0; }
+    if (pts === CFG.pts_exato) exatos++;
+    totalGolDiff += Math.abs(parseInt(p.h) - parseInt(res[g.id].h_real)) + Math.abs(parseInt(p.a) - parseInt(res[g.id].a_real));
+  }
+  let currentStreak = 0;
+  for (let i = gamesOrdered.length - 1; i >= 0; i--) {
+    const p = userPals[gamesOrdered[i].id];
+    if (!p) break;
+    const pts = calcPontos(p, res[gamesOrdered[i].id]);
+    if (pts >= (CFG.pts_apenas_vencedor || 5)) currentStreak++;
+    else break;
+  }
+  return {
+    acertoPct: count > 0 ? (acertos / count * 100).toFixed(1) : '-',
+    exatoPct: count > 0 ? (exatos / count * 100).toFixed(1) : '-',
+    erroMedio: count > 0 ? (totalGolDiff / count).toFixed(1) : '-',
+    currentStreak, maxStreak, count
+  };
+}
+
+function calcAltRankings(users, allPals) {
+  return users.map(u => {
+    const pals = allPals[u.uid] || {};
+    let empates = 0, totalGols = 0, totalPals = 0;
+    for (const p of Object.values(pals)) {
+      if (parseInt(p.h) === parseInt(p.a)) empates++;
+      totalGols += (parseInt(p.h) || 0) + (parseInt(p.a) || 0);
+      totalPals++;
+    }
+    return { ...u, empates, mediaGols: totalPals > 0 ? totalGols / totalPals : 0, totalPals };
+  });
+}
+
+function generateInsights(ranking, userAccStats, analiseJogos, res) {
+  const insights = [];
+  ranking.forEach(u => {
+    const s = userAccStats[u.uid];
+    if (s && s.currentStreak >= 3)
+      insights.push(`🔥 <b>${esc(u.apelido || u.nome)}</b> está em alta com ${s.currentStreak} acertos seguidos!`);
+  });
+  if (ranking.length >= 2 && ranking[0].pontos > 0) {
+    const diff = ranking[0].pontos - ranking[1].pontos;
+    if (diff > 0) insights.push(`👑 <b>${esc(ranking[0].apelido || ranking[0].nome)}</b> lidera com ${diff} pts de vantagem`);
+    else insights.push(`⚔️ Empate na liderança entre <b>${esc(ranking[0].apelido || ranking[0].nome)}</b> e <b>${esc(ranking[1].apelido || ranking[1].nome)}</b>!`);
+  }
+  const withCount = ranking.filter(u => userAccStats[u.uid] && userAccStats[u.uid].count > 0);
+  if (withCount.length > 0) {
+    const best = withCount.slice().sort((a,b) => parseFloat(userAccStats[b.uid].acertoPct) - parseFloat(userAccStats[a.uid].acertoPct))[0];
+    insights.push(`💎 <b>${esc(best.apelido || best.nome)}</b> tem o melhor aproveitamento: ${userAccStats[best.uid].acertoPct}%`);
+  }
+  Object.entries(analiseJogos).forEach(([jid, data]) => {
+    if (data.palpites.length > 0 && data.exatos === 0 && data.venc_saldo === 0 && data.apenas_venc === 0)
+      insights.push(`😱 Ninguém acertou o resultado de <b>${esc(data.game?.h||jid)} × ${esc(data.game?.a||'')}</b>`);
+  });
+  if (withCount.length > 0) {
+    const sniper = withCount.slice().sort((a,b) => b.exatos - a.exatos)[0];
+    if (sniper.exatos > 0)
+      insights.push(`🎯 <b>${esc(sniper.apelido || sniper.nome)}</b> é o melhor sniper com ${sniper.exatos} placares exatos!`);
+  }
+  return insights;
+}
+
+// ════════════════════════════════════════════
 // ESTATÍSTICAS PAGE
 // ════════════════════════════════════════════
 async function renderEstatisticas() {
@@ -1948,6 +2050,31 @@ async function renderEstatisticas() {
     });
     const resultMaisComum = Object.entries(resultFreq).sort((a,b)=>b[1]-a[1])[0];
 
+    // Dificuldade dos jogos
+    const gameDifficulty = Object.entries(analiseJogos)
+      .filter(([,d]) => d.palpites.length > 0)
+      .map(([jid, d]) => {
+        const acertos = d.exatos + d.venc_saldo + d.apenas_venc;
+        return { jid, game: d.game, acertos, total: d.palpites.length, pct: acertos / d.palpites.length * 100 };
+      }).sort((a,b) => a.pct - b.pct);
+    const maisDificil = gameDifficulty[0];
+    const maisFacil = gameDifficulty[gameDifficulty.length - 1];
+
+    // Ranking e precisão por usuário
+    const ranking = computeRanking(users, res, allPals);
+    const userAccStats = {};
+    users.forEach(u => { userAccStats[u.uid] = calcUserAccuracyStats(u.uid, allPals, res); });
+
+    // Rankings alternativos
+    const altData = calcAltRankings(ranking, allPals);
+    const melhorSniper = altData.slice().sort((a,b) => b.exatos - a.exatos)[0];
+    const maisZicado = altData.slice().sort((a,b) => b.erros - a.erros)[0];
+    const reiEmpates = altData.slice().sort((a,b) => b.empates - a.empates)[0];
+    const apostadorOusado = altData.slice().sort((a,b) => b.mediaGols - a.mediaGols)[0];
+
+    // Insights automáticos
+    const insights = generateInsights(ranking, userAccStats, analiseJogos, res);
+
     let html = `<div class="section-title">📈 Estatísticas & Curiosidades</div>
 
       <div class="stats-grid">
@@ -1955,13 +2082,96 @@ async function renderEstatisticas() {
         <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos Resultado</div></div>
         <div class="stat-card"><div class="val">${Object.values(analiseJogos).reduce((a,b)=>a+b.exatos,0)}</div><div class="lbl">Placares Exatos</div></div>
         <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
-      </div>
+      </div>`;
 
-      <div class="card">
-        <div class="card-title">🎯 Jogo Mais Acertado</div>
+    // ── Insights automáticos ──
+    if (insights.length > 0) {
+      html += `<div class="card">
+        <div class="card-title">💡 Insights do Bolão</div>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          ${insights.map(i=>`<div style="background:rgba(255,255,255,0.04);border-left:3px solid var(--gold);border-radius:6px;padding:10px 14px;font-size:0.88rem;line-height:1.4">${i}</div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    // ── Rankings alternativos ──
+    if (totalJogos > 0 && ranking.length > 0) {
+      const mkAward = (emoji, title, color, user, sub) => user ? `
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:1.8rem">${emoji}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);margin:4px 0 6px;text-transform:uppercase;letter-spacing:.5px">${title}</div>
+          <div style="font-size:1rem;font-weight:700;color:${color}">${esc(user.apelido||user.nome)}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">${sub}</div>
+        </div>` : '';
+      html += `<div class="card">
+        <div class="card-title">🏅 Rankings Alternativos</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+          ${mkAward('🎯','Melhor Sniper','var(--gold)',melhorSniper,`${melhorSniper?.exatos||0} placares exatos`)}
+          ${mkAward('💀','Mais Zicado','#ff6b6b',maisZicado,`${maisZicado?.erros||0} erros`)}
+          ${mkAward('🤝','Rei dos Empates','var(--accent)',reiEmpates,`${reiEmpates?.empates||0} palpites de empate`)}
+          ${mkAward('🚀','Apostador Ousado','var(--orange)',apostadorOusado,`média ${apostadorOusado?.mediaGols?.toFixed(1)||0} gols/jogo`)}
+        </div>
+      </div>`;
+    }
+
+    // ── Precisão por usuário ──
+    if (totalJogos > 0 && ranking.length > 0) {
+      html += `<div class="card" style="padding:0;overflow:hidden">
+        <div class="card-title" style="padding:16px 16px 0">🎯 Precisão dos Participantes</div>
+        <div style="overflow-x:auto">
+        <table class="ranking-table" style="margin-top:10px">
+          <thead><tr>
+            <th>Participante</th>
+            <th title="% de acerto de resultado">Acerto%</th>
+            <th title="% de placares exatos">Exato%</th>
+            <th title="Erro médio em gols" class="hide-mobile">Δ Gols</th>
+            <th title="Sequência atual de acertos">Sequência</th>
+            <th title="Maior sequência histórica" class="hide-mobile">Recorde</th>
+          </tr></thead><tbody>`;
+      ranking.forEach(u => {
+        const s = userAccStats[u.uid];
+        if (!s) return;
+        const streak = s.currentStreak > 0 ? `<span style="color:var(--green);font-weight:700">🔥 ${s.currentStreak}</span>` : `<span style="color:var(--text-muted)">—</span>`;
+        html += `<tr ${u.uid===currentUser?.uid?'class="is-me"':''}>
+          <td><div class="fw-bold">${esc(u.apelido)}</div><div style="font-size:0.72rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
+          <td style="font-weight:600;color:var(--gold)">${s.acertoPct}${s.acertoPct!=='-'?'%':''}</td>
+          <td style="color:var(--green)">${s.exatoPct}${s.exatoPct!=='-'?'%':''}</td>
+          <td class="hide-mobile" style="color:var(--text-muted)">${s.erroMedio}</td>
+          <td>${streak}</td>
+          <td class="hide-mobile" style="color:var(--accent)">${s.maxStreak > 0 ? s.maxStreak : '—'}</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div></div>`;
+    }
+
+    // ── Jogo mais difícil / mais fácil ──
+    if (maisDificil || maisFacil) {
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">`;
+      if (maisDificil) html += `<div class="card">
+        <div class="card-title">😈 Mais Difícil</div>
+        <div style="margin-top:10px">
+          <div style="font-size:0.85rem;font-weight:600">${esc(maisDificil.game?.h||maisDificil.jid)} × ${esc(maisDificil.game?.a||'')}</div>
+          <div style="font-size:1.4rem;font-weight:800;color:#ff6b6b;margin:4px 0">${maisDificil.pct.toFixed(0)}%</div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">${maisDificil.acertos}/${maisDificil.total} acertaram</div>
+        </div>
+      </div>`;
+      if (maisFacil) html += `<div class="card">
+        <div class="card-title">😊 Mais Fácil</div>
+        <div style="margin-top:10px">
+          <div style="font-size:0.85rem;font-weight:600">${esc(maisFacil.game?.h||maisFacil.jid)} × ${esc(maisFacil.game?.a||'')}</div>
+          <div style="font-size:1.4rem;font-weight:800;color:var(--green);margin:4px 0">${maisFacil.pct.toFixed(0)}%</div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">${maisFacil.acertos}/${maisFacil.total} acertaram</div>
+        </div>
+      </div>`;
+      html += `</div>`;
+    }
+
+    // ── Cards originais ──
+    html += `<div class="card">
+        <div class="card-title">🏆 Jogo Mais Acertado (Placar Exato)</div>
         ${maiorAcerto.id ? `
           <div style="margin-top:12px">
-            <p style="font-size:0.95rem;font-weight:600;margin-bottom:6px">${analiseJogos[maiorAcerto.id].game.h} vs ${analiseJogos[maiorAcerto.id].game.a}</p>
+            <p style="font-size:0.95rem;font-weight:600;margin-bottom:6px">${esc(analiseJogos[maiorAcerto.id].game?.h||'')} × ${esc(analiseJogos[maiorAcerto.id].game?.a||'')}</p>
             <p style="font-size:0.85rem;color:var(--text-muted)">
               ${analiseJogos[maiorAcerto.id].exatos} placares exatos ·
               ${analiseJogos[maiorAcerto.id].venc_saldo} vencedor+saldo ·
@@ -1979,7 +2189,7 @@ async function renderEstatisticas() {
       </div>
 
       <div class="card">
-        <div class="card-title">🏆 Resultado Mais Comum</div>
+        <div class="card-title">📊 Resultado Mais Comum</div>
         ${resultMaisComum ? `
           <p style="font-size:1.2rem;font-weight:700;color:var(--green);margin-top:12px">${resultMaisComum[0]} <span style="font-size:0.85rem;color:var(--text-muted)">(${resultMaisComum[1]} jogos)</span></p>
         ` : '<p class="text-muted">Sem dados</p>'}
