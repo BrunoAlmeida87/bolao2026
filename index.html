@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
   // Garante que o Firebase esteja disponível antes de qualquer uso
   window.__firebaseReady = new Promise((resolve) => {
@@ -563,6 +563,59 @@ a:hover{text-decoration:underline}
   .app-footer{padding:10px 12px 72px}
   .footer-row{gap:6px}
 }
+
+/* ══════════════════════════════════════════
+   LIGHT THEME EXTRA OVERRIDES
+══════════════════════════════════════════ */
+body.light-theme{
+  --dark-blue:#f0f4f8;--mid-blue:#ffffff;--light-blue:#e8edf5;
+  --white:#1a1a2e;--text-muted:#5a6a7a;--border:#c8d4e0;--card:#ffffff;
+  background:#f0f4f8;color:#1a1a2e;
+}
+body.light-theme .app-header{background:linear-gradient(135deg,#1A2E4A,#243857)}
+body.light-theme .auth-wrap{background:radial-gradient(ellipse at center top,#e8edf5 0%,#f0f4f8 60%)}
+body.light-theme .auth-card{background:#fff;border-color:#c8d4e0}
+body.light-theme .card{background:#fff;border-color:#c8d4e0}
+body.light-theme .ranking-table tr:nth-child(even){background:rgba(0,0,0,0.03)}
+body.light-theme .ranking-table th{background:#e8edf5;color:#1a1a2e}
+body.light-theme .pts-badge{background:#e8edf5;color:#1a1a2e}
+body.light-theme .form-group input,
+body.light-theme .form-group select,
+body.light-theme .form-group textarea{background:#f8fafc;border-color:#c8d4e0;color:#1a1a2e}
+body.light-theme .form-group select option{background:#fff;color:#1a1a2e}
+body.light-theme .score-input{background:#f8fafc;border-color:#c8d4e0;color:#1a1a2e}
+body.light-theme .score-input.filled{background:#e8f5e9;border-color:#4caf50;color:#1a5e20}
+body.light-theme .result-input{background:#f8fafc;border-color:#c8d4e0;color:#1a1a2e}
+body.light-theme .result-input.saved{background:#e8f5e9;border-color:#4caf50}
+body.light-theme .btn-logout{border-color:#c8d4e0;color:#5a6a7a}
+body.light-theme .btn-logout:hover{border-color:var(--red);color:var(--red)}
+body.light-theme .nav-btn{color:#5a6a7a}
+body.light-theme .nav-btn:hover,.light-theme .nav-btn.active{background:rgba(26,46,74,.1);color:#1a2e4a}
+body.light-theme .bottom-nav{background:#fff;border-top:1px solid #c8d4e0}
+body.light-theme .bottom-nav button{color:#5a6a7a}
+body.light-theme .bottom-nav button.active{color:var(--accent)}
+body.light-theme .phase-tab{background:#e8edf5;border-color:#c8d4e0;color:#5a6a7a}
+body.light-theme .phase-tab.active{background:var(--gold);color:#1a1a2e}
+body.light-theme .group-tab{background:#e8edf5;border-color:#c8d4e0;color:#5a6a7a}
+body.light-theme .group-tab.active{background:var(--accent);color:#fff}
+body.light-theme .vs-badge{color:#5a6a7a}
+body.light-theme .game-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px}
+body.light-theme .progress-bar{background:#e2e8f0}
+body.light-theme .mini-bar{background:#e2e8f0}
+body.light-theme .stat-card{background:#fff;border-color:#c8d4e0}
+body.light-theme .standings-card{background:#fff;border-color:#c8d4e0}
+body.light-theme .user-card{background:#f8fafc;border-color:#c8d4e0;color:#1a1a2e}
+body.light-theme .user-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px}
+body.light-theme .alert-info{background:#e8f4fd;border-color:#90caf9;color:#0d47a1}
+body.light-theme .alert-warning{background:#fff8e1;border-color:#ffd54f;color:#e65100}
+body.light-theme .alert-error{background:#fce4ec;border-color:#ef9a9a;color:#b71c1c}
+body.light-theme .result-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}
+body.light-theme .nav-dropdown .dropdown-content{background:#fff;border-color:#c8d4e0}
+body.light-theme .nav-dropdown .dropdown-content a{color:#1a1a2e}
+body.light-theme .nav-dropdown .dropdown-content a:hover{background:#e8edf5}
+body.light-theme .toast{background:#1a2e4a;color:#fff}
+body.light-theme .section-title{border-color:#c8d4e0;color:#1a1a2e}
+body.light-theme footer{background:rgba(0,0,0,.05);color:#5a6a7a}
 </style>
 </head>
 <body>
@@ -657,6 +710,7 @@ a:hover{text-decoration:underline}
       <button class="nav-btn" data-page="ver-palpites" onclick="navigateTo('ver-palpites')">👁️ Ver</button>
       <button class="nav-btn" data-page="tabelas" onclick="navigateTo('tabelas')">📊 Tabelas</button>
       <button class="nav-btn" data-page="chaveamento" onclick="navigateTo('chaveamento')">🔑 Chaves</button>
+      <button class="nav-btn" data-page="estatisticas" onclick="navigateTo('estatisticas')">📈 Stats</button>
       <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
       <button class="nav-btn" data-page="admin" id="admin-nav" style="display:none" onclick="navigateTo('admin')">⚙️ Admin</button>
     </nav>
@@ -1165,12 +1219,15 @@ function showApp() {
   document.getElementById('header-admin-badge').style.display = isAdmin?'inline':'none';
   document.getElementById('admin-nav').style.display = isAdmin?'inline-block':'none';
   document.getElementById('admin-dropdown').style.display = isAdmin?'block':'none';
+  const adminBottom = document.getElementById('admin-bottom-nav');
+  if (adminBottom) adminBottom.style.display = isAdmin?'flex':'none';
 }
 
 // ════════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════════
 let _pendingPalpitesUid = null;
+
 function goToUserPalpites(uid) {
   _pendingPalpitesUid = uid;
   navigateTo('ver-palpites');
@@ -2567,38 +2624,39 @@ async function renderAdminResultados() {
     const rSnap = await db_.collection('resultados').get();
     const res = {};
     rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const phases = [
-      {key:'grupos',label:'Fase de Grupos',games:Object.values(GRUPOS_DATA).flatMap(g=>g.games)},
-      ...Object.entries(ELIM_DATA).map(([k,v])=>({key:k,label:v.icon+' '+v.label,games:v.games}))
-    ];
-    let html = `<div class="alert alert-info">Insira os placares reais. Clique em 🔒 para bloquear o jogo (impede alterações nos palpites).</div>
-      <div class="alert alert-warning" style="margin-top:10px">
-        🧪 <strong>Modo de Teste:</strong> os botões abaixo preenchem/apagam resultados em massa para validação do sistema.
-        <br>⚠️ Remova esta funcionalidade antes de colocar em produção.
-      </div>
-      <div class="btn-group" style="margin-top:10px;margin-bottom:14px">
-        <button class="btn btn-secondary btn-sm" onclick="fillResultadosTeste('all')">🎲 Preencher todos aleatoriamente</button>
-        <button class="btn btn-secondary btn-sm" onclick="fillResultadosTeste('date')">🎲 Preencher aleatório por dia</button>
-        <button class="btn btn-red btn-sm" onclick="clearResultadosTeste('all')">🧹 Apagar todos os resultados</button>
-        <button class="btn btn-red btn-sm" onclick="clearResultadosTeste('date')">🧹 Apagar resultados por dia</button>
-      </div>`;
-    phases.forEach(phase=>{
-      html += `<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">${phase.label}</span></div>`;
-      phase.games.forEach(game=>{
-        const r = res[game.id]||{};
-        const locked = r.locked===true;
-        const hasVal = r.h_real!==undefined;
-        html += `<div class="result-row" id="row_${game.id}">
-          <div><div style="font-size:0.85rem;font-weight:600">${esc(game.h)}</div><div style="font-size:0.72rem;color:var(--text-muted)">${game.id} · ${game.date}</div></div>
-          <input type="number" class="result-input ${hasVal?'saved':''}" id="rh_${game.id}" min="0" max="20" placeholder="–" value="${hasVal?r.h_real:''}" oninput="onResultInput('${game.id}','h',this.value)">
-          <div style="text-align:center;color:var(--text-muted);font-size:0.8rem">✕</div>
-          <input type="number" class="result-input ${hasVal?'saved':''}" id="ra_${game.id}" min="0" max="20" placeholder="–" value="${hasVal?r.a_real:''}" oninput="onResultInput('${game.id}','a',this.value)">
-          <div><div style="font-size:0.85rem;font-weight:600">${esc(game.a)}</div></div>
-          <button class="lock-btn ${locked?'locked':''}" title="${locked?'Desbloquear':'Bloquear'}" onclick="toggleLock('${game.id}')" id="lock_${game.id}">${locked?'🔒':'🔓'}</button>
-        </div>`;
-      });
-      html += `</div>`;
+    // Sort all games chronologically by date + time
+    const sortedGames = ALL_GAMES.slice().sort((a,b)=>{
+      const da = _parseGameDate(a.date), db2 = _parseGameDate(b.date);
+      if (da-db2!==0) return da-db2;
+      const ta = GAME_TIMES[a.id]||'00:00', tb = GAME_TIMES[b.id]||'00:00';
+      return ta.localeCompare(tb);
     });
+
+    let html = `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
+    let lastDate = null;
+    sortedGames.forEach(game=>{
+      const r = res[game.id]||{};
+      const locked = r.locked===true;
+      const hasVal = r.h_real!==undefined;
+      const time = GAME_TIMES[game.id]||'--:--';
+      if (game.date !== lastDate) {
+        if (lastDate!==null) html += `</div>`;
+        html += `<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">📅 ${game.date}</span></div>`;
+        lastDate = game.date;
+      }
+      html += `<div class="result-row" id="row_${game.id}">
+        <div>
+          <div style="font-size:0.85rem;font-weight:600">${esc(game.h)}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted)">${game.id} · <span style="font-weight:700;color:var(--gold)">${time}</span></div>
+        </div>
+        <input type="number" class="result-input ${hasVal?'saved':''}" id="rh_${game.id}" min="0" max="20" placeholder="–" value="${hasVal?r.h_real:''}" oninput="onResultInput('${game.id}','h',this.value)">
+        <div style="text-align:center;color:var(--text-muted);font-size:0.8rem">✕</div>
+        <input type="number" class="result-input ${hasVal?'saved':''}" id="ra_${game.id}" min="0" max="20" placeholder="–" value="${hasVal?r.a_real:''}" oninput="onResultInput('${game.id}','a',this.value)">
+        <div><div style="font-size:0.85rem;font-weight:600">${esc(game.a)}</div></div>
+        <button class="lock-btn ${locked?'locked':''}" title="${locked?'Desbloquear':'Bloquear'}" onclick="toggleLock('${game.id}')" id="lock_${game.id}">${locked?'🔒':'🔓'}</button>
+      </div>`;
+    });
+    if (lastDate!==null) html += `</div>`;
     cont.innerHTML = html;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
@@ -2664,18 +2722,45 @@ async function renderAdminUsuarios() {
   try {
     const snap = await db_.collection('usuarios').get();
     const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
-    let html = `<div class="alert alert-info">${users.length} usuário(s) registrado(s).</div>`;
-    users.sort((a,b)=>{
-      if (a.role === b.role) return (a.apelido||'').localeCompare(b.apelido||'');
-      return a.role==='admin' ? -1 : 1;
-    }).forEach(u=>{
+    const activeUsers = users.filter(u=>u.ativo!==false);
+
+    // Load palpites for all active users
+    const palSnaps = await Promise.all(activeUsers.map(u=>db_.collection('palpites').doc(u.uid).collection('jogos').get()));
+    const userPalCounts = {};
+    activeUsers.forEach((u,i)=>{
+      const filled = palSnaps[i].docs.filter(d=>{const p=d.data();return p.h!==undefined&&p.a!==undefined;}).length;
+      userPalCounts[u.uid] = filled;
+    });
+
+    const total = ALL_GAMES.length;
+    const incomplete = activeUsers.filter(u=>userPalCounts[u.uid]<total && u.email);
+    const incompleteEmails = incomplete.map(u=>u.email).join(',');
+    const bulkMailto = incompleteEmails ? `mailto:${incompleteEmails}?subject=${encodeURIComponent('[Bolão ICN] Palpites pendentes')}&body=${encodeURIComponent('Olá! Lembrete: você ainda tem palpites pendentes no Bolão ICN Copa 2026. Acesse e complete seus palpites antes dos jogos começarem!')}` : '';
+
+    let html = `<div class="alert alert-info">${users.length} usuário(s) registrado(s) · ${activeUsers.length} ativo(s).</div>`;
+    if (bulkMailto) {
+      html += `<div style="margin-bottom:16px"><a href="${esc(bulkMailto)}" class="btn btn-primary btn-sm">📧 Email para todos com palpites incompletos (${incomplete.length})</a></div>`;
+    }
+
+    users.sort((a,b)=>{ if(a.role===b.role) return (a.apelido||'').localeCompare(b.apelido||''); return a.role==='admin'?-1:1; }).forEach(u=>{
       const isSelf = u.uid===currentUser.uid;
+      const filled = userPalCounts[u.uid]??0;
+      const pct = Math.round(filled/total*100);
+      const isComplete = filled>=total;
+      const statusBadge = u.ativo===false ? '' :
+        isComplete
+          ? `<span style="background:rgba(0,200,81,.15);color:var(--green);border:1px solid var(--green);border-radius:12px;padding:2px 8px;font-size:0.72rem;font-weight:700">✅ Em dia ${filled}/${total}</span>`
+          : `<span style="background:rgba(255,140,0,.15);color:var(--orange);border:1px solid var(--orange);border-radius:12px;padding:2px 8px;font-size:0.72rem;font-weight:700">⚠️ ${filled}/${total}</span>`;
+      const mailBody = `Olá ${u.apelido||u.nome}! Você ainda tem ${total-filled} palpite(s) pendente(s) no Bolão ICN Copa 2026. Acesse o sistema e complete seus palpites antes dos jogos começarem!`;
+      const mailBtn = u.email && !isComplete && u.ativo!==false
+        ? `<a href="mailto:${esc(u.email)}?subject=${encodeURIComponent('[Bolão ICN] Seus palpites estão incompletos')}&body=${encodeURIComponent(mailBody)}" class="btn btn-secondary btn-sm">📧 Lembrete</a>`
+        : '';
       html += `<div class="user-row">
         <div class="user-info-col">
           <div class="user-name-big">${esc(u.apelido)} <span class="badge ${u.role==='admin'?'badge-admin-tag':'badge-user'}">${u.role}</span>
-            ${u.ativo===false?'<span class="badge badge-inactive">Inativo</span>':''}</div>
+            ${u.ativo===false?'<span class="badge badge-inactive">Inativo</span>':statusBadge}</div>
           <div class="user-email">${esc(u.nome)} · ${esc(u.email)}</div>
-          <div class="user-meta">UID: ${u.uid.slice(0,12)}…</div>
+          ${u.ativo!==false?`<div style="margin-top:4px"><div style="height:4px;border-radius:2px;background:var(--border);width:100%;max-width:160px"><div style="height:4px;border-radius:2px;background:${isComplete?'var(--green)':'var(--orange)'};width:${pct}%"></div></div></div>`:''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <label class="toggle-switch" title="${isSelf?'Você não pode remover seu próprio status de admin':''}">
@@ -2685,6 +2770,7 @@ async function renderAdminUsuarios() {
           <span style="font-size:0.78rem;color:var(--text-muted);min-width:40px">ADMIN</span>
           ${!isSelf?`<button class="btn ${u.ativo===false?'btn-green':'btn-red'} btn-sm" onclick="toggleAtivo('${u.uid}',${u.ativo!==false})">${u.ativo===false?'Ativar':'Desativar'}</button>`:''}
           <button class="btn btn-secondary btn-sm" onclick="adminGoEditPalpites('${u.uid}')">✏️ Palpites</button>
+          ${mailBtn}
           ${!isSelf?`<button class="btn btn-red btn-sm" onclick="deleteUserClick('${u.uid}','${esc(u.apelido)}')">🗑️ Excluir</button>`:''}
         </div>
       </div>`;
