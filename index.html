@@ -136,10 +136,10 @@ a:hover{text-decoration:underline}
   color:var(--text-muted);cursor:pointer;font-weight:700;font-size:0.9rem;transition:all .2s;
 }
 .auth-tab.active{background:var(--gold);color:var(--dark-blue)}
+.auth-footer-actions{margin-top:14px;display:flex;justify-content:center}
 .btn-install-pwa{
   border:1px dashed var(--border);background:transparent;color:var(--text-muted);
-  font-size:0.72rem;padding:5px 9px;border-radius:999px;cursor:pointer;
-  line-height:1.2;white-space:nowrap;
+  font-size:0.74rem;padding:6px 10px;border-radius:999px;cursor:pointer;
 }
 .btn-install-pwa:hover{border-color:var(--gold);color:var(--gold)}
 
@@ -629,6 +629,12 @@ a:hover{text-decoration:underline}
         </div>
         <div id="reg-error" class="alert alert-error" style="display:none"></div>
         <button class="btn btn-primary btn-full" onclick="doRegister()">Criar Conta →</button>
+      </div>
+
+      <div class="auth-footer-actions">
+        <button id="btn-install-pwa" class="btn-install-pwa" style="display:none" onclick="installPwaApp()">
+          📲 Instalar app no celular
+        </button>
       </div>
 
     </div>
