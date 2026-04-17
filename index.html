@@ -485,20 +485,31 @@ a:hover{text-decoration:underline}
 .bottom-nav button.active{color:var(--gold)}
 .bottom-nav button.active span{color:var(--gold)}
 
+.stats-alt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.stats-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
 @media(max-width:600px){
   .bottom-nav{display:flex}
   .app-nav{display:none}
-  .container{padding-bottom:70px}
+  .container{padding-bottom:76px;padding-left:12px;padding-right:12px}
   .grid2{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
   .standings-grid{grid-template-columns:1fr}
-  .app-logo{font-size:0.9rem}
+  .app-logo{font-size:0.88rem}
   .nav-btn{padding:5px 8px;font-size:0.75rem}
   .game-row{grid-template-columns:1fr 44px 20px 44px 1fr;gap:4px}
   .score-input{width:44px;height:42px;font-size:1rem}
   .result-row{grid-template-columns:1fr 46px 16px 46px 1fr auto;gap:4px}
   .result-input{width:46px;height:42px;font-size:1rem}
   .ranking-table .hide-mobile{display:none}
+  .stats-pair{grid-template-columns:1fr}
+  .card{padding:14px;border-radius:12px;margin-bottom:14px}
+  .stat-card .val{font-size:1.5rem}
+  .section-title{font-size:0.95rem;margin-bottom:14px}
+  .card-title{font-size:0.92rem}
+  .toast{bottom:68px;right:12px;left:12px;max-width:none;text-align:center}
+  .pts-badge{padding:4px 8px;font-size:0.8rem}
+  .app-user .user-name{font-size:0.8rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 </style>
 </head>
@@ -1062,6 +1073,7 @@ function showApp() {
   document.getElementById('header-apelido').textContent = currentUserDoc?.apelido||'';
   document.getElementById('header-admin-badge').style.display = isAdmin?'inline':'none';
   document.getElementById('admin-nav').style.display = isAdmin?'inline-block':'none';
+  document.getElementById('admin-dropdown').style.display = isAdmin?'block':'none';
 }
 
 // ════════════════════════════════════════════
@@ -1921,13 +1933,21 @@ function renderRegras() {
 // ════════════════════════════════════════════
 // ESTATÍSTICAS — HELPERS
 // ════════════════════════════════════════════
+const _MONTH_MAP = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function _parseGameDate(dateStr) {
+  const m = (dateStr||'').match(/([A-Za-z]+)\s+(\d+)/);
+  return m ? new Date(2026, _MONTH_MAP[m[1]] ?? 5, parseInt(m[2])) : new Date(9999, 0, 1);
+}
+
 function calcUserAccuracyStats(uid, allPals, res) {
-  const gamesOrdered = ALL_GAMES.filter(g => res[g.id] && res[g.id].h_real !== undefined);
+  const gamesOrdered = ALL_GAMES
+    .filter(g => res[g.id] && res[g.id].h_real !== undefined)
+    .sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
   const userPals = allPals[uid] || {};
   let acertos = 0, exatos = 0, totalGolDiff = 0, count = 0, maxStreak = 0, tempStreak = 0;
   for (const g of gamesOrdered) {
     const p = userPals[g.id];
-    if (!p) continue;
+    if (!p) { tempStreak = 0; continue; }
     count++;
     const pts = calcPontos(p, res[g.id]);
     if (pts >= (CFG.pts_apenas_vencedor || 5)) {
@@ -2105,7 +2125,7 @@ async function renderEstatisticas() {
         </div>` : '';
       html += `<div class="card">
         <div class="card-title">🏅 Rankings Alternativos</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <div class="stats-alt-grid">
           ${mkAward('🎯','Melhor Sniper','var(--gold)',melhorSniper,`${melhorSniper?.exatos||0} placares exatos`)}
           ${mkAward('💀','Mais Zicado','#ff6b6b',maisZicado,`${maisZicado?.erros||0} erros`)}
           ${mkAward('🤝','Rei dos Empates','var(--accent)',reiEmpates,`${reiEmpates?.empates||0} palpites de empate`)}
@@ -2146,7 +2166,7 @@ async function renderEstatisticas() {
 
     // ── Jogo mais difícil / mais fácil ──
     if (maisDificil || maisFacil) {
-      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">`;
+      html += `<div class="stats-pair">`;
       if (maisDificil) html += `<div class="card">
         <div class="card-title">😈 Mais Difícil</div>
         <div style="margin-top:10px">
