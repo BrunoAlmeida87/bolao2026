@@ -2599,6 +2599,10 @@ async function renderAdminResultados() {
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
+// Garante disponibilidade para handlers inline (onclick="...")
+window.fillResultadosTeste = fillResultadosTeste;
+window.clearResultadosTeste = clearResultadosTeste;
+
 let resultBuf = {};
 function onResultInput(gameId, side, value) {
   const v = value===''?undefined:Math.max(0,Math.min(20,parseInt(value)||0));
