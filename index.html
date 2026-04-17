@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.0.2">
+<meta name="app-version" content="v1.1.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -14,9 +14,12 @@
 <script>
   // Garante que o Firebase esteja disponível antes de qualquer uso
   window.__firebaseReady = new Promise((resolve) => {
-    if (typeof firebase !== 'undefined') { resolve(); return; }
+    if (typeof firebase !== 'undefined') { resolve(true); return; }
+    const startedAt = Date.now();
+    const maxWaitMs = 10000;
     const check = setInterval(() => {
-      if (typeof firebase !== 'undefined') { clearInterval(check); resolve(); }
+      if (typeof firebase !== 'undefined') { clearInterval(check); resolve(true); return; }
+      if (Date.now() - startedAt >= maxWaitMs) { clearInterval(check); resolve(false); }
     }, 50);
   });
 </script>
@@ -106,6 +109,7 @@ a:hover{text-decoration:underline}
 ══════════════════════════════════════════ */
 .screen{min-height:100vh}
 .hidden{display:none!important}
+#screen-app{min-height:100vh;display:flex;flex-direction:column}
 .page{display:none}
 .page.active{display:block}
 .container{max-width:1000px;margin:0 auto;padding:28px 16px 80px}
@@ -132,6 +136,12 @@ a:hover{text-decoration:underline}
   color:var(--text-muted);cursor:pointer;font-weight:700;font-size:0.9rem;transition:all .2s;
 }
 .auth-tab.active{background:var(--gold);color:var(--dark-blue)}
+.btn-install-pwa{
+  border:1px dashed var(--border);background:transparent;color:var(--text-muted);
+  font-size:0.72rem;padding:5px 9px;border-radius:999px;cursor:pointer;
+  line-height:1.2;white-space:nowrap;
+}
+.btn-install-pwa:hover{border-color:var(--gold);color:var(--gold)}
 
 /* ══════════════════════════════════════════
    FORM ELEMENTS
@@ -514,6 +524,12 @@ a:hover{text-decoration:underline}
 .bottom-nav button span{font-size:0.58rem;font-weight:600}
 .bottom-nav button.active{color:var(--gold)}
 .bottom-nav button.active span{color:var(--gold)}
+.app-main{flex:1}
+.app-footer{
+  text-align:center;padding:12px 16px;color:var(--text-muted);font-size:0.75rem;
+  background:rgba(0,0,0,0.3);margin-top:0;border-top:1px solid var(--border);
+}
+.footer-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 
 .stats-alt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .stats-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -540,6 +556,8 @@ a:hover{text-decoration:underline}
   .toast{bottom:68px;right:12px;left:12px;max-width:none;text-align:center}
   .pts-badge{padding:4px 8px;font-size:0.8rem}
   .app-user .user-name{font-size:0.8rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .app-footer{padding:10px 12px 72px}
+  .footer-row{gap:6px}
 }
 </style>
 </head>
@@ -665,7 +683,7 @@ a:hover{text-decoration:underline}
     <button data-page="admin" id="admin-bottom-nav" style="display:none" onclick="navigateTo('admin')">⚙️<span>Admin</span></button>
   </nav>
 
-  <main>
+  <main class="app-main">
     <!-- ── DASHBOARD ── -->
     <div id="page-dashboard" class="page active">
       <div class="container" id="dashboard-content">
@@ -731,8 +749,13 @@ a:hover{text-decoration:underline}
   </main>
 
   <!-- Footer com versão -->
-  <footer style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.75rem;background:rgba(0,0,0,0.3);margin-top:40px">
-    <span id="app-version">Bolão ICN Copa 2026 • v1.0.2</span>
+  <footer class="app-footer">
+    <div class="footer-row">
+      <span id="app-version">Bolão ICN Copa 2026 • v1.1.0</span>
+      <button id="btn-install-pwa" class="btn-install-pwa" style="display:none" onclick="installPwaApp()">
+        📲 Instalar app
+      </button>
+    </div>
   </footer>
 </div>
 
@@ -888,7 +911,7 @@ const ELIM_DATA = {
   ]},
   final:{label:'Final + 3º Lugar',icon:'🏆',games:[
     {id:'T1',h:'Perd. SF1',a:'Perd. SF2',date:'Jul 18 (3º lugar)'},
-    {id:'F1',h:'Venc. SF1',a:'Venc. SF2',date:'Jul 19 🏆'},
+    {id:'FIN1',h:'Venc. SF1',a:'Venc. SF2',date:'Jul 19 🏆'},
   ]},
 };
 
@@ -904,7 +927,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.0.2',
+  app_version:'v1.1.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -933,7 +956,7 @@ const GAME_TIMES = {
   'Q1':'15:00','Q2':'18:00','Q3':'16:00','Q4':'19:00','Q5':'15:00','Q6':'18:00','Q7':'16:00','Q8':'19:00',
   'S1':'16:00','S2':'16:00','S3':'20:00','S4':'20:00',
   'SF1':'21:00','SF2':'21:00',
-  'T1':'17:00','F1':'20:00'
+  'T1':'17:00','FIN1':'20:00'
 };
 
 const COUNTRY_FLAGS = {
@@ -957,6 +980,7 @@ let palpitesEditing = null;
 let saveDebounce = {};
 let isLoadingPage = false;
 let eliminationCache = {};
+let deferredPwaPrompt = null;
 
 // ════════════════════════════════════════════
 // FIREBASE CONFIG — PRODUÇÃO
@@ -1005,8 +1029,19 @@ async function handleAuthState(user) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  await window.__firebaseReady;
-  initFirebase(FIREBASE_CONFIG);
+  updatePwaInstallButton();
+  const firebaseReady = await window.__firebaseReady;
+  if (!firebaseReady) {
+    showLoading(false);
+    showAuth();
+    setAuthError('login','Falha ao carregar serviços do Firebase. Verifique sua conexão e recarregue a página.');
+    return;
+  }
+  if (!initFirebase(FIREBASE_CONFIG)) {
+    showLoading(false);
+    showAuth();
+    setAuthError('login','Erro ao iniciar o Firebase. Recarregue a página ou contate o suporte.');
+  }
 });
 
 // ════════════════════════════════════════════
@@ -1045,6 +1080,11 @@ async function doRegister() {
       nome, apelido, email, role, ativo:true,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    await db_.collection('palpites').doc(cred.user.uid).set({
+      uid: cred.user.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true});
   } catch(e) {
     hide('screen-loading'); show('screen-auth'); showAuthTab('register');
     const msgs = {'auth/email-already-in-use':'E-mail já cadastrado','auth/invalid-email':'E-mail inválido','auth/weak-password':'Senha fraca (mínimo 6 caracteres)'};
@@ -1610,7 +1650,7 @@ async function renderDashboard() {
       ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor</p>`;
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -1676,7 +1716,7 @@ async function renderPalpites(editUid=null) {
     updatePalProgress();
     updateGroupTabState();
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -1686,9 +1726,10 @@ function buildPalRow(game) {
   const locked = res.locked===true;
   const hasResult = res.h_real!==undefined;
   const pts = calcPontos(pal,res);
-  const disAttr = locked?'disabled':'';
+  const isClosed = locked || hasResult;
+  const closeAttr = isClosed ? `readonly onclick="showPalpiteClosedReason('${game.id}')" onfocus="showPalpiteClosedReason('${game.id}')"` : '';
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
-  const lockedBadge = locked?`<span class="locked-badge">🔒 Bloqueado</span>`:'';
+  const lockedBadge = isClosed?`<span class="locked-badge">🔒 Encerrado</span>`:'';
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = COUNTRY_FLAGS[game.h] || '';
@@ -1696,9 +1737,9 @@ function buildPalRow(game) {
   const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
     <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
-    <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${disAttr} oninput="onPalInput('${game.id}','h',this.value)">
+    <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
-    <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${disAttr} oninput="onPalInput('${game.id}','a',this.value)">
+    <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${closeAttr} oninput="onPalInput('${game.id}','a',this.value)">
     <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
@@ -1732,12 +1773,21 @@ function onPalInput(gameId, side, value) {
 async function savePalpite(gameId) {
   const pal = myPalpites[gameId];
   if (!pal||pal.h===undefined||pal.a===undefined) return;
+  const res = resultados[gameId]||{};
+  if (res.locked===true || res.h_real!==undefined) {
+    showPalpiteClosedReason(gameId);
+    return;
+  }
   const uid = palpitesEditing||currentUser.uid;
   const hInp = document.getElementById(`ph_${gameId}`);
   const aInp = document.getElementById(`pa_${gameId}`);
   if (hInp) hInp.classList.add('saving');
   if (aInp) aInp.classList.add('saving');
   try {
+    await db_.collection('palpites').doc(uid).set({
+      uid,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true});
     await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).set({
       h: pal.h, a: pal.a, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -1749,6 +1799,19 @@ async function savePalpite(gameId) {
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('save-err'); }
     showToast('Erro ao salvar: '+e.message,'error');
   }
+}
+
+function showPalpiteClosedReason(gameId) {
+  const res = resultados[gameId] || {};
+  if (res.locked===true) {
+    showToast('Este jogo está bloqueado. Não é mais possível alterar palpites.','warning');
+    return;
+  }
+  if (res.h_real!==undefined) {
+    showToast('Resultado oficial já lançado. Não é mais possível alterar palpites.','warning');
+    return;
+  }
+  showToast('Este jogo está encerrado para palpites.','warning');
 }
 
 function updatePalProgress() {
@@ -1868,7 +1931,7 @@ async function renderVerPalpites(selectedUid=null) {
 
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -2017,7 +2080,7 @@ function renderRegras() {
 
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -2098,7 +2161,7 @@ async function renderVerTodos() {
     html += `</tbody></table></div>`;
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -2389,7 +2452,7 @@ async function renderEstatisticas() {
 
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
@@ -2413,7 +2476,7 @@ async function renderTabelas() {
     });
     html += `</div><p class="text-muted" style="font-size:0.78rem;margin-top:12px">Verde = classificado · Laranja = possível 3º lugar · Baseado nos resultados lançados pelo admin.</p>`;
     cont.innerHTML = html;
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 // ════════════════════════════════════════════
@@ -2446,7 +2509,7 @@ async function renderChaveamento() {
     });
     html += `</div></div>`;
     cont.innerHTML = html;
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 // ════════════════════════════════════════════
@@ -2498,7 +2561,17 @@ async function renderAdminResultados() {
       {key:'grupos',label:'Fase de Grupos',games:Object.values(GRUPOS_DATA).flatMap(g=>g.games)},
       ...Object.entries(ELIM_DATA).map(([k,v])=>({key:k,label:v.icon+' '+v.label,games:v.games}))
     ];
-    let html = `<div class="alert alert-info">Insira os placares reais. Clique em 🔒 para bloquear o jogo (impede alterações nos palpites).</div>`;
+    let html = `<div class="alert alert-info">Insira os placares reais. Clique em 🔒 para bloquear o jogo (impede alterações nos palpites).</div>
+      <div class="alert alert-warning" style="margin-top:10px">
+        🧪 <strong>Modo de Teste:</strong> os botões abaixo preenchem/apagam resultados em massa para validação do sistema.
+        <br>⚠️ Remova esta funcionalidade antes de colocar em produção.
+      </div>
+      <div class="btn-group" style="margin-top:10px;margin-bottom:14px">
+        <button class="btn btn-secondary btn-sm" onclick="fillResultadosTeste('all')">🎲 Preencher todos aleatoriamente</button>
+        <button class="btn btn-secondary btn-sm" onclick="fillResultadosTeste('date')">🎲 Preencher aleatório por dia</button>
+        <button class="btn btn-red btn-sm" onclick="clearResultadosTeste('all')">🧹 Apagar todos os resultados</button>
+        <button class="btn btn-red btn-sm" onclick="clearResultadosTeste('date')">🧹 Apagar resultados por dia</button>
+      </div>`;
     phases.forEach(phase=>{
       html += `<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">${phase.label}</span></div>`;
       phase.games.forEach(game=>{
@@ -2517,8 +2590,81 @@ async function renderAdminResultados() {
       html += `</div>`;
     });
     cont.innerHTML = html;
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
+
+function pickRandomScore() { return Math.floor(Math.random()*6); }
+
+function pickGamesByDate(dateTxt) {
+  const normalized = (dateTxt||'').trim().toLowerCase();
+  return ALL_GAMES.filter(g => (g.date||'').trim().toLowerCase() === normalized);
+}
+
+async function fillResultadosTeste(mode='all') {
+  if (currentUserDoc?.role!=='admin') return;
+  let games = ALL_GAMES;
+  if (mode === 'date') {
+    const hint = 'Ex: Jun 11';
+    const dateTxt = prompt(`Preencher aleatoriamente apenas jogos de qual dia?\n${hint}`);
+    if (!dateTxt) return;
+    games = pickGamesByDate(dateTxt);
+    if (!games.length) { showToast('Nenhum jogo encontrado para esta data.', 'warning'); return; }
+  }
+  if (!confirm(`Confirmar preenchimento aleatório de ${games.length} jogo(s)?`)) return;
+  try {
+    const batch = db_.batch();
+    games.forEach(g=>{
+      batch.set(db_.collection('resultados').doc(g.id), {
+        h_real: pickRandomScore(),
+        a_real: pickRandomScore(),
+        locked: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        source: 'test-seed'
+      }, {merge:true});
+    });
+    await batch.commit();
+    await updateEliminationTeams();
+    showToast(`✅ ${games.length} jogo(s) preenchidos para teste.`, 'success');
+    renderAdminResultados();
+  } catch(e) {
+    showToast('Erro ao preencher resultados de teste: '+errMsg(e), 'error');
+  }
+}
+
+async function clearResultadosTeste(mode='all') {
+  if (currentUserDoc?.role!=='admin') return;
+  let games = ALL_GAMES;
+  if (mode === 'date') {
+    const hint = 'Ex: Jun 11';
+    const dateTxt = prompt(`Apagar resultados apenas de qual dia?\n${hint}`);
+    if (!dateTxt) return;
+    games = pickGamesByDate(dateTxt);
+    if (!games.length) { showToast('Nenhum jogo encontrado para esta data.', 'warning'); return; }
+  }
+  if (!confirm(`Confirmar remoção de resultados em ${games.length} jogo(s)?`)) return;
+  try {
+    const batch = db_.batch();
+    games.forEach(g=>{
+      batch.set(db_.collection('resultados').doc(g.id), {
+        h_real: firebase.firestore.FieldValue.delete(),
+        a_real: firebase.firestore.FieldValue.delete(),
+        locked: false,
+        source: firebase.firestore.FieldValue.delete(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, {merge:true});
+    });
+    await batch.commit();
+    await updateEliminationTeams();
+    showToast(`✅ Resultados removidos de ${games.length} jogo(s).`, 'success');
+    renderAdminResultados();
+  } catch(e) {
+    showToast('Erro ao apagar resultados de teste: '+errMsg(e), 'error');
+  }
+}
+
+// Garante disponibilidade para handlers inline (onclick="...")
+window.fillResultadosTeste = fillResultadosTeste;
+window.clearResultadosTeste = clearResultadosTeste;
 
 let resultBuf = {};
 function onResultInput(gameId, side, value) {
@@ -2578,7 +2724,10 @@ async function renderAdminUsuarios() {
     const snap = await db_.collection('usuarios').get();
     const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
     let html = `<div class="alert alert-info">${users.length} usuário(s) registrado(s).</div>`;
-    users.sort((a,b)=>a.role==='admin'?-1:1).forEach(u=>{
+    users.sort((a,b)=>{
+      if (a.role === b.role) return (a.apelido||'').localeCompare(b.apelido||'');
+      return a.role==='admin' ? -1 : 1;
+    }).forEach(u=>{
       const isSelf = u.uid===currentUser.uid;
       html += `<div class="user-row">
         <div class="user-info-col">
@@ -2600,7 +2749,7 @@ async function renderAdminUsuarios() {
       </div>`;
     });
     cont.innerHTML = html;
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 async function toggleAdminCheckbox(uid, isChecked) {
@@ -2679,7 +2828,7 @@ async function renderAdminEditPalpites(selectedUid=null) {
     }
     cont.innerHTML = html;
     if (selectedUid) await renderAdminPalpitesInline(selectedUid);
-  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 async function adminEditSelected(uid) { if (uid) renderAdminEditPalpites(uid); }
@@ -2719,7 +2868,7 @@ async function renderAdminPalpitesInline(uid) {
       html += `</div>`;
     });
     area.innerHTML = html;
-  } catch(e) { area.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`; }
+  } catch(e) { area.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
 
 function adminGoEditPalpites(uid) { switchAdminTab('palpites-admin'); renderAdminEditPalpites(uid); }
@@ -3027,6 +3176,11 @@ document.addEventListener('click', function(e) {
   }
 });
 
+function errMsg(err) {
+  if (!err) return 'Erro desconhecido';
+  return err.message ? String(err.message) : String(err);
+}
+
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -3042,6 +3196,49 @@ function showToast(msg, type='') {
   t.textContent = msg; t.className = 'toast show'+(type?' '+type:'');
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>{ t.className='toast'; }, 3000);
+}
+
+function isMobileClient() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'');
+}
+
+function isStandalonePwa() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function updatePwaInstallButton() {
+  const btn = document.getElementById('btn-install-pwa');
+  if (!btn) return;
+  const shouldShow = isMobileClient() && !isStandalonePwa();
+  btn.style.display = shouldShow ? 'inline-flex' : 'none';
+  btn.disabled = !deferredPwaPrompt;
+  btn.title = deferredPwaPrompt ? 'Instalar app' : 'Instalação indisponível no momento';
+}
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredPwaPrompt = event;
+  updatePwaInstallButton();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPwaPrompt = null;
+  updatePwaInstallButton();
+  showToast('✅ App instalado com sucesso!', 'success');
+});
+
+async function installPwaApp() {
+  if (!deferredPwaPrompt) {
+    showToast('No iPhone, use Compartilhar → "Adicionar à Tela de Início".', 'warning');
+    return;
+  }
+  deferredPwaPrompt.prompt();
+  const choice = await deferredPwaPrompt.userChoice;
+  if (choice && choice.outcome === 'accepted') {
+    showToast('Instalação iniciada ✅', 'success');
+  }
+  deferredPwaPrompt = null;
+  updatePwaInstallButton();
 }
 </script>
 </body>
