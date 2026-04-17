@@ -596,6 +596,7 @@ a:hover{text-decoration:underline}
     <nav class="app-nav">
       <button class="nav-btn active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠 Ranking</button>
       <button class="nav-btn" data-page="palpites" onclick="navigateTo('palpites')">⚽ Palpites</button>
+      <button class="nav-btn" data-page="ver-palpites" onclick="navigateTo('ver-palpites')">👁️ Ver</button>
       <button class="nav-btn" data-page="tabelas" onclick="navigateTo('tabelas')">📊 Tabelas</button>
       <button class="nav-btn" data-page="chaveamento" onclick="navigateTo('chaveamento')">🔑 Chaves</button>
       <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
@@ -612,6 +613,8 @@ a:hover{text-decoration:underline}
         <a onclick="navigateTo('chaveamento');toggleDropdown()">🔑 Chaveamento</a>
         <a onclick="navigateTo('regras');toggleDropdown()">📋 Regras</a>
         <a onclick="navigateTo('estatisticas');toggleDropdown()">📈 Estatísticas</a>
+        <a onclick="navigateTo('ver-palpites');toggleDropdown()">👁️ Ver Palpites</a>
+        <a onclick="navigateTo('ver-todos');toggleDropdown()">📋 Todos os Palpites</a>
         <a id="admin-dropdown" style="display:none" onclick="navigateTo('admin');toggleDropdown()">⚙️ Admin</a>
       </div>
     </div>
@@ -626,7 +629,7 @@ a:hover{text-decoration:underline}
   <nav class="bottom-nav" id="bottom-nav">
     <button class="active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠<span>Ranking</span></button>
     <button data-page="palpites" onclick="navigateTo('palpites')">⚽<span>Palpites</span></button>
-    <button data-page="regras" onclick="navigateTo('regras')">📋<span>Regras</span></button>
+    <button data-page="ver-palpites" onclick="navigateTo('ver-palpites')">👁️<span>Ver</span></button>
     <button data-page="tabelas" onclick="navigateTo('tabelas')">📊<span>Tabelas</span></button>
     <button data-page="admin" id="admin-bottom-nav" style="display:none" onclick="navigateTo('admin')">⚙️<span>Admin</span></button>
   </nav>
@@ -663,6 +666,13 @@ a:hover{text-decoration:underline}
     <!-- ── VER PALPITES ── -->
     <div id="page-ver-palpites" class="page">
       <div class="container" id="ver-palpites-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ── VER TODOS OS PALPITES ── -->
+    <div id="page-ver-todos" class="page">
+      <div class="container" id="ver-todos-content">
         <div class="loading-wrap"><div class="spinner"></div></div>
       </div>
     </div>
@@ -1079,6 +1089,12 @@ function showApp() {
 // ════════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════════
+let _pendingPalpitesUid = null;
+function goToUserPalpites(uid) {
+  _pendingPalpitesUid = uid;
+  navigateTo('ver-palpites');
+}
+
 function navigateTo(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
@@ -1088,7 +1104,8 @@ function navigateTo(page) {
   switch(page) {
     case 'dashboard':   renderDashboard(); break;
     case 'palpites':    renderPalpites(); break;
-    case 'ver-palpites': renderVerPalpites(); break;
+    case 'ver-palpites': renderVerPalpites(_pendingPalpitesUid); _pendingPalpitesUid=null; break;
+    case 'ver-todos':   renderVerTodos(); break;
     case 'tabelas':     renderTabelas(); break;
     case 'chaveamento': renderChaveamento(); break;
     case 'regras':      renderRegras(); break;
@@ -1545,7 +1562,7 @@ async function renderDashboard() {
       const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
       html += `<tr class="${isMe?'is-me':''}">
         <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}</td>
-        <td><div class="fw-bold">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
+        <td style="cursor:pointer" onclick="goToUserPalpites('${u.uid}')"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
         <td><span class="pts-badge">${u.pontos}</span></td>
         <td class="hide-mobile text-green">${u.exatos}</td>
         <td class="hide-mobile text-gold">${u.venc_saldo}</td>
@@ -1737,7 +1754,11 @@ async function renderVerPalpites(selectedUid=null) {
     const res = {};
     rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
 
-    let html = `<div class="section-title">👁️ Ver Palpites de Todos</div>
+    let html = `<div class="section-title">👁️ Ver Palpites</div>
+      <div class="back-bar" style="margin-bottom:16px">
+        <span style="font-size:0.85rem;color:var(--text-muted)">Selecione um participante para ver os palpites</span>
+        <button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="navigateTo('ver-todos')">📋 Ver Todos de Uma Vez</button>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-bottom:24px">`;
 
     users.sort((a,b)=>a.apelido.localeCompare(b.apelido)).forEach(u=>{
@@ -1924,6 +1945,87 @@ function renderRegras() {
         </ul>
       </div>`;
 
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════
+// VER TODOS OS PALPITES PAGE
+// ════════════════════════════════════════════
+async function renderVerTodos() {
+  const cont = document.getElementById('ver-todos-content');
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const [usersSnap, resSnap] = await Promise.all([
+      db_.collection('usuarios').get(),
+      db_.collection('resultados').get()
+    ]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false)
+      .sort((a,b)=>a.apelido.localeCompare(b.apelido));
+    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const allPals = {};
+    await Promise.all(users.map(async u=>{
+      const ps = await db_.collection('palpites').doc(u.uid).collection('jogos').get();
+      allPals[u.uid] = {};
+      ps.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); });
+    }));
+
+    const gamesOrdered = ALL_GAMES.slice().sort((a,b)=>_parseGameDate(a.date)-_parseGameDate(b.date));
+    const phaseGroups = [
+      { label:'⚽ Fase de Grupos', ids: new Set(Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(gm=>gm.id))) },
+      ...Object.entries(ELIM_DATA).map(([,v])=>({ label:`${v.icon} ${v.label}`, ids: new Set(v.games.map(g=>g.id)) }))
+    ];
+
+    let html = `<div class="section-title">📋 Todos os Palpites</div>
+      <div class="back-bar">
+        <span style="font-size:0.82rem;color:var(--text-muted)">🟡 Exato &nbsp;🟢 Acerto &nbsp;🔴 Erro</span>
+        <button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="navigateTo('ver-palpites')">👁️ Por Pessoa</button>
+      </div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table class="ranking-table" style="min-width:${160+users.length*72}px;font-size:0.8rem">
+        <thead><tr>
+          <th style="text-align:left;min-width:130px;position:sticky;left:0;z-index:2;background:var(--mid-blue)">Jogo</th>
+          <th style="min-width:55px">Data</th>
+          <th style="min-width:55px">Result.</th>
+          ${users.map(u=>`<th style="min-width:68px;cursor:pointer;color:var(--gold)" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites de ${esc(u.apelido)}">${esc(u.apelido)}</th>`).join('')}
+        </tr></thead>
+        <tbody>`;
+
+    let lastPhase = -1;
+    gamesOrdered.forEach(g=>{
+      const phaseIdx = phaseGroups.findIndex(p=>p.ids.has(g.id));
+      if (phaseIdx !== lastPhase) {
+        lastPhase = phaseIdx;
+        if (phaseIdx !== -1)
+          html += `<tr><td colspan="${3+users.length}" style="background:rgba(255,215,0,.07);color:var(--gold);font-weight:700;font-size:0.75rem;padding:7px 10px;text-align:left;position:sticky;left:0">${phaseGroups[phaseIdx].label}</td></tr>`;
+      }
+      const r = res[g.id]||{};
+      const hasResult = r.h_real!==undefined;
+      const resultStr = hasResult?`${r.h_real}-${r.a_real}`:'—';
+      const flagH = COUNTRY_FLAGS[g.h]||'';
+      const flagA = COUNTRY_FLAGS[g.a]||'';
+      const short = t => t.split(' ')[0];
+      html += `<tr>
+        <td style="text-align:left;white-space:nowrap;position:sticky;left:0;z-index:1;background:var(--card)">${flagH} ${esc(short(g.h))} × ${flagA} ${esc(short(g.a))}</td>
+        <td style="color:var(--text-muted);font-size:0.73rem;white-space:nowrap">${g.date||'—'}</td>
+        <td style="font-weight:600;color:${hasResult?'var(--green)':'var(--text-muted)'};white-space:nowrap">${resultStr}</td>`;
+      users.forEach(u=>{
+        const pal = allPals[u.uid]?.[g.id];
+        if (!pal||pal.h===undefined) { html += `<td style="color:var(--text-muted)">—</td>`; return; }
+        const pts = calcPontos(pal, r);
+        const palStr = `${pal.h}-${pal.a}`;
+        let bg='', col='';
+        if (pts===CFG.pts_exato)        { bg='rgba(255,215,0,.12)'; col='var(--gold)'; }
+        else if (pts!==null && pts>0)   { col='var(--green)'; }
+        else if (pts===0 && hasResult)  { col='#ff6b6b'; }
+        html += `<td style="${bg?`background:${bg};`:''}${col?`color:${col};`:''}font-weight:600">${palStr}</td>`;
+      });
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
     cont.innerHTML = html;
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${e.message}</div>`;
