@@ -1316,7 +1316,9 @@ function calcPontos(pal, res) {
 }
 
 function computeRanking(users, resultados, allPalpites) {
-  const jogosComResultado = Object.keys(resultados).filter(id=>resultados[id].h_real!==undefined);
+  const jogosComResultado = Object.keys(resultados).filter(id=>
+    resultados[id].h_real!==undefined && resultados[id].a_real!==undefined
+  );
   return users
     .filter(u=>u.ativo!==false)
     .map(u=>{
@@ -3198,11 +3200,14 @@ async function exportFullExcel() {
     const allPals = {};
     await Promise.all(users.map(async u=>{ const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); }); }));
     const ranking = computeRanking(users, res, allPals);
+    const totalJogosComResultado = Object.keys(res).filter(
+      id => res[id].h_real !== undefined && res[id].a_real !== undefined
+    ).length;
 
     // Sheet 1 - Ranking
     const rankingData = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','% Aproveito']];
     ranking.forEach((u,i)=>{
-      const pct = u.jogos>0 ? Math.round(u.jogos/Object.keys(res).filter(id=>res[id].h_real!==undefined).length*100) : 0;
+      const pct = totalJogosComResultado > 0 ? Math.round((u.jogos / totalJogosComResultado) * 100) : 0;
       rankingData.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos, pct+'%']);
     });
 
