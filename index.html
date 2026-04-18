@@ -1352,9 +1352,9 @@ async function updateQuarterfinals(res) {
     const updatedRes = {};
     rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
 
-    // Verificar se todas oitavas estão com resultado
+    // Verificar se todas oitavas estão decididas (vencedor conhecido, considerando penaltis em empate)
     const oitavaIds = ELIM_DATA.r32.games.map(g=>g.id);
-    const todasOitavasCompletas = oitavaIds.every(id=>updatedRes[id]?.h_real!==undefined);
+    const todasOitavasCompletas = oitavaIds.every(id=>_hasDecided(updatedRes[id]));
 
     if (!todasOitavasCompletas) {
       isLoadingPage = false;
@@ -1365,11 +1365,8 @@ async function updateQuarterfinals(res) {
     const quartaGames = ELIM_DATA.r16.games.map(game=>{
       let h = game.h, a = game.a;
       ELIM_DATA.r32.games.forEach(oitava=>{
-        const oitavaRes = updatedRes[oitava.id];
-        if (!oitavaRes?.h_real) return;
-        const h_real = parseInt(oitavaRes.h_real);
-        const a_real = parseInt(oitavaRes.a_real);
-        const vencedor = h_real > a_real ? (oitavaRes.h_team || oitava.h) : (oitavaRes.a_team || oitava.a);
+        const vencedor = _winnerOf(updatedRes[oitava.id], oitava.h, oitava.a);
+        if (!vencedor) return;
         h = h.replace(`Venc. ${oitava.id}`, vencedor);
         a = a.replace(`Venc. ${oitava.id}`, vencedor);
       });
@@ -1406,7 +1403,7 @@ async function updateQuartas(res) {
     rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
 
     const r16Ids = ELIM_DATA.r16.games.map(g=>g.id);
-    const todasR16Completas = r16Ids.every(id=>updatedRes[id]?.h_real!==undefined);
+    const todasR16Completas = r16Ids.every(id=>_hasDecided(updatedRes[id]));
 
     if (!todasR16Completas) {
       isLoadingPage = false;
@@ -1416,11 +1413,8 @@ async function updateQuartas(res) {
     const quartaGames = ELIM_DATA.quartas.games.map(game=>{
       let h = game.h, a = game.a;
       ELIM_DATA.r16.games.forEach(r16=>{
-        const r16Res = updatedRes[r16.id];
-        if (!r16Res?.h_real) return;
-        const h_real = parseInt(r16Res.h_real);
-        const a_real = parseInt(r16Res.a_real);
-        const vencedor = h_real > a_real ? (r16Res.h_team || r16.h) : (r16Res.a_team || r16.a);
+        const vencedor = _winnerOf(updatedRes[r16.id], r16.h, r16.a);
+        if (!vencedor) return;
         h = h.replace(`Venc. ${r16.id}`, vencedor);
         a = a.replace(`Venc. ${r16.id}`, vencedor);
       });
@@ -1456,9 +1450,9 @@ async function updateSemifinals(res) {
     const updatedRes = {};
     rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
 
-    // Verificar se todas quartas estão com resultado
+    // Verificar se todas quartas estão decididas (vencedor conhecido)
     const quartaIds = ELIM_DATA.quartas.games.map(g=>g.id);
-    const todasQuartasCompletas = quartaIds.every(id=>updatedRes[id]?.h_real!==undefined);
+    const todasQuartasCompletas = quartaIds.every(id=>_hasDecided(updatedRes[id]));
 
     if (!todasQuartasCompletas) {
       isLoadingPage = false;
@@ -1469,11 +1463,8 @@ async function updateSemifinals(res) {
     const semiGames = ELIM_DATA.semi.games.map(game=>{
       let h = game.h, a = game.a;
       ELIM_DATA.quartas.games.forEach(quarta=>{
-        const quartaRes = updatedRes[quarta.id];
-        if (!quartaRes?.h_real) return;
-        const h_real = parseInt(quartaRes.h_real);
-        const a_real = parseInt(quartaRes.a_real);
-        const vencedor = h_real > a_real ? (quartaRes.h_team || quarta.h) : (quartaRes.a_team || quarta.a);
+        const vencedor = _winnerOf(updatedRes[quarta.id], quarta.h, quarta.a);
+        if (!vencedor) return;
         h = h.replace(`Venc. ${quarta.id}`, vencedor);
         a = a.replace(`Venc. ${quarta.id}`, vencedor);
       });
@@ -1510,9 +1501,9 @@ async function updateFinal(res) {
     const updatedRes = {};
     rSnap.docs.forEach(d=>{ updatedRes[d.id]=d.data(); });
 
-    // Verificar se todas semis estão com resultado
+    // Verificar se todas semis estão decididas
     const semiIds = ELIM_DATA.semi.games.map(g=>g.id);
-    const todasSemisCompletas = semiIds.every(id=>updatedRes[id]?.h_real!==undefined);
+    const todasSemisCompletas = semiIds.every(id=>_hasDecided(updatedRes[id]));
 
     if (!todasSemisCompletas) {
       isLoadingPage = false;
@@ -1523,12 +1514,9 @@ async function updateFinal(res) {
     const finalGames = ELIM_DATA.final.games.map(game=>{
       let h = game.h, a = game.a;
       ELIM_DATA.semi.games.forEach(semi=>{
-        const semiRes = updatedRes[semi.id];
-        if (!semiRes?.h_real) return;
-        const h_real = parseInt(semiRes.h_real);
-        const a_real = parseInt(semiRes.a_real);
-        const vencedor = h_real > a_real ? (semiRes.h_team || semi.h) : (semiRes.a_team || semi.a);
-        const perdedor = h_real > a_real ? (semiRes.a_team || semi.a) : (semiRes.h_team || semi.h);
+        const vencedor = _winnerOf(updatedRes[semi.id], semi.h, semi.a);
+        const perdedor = _loserOf(updatedRes[semi.id], semi.h, semi.a);
+        if (!vencedor || !perdedor) return;
         h = h.replace(`Venc. ${semi.id}`, vencedor).replace(`Perd. ${semi.id}`, perdedor);
         a = a.replace(`Venc. ${semi.id}`, vencedor).replace(`Perd. ${semi.id}`, perdedor);
       });
@@ -2227,6 +2215,40 @@ function _uniqueGameDates() {
   return Array.from(seen).sort((a,b) => _parseGameDate(a) - _parseGameDate(b));
 }
 
+// IDs dos jogos de fase eliminatória (R32, R16, Quartas, Semi, Final/3º)
+const ELIM_GAME_IDS = new Set(
+  Object.values(ELIM_DATA).flatMap(e => e.games.map(g => g.id))
+);
+function _isElim(gameId) { return ELIM_GAME_IDS.has(gameId); }
+
+// Vencedor da partida considerando penaltis em caso de empate no tempo normal.
+// Para pontuação do bolão, apenas h_real/a_real (90 min) são considerados em calcPontos.
+function _winnerOf(r, fallbackH, fallbackA) {
+  if (!r || r.h_real === undefined || r.a_real === undefined) return null;
+  const hr = parseInt(r.h_real), ar = parseInt(r.a_real);
+  const hTeam = r.h_team || fallbackH;
+  const aTeam = r.a_team || fallbackA;
+  if (hr > ar) return hTeam;
+  if (ar > hr) return aTeam;
+  if (r.h_pen !== undefined && r.a_pen !== undefined) {
+    const hp = parseInt(r.h_pen), ap = parseInt(r.a_pen);
+    if (hp > ap) return hTeam;
+    if (ap > hp) return aTeam;
+  }
+  return null; // empate sem penaltis definidos
+}
+function _loserOf(r, fallbackH, fallbackA) {
+  const w = _winnerOf(r, fallbackH, fallbackA);
+  if (!w) return null;
+  const hTeam = r.h_team || fallbackH;
+  return w === hTeam ? (r.a_team || fallbackA) : hTeam;
+}
+function _hasDecided(r) {
+  if (!r || r.h_real === undefined || r.a_real === undefined) return false;
+  if (parseInt(r.h_real) !== parseInt(r.a_real)) return true;
+  return r.h_pen !== undefined && r.a_pen !== undefined && parseInt(r.h_pen) !== parseInt(r.a_pen);
+}
+
 function calcUserAccuracyStats(uid, allPals, res) {
   const gamesOrdered = ALL_GAMES
     .filter(g => res[g.id] && res[g.id].h_real !== undefined)
@@ -2542,20 +2564,27 @@ async function renderChaveamento() {
     const rSnap = await db_.collection('resultados').get();
     const res = {};
     rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    let html = `<div class="section-title">🔑 Chaveamento</div><div class="bracket-wrap"><div class="bracket">`;
+    let html = `<div class="section-title">🔑 Chaveamento</div>
+      <div class="alert alert-info" style="font-size:0.82rem">Em empates na fase eliminatória, o vencedor é decidido nos <strong>penaltis</strong> (exibidos em parênteses). Para a pontuação do bolão, apenas o placar dos 90 minutos é considerado.</div>
+      <div class="bracket-wrap"><div class="bracket">`;
     const rounds = [{key:'r32',label:'Oitavas'},{key:'r16',label:'Quartas'},{key:'semi',label:'Semis'},{key:'final',label:'Final'}];
     rounds.forEach(({key,label})=>{
       const data = ELIM_DATA[key];
       html += `<div class="bracket-round"><h4>${data.icon} ${label}</h4><div class="bracket-games">`;
       data.games.forEach(g=>{
         const r = res[g.id];
-        const hasRes = r&&r.h_real!==undefined;
-        const hWin = hasRes && parseInt(r.h_real)>parseInt(r.a_real);
-        const aWin = hasRes && parseInt(r.a_real)>parseInt(r.h_real);
-        const scoreTxt = hasRes ? `${r.h_real}–${r.a_real}` : '';
+        const hasRes = r && r.h_real !== undefined;
+        const hasPen = r && r.h_pen !== undefined && r.a_pen !== undefined;
+        const winner = _winnerOf(r, g.h, g.a);
+        const hTeam = (r && r.h_team) || g.h;
+        const aTeam = (r && r.a_team) || g.a;
+        const hWin = !!winner && winner === hTeam;
+        const aWin = !!winner && winner === aTeam;
+        const hPenTxt = hasPen ? ` <span style="color:var(--text-muted);font-size:0.72rem">(${r.h_pen})</span>` : '';
+        const aPenTxt = hasPen ? ` <span style="color:var(--text-muted);font-size:0.72rem">(${r.a_pen})</span>` : '';
         html += `<div class="bracket-match">
-          <div class="bracket-team ${hWin?'winner':''}">${esc(g.h)} <span class="bracket-score">${scoreTxt?scoreTxt.split('–')[0]:''}</span></div>
-          <div class="bracket-team ${aWin?'winner':''}">${esc(g.a)} <span class="bracket-score">${scoreTxt?scoreTxt.split('–')[1]:''}</span></div>
+          <div class="bracket-team ${hWin?'winner':''}">${esc(hTeam)} <span class="bracket-score">${hasRes?r.h_real:''}</span>${hPenTxt}</div>
+          <div class="bracket-team ${aWin?'winner':''}">${esc(aTeam)} <span class="bracket-score">${hasRes?r.a_real:''}</span>${aPenTxt}</div>
         </div>`;
       });
       html += `</div></div>`;
@@ -2653,17 +2682,33 @@ async function renderAdminResultados() {
         html += `<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">📅 ${game.date}</span></div>`;
         lastDate = game.date;
       }
+      const isElim = _isElim(game.id);
+      const hasPen = r.h_pen !== undefined && r.a_pen !== undefined;
+      const drawNow = hasVal && parseInt(r.h_real)===parseInt(r.a_real);
+      const showPenRow = isElim && (drawNow || hasPen);
+      const displayH = esc(r.h_team || game.h);
+      const displayA = esc(r.a_team || game.a);
       html += `<div class="result-row" id="row_${game.id}">
         <div>
-          <div style="font-size:0.85rem;font-weight:600">${esc(game.h)}</div>
-          <div style="font-size:0.72rem;color:var(--text-muted)">${game.id} · <span style="font-weight:700;color:var(--gold)">${time}</span></div>
+          <div style="font-size:0.85rem;font-weight:600">${displayH}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted)">${game.id} · <span style="font-weight:700;color:var(--gold)">${time}</span>${isElim?' · <span style="color:var(--accent)">eliminatória</span>':''}</div>
         </div>
         <input type="number" class="result-input ${hasVal?'saved':''}" id="rh_${game.id}" min="0" max="20" placeholder="–" value="${hasVal?r.h_real:''}" oninput="onResultInput('${game.id}','h',this.value)">
         <div style="text-align:center;color:var(--text-muted);font-size:0.8rem">✕</div>
         <input type="number" class="result-input ${hasVal?'saved':''}" id="ra_${game.id}" min="0" max="20" placeholder="–" value="${hasVal?r.a_real:''}" oninput="onResultInput('${game.id}','a',this.value)">
-        <div><div style="font-size:0.85rem;font-weight:600">${esc(game.a)}</div></div>
+        <div><div style="font-size:0.85rem;font-weight:600">${displayA}</div></div>
         <button class="lock-btn ${locked?'locked':''}" title="${locked?'Desbloquear':'Bloquear'}" onclick="toggleLock('${game.id}')" id="lock_${game.id}">${locked?'🔒':'🔓'}</button>
       </div>`;
+      if (isElim) {
+        html += `<div class="result-row pen-row" id="pen_row_${game.id}" style="display:${showPenRow?'grid':'none'};background:rgba(30,144,255,.06);border-radius:8px;padding:8px 10px;margin-top:-4px">
+          <div style="font-size:0.72rem;color:var(--accent);text-align:right">⚽ Penaltis<br><span style="color:var(--text-muted);font-size:0.68rem">(só desempate)</span></div>
+          <input type="number" class="result-input ${hasPen?'saved':''}" id="rph_${game.id}" min="0" max="30" placeholder="–" value="${hasPen?r.h_pen:''}" oninput="onResultInput('${game.id}','ph',this.value)">
+          <div style="text-align:center;color:var(--text-muted);font-size:0.8rem">×</div>
+          <input type="number" class="result-input ${hasPen?'saved':''}" id="rpa_${game.id}" min="0" max="30" placeholder="–" value="${hasPen?r.a_pen:''}" oninput="onResultInput('${game.id}','pa',this.value)">
+          <div style="font-size:0.72rem;color:var(--text-muted)">não conta pro bolão</div>
+          <div></div>
+        </div>`;
+      }
     });
     if (lastDate!==null) html += `</div>`;
     cont.innerHTML = html;
@@ -2671,37 +2716,67 @@ async function renderAdminResultados() {
 }
 
 let resultBuf = {};
+// side: 'h' | 'a' | 'ph' | 'pa'  (ph/pa = penaltis casa/fora)
 function onResultInput(gameId, side, value) {
   const v = value===''?undefined:Math.max(0,Math.min(20,parseInt(value)||0));
   if (!resultBuf[gameId]) resultBuf[gameId] = {};
   resultBuf[gameId][side] = v;
   const inp = document.getElementById(`r${side}_${gameId}`);
   if (inp) inp.classList.remove('saved');
+  // Mostra/esconde linha de penaltis ao vivo (empate em jogo eliminatório)
+  if (_isElim(gameId)) _updatePenRowVisibility(gameId);
   if (saveDebounce['r_'+gameId]) clearTimeout(saveDebounce['r_'+gameId]);
   saveDebounce['r_'+gameId] = setTimeout(()=>saveResultado(gameId), 1000);
+}
+
+function _updatePenRowVisibility(gameId) {
+  const hInp = document.getElementById(`rh_${gameId}`);
+  const aInp = document.getElementById(`ra_${gameId}`);
+  const penRow = document.getElementById(`pen_row_${gameId}`);
+  if (!hInp || !aInp || !penRow) return;
+  const hv = hInp.value, av = aInp.value;
+  const both = hv !== '' && av !== '';
+  const draw = both && parseInt(hv) === parseInt(av);
+  penRow.style.display = draw ? 'grid' : 'none';
+}
+
+async function _cascadeAfterResult(gameId) {
+  // Dispara a cascata de atualização de nomes da rodada seguinte
+  const grupoIds = Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(game=>game.id));
+  if (grupoIds.includes(gameId)) return updateEliminationTeams();
+  if (ELIM_DATA.r32.games.some(g=>g.id===gameId))     return updateQuarterfinals({});
+  if (ELIM_DATA.r16.games.some(g=>g.id===gameId))     return updateQuartas({});
+  if (ELIM_DATA.quartas.games.some(g=>g.id===gameId)) return updateSemifinals({});
+  if (ELIM_DATA.semi.games.some(g=>g.id===gameId))    return updateFinal({});
 }
 
 async function saveResultado(gameId) {
   const buf = resultBuf[gameId];
   if (!buf) return;
   try {
-    const snap = await db_.collection('resultados').doc(gameId).get();
-    const existing = snap.exists ? snap.data() : {};
-    const merged = { ...existing };
-    if (buf.h!==undefined) merged.h_real = buf.h;
-    if (buf.a!==undefined) merged.a_real = buf.a;
-    merged.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-    await db_.collection('resultados').doc(gameId).set(merged, {merge:true});
-    delete resultBuf[gameId];
-    ['h','a'].forEach(s=>{ const inp=document.getElementById(`r${s}_${gameId}`); if(inp) inp.classList.add('saved'); });
-    showToast('✅ Resultado salvo','success');
-    // Atualizar eliminatórias automaticamente se resultado foi inserido nos grupos
-    const grupoIds = Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(game=>game.id));
-    if (grupoIds.includes(gameId)) {
-      await updateEliminationTeams();
-    } else {
-      isLoadingPage = false;
+    const FV = firebase.firestore.FieldValue;
+    const patch = { updatedAt: FV.serverTimestamp() };
+    if ('h'  in buf) patch.h_real = buf.h  === undefined ? FV.delete() : buf.h;
+    if ('a'  in buf) patch.a_real = buf.a  === undefined ? FV.delete() : buf.a;
+    if ('ph' in buf) patch.h_pen  = buf.ph === undefined ? FV.delete() : buf.ph;
+    if ('pa' in buf) patch.a_pen  = buf.pa === undefined ? FV.delete() : buf.pa;
+    // Em eliminatórias: se estado final deixou de ser empate, apaga penaltis obsoletos
+    if (_isElim(gameId)) {
+      const snap = await db_.collection('resultados').doc(gameId).get();
+      const cur = snap.exists ? snap.data() : {};
+      const finalH = 'h' in buf ? buf.h : cur.h_real;
+      const finalA = 'a' in buf ? buf.a : cur.a_real;
+      if (finalH !== undefined && finalA !== undefined && parseInt(finalH) !== parseInt(finalA)) {
+        patch.h_pen = FV.delete();
+        patch.a_pen = FV.delete();
+      }
     }
+    await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
+    delete resultBuf[gameId];
+    ['h','a','ph','pa'].forEach(s=>{ const inp=document.getElementById(`r${s}_${gameId}`); if(inp) inp.classList.add('saved'); });
+    showToast('✅ Resultado salvo','success');
+    await _cascadeAfterResult(gameId);
+    isLoadingPage = false;
   } catch(e) {
     showToast('Erro: '+e.message,'error');
     isLoadingPage = false;
@@ -2734,15 +2809,27 @@ async function _testeApplyBatch(games, mode) {
   games.forEach(g => {
     const ref = db_.collection('resultados').doc(g.id);
     if (mode === 'fill') {
-      batch.set(ref, {
-        h_real: _randScore(),
-        a_real: _randScore(),
-        updatedAt: FV.serverTimestamp()
-      }, { merge: true });
+      const h = _randScore(), a = _randScore();
+      const data = { h_real: h, a_real: a, updatedAt: FV.serverTimestamp() };
+      if (_isElim(g.id) && h === a) {
+        // Empate em eliminatória → gera penaltis distintos para decidir vencedor
+        let hp = 3 + Math.floor(Math.random() * 3); // 3..5
+        let ap = 3 + Math.floor(Math.random() * 3);
+        if (ap === hp) ap = hp === 5 ? hp - 1 : hp + 1;
+        data.h_pen = hp;
+        data.a_pen = ap;
+      } else {
+        // Sem empate → limpa penaltis antigos
+        data.h_pen = FV.delete();
+        data.a_pen = FV.delete();
+      }
+      batch.set(ref, data, { merge: true });
     } else {
       batch.set(ref, {
         h_real: FV.delete(),
         a_real: FV.delete(),
+        h_pen:  FV.delete(),
+        a_pen:  FV.delete(),
         updatedAt: FV.serverTimestamp()
       }, { merge: true });
     }
