@@ -1026,6 +1026,38 @@ let eliminationCache = {};
 let deferredPwaPrompt = null;
 
 // ════════════════════════════════════════════
+// DEBUG — captura de erros e flag opcional
+// ════════════════════════════════════════════
+// Ativa com: localStorage.setItem('bolao_debug','1') e recarrega.
+// Desativa com: localStorage.removeItem('bolao_debug').
+window.__DEBUG = (() => {
+  try { return localStorage.getItem('bolao_debug') === '1'; } catch(_) { return false; }
+})();
+window.setDebug = function(on) {
+  try {
+    if (on) localStorage.setItem('bolao_debug','1');
+    else    localStorage.removeItem('bolao_debug');
+  } catch(_) {}
+  window.__DEBUG = !!on;
+  console.log('[bolao] debug =', window.__DEBUG);
+};
+function dlog(...args) { if (window.__DEBUG) console.log('[bolao]', ...args); }
+function _toastIfPossible(msg, type) {
+  if (typeof showToast === 'function' && document.getElementById('toast')) {
+    try { showToast(msg, type); } catch(_) {}
+  }
+}
+window.addEventListener('error', (ev) => {
+  console.error('[bolao][error]', ev.error || ev.message, ev.filename + ':' + ev.lineno);
+  if (window.__DEBUG) _toastIfPossible('❌ ' + ((ev.error && ev.error.message) || ev.message || 'Erro'), 'error');
+});
+window.addEventListener('unhandledrejection', (ev) => {
+  const reason = ev.reason;
+  console.error('[bolao][unhandledrejection]', reason);
+  if (window.__DEBUG) _toastIfPossible('❌ Promise: ' + ((reason && reason.message) || reason), 'error');
+});
+
+// ════════════════════════════════════════════
 // FIREBASE CONFIG — PRODUÇÃO
 // ════════════════════════════════════════════
 const FIREBASE_CONFIG = {
@@ -1073,14 +1105,25 @@ async function handleAuthState(user) {
 
 window.addEventListener('DOMContentLoaded', async () => {
   updatePwaInstallButton();
+  // Timeout de segurança: se o loading não sumir em 20s, força auth e avisa
+  const loadingFallback = setTimeout(() => {
+    const el = document.getElementById('screen-loading');
+    if (el && !el.classList.contains('hidden')) {
+      console.error('[bolao] screen-loading preso há 20s — forçando auth');
+      showLoading(false); showAuth();
+      setAuthError('login','O carregamento demorou demais. Tente Ctrl+Shift+R ou limpe os dados do site (DevTools → Application → Storage).');
+    }
+  }, 20000);
   const firebaseReady = await window.__firebaseReady;
   if (!firebaseReady) {
+    clearTimeout(loadingFallback);
     showLoading(false);
     showAuth();
     setAuthError('login','Falha ao carregar serviços do Firebase. Verifique sua conexão e recarregue a página.');
     return;
   }
   if (!initFirebase(FIREBASE_CONFIG)) {
+    clearTimeout(loadingFallback);
     showLoading(false);
     showAuth();
     setAuthError('login','Erro ao iniciar o Firebase. Recarregue a página ou contate o suporte.');
@@ -1181,7 +1224,7 @@ async function loadCFG() {
     document.getElementById('bolao-nome').textContent = CFG.nome_bolao;
     const appVersion = document.getElementById('app-version');
     if (appVersion) appVersion.textContent = `${CFG.nome_bolao} • ${CFG.app_version}`;
-  } catch(e) {}
+  } catch(e) { console.error('loadCFG:', e); }
 }
 
 // ════════════════════════════════════════════
@@ -1284,6 +1327,26 @@ function computeRanking(users, resultados, allPalpites) {
 // ════════════════════════════════════════════
 // AUTOMATIC ELIMINATION UPDATE
 // ════════════════════════════════════════════
+// Limpa h_team/a_team das fases indicadas, mas só onde o doc já existe
+// (evita criar documentos vazios sem necessidade).
+async function _resetBracketTeams(res, phaseKeys) {
+  const FV = firebase.firestore.FieldValue;
+  const batch = db_.batch();
+  let toCommit = 0;
+  phaseKeys.forEach(k => {
+    ELIM_DATA[k].games.forEach(g => {
+      const r = res[g.id];
+      if (!r) return;
+      if (r.h_team === undefined && r.a_team === undefined) return;
+      batch.set(db_.collection('resultados').doc(g.id),
+        { h_team: FV.delete(), a_team: FV.delete() },
+        { merge: true });
+      toCommit++;
+    });
+  });
+  if (toCommit) await batch.commit();
+}
+
 async function updateEliminationTeams() {
   try {
     isLoadingPage = true;
@@ -1296,6 +1359,8 @@ async function updateEliminationTeams() {
     const todosGruposCompletos = grupoIds.every(id=>res[id]?.h_real!==undefined);
 
     if (!todosGruposCompletos) {
+      // Grupos incompletos → reverte nomes das chaves para placeholders
+      await _resetBracketTeams(res, ['r32','r16','quartas','semi','final']);
       isLoadingPage = false;
       return;
     }
@@ -1357,6 +1422,7 @@ async function updateQuarterfinals(res) {
     const todasOitavasCompletas = oitavaIds.every(id=>_hasDecided(updatedRes[id]));
 
     if (!todasOitavasCompletas) {
+      await _resetBracketTeams(updatedRes, ['r16','quartas','semi','final']);
       isLoadingPage = false;
       return;
     }
@@ -1406,6 +1472,7 @@ async function updateQuartas(res) {
     const todasR16Completas = r16Ids.every(id=>_hasDecided(updatedRes[id]));
 
     if (!todasR16Completas) {
+      await _resetBracketTeams(updatedRes, ['quartas','semi','final']);
       isLoadingPage = false;
       return;
     }
@@ -1455,6 +1522,7 @@ async function updateSemifinals(res) {
     const todasQuartasCompletas = quartaIds.every(id=>_hasDecided(updatedRes[id]));
 
     if (!todasQuartasCompletas) {
+      await _resetBracketTeams(updatedRes, ['semi','final']);
       isLoadingPage = false;
       return;
     }
@@ -1506,6 +1574,7 @@ async function updateFinal(res) {
     const todasSemisCompletas = semiIds.every(id=>_hasDecided(updatedRes[id]));
 
     if (!todasSemisCompletas) {
+      await _resetBracketTeams(updatedRes, ['final']);
       isLoadingPage = false;
       return;
     }
@@ -2830,6 +2899,8 @@ async function _testeApplyBatch(games, mode) {
         a_real: FV.delete(),
         h_pen:  FV.delete(),
         a_pen:  FV.delete(),
+        h_team: FV.delete(),
+        a_team: FV.delete(),
         updatedAt: FV.serverTimestamp()
       }, { merge: true });
     }
@@ -2839,7 +2910,7 @@ async function _testeApplyBatch(games, mode) {
 
 async function _testeFinish(msg) {
   resultBuf = {};
-  try { await updateEliminationTeams(); } catch(_) { /* fluxo eliminatório é best-effort */ }
+  try { await updateEliminationTeams(); } catch(e) { console.error('updateEliminationTeams:', e); }
   await renderAdminResultados();
   showToast(msg, 'success');
 }
