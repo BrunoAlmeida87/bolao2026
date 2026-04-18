@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.1.0">
+<meta name="app-version" content="v1.2.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -794,7 +794,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.1.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.2.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -970,7 +970,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.1.0',
+  app_version:'v1.2.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -2737,6 +2737,10 @@ async function renderAdminResultados() {
           <button class="btn btn-primary btn-sm" onclick="testeFillDay()">🎲 Preencher aleatório por dia</button>
           <button class="btn btn-red btn-sm" onclick="testeClearDay()">🗑️ Apagar resultados do dia</button>
         </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;border-top:1px dashed var(--border);padding-top:12px">
+          <button class="btn btn-red btn-sm" onclick="testeResetBracket()" title="Limpa só os nomes (h_team/a_team) das oitavas até a final — corrige chaves com seleções 'presas' de testes anteriores">🔄 Resetar nomes da chave</button>
+          <span style="font-size:0.75rem;color:var(--text-muted)">Corrige chaves com seleções presas de fills antigos.</span>
+        </div>
       </div>`;
     // <!-- TEST-MODE:END -->
     let html = _testPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
@@ -2959,11 +2963,38 @@ async function testeClearDay() {
   } catch(e) { showToast('Erro ao apagar: ' + errMsg(e), 'error'); }
 }
 
+// Limpa apenas os nomes das seleções (h_team/a_team) em todas as fases
+// eliminatórias. Serve para "destravar" chaves que ficaram com seleções
+// gravadas por fills antigos antes da correção de clear.
+async function testeResetBracket() {
+  if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
+  if (!confirm('Resetar os nomes das seleções em TODAS as fases eliminatórias (oitavas → final)?\nPlacares não serão afetados.')) return;
+  try {
+    const FV = firebase.firestore.FieldValue;
+    const batch = db_.batch();
+    let count = 0;
+    ['r32','r16','quartas','semi','final'].forEach(k => {
+      ELIM_DATA[k].games.forEach(g => {
+        batch.set(db_.collection('resultados').doc(g.id),
+          { h_team: FV.delete(), a_team: FV.delete(), updatedAt: FV.serverTimestamp() },
+          { merge: true });
+        count++;
+      });
+    });
+    await batch.commit();
+    // Se grupos estão completos, reprocessa a cascata para repopular
+    try { await updateEliminationTeams(); } catch(e) { console.error('resetBracket cascade:', e); }
+    await renderAdminResultados();
+    showToast(`🔄 Chave resetada (${count} jogos)`, 'success');
+  } catch(e) { showToast('Erro ao resetar chave: ' + errMsg(e), 'error'); }
+}
+
 // Expostos para handlers inline (onclick="...")
-window.testeFillAll  = testeFillAll;
-window.testeClearAll = testeClearAll;
-window.testeFillDay  = testeFillDay;
-window.testeClearDay = testeClearDay;
+window.testeFillAll       = testeFillAll;
+window.testeClearAll      = testeClearAll;
+window.testeFillDay       = testeFillDay;
+window.testeClearDay      = testeClearDay;
+window.testeResetBracket  = testeResetBracket;
 // ════════════════════════════════════════════
 // TEST-MODE:END
 // ════════════════════════════════════════════
