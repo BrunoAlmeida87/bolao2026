@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.3.0">
+<meta name="app-version" content="v1.4.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -794,7 +794,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.3.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.4.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -970,7 +970,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.3.0',
+  app_version:'v1.4.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -1092,7 +1092,7 @@ async function handleAuthState(user) {
       currentUserDoc = { uid: user.uid, ...snap.data() };
       await loadCFG();
       showApp();
-      navigateTo('dashboard');
+      _restorePageFromHash();
     } catch(e) {
       showToast('Erro ao carregar dados: '+e.message,'error');
       showLoading(false); showAuth();
@@ -1255,12 +1255,17 @@ function goToUserPalpites(uid) {
   navigateTo('ver-palpites');
 }
 
+// Páginas transientes não devem ser gravadas no hash (dependem de contexto externo).
+const _TRANSIENT_PAGES = new Set(['ver-palpites','ver-todos']);
+
 function navigateTo(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   const el = document.getElementById('page-'+page);
   if (el) el.classList.add('active');
+  // Persiste a página no hash para sobreviver a reloads
+  if (!_TRANSIENT_PAGES.has(page)) history.replaceState(null,'','#'+page);
   switch(page) {
     case 'dashboard':   renderDashboard(); break;
     case 'palpites':    renderPalpites(); break;
@@ -1273,6 +1278,15 @@ function navigateTo(page) {
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
   window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function _restorePageFromHash() {
+  const hash = (location.hash||'').replace('#','').trim();
+  const valid = ['dashboard','palpites','tabelas','chaveamento','regras','estatisticas','admin'];
+  const page = valid.includes(hash) ? hash : 'dashboard';
+  // admin só restaura se usuário for admin
+  if (page === 'admin' && currentUserDoc?.role !== 'admin') return navigateTo('dashboard');
+  navigateTo(page);
 }
 
 // ════════════════════════════════════════════
@@ -1343,12 +1357,24 @@ function _resolveGroupPlaceholders(str, groupLeaders) {
   return out;
 }
 
+// Detecta se um nome ainda é placeholder (não foi resolvido para seleção real).
+function _isPlaceholder(name) {
+  return !name || /^(1º |2º |Melhor 3º|Venc\. |Perd\. )/.test(name);
+}
+
 // Resolve "Venc. Xxx" / "Perd. Xxx" a partir dos resultados da fase anterior.
+// Só propaga se ambas as seleções do confronto anterior são nomes reais —
+// evita que um placar com time-placeholder gere vencedor inválido em cascata.
 function _resolveWinnerPlaceholders(str, prevPhaseKey, res) {
   let out = str;
   ELIM_DATA[prevPhaseKey].games.forEach(prev => {
-    const w = _winnerOf(res[prev.id], prev.h, prev.a);
-    const l = _loserOf(res[prev.id], prev.h, prev.a);
+    const r = res[prev.id] || {};
+    const hTeam = r.h_team !== undefined ? r.h_team : prev.h;
+    const aTeam = r.a_team !== undefined ? r.a_team : prev.a;
+    // Só propaga se ambos os lados já têm seleção real
+    if (_isPlaceholder(hTeam) || _isPlaceholder(aTeam)) return;
+    const w = _winnerOf(r, hTeam, aTeam);
+    const l = _loserOf(r, hTeam, aTeam);
     if (w) out = out.replace(`Venc. ${prev.id}`, w);
     if (l) out = out.replace(`Perd. ${prev.id}`, l);
   });
