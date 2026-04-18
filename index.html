@@ -2221,6 +2221,12 @@ function _parseGameDate(dateStr) {
   return m ? new Date(2026, _MONTH_MAP[m[1]] ?? 5, parseInt(m[2])) : new Date(9999, 0, 1);
 }
 
+function _uniqueGameDates() {
+  const seen = new Set();
+  ALL_GAMES.forEach(g => { if (g.date) seen.add(g.date); });
+  return Array.from(seen).sort((a,b) => _parseGameDate(a) - _parseGameDate(b));
+}
+
 function calcUserAccuracyStats(uid, allPals, res) {
   const gamesOrdered = ALL_GAMES
     .filter(g => res[g.id] && res[g.id].h_real !== undefined)
@@ -2612,7 +2618,30 @@ async function renderAdminResultados() {
       return ta.localeCompare(tb);
     });
 
-    let html = `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
+    const _dateOpts = _uniqueGameDates().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    // <!-- TEST-MODE:START — REMOVER EM PRODUÇÃO -->
+    const _testPanel = `
+      <div class="alert alert-warning" style="border-width:2px" data-testmode="banner">
+        ⚠️ <strong>Modo de Teste (Admin)</strong> — As ferramentas abaixo preenchem/apagam resultados em massa para validação.
+        <strong>Remover em produção</strong> (procure por <code>TEST-MODE</code> no código).
+      </div>
+      <div class="card" style="border-color:var(--orange);background:rgba(255,140,0,.06);margin-bottom:16px" data-testmode="panel">
+        <div class="card-header"><span class="card-title">🧪 Ferramentas de Teste</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
+          <button class="btn btn-primary btn-sm" onclick="testeFillAll()">🎲 Preencher todos aleatoriamente</button>
+          <button class="btn btn-red btn-sm" onclick="testeClearAll()">🗑️ Apagar todos os resultados</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <label for="teste-data-select" style="font-size:0.82rem;color:var(--text-muted)">Data:</label>
+          <select id="teste-data-select" style="padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid var(--border);font-size:0.85rem">
+            ${_dateOpts}
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="testeFillDay()">🎲 Preencher aleatório por dia</button>
+          <button class="btn btn-red btn-sm" onclick="testeClearDay()">🗑️ Apagar resultados do dia</button>
+        </div>
+      </div>`;
+    // <!-- TEST-MODE:END -->
+    let html = _testPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
     let lastDate = null;
     sortedGames.forEach(game=>{
       const r = res[game.id]||{};
@@ -2690,6 +2719,96 @@ async function toggleLock(gameId) {
     showToast(newLocked?'🔒 Jogo bloqueado':'🔓 Jogo desbloqueado', newLocked?'warning':'success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
+
+// ════════════════════════════════════════════
+// TEST-MODE:START — REMOVER EM PRODUÇÃO
+// Ferramentas de admin para preencher/apagar resultados em massa
+// (procure por "TEST-MODE" para localizar e remover todos os blocos)
+// ════════════════════════════════════════════
+function _isAdmin() { return currentUserDoc?.role === 'admin'; }
+function _randScore() { return Math.floor(Math.random() * 5); } // 0–4
+
+async function _testeApplyBatch(games, mode) {
+  const FV = firebase.firestore.FieldValue;
+  const batch = db_.batch();
+  games.forEach(g => {
+    const ref = db_.collection('resultados').doc(g.id);
+    if (mode === 'fill') {
+      batch.set(ref, {
+        h_real: _randScore(),
+        a_real: _randScore(),
+        updatedAt: FV.serverTimestamp()
+      }, { merge: true });
+    } else {
+      batch.set(ref, {
+        h_real: FV.delete(),
+        a_real: FV.delete(),
+        updatedAt: FV.serverTimestamp()
+      }, { merge: true });
+    }
+  });
+  await batch.commit();
+}
+
+async function _testeFinish(msg) {
+  resultBuf = {};
+  try { await updateEliminationTeams(); } catch(_) { /* fluxo eliminatório é best-effort */ }
+  await renderAdminResultados();
+  showToast(msg, 'success');
+}
+
+async function testeFillAll() {
+  if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
+  if (!confirm(`Preencher TODOS os ${ALL_GAMES.length} jogos com placares aleatórios (0–4)?\nIsso sobrescreve valores existentes.`)) return;
+  try {
+    await _testeApplyBatch(ALL_GAMES, 'fill');
+    await _testeFinish(`🎲 ${ALL_GAMES.length} jogos preenchidos aleatoriamente`);
+  } catch(e) { showToast('Erro ao preencher: ' + errMsg(e), 'error'); }
+}
+
+async function testeClearAll() {
+  if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
+  if (!confirm(`Apagar TODOS os resultados (h_real e a_real) dos ${ALL_GAMES.length} jogos?\nEssa ação não pode ser desfeita.`)) return;
+  try {
+    await _testeApplyBatch(ALL_GAMES, 'clear');
+    await _testeFinish(`🗑️ Resultados apagados (${ALL_GAMES.length} jogos)`);
+  } catch(e) { showToast('Erro ao apagar: ' + errMsg(e), 'error'); }
+}
+
+async function testeFillDay() {
+  if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
+  const date = document.getElementById('teste-data-select')?.value;
+  if (!date) { showToast('Selecione uma data', 'warning'); return; }
+  const games = ALL_GAMES.filter(g => g.date === date);
+  if (!games.length) { showToast('Nenhum jogo nessa data', 'warning'); return; }
+  if (!confirm(`Preencher aleatoriamente ${games.length} jogo(s) do dia ${date}?`)) return;
+  try {
+    await _testeApplyBatch(games, 'fill');
+    await _testeFinish(`🎲 ${games.length} jogo(s) de ${date} preenchido(s)`);
+  } catch(e) { showToast('Erro ao preencher: ' + errMsg(e), 'error'); }
+}
+
+async function testeClearDay() {
+  if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
+  const date = document.getElementById('teste-data-select')?.value;
+  if (!date) { showToast('Selecione uma data', 'warning'); return; }
+  const games = ALL_GAMES.filter(g => g.date === date);
+  if (!games.length) { showToast('Nenhum jogo nessa data', 'warning'); return; }
+  if (!confirm(`Apagar resultados de ${games.length} jogo(s) do dia ${date}?`)) return;
+  try {
+    await _testeApplyBatch(games, 'clear');
+    await _testeFinish(`🗑️ ${games.length} jogo(s) de ${date} limpo(s)`);
+  } catch(e) { showToast('Erro ao apagar: ' + errMsg(e), 'error'); }
+}
+
+// Expostos para handlers inline (onclick="...")
+window.testeFillAll  = testeFillAll;
+window.testeClearAll = testeClearAll;
+window.testeFillDay  = testeFillDay;
+window.testeClearDay = testeClearDay;
+// ════════════════════════════════════════════
+// TEST-MODE:END
+// ════════════════════════════════════════════
 
 async function renderAdminUsuarios() {
   const cont = document.getElementById('admin-usuarios');
