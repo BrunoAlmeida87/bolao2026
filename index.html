@@ -1365,24 +1365,36 @@ function _hasFullResult(r) {
 
 function _computeBestThirds(resultados) {
   const thirds = [];
+  let allGroupsComplete = true;
   Object.keys(GRUPOS_DATA).forEach(grp => {
     const grpGames = GRUPOS_DATA[grp].games;
     const allPlayed = grpGames.every(g => _hasFullResult(resultados[g.id]));
-    if (!allPlayed) return;
+    if (!allPlayed) { allGroupsComplete = false; return; }
     const s = computeStandings(grp, resultados);
     const third = s[2];
     if (!third) return;
     thirds.push({ group: grp, team: third.team, pts: third.pts, sg: third.sg, gp: third.gp });
   });
+  // O top-8 dos terceiros só é conhecido com os 12 grupos concluídos;
+  // antes disso não publica nada para evitar remanejamento instável.
+  if (!allGroupsComplete) return [];
   return thirds.sort((a,b)=>b.pts-a.pts||b.sg-a.sg||b.gp-a.gp||a.team.localeCompare(b.team,'pt-BR'));
 }
 
 function _createBestThirdAllocator(bestThirdsRanking) {
+  // Apenas os 8 melhores 3ºs se classificam para a r32.
+  const qualified = bestThirdsRanking.slice(0, 8);
   const usedTeams = new Set();
   const pickBest = (allowedGroups) => {
-    const found = bestThirdsRanking.find(t =>
+    // Preferência pela região, mas sempre dentro do pool qualificado.
+    let found = qualified.find(t =>
       !usedTeams.has(t.team) && (!allowedGroups || allowedGroups.has(t.group))
     );
+    // Se nenhum top-8 vem dessa região, pega o melhor qualificado restante
+    // (evita que um 3º fora do top-8 tome o slot e empurre um top-8 pra fora).
+    if (!found && allowedGroups) {
+      found = qualified.find(t => !usedTeams.has(t.team));
+    }
     if (!found) return null;
     usedTeams.add(found.team);
     return found.team;
