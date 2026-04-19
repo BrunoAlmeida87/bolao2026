@@ -197,6 +197,13 @@ a:hover{text-decoration:underline}
   margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;gap:8px;
 }
+.admin-phase-header{
+  font-size:1rem;font-weight:800;color:var(--gold);
+  background:linear-gradient(90deg,rgba(255,215,0,.12),rgba(255,215,0,0) 80%);
+  border-left:4px solid var(--gold);
+  padding:10px 14px;margin:18px 0 10px;border-radius:6px;
+  letter-spacing:.3px;text-transform:uppercase;
+}
 
 /* ══════════════════════════════════════════
    STATS GRID
@@ -1560,7 +1567,7 @@ async function renderDashboard() {
     }));
     const ranking = computeRanking(users, res, allPals);
     const maxPts = ranking[0]?.pontos||1;
-    const totalJogos = Object.keys(res).filter(id=>res[id].h_real!==undefined).length;
+    const totalJogos = Object.keys(res).filter(id=>_hasFullResult(res[id])).length;
     const myRank = ranking.findIndex(r=>r.uid===currentUser.uid)+1;
 
     // Calcular variação de posição por rodada
@@ -1570,7 +1577,7 @@ async function renderDashboard() {
       { id:'G3', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
       ...Object.keys(ELIM_DATA).map(ph=>({ id:ph, gameIds: ELIM_DATA[ph].games.map(g=>g.id) }))
     ];
-    const gamesWithRes = new Set(Object.keys(res).filter(id=>res[id].h_real!==undefined));
+    const gamesWithRes = new Set(Object.keys(res).filter(id=>_hasFullResult(res[id])));
     let latestRoundIdx = -1;
     roundDefs.forEach((rd,idx)=>{ if(rd.gameIds.some(id=>gamesWithRes.has(id))) latestRoundIdx=idx; });
     const positionDeltas = {};
@@ -2227,7 +2234,7 @@ function _hasDecided(r) {
 
 function calcUserAccuracyStats(uid, allPals, res) {
   const gamesOrdered = ALL_GAMES
-    .filter(g => res[g.id] && res[g.id].h_real !== undefined)
+    .filter(g => _hasFullResult(res[g.id]))
     .sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
   const userPals = allPals[uid] || {};
   let acertos = 0, exatos = 0, totalGolDiff = 0, count = 0, maxStreak = 0, tempStreak = 0;
@@ -2313,7 +2320,7 @@ async function renderEstatisticas() {
     const allPals = {};
     await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
 
-    const jogosComResultado = Object.keys(res).filter(id=>res[id].h_real!==undefined);
+    const jogosComResultado = Object.keys(res).filter(id=>_hasFullResult(res[id]));
     const totalJogos = jogosComResultado.length;
 
     // Análise por jogo
@@ -2651,8 +2658,19 @@ async function renderAdminResultados() {
         </div>
       </div>`;
     // <!-- TEST-MODE:END -->
+    // Mapa gameId -> { label, icon } para rotular a fase de cada jogo
+    const phaseOf = {};
+    Object.keys(GRUPOS_DATA).forEach(grp => {
+      GRUPOS_DATA[grp].games.forEach(g => { phaseOf[g.id] = { label:'Fase de Grupos', icon:'🏁' }; });
+    });
+    Object.keys(ELIM_DATA).forEach(ph => {
+      const meta = { label: ELIM_DATA[ph].label, icon: ELIM_DATA[ph].icon };
+      ELIM_DATA[ph].games.forEach(g => { phaseOf[g.id] = meta; });
+    });
+
     let html = _testPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
     let lastDate = null;
+    let lastPhase = null;
     sortedGames.forEach(game=>{
       const r = res[game.id]||{};
       const locked = r.locked===true;
@@ -2660,6 +2678,12 @@ async function renderAdminResultados() {
       const hasA = r.a_real!==undefined;
       const hasVal = hasH && hasA;
       const time = GAME_TIMES[game.id]||'--:--';
+      const phase = phaseOf[game.id] || { label:'Jogos', icon:'⚽' };
+      if (phase.label !== lastPhase) {
+        if (lastDate!==null) { html += `</div>`; lastDate = null; }
+        html += `<div class="admin-phase-header">${phase.icon} ${esc(phase.label)}</div>`;
+        lastPhase = phase.label;
+      }
       if (game.date !== lastDate) {
         if (lastDate!==null) html += `</div>`;
         html += `<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">📅 ${game.date}</span></div>`;
