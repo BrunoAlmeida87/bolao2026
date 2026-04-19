@@ -2656,7 +2656,9 @@ async function renderAdminResultados() {
     sortedGames.forEach(game=>{
       const r = res[game.id]||{};
       const locked = r.locked===true;
-      const hasVal = r.h_real!==undefined;
+      const hasH = r.h_real!==undefined;
+      const hasA = r.a_real!==undefined;
+      const hasVal = hasH && hasA;
       const time = GAME_TIMES[game.id]||'--:--';
       if (game.date !== lastDate) {
         if (lastDate!==null) html += `</div>`;
@@ -2664,9 +2666,11 @@ async function renderAdminResultados() {
         lastDate = game.date;
       }
       const isElim = _isElim(game.id);
-      const hasPen = r.h_pen !== undefined && r.a_pen !== undefined;
+      const hasHP = r.h_pen !== undefined;
+      const hasAP = r.a_pen !== undefined;
+      const hasPen = hasHP && hasAP;
       const drawNow = hasVal && parseInt(r.h_real)===parseInt(r.a_real);
-      const showPenRow = isElim && (drawNow || hasPen);
+      const showPenRow = isElim && (drawNow || hasHP || hasAP);
       const displayH = esc(r.h_team || game.h);
       const displayA = esc(r.a_team || game.a);
       html += `<div class="result-row" id="row_${game.id}">
@@ -2674,18 +2678,18 @@ async function renderAdminResultados() {
           <div style="font-size:0.85rem;font-weight:600">${displayH}</div>
           <div style="font-size:0.72rem;color:var(--text-muted)">${game.id} · <span style="font-weight:700;color:var(--gold)">${time}</span>${isElim?' · <span style="color:var(--accent)">eliminatória</span>':''}</div>
         </div>
-        <input type="number" class="result-input ${hasVal?'saved':''}" id="rh_${game.id}" min="0" max="20" placeholder="–" value="${hasVal?r.h_real:''}" oninput="onResultInput('${game.id}','h',this.value)">
+        <input type="number" class="result-input ${hasH?'saved':''}" id="rh_${game.id}" min="0" max="20" placeholder="–" value="${hasH?r.h_real:''}" oninput="onResultInput('${game.id}','h',this.value)">
         <div style="text-align:center;color:var(--text-muted);font-size:0.8rem">✕</div>
-        <input type="number" class="result-input ${hasVal?'saved':''}" id="ra_${game.id}" min="0" max="20" placeholder="–" value="${hasVal?r.a_real:''}" oninput="onResultInput('${game.id}','a',this.value)">
+        <input type="number" class="result-input ${hasA?'saved':''}" id="ra_${game.id}" min="0" max="20" placeholder="–" value="${hasA?r.a_real:''}" oninput="onResultInput('${game.id}','a',this.value)">
         <div><div style="font-size:0.85rem;font-weight:600">${displayA}</div></div>
         <button class="lock-btn ${locked?'locked':''}" title="${locked?'Desbloquear':'Bloquear'}" onclick="toggleLock('${game.id}')" id="lock_${game.id}">${locked?'🔒':'🔓'}</button>
       </div>`;
       if (isElim) {
         html += `<div class="result-row pen-row" id="pen_row_${game.id}" style="display:${showPenRow?'grid':'none'};background:rgba(30,144,255,.06);border-radius:8px;padding:8px 10px;margin-top:-4px">
           <div style="font-size:0.72rem;color:var(--accent);text-align:right">⚽ Penaltis<br><span style="color:var(--text-muted);font-size:0.68rem">(só desempate)</span></div>
-          <input type="number" class="result-input ${hasPen?'saved':''}" id="rph_${game.id}" min="0" max="30" placeholder="–" value="${hasPen?r.h_pen:''}" oninput="onResultInput('${game.id}','ph',this.value)">
+          <input type="number" class="result-input ${hasHP?'saved':''}" id="rph_${game.id}" min="0" max="30" placeholder="–" value="${hasHP?r.h_pen:''}" oninput="onResultInput('${game.id}','ph',this.value)">
           <div style="text-align:center;color:var(--text-muted);font-size:0.8rem">×</div>
-          <input type="number" class="result-input ${hasPen?'saved':''}" id="rpa_${game.id}" min="0" max="30" placeholder="–" value="${hasPen?r.a_pen:''}" oninput="onResultInput('${game.id}','pa',this.value)">
+          <input type="number" class="result-input ${hasAP?'saved':''}" id="rpa_${game.id}" min="0" max="30" placeholder="–" value="${hasAP?r.a_pen:''}" oninput="onResultInput('${game.id}','pa',this.value)">
           <div style="font-size:0.72rem;color:var(--text-muted)">não conta pro bolão</div>
           <div></div>
         </div>`;
