@@ -2634,6 +2634,7 @@ async function renderAdminResultados() {
         <div class="card-header"><span class="card-title">🧪 Ferramentas de Teste</span></div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
           <button class="btn btn-primary btn-sm" onclick="testeFillAll()">🎲 Preencher todos aleatoriamente</button>
+          <button class="btn btn-primary btn-sm" onclick="testeFillGroupStage()" title="Preenche só os 72 jogos dos 12 grupos (fase inicial)">🎲 Preencher primeira fase</button>
           <button class="btn btn-red btn-sm" onclick="testeClearAll()">🗑️ Apagar todos os resultados</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
@@ -2839,6 +2840,16 @@ async function testeClearAll() {
   } catch(e) { showToast('Erro ao apagar: ' + errMsg(e), 'error'); }
 }
 
+async function testeFillGroupStage() {
+  if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
+  const games = Object.values(GRUPOS_DATA).flatMap(g => g.games);
+  if (!confirm(`Preencher aleatoriamente os ${games.length} jogos da fase de grupos?\nIsso sobrescreve valores existentes (não mexe em eliminatórias).`)) return;
+  try {
+    await _testeApplyBatch(games, 'fill');
+    await _testeFinish(`🎲 ${games.length} jogos da fase de grupos preenchidos`);
+  } catch(e) { showToast('Erro ao preencher: ' + errMsg(e), 'error'); }
+}
+
 async function testeFillDay() {
   if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
   const date = document.getElementById('teste-data-select')?.value;
@@ -2892,11 +2903,12 @@ async function testeResetBracket() {
 }
 
 // Expostos para handlers inline (onclick="...")
-window.testeFillAll       = testeFillAll;
-window.testeClearAll      = testeClearAll;
-window.testeFillDay       = testeFillDay;
-window.testeClearDay      = testeClearDay;
-window.testeResetBracket  = testeResetBracket;
+window.testeFillAll        = testeFillAll;
+window.testeFillGroupStage = testeFillGroupStage;
+window.testeClearAll       = testeClearAll;
+window.testeFillDay        = testeFillDay;
+window.testeClearDay       = testeClearDay;
+window.testeResetBracket   = testeResetBracket;
 // ════════════════════════════════════════════
 // TEST-MODE:END
 // ════════════════════════════════════════════
