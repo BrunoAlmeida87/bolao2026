@@ -1359,6 +1359,44 @@ function _resolveGroupPlaceholders(str, groupLeaders) {
   return out;
 }
 
+function _hasFullResult(r) {
+  return r && r.h_real !== undefined && r.a_real !== undefined;
+}
+
+function _computeBestThirds(resultados) {
+  const thirds = [];
+  Object.keys(GRUPOS_DATA).forEach(grp => {
+    const grpGames = GRUPOS_DATA[grp].games;
+    const allPlayed = grpGames.every(g => _hasFullResult(resultados[g.id]));
+    if (!allPlayed) return;
+    const s = computeStandings(grp, resultados);
+    const third = s[2];
+    if (!third) return;
+    thirds.push({ group: grp, team: third.team, pts: third.pts, sg: third.sg, gp: third.gp });
+  });
+  return thirds.sort((a,b)=>b.pts-a.pts||b.sg-a.sg||b.gp-a.gp||a.team.localeCompare(b.team,'pt-BR'));
+}
+
+function _createBestThirdAllocator(bestThirdsRanking) {
+  const usedTeams = new Set();
+  const pickBest = (allowedGroups) => {
+    const found = bestThirdsRanking.find(t =>
+      !usedTeams.has(t.team) && (!allowedGroups || allowedGroups.has(t.group))
+    );
+    if (!found) return null;
+    usedTeams.add(found.team);
+    return found.team;
+  };
+  return function resolveBestThird(str) {
+    if (!str || !str.startsWith('Melhor 3º')) return str;
+    if (str === 'Melhor 3º (A/B/C/D)') return pickBest(new Set(['A','B','C','D'])) || str;
+    if (str === 'Melhor 3º (E/F/G/H)') return pickBest(new Set(['E','F','G','H'])) || str;
+    if (str === 'Melhor 3º (I/J/K/L)') return pickBest(new Set(['I','J','K','L'])) || str;
+    if (str === 'Melhor 3º restante') return pickBest(null) || str;
+    return str;
+  };
+}
+
 // Detecta se um nome ainda é placeholder (não foi resolvido para seleção real).
 function _isPlaceholder(name) {
   return !name || /^(1º |2º |Melhor 3º|Venc\. |Perd\. )/.test(name);
@@ -1421,14 +1459,15 @@ async function updateEliminationTeams() {
     const groupLeaders = {};
     Object.keys(GRUPOS_DATA).forEach(grp => {
       const grpGames = GRUPOS_DATA[grp].games;
-      const allPlayed = grpGames.every(g => res[g.id]?.h_real !== undefined);
+      const allPlayed = grpGames.every(g => _hasFullResult(res[g.id]));
       if (!allPlayed) { groupLeaders[grp] = {}; return; }
       const s = computeStandings(grp, res);
       groupLeaders[grp] = { first: s[0]?.team, second: s[1]?.team };
     });
+    const bestThirdAllocator = _createBestThirdAllocator(_computeBestThirds(res));
 
     // r32: resolve a partir dos grupos
-    await _applyBracketPhase('r32', str => _resolveGroupPlaceholders(str, groupLeaders), res);
+    await _applyBracketPhase('r32', str => bestThirdAllocator(_resolveGroupPlaceholders(str, groupLeaders)), res);
     // Fases seguintes: resolve Venc./Perd. da fase anterior (parcial permitido)
     await _applyBracketPhase('r16',     str => _resolveWinnerPlaceholders(str, 'r32',     res), res);
     await _applyBracketPhase('quartas', str => _resolveWinnerPlaceholders(str, 'r16',     res), res);
@@ -1474,7 +1513,7 @@ function computeStandings(grupKey, resultados) {
   grp.teams.forEach(t=>{ stats[t]={pts:0,j:0,v:0,e:0,d:0,gp:0,gc:0,sg:0}; });
   grp.games.forEach(g=>{
     const r=resultados[g.id];
-    if (!r||r.h_real===undefined) return;
+    if (!_hasFullResult(r)) return;
     const rh=parseInt(r.h_real),ra=parseInt(r.a_real);
     const h=stats[g.h],a=stats[g.a];
     h.j++; a.j++; h.gp+=rh; h.gc+=ra; a.gp+=ra; a.gc+=rh;
