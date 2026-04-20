@@ -2632,9 +2632,6 @@ async function renderEstatisticas() {
       const maxFreq = topPlacares[0][1] || 1;
       html += `<div class="card">
         <div class="card-title">🧠 Heatmap de Palpites (Top 12)</div>
-        <div style="font-size:.78rem;color:var(--text-muted);margin-top:4px">
-          Agrupamento por <b>tipo de placar</b> (ordem ignorada): ex. <b>2-1 = 1-2</b>.
-        </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px">
           ${topPlacares.map(([placar, qtd])=>`
             <div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:rgba(255,255,255,0.03)">
@@ -2730,9 +2727,6 @@ async function renderEstatisticas() {
             Jogos comparáveis: <b>${rivalidade.duelGames}</b> · Vitórias no duelo: <b>${rivalidade.winA}</b> × <b>${rivalidade.winB}</b> · Empates: <b>${rivalidade.ties}</b>
           </div>
           <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px">Índice de divergência de palpites: ${rivalidade.divergence}</div>
-          <div style="font-size:.76rem;color:var(--text-muted);margin-top:8px;line-height:1.35">
-            Esta rivalidade destaca o par que mais <b>discorda nos palpites</b> (soma das diferenças de gols em jogos comparáveis).
-          </div>
         </div>
       </div>`;
     }
