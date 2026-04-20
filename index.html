@@ -113,6 +113,9 @@ a:hover{text-decoration:underline}
 .page{display:none}
 .page.active{display:block}
 .container{max-width:1000px;margin:0 auto;padding:28px 16px 80px}
+@media (min-width:1200px){
+  .container{max-width:1400px;padding-left:24px;padding-right:24px}
+}
 
 /* ══════════════════════════════════════════
    AUTH SCREEN
@@ -1370,6 +1373,14 @@ function _hasFullResult(r) {
   return r && r.h_real !== undefined && r.a_real !== undefined;
 }
 
+function _getResolvedTeamsForGame(game, resMap) {
+  const r = (resMap && resMap[game.id]) || {};
+  return {
+    h: r.h_team || game.h,
+    a: r.a_team || game.a
+  };
+}
+
 function _computeBestThirds(resultados) {
   const thirds = [];
   let allGroupsComplete = true;
@@ -1388,31 +1399,86 @@ function _computeBestThirds(resultados) {
   return thirds.sort((a,b)=>b.pts-a.pts||b.sg-a.sg||b.gp-a.gp||a.team.localeCompare(b.team,'pt-BR'));
 }
 
+// Matriz de combinação (chave = grupos dos 3º classificados, ordenados e unidos por '-')
+// para distribuição fixa dos terceiros nas vagas da r32.
+// Formato do valor: array com os 8 grupos ocupando, nesta ordem:
+// O13.h, O13.a, O14.h, O14.a, O15.h, O15.a, O16.h, O16.a
+// Exemplo de entrada: { 'A-B-C-D-E-F-G-H': ['A','E','B','F','C','G','D','H'] }
+const BEST_THIRD_OFFICIAL_COMBO_MAP = {};
+
+function _parseAllowedThirdGroups(placeholder) {
+  const m = (placeholder || '').match(/^Melhor 3º \(([A-L](?:\/[A-L])*)\)$/);
+  if (!m) return null;
+  return new Set(m[1].split('/'));
+}
+
 function _createBestThirdAllocator(bestThirdsRanking) {
-  // Apenas os 8 melhores 3ºs se classificam para a r32.
   const qualified = bestThirdsRanking.slice(0, 8);
+  const byGroup = Object.fromEntries(qualified.map(t => [t.group, t]));
+  const comboKey = qualified.map(t => t.group).sort().join('-');
+  const officialPattern = BEST_THIRD_OFFICIAL_COMBO_MAP[comboKey] || null;
+  const usedGroups = new Set();
   const usedTeams = new Set();
+
+  const pickByGroup = (group) => {
+    const item = byGroup[group];
+    if (!item || usedGroups.has(item.group) || usedTeams.has(item.team)) return null;
+    usedGroups.add(item.group);
+    usedTeams.add(item.team);
+    return item.team;
+  };
+
   const pickBest = (allowedGroups) => {
-    // Preferência pela região, mas sempre dentro do pool qualificado.
     let found = qualified.find(t =>
-      !usedTeams.has(t.team) && (!allowedGroups || allowedGroups.has(t.group))
+      !usedGroups.has(t.group) &&
+      !usedTeams.has(t.team) &&
+      (!allowedGroups || allowedGroups.has(t.group))
     );
-    // Se nenhum top-8 vem dessa região, pega o melhor qualificado restante
-    // (evita que um 3º fora do top-8 tome o slot e empurre um top-8 pra fora).
     if (!found && allowedGroups) {
-      found = qualified.find(t => !usedTeams.has(t.team));
+      found = qualified.find(t => !usedGroups.has(t.group) && !usedTeams.has(t.team));
     }
     if (!found) return null;
+    usedGroups.add(found.group);
     usedTeams.add(found.team);
     return found.team;
   };
+
+  const slotPattern = [
+    'Melhor 3º (A/B/C/D)',
+    'Melhor 3º (E/F/G/H)',
+    'Melhor 3º (I/J/K/L)',
+    'Melhor 3º restante',
+    'Melhor 3º restante',
+    'Melhor 3º restante',
+    'Melhor 3º restante',
+    'Melhor 3º restante'
+  ];
+  const slotCache = [];
+
+  const buildSlots = () => {
+    if (slotCache.length) return;
+    for (let i = 0; i < slotPattern.length; i++) {
+      const token = slotPattern[i];
+      const officialGroup = officialPattern?.[i];
+      if (officialGroup) {
+        const team = pickByGroup(officialGroup);
+        slotCache.push(team || null);
+        continue;
+      }
+      const allowed = _parseAllowedThirdGroups(token);
+      slotCache.push(pickBest(allowed));
+    }
+  };
+
+  let cursor = 0;
   return function resolveBestThird(str) {
     if (!str || !str.startsWith('Melhor 3º')) return str;
-    if (str === 'Melhor 3º (A/B/C/D)') return pickBest(new Set(['A','B','C','D'])) || str;
-    if (str === 'Melhor 3º (E/F/G/H)') return pickBest(new Set(['E','F','G','H'])) || str;
-    if (str === 'Melhor 3º (I/J/K/L)') return pickBest(new Set(['I','J','K','L'])) || str;
-    if (str === 'Melhor 3º restante') return pickBest(null) || str;
-    return str;
+    buildSlots();
+    while (cursor < slotPattern.length && slotPattern[cursor] !== str) cursor++;
+    if (cursor >= slotPattern.length) return pickBest(_parseAllowedThirdGroups(str)) || str;
+    const team = slotCache[cursor];
+    cursor++;
+    return team || str;
   };
 }
 
@@ -1426,6 +1492,10 @@ function _isPlaceholder(name) {
 // evita que um placar com time-placeholder gere vencedor inválido em cascata.
 function _resolveWinnerPlaceholders(str, prevPhaseKey, res) {
   let out = str;
+  const replaceTokenExact = (src, token, value) => {
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return src.replace(new RegExp(`${escaped}\\b`, 'g'), value);
+  };
   ELIM_DATA[prevPhaseKey].games.forEach(prev => {
     const r = res[prev.id] || {};
     const hTeam = r.h_team !== undefined ? r.h_team : prev.h;
@@ -1434,8 +1504,8 @@ function _resolveWinnerPlaceholders(str, prevPhaseKey, res) {
     if (_isPlaceholder(hTeam) || _isPlaceholder(aTeam)) return;
     const w = _winnerOf(r, hTeam, aTeam);
     const l = _loserOf(r, hTeam, aTeam);
-    if (w) out = out.replace(`Venc. ${prev.id}`, w);
-    if (l) out = out.replace(`Perd. ${prev.id}`, l);
+    if (w) out = replaceTokenExact(out, `Venc. ${prev.id}`, w);
+    if (l) out = replaceTokenExact(out, `Perd. ${prev.id}`, l);
   });
   return out;
 }
@@ -1740,6 +1810,7 @@ async function renderPalpites(editUid=null) {
 function buildPalRow(game) {
   const pal = myPalpites[game.id]||{};
   const res = resultados[game.id]||{};
+  const teams = _getResolvedTeamsForGame(game, resultados);
   const locked = res.locked===true;
   const hasResult = res.h_real!==undefined;
   const pts = calcPontos(pal,res);
@@ -1749,15 +1820,15 @@ function buildPalRow(game) {
   const lockedBadge = isClosed?`<span class="locked-badge">🔒 Encerrado</span>`:'';
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
-  const flagH = COUNTRY_FLAGS[game.h] || '';
-  const flagA = COUNTRY_FLAGS[game.a] || '';
+  const flagH = COUNTRY_FLAGS[teams.h] || '';
+  const flagA = COUNTRY_FLAGS[teams.a] || '';
   const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
+    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${closeAttr} oninput="onPalInput('${game.id}','a',this.value)">
-    <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
+    <div><div class="team-name">${flagA} ${esc(teams.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
 
@@ -1956,20 +2027,21 @@ async function renderVerPalpites(selectedUid=null) {
 function buildVerPalRow(game, userPals, res) {
   const pal = userPals[game.id]||{};
   const r = res[game.id]||{};
+  const teams = _getResolvedTeamsForGame(game, res);
   const hasResult = r.h_real!==undefined;
   const pts = calcPontos(pal,r);
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
-  const flagH = COUNTRY_FLAGS[game.h] || '';
-  const flagA = COUNTRY_FLAGS[game.a] || '';
+  const flagH = COUNTRY_FLAGS[teams.h] || '';
+  const flagA = COUNTRY_FLAGS[teams.a] || '';
   const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
+    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.h!==undefined?pal.h:''}">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.a!==undefined?pal.a:''}">
-    <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
+    <div><div class="team-name">${flagA} ${esc(teams.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
 
@@ -2307,6 +2379,91 @@ function generateInsights(ranking, userAccStats, analiseJogos, res) {
   return insights;
 }
 
+function _computeRankingForGameIds(users, resultados, allPalpites, gameIds) {
+  const gameSet = new Set(gameIds || []);
+  return users
+    .filter(u=>u.ativo!==false)
+    .map(u=>{
+      let pontos=0, exatos=0, venc_saldo=0, apenas_venc=0, jogos=0, erros=0;
+      const pals = allPalpites[u.uid]||{};
+      gameSet.forEach(jid=>{
+        const r = resultados[jid];
+        if (!r || r.h_real===undefined || r.a_real===undefined) return;
+        const p = pals[jid];
+        if (!p) return;
+        const pts = calcPontos(p,r);
+        if (pts===null) return;
+        jogos++; pontos+=pts;
+        if (pts===CFG.pts_exato) exatos++;
+        else if (pts===(CFG.pts_vencedor_saldo||7)) venc_saldo++;
+        else if (pts===(CFG.pts_apenas_vencedor||5)) apenas_venc++;
+        else if (pts===0) erros++;
+      });
+      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
+    })
+    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
+}
+
+function _calcRecentTrend(uid, allPals, res, n=5) {
+  const gamesOrdered = ALL_GAMES
+    .filter(g => _hasFullResult(res[g.id]))
+    .sort((a,b)=>_parseGameDate(a.date)-_parseGameDate(b.date));
+  const recent = gamesOrdered.slice(-n);
+  if (!recent.length) return { recentPct:0, overallPct:0, delta:0, count:0 };
+  const pals = allPals[uid] || {};
+  let hitRecent=0, totalRecent=0, hitAll=0, totalAll=0;
+  gamesOrdered.forEach(g=>{
+    const p = pals[g.id];
+    if (!p) return;
+    const pts = calcPontos(p, res[g.id]);
+    if (pts===null) return;
+    totalAll++;
+    if (pts >= (CFG.pts_apenas_vencedor||5)) hitAll++;
+  });
+  recent.forEach(g=>{
+    const p = pals[g.id];
+    if (!p) return;
+    const pts = calcPontos(p, res[g.id]);
+    if (pts===null) return;
+    totalRecent++;
+    if (pts >= (CFG.pts_apenas_vencedor||5)) hitRecent++;
+  });
+  const recentPct = totalRecent ? (hitRecent/totalRecent*100) : 0;
+  const overallPct = totalAll ? (hitAll/totalAll*100) : 0;
+  return { recentPct, overallPct, delta: recentPct-overallPct, count: totalRecent };
+}
+
+function _calcHeadToHead(users, allPals, res) {
+  const gamesWithRes = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
+  let best = null;
+  for (let i=0; i<users.length; i++) {
+    for (let j=i+1; j<users.length; j++) {
+      const a = users[i], b = users[j];
+      const pa = allPals[a.uid] || {}, pb = allPals[b.uid] || {};
+      let duelGames=0, winA=0, winB=0, ties=0, divergence=0;
+      gamesWithRes.forEach(g=>{
+        const pA = pa[g.id], pB = pb[g.id];
+        if (!pA || !pB) return;
+        const ptsA = calcPontos(pA, res[g.id]);
+        const ptsB = calcPontos(pB, res[g.id]);
+        if (ptsA===null || ptsB===null) return;
+        duelGames++;
+        divergence += Math.abs((parseInt(pA.h)||0)-(parseInt(pB.h)||0)) + Math.abs((parseInt(pA.a)||0)-(parseInt(pB.a)||0));
+        if (ptsA > ptsB) winA++;
+        else if (ptsB > ptsA) winB++;
+        else ties++;
+      });
+      if (!duelGames) continue;
+      const scoreGap = Math.abs(winA-winB);
+      const candidate = { a, b, duelGames, winA, winB, ties, divergence, scoreGap };
+      if (!best || candidate.divergence > best.divergence || (candidate.divergence===best.divergence && candidate.duelGames>best.duelGames)) {
+        best = candidate;
+      }
+    }
+  }
+  return best;
+}
+
 // ════════════════════════════════════════════
 // ESTATÍSTICAS PAGE
 // ════════════════════════════════════════════
@@ -2385,6 +2542,24 @@ async function renderEstatisticas() {
     const reiEmpates = altData.slice().sort((a,b) => b.empates - a.empates)[0];
     const apostadorOusado = altData.slice().sort((a,b) => b.mediaGols - a.mediaGols)[0];
 
+    // Tendência (últimos 5 jogos com resultado)
+    const trendData = ranking.map(u => ({ user: u, ..._calcRecentTrend(u.uid, allPals, res, 5) })).filter(t => t.count > 0);
+    const emAlta = trendData.slice().sort((a,b)=>b.delta-a.delta)[0];
+    const emQueda = trendData.slice().sort((a,b)=>a.delta-b.delta)[0];
+
+    // Ranking por fase
+    const phaseGameIds = {
+      grupos: Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(x=>x.id)),
+      eliminatorias: Object.values(ELIM_DATA).flatMap(g=>g.games.map(x=>x.id))
+    };
+    const rankGrupos = _computeRankingForGameIds(users, res, allPals, phaseGameIds.grupos);
+    const rankElim = _computeRankingForGameIds(users, res, allPals, phaseGameIds.eliminatorias);
+    const liderGrupos = rankGrupos[0];
+    const liderElim = rankElim[0];
+
+    // Head-to-head mais "quente"
+    const rivalidade = _calcHeadToHead(users, allPals, res);
+
     // Insights automáticos
     const insights = generateInsights(ranking, userAccStats, analiseJogos, res);
 
@@ -2407,6 +2582,27 @@ async function renderEstatisticas() {
       </div>`;
     }
 
+    // ── Tendência e momento ──
+    if (trendData.length > 0) {
+      const renderTrend = (title, icon, color, data, mode) => {
+        if (!data) return '';
+        const arrow = mode === 'up' ? '📈' : '📉';
+        return `<div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:14px">
+          <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">${icon} ${title}</div>
+          <div style="font-size:1rem;font-weight:800;color:${color};margin-top:6px">${esc(data.user.apelido||data.user.nome)}</div>
+          <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px">${arrow} Δ ${data.delta>=0?'+':''}${data.delta.toFixed(1)} pp (últ.5 vs geral)</div>
+          <div style="font-size:0.76rem;color:var(--text-muted)">Últ.5: ${data.recentPct.toFixed(1)}% · Geral: ${data.overallPct.toFixed(1)}%</div>
+        </div>`;
+      };
+      html += `<div class="card">
+        <div class="card-title">📊 Momento dos Participantes</div>
+        <div class="stats-alt-grid">
+          ${renderTrend('Em alta','🔥','var(--green)', emAlta, 'up')}
+          ${renderTrend('Em queda','🧊','#ff8a8a', emQueda, 'down')}
+        </div>
+      </div>`;
+    }
+
     // ── Rankings alternativos ──
     if (totalJogos > 0 && ranking.length > 0) {
       const mkAward = (emoji, title, color, user, sub) => user ? `
@@ -2423,6 +2619,111 @@ async function renderEstatisticas() {
           ${mkAward('💀','Mais Zicado','#ff6b6b',maisZicado,`${maisZicado?.erros||0} erros`)}
           ${mkAward('🤝','Rei dos Empates','var(--accent)',reiEmpates,`${reiEmpates?.empates||0} palpites de empate`)}
           ${mkAward('🚀','Apostador Ousado','var(--orange)',apostadorOusado,`média ${apostadorOusado?.mediaGols?.toFixed(1)||0} gols/jogo`)}
+        </div>
+      </div>`;
+    }
+
+    // ── Heatmap de placares mais palpitados ──
+    const topPlacares = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1]).slice(0, 12);
+    if (topPlacares.length > 0) {
+      const maxFreq = topPlacares[0][1] || 1;
+      html += `<div class="card">
+        <div class="card-title">🧠 Heatmap de Palpites (Top 12)</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px">
+          ${topPlacares.map(([placar, qtd])=>`
+            <div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:rgba(255,255,255,0.03)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-weight:800;color:var(--gold)">${placar}</span>
+                <span style="font-size:0.8rem;color:var(--text-muted)">${qtd}x</span>
+              </div>
+              <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round((qtd/maxFreq)*100)}%"></div></div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    // ── Ousadia detalhada ──
+    if (altData.length > 0) {
+      const ousadia = altData.map(u => {
+        const pals = allPals[u.uid] || {};
+        const totals = Object.values(pals).map(p => (parseInt(p.h)||0) + (parseInt(p.a)||0));
+        const media = totals.length ? totals.reduce((a,b)=>a+b,0)/totals.length : 0;
+        const variancia = totals.length ? (totals.reduce((a,v)=>a+Math.pow(v-media,2),0)/totals.length) : 0;
+        const empatePct = u.totalPals ? (u.empates/u.totalPals*100) : 0;
+        return { ...u, variancia, empatePct };
+      });
+      const maisVariavel = ousadia.slice().sort((a,b)=>b.variancia-a.variancia)[0];
+      const menosEmpates = ousadia.slice().sort((a,b)=>a.empatePct-b.empatePct)[0];
+      html += `<div class="card">
+        <div class="card-title">🎲 Índice de Ousadia (detalhado)</div>
+        <div class="stats-alt-grid">
+          <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:14px;text-align:center">
+            <div style="font-size:1.8rem">🧨</div>
+            <div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase">Maior variação de placar</div>
+            <div style="font-size:1rem;font-weight:700;color:var(--orange)">${esc(maisVariavel?.apelido||maisVariavel?.nome||'—')}</div>
+            <div style="font-size:.78rem;color:var(--text-muted)">variância ${maisVariavel?.variancia?.toFixed(2)||'0.00'}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:14px;text-align:center">
+            <div style="font-size:1.8rem">⚡</div>
+            <div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase">Menos empates previstos</div>
+            <div style="font-size:1rem;font-weight:700;color:var(--accent)">${esc(menosEmpates?.apelido||menosEmpates?.nome||'—')}</div>
+            <div style="font-size:.78rem;color:var(--text-muted)">${menosEmpates?.empatePct?.toFixed(1)||'0.0'}% de empates</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // ── Ranking por fase ──
+    if ((liderGrupos && liderGrupos.jogos > 0) || (liderElim && liderElim.jogos > 0)) {
+      html += `<div class="card">
+        <div class="card-title">🗂️ Ranking por Fase</div>
+        <div class="stats-alt-grid">
+          <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:14px">
+            <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase">Fase de Grupos</div>
+            <div style="margin-top:6px;font-size:1rem;font-weight:800;color:var(--gold)">${esc(liderGrupos?.apelido||liderGrupos?.nome||'—')}</div>
+            <div style="font-size:.8rem;color:var(--text-muted)">${liderGrupos?.pontos||0} pts · ${liderGrupos?.jogos||0} jogos</div>
+          </div>
+          <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:14px">
+            <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase">Mata-mata</div>
+            <div style="margin-top:6px;font-size:1rem;font-weight:800;color:var(--green)">${esc(liderElim?.apelido||liderElim?.nome||'—')}</div>
+            <div style="font-size:.8rem;color:var(--text-muted)">${liderElim?.pontos||0} pts · ${liderElim?.jogos||0} jogos</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // ── Jogo mais difícil e mais fácil ──
+    if (maisDificil || maisFacil) {
+      const fmtGame = (g) => g?.game ? `${esc(g.game.h)} × ${esc(g.game.a)}` : '—';
+      html += `<div class="card">
+        <div class="card-title">🎮 Dificuldade dos Jogos</div>
+        <div class="stats-alt-grid">
+          <div style="background:rgba(255,0,0,.06);border:1px solid rgba(255,68,68,.25);border-radius:10px;padding:14px">
+            <div style="font-size:.75rem;color:#ff9a9a;text-transform:uppercase">Mais imprevisível</div>
+            <div style="font-size:1rem;font-weight:800;margin-top:6px">${fmtGame(maisDificil)}</div>
+            <div style="font-size:.8rem;color:var(--text-muted)">acerto: ${maisDificil?.pct?.toFixed(1)||'0.0'}%</div>
+          </div>
+          <div style="background:rgba(0,200,81,.07);border:1px solid rgba(0,200,81,.25);border-radius:10px;padding:14px">
+            <div style="font-size:.75rem;color:#92e7b8;text-transform:uppercase">Mais previsível</div>
+            <div style="font-size:1rem;font-weight:800;margin-top:6px">${fmtGame(maisFacil)}</div>
+            <div style="font-size:.8rem;color:var(--text-muted)">acerto: ${maisFacil?.pct?.toFixed(1)||'0.0'}%</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // ── Head-to-head ──
+    if (rivalidade) {
+      const uA = rivalidade.a.apelido || rivalidade.a.nome;
+      const uB = rivalidade.b.apelido || rivalidade.b.nome;
+      html += `<div class="card">
+        <div class="card-title">🥊 Rivalidade em Destaque</div>
+        <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:10px">
+          <div style="font-size:1.02rem;font-weight:800;color:var(--gold)">${esc(uA)} × ${esc(uB)}</div>
+          <div style="font-size:.83rem;color:var(--text-muted);margin-top:6px">
+            Jogos comparáveis: <b>${rivalidade.duelGames}</b> · Vitórias no duelo: <b>${rivalidade.winA}</b> × <b>${rivalidade.winB}</b> · Empates: <b>${rivalidade.ties}</b>
+          </div>
+          <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px">Índice de divergência de palpites: ${rivalidade.divergence}</div>
         </div>
       </div>`;
     }
@@ -2455,28 +2756,6 @@ async function renderEstatisticas() {
         </tr>`;
       });
       html += `</tbody></table></div></div>`;
-    }
-
-    // ── Jogo mais difícil / mais fácil ──
-    if (maisDificil || maisFacil) {
-      html += `<div class="stats-pair">`;
-      if (maisDificil) html += `<div class="card">
-        <div class="card-title">😈 Mais Difícil</div>
-        <div style="margin-top:10px">
-          <div style="font-size:0.85rem;font-weight:600">${esc(maisDificil.game?.h||maisDificil.jid)} × ${esc(maisDificil.game?.a||'')}</div>
-          <div style="font-size:1.4rem;font-weight:800;color:#ff6b6b;margin:4px 0">${maisDificil.pct.toFixed(0)}%</div>
-          <div style="font-size:0.75rem;color:var(--text-muted)">${maisDificil.acertos}/${maisDificil.total} acertaram</div>
-        </div>
-      </div>`;
-      if (maisFacil) html += `<div class="card">
-        <div class="card-title">😊 Mais Fácil</div>
-        <div style="margin-top:10px">
-          <div style="font-size:0.85rem;font-weight:600">${esc(maisFacil.game?.h||maisFacil.jid)} × ${esc(maisFacil.game?.a||'')}</div>
-          <div style="font-size:1.4rem;font-weight:800;color:var(--green);margin:4px 0">${maisFacil.pct.toFixed(0)}%</div>
-          <div style="font-size:0.75rem;color:var(--text-muted)">${maisFacil.acertos}/${maisFacil.total} acertaram</div>
-        </div>
-      </div>`;
-      html += `</div>`;
     }
 
     // ── Cards originais ──
@@ -2550,7 +2829,13 @@ async function renderChaveamento() {
     let html = `<div class="section-title">🔑 Chaveamento</div>
       <div class="alert alert-info" style="font-size:0.82rem">Em empates na fase eliminatória, o vencedor é decidido nos <strong>penaltis</strong> (exibidos em parênteses). Para a pontuação do bolão, apenas o placar dos 90 minutos é considerado.</div>
       <div class="bracket-wrap"><div class="bracket">`;
-    const rounds = [{key:'r32',label:'Oitavas'},{key:'r16',label:'Quartas'},{key:'semi',label:'Semis'},{key:'final',label:'Final'}];
+    const rounds = [
+      {key:'r32',label:'Round of 32'},
+      {key:'r16',label:'Oitavas'},
+      {key:'quartas',label:'Quartas'},
+      {key:'semi',label:'Semis'},
+      {key:'final',label:'Final e 3º lugar'}
+    ];
     rounds.forEach(({key,label})=>{
       const data = ELIM_DATA[key];
       html += `<div class="bracket-round"><h4>${data.icon} ${label}</h4><div class="bracket-games">`;
@@ -2565,7 +2850,13 @@ async function renderChaveamento() {
         const aWin = !!winner && winner === aTeam;
         const hPenTxt = hasPen ? ` <span style="color:var(--text-muted);font-size:0.72rem">(${r.h_pen})</span>` : '';
         const aPenTxt = hasPen ? ` <span style="color:var(--text-muted);font-size:0.72rem">(${r.a_pen})</span>` : '';
+        const matchLabel = g.id === 'T1'
+          ? '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px">🥉 3º lugar</div>'
+          : (g.id === 'FIN1'
+            ? '<div style="font-size:0.7rem;color:var(--gold);margin-bottom:6px">🏆 Final</div>'
+            : '');
         html += `<div class="bracket-match">
+          ${matchLabel}
           <div class="bracket-team ${hWin?'winner':''}">${esc(hTeam)} <span class="bracket-score">${hasRes?r.h_real:''}</span>${hPenTxt}</div>
           <div class="bracket-team ${aWin?'winner':''}">${esc(aTeam)} <span class="bracket-score">${hasRes?r.a_real:''}</span>${aPenTxt}</div>
         </div>`;
@@ -2815,6 +3106,12 @@ async function _testeApplyBatch(games, mode) {
     if (mode === 'fill') {
       const h = _randScore(), a = _randScore();
       const data = { h_real: h, a_real: a, updatedAt: FV.serverTimestamp() };
+      if (_isElim(g.id)) {
+        // Evita "times presos" de simulações anteriores:
+        // o encadeamento recalcula h_team/a_team após preencher os placares.
+        data.h_team = FV.delete();
+        data.a_team = FV.delete();
+      }
       if (_isElim(g.id) && h === a) {
         // Empate em eliminatória → gera penaltis distintos para decidir vencedor
         let hp = 3 + Math.floor(Math.random() * 3); // 3..5
