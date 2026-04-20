@@ -2505,7 +2505,10 @@ async function renderEstatisticas() {
     const placarFreq = {};
     jogosComResultado.forEach(jid=>{
       analiseJogos[jid].palpites.forEach(p=>{
-        const key=`${p.palpite.h}-${p.palpite.a}`;
+        const h = parseInt(p.palpite.h)||0;
+        const a = parseInt(p.palpite.a)||0;
+        // Heatmap sem direção: 2-1 e 1-2 contam como o mesmo tipo de placar.
+        const key = `${Math.min(h,a)}-${Math.max(h,a)}`;
         placarFreq[key]=(placarFreq[key]||0)+1;
       });
     });
