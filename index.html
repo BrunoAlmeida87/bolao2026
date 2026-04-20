@@ -1885,7 +1885,31 @@ async function savePalpite(gameId) {
   } catch(e) {
     if (hInp) { hInp.classList.remove('saving'); hInp.classList.add('save-err'); }
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('save-err'); }
-    showToast('Erro ao salvar: '+e.message,'error');
+    console.error('[bolao][savePalpite] falha ao salvar palpite', {
+      gameId,
+      code: e?.code,
+      message: e?.message,
+      name: e?.name,
+      targetUid: uid,
+      authUid: currentUser?.uid,
+      authEmail: currentUser?.email,
+      palpitesEditing,
+      isAdmin: currentUserDoc?.role === 'admin',
+      myRole: currentUserDoc?.role,
+      path: `palpites/${uid}/jogos/${gameId}`,
+      palpite: pal,
+      error: e
+    });
+    let extra = '';
+    if (e?.code === 'permission-denied') {
+      const editingOther = palpitesEditing && palpitesEditing !== currentUser?.uid;
+      if (editingOther) {
+        extra = ' (admin editando palpite de outro usuário — verifique as regras do Firestore)';
+      } else {
+        extra = ' (verifique se você está logado e se as regras do Firestore permitem o usuário gravar em palpites/' + uid + ')';
+      }
+    }
+    showToast('Erro ao salvar: '+(e?.code?`[${e.code}] `:'')+e.message+extra,'error');
   }
 }
 
