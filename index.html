@@ -113,6 +113,9 @@ a:hover{text-decoration:underline}
 .page{display:none}
 .page.active{display:block}
 .container{max-width:1000px;margin:0 auto;padding:28px 16px 80px}
+@media (min-width:1200px){
+  .container{max-width:1400px;padding-left:24px;padding-right:24px}
+}
 
 /* ══════════════════════════════════════════
    AUTH SCREEN
@@ -1489,6 +1492,10 @@ function _isPlaceholder(name) {
 // evita que um placar com time-placeholder gere vencedor inválido em cascata.
 function _resolveWinnerPlaceholders(str, prevPhaseKey, res) {
   let out = str;
+  const replaceTokenExact = (src, token, value) => {
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return src.replace(new RegExp(`${escaped}\\b`, 'g'), value);
+  };
   ELIM_DATA[prevPhaseKey].games.forEach(prev => {
     const r = res[prev.id] || {};
     const hTeam = r.h_team !== undefined ? r.h_team : prev.h;
@@ -1497,8 +1504,8 @@ function _resolveWinnerPlaceholders(str, prevPhaseKey, res) {
     if (_isPlaceholder(hTeam) || _isPlaceholder(aTeam)) return;
     const w = _winnerOf(r, hTeam, aTeam);
     const l = _loserOf(r, hTeam, aTeam);
-    if (w) out = out.replace(`Venc. ${prev.id}`, w);
-    if (l) out = out.replace(`Perd. ${prev.id}`, l);
+    if (w) out = replaceTokenExact(out, `Venc. ${prev.id}`, w);
+    if (l) out = replaceTokenExact(out, `Perd. ${prev.id}`, l);
   });
   return out;
 }
