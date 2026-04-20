@@ -1370,6 +1370,14 @@ function _hasFullResult(r) {
   return r && r.h_real !== undefined && r.a_real !== undefined;
 }
 
+function _getResolvedTeamsForGame(game, resMap) {
+  const r = (resMap && resMap[game.id]) || {};
+  return {
+    h: r.h_team || game.h,
+    a: r.a_team || game.a
+  };
+}
+
 function _computeBestThirds(resultados) {
   const thirds = [];
   let allGroupsComplete = true;
@@ -1388,31 +1396,86 @@ function _computeBestThirds(resultados) {
   return thirds.sort((a,b)=>b.pts-a.pts||b.sg-a.sg||b.gp-a.gp||a.team.localeCompare(b.team,'pt-BR'));
 }
 
+// Matriz de combinação (chave = grupos dos 3º classificados, ordenados e unidos por '-')
+// para distribuição fixa dos terceiros nas vagas da r32.
+// Formato do valor: array com os 8 grupos ocupando, nesta ordem:
+// O13.h, O13.a, O14.h, O14.a, O15.h, O15.a, O16.h, O16.a
+// Exemplo de entrada: { 'A-B-C-D-E-F-G-H': ['A','E','B','F','C','G','D','H'] }
+const BEST_THIRD_OFFICIAL_COMBO_MAP = {};
+
+function _parseAllowedThirdGroups(placeholder) {
+  const m = (placeholder || '').match(/^Melhor 3º \(([A-L](?:\/[A-L])*)\)$/);
+  if (!m) return null;
+  return new Set(m[1].split('/'));
+}
+
 function _createBestThirdAllocator(bestThirdsRanking) {
-  // Apenas os 8 melhores 3ºs se classificam para a r32.
   const qualified = bestThirdsRanking.slice(0, 8);
+  const byGroup = Object.fromEntries(qualified.map(t => [t.group, t]));
+  const comboKey = qualified.map(t => t.group).sort().join('-');
+  const officialPattern = BEST_THIRD_OFFICIAL_COMBO_MAP[comboKey] || null;
+  const usedGroups = new Set();
   const usedTeams = new Set();
+
+  const pickByGroup = (group) => {
+    const item = byGroup[group];
+    if (!item || usedGroups.has(item.group) || usedTeams.has(item.team)) return null;
+    usedGroups.add(item.group);
+    usedTeams.add(item.team);
+    return item.team;
+  };
+
   const pickBest = (allowedGroups) => {
-    // Preferência pela região, mas sempre dentro do pool qualificado.
     let found = qualified.find(t =>
-      !usedTeams.has(t.team) && (!allowedGroups || allowedGroups.has(t.group))
+      !usedGroups.has(t.group) &&
+      !usedTeams.has(t.team) &&
+      (!allowedGroups || allowedGroups.has(t.group))
     );
-    // Se nenhum top-8 vem dessa região, pega o melhor qualificado restante
-    // (evita que um 3º fora do top-8 tome o slot e empurre um top-8 pra fora).
     if (!found && allowedGroups) {
-      found = qualified.find(t => !usedTeams.has(t.team));
+      found = qualified.find(t => !usedGroups.has(t.group) && !usedTeams.has(t.team));
     }
     if (!found) return null;
+    usedGroups.add(found.group);
     usedTeams.add(found.team);
     return found.team;
   };
+
+  const slotPattern = [
+    'Melhor 3º (A/B/C/D)',
+    'Melhor 3º (E/F/G/H)',
+    'Melhor 3º (I/J/K/L)',
+    'Melhor 3º restante',
+    'Melhor 3º restante',
+    'Melhor 3º restante',
+    'Melhor 3º restante',
+    'Melhor 3º restante'
+  ];
+  const slotCache = [];
+
+  const buildSlots = () => {
+    if (slotCache.length) return;
+    for (let i = 0; i < slotPattern.length; i++) {
+      const token = slotPattern[i];
+      const officialGroup = officialPattern?.[i];
+      if (officialGroup) {
+        const team = pickByGroup(officialGroup);
+        slotCache.push(team || null);
+        continue;
+      }
+      const allowed = _parseAllowedThirdGroups(token);
+      slotCache.push(pickBest(allowed));
+    }
+  };
+
+  let cursor = 0;
   return function resolveBestThird(str) {
     if (!str || !str.startsWith('Melhor 3º')) return str;
-    if (str === 'Melhor 3º (A/B/C/D)') return pickBest(new Set(['A','B','C','D'])) || str;
-    if (str === 'Melhor 3º (E/F/G/H)') return pickBest(new Set(['E','F','G','H'])) || str;
-    if (str === 'Melhor 3º (I/J/K/L)') return pickBest(new Set(['I','J','K','L'])) || str;
-    if (str === 'Melhor 3º restante') return pickBest(null) || str;
-    return str;
+    buildSlots();
+    while (cursor < slotPattern.length && slotPattern[cursor] !== str) cursor++;
+    if (cursor >= slotPattern.length) return pickBest(_parseAllowedThirdGroups(str)) || str;
+    const team = slotCache[cursor];
+    cursor++;
+    return team || str;
   };
 }
 
@@ -1740,6 +1803,7 @@ async function renderPalpites(editUid=null) {
 function buildPalRow(game) {
   const pal = myPalpites[game.id]||{};
   const res = resultados[game.id]||{};
+  const teams = _getResolvedTeamsForGame(game, resultados);
   const locked = res.locked===true;
   const hasResult = res.h_real!==undefined;
   const pts = calcPontos(pal,res);
@@ -1749,15 +1813,15 @@ function buildPalRow(game) {
   const lockedBadge = isClosed?`<span class="locked-badge">🔒 Encerrado</span>`:'';
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
-  const flagH = COUNTRY_FLAGS[game.h] || '';
-  const flagA = COUNTRY_FLAGS[game.a] || '';
+  const flagH = COUNTRY_FLAGS[teams.h] || '';
+  const flagA = COUNTRY_FLAGS[teams.a] || '';
   const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
+    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${closeAttr} oninput="onPalInput('${game.id}','a',this.value)">
-    <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
+    <div><div class="team-name">${flagA} ${esc(teams.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
 
@@ -1956,20 +2020,21 @@ async function renderVerPalpites(selectedUid=null) {
 function buildVerPalRow(game, userPals, res) {
   const pal = userPals[game.id]||{};
   const r = res[game.id]||{};
+  const teams = _getResolvedTeamsForGame(game, res);
   const hasResult = r.h_real!==undefined;
   const pts = calcPontos(pal,r);
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
   const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
-  const flagH = COUNTRY_FLAGS[game.h] || '';
-  const flagA = COUNTRY_FLAGS[game.a] || '';
+  const flagH = COUNTRY_FLAGS[teams.h] || '';
+  const flagA = COUNTRY_FLAGS[teams.a] || '';
   const time = GAME_TIMES[game.id] || '--:--';
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(game.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
+    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.h!==undefined?pal.h:''}">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.a!==undefined?pal.a:''}">
-    <div><div class="team-name">${flagA} ${esc(game.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
+    <div><div class="team-name">${flagA} ${esc(teams.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
   </div>`;
 }
 
@@ -2550,7 +2615,13 @@ async function renderChaveamento() {
     let html = `<div class="section-title">🔑 Chaveamento</div>
       <div class="alert alert-info" style="font-size:0.82rem">Em empates na fase eliminatória, o vencedor é decidido nos <strong>penaltis</strong> (exibidos em parênteses). Para a pontuação do bolão, apenas o placar dos 90 minutos é considerado.</div>
       <div class="bracket-wrap"><div class="bracket">`;
-    const rounds = [{key:'r32',label:'Oitavas'},{key:'r16',label:'Quartas'},{key:'semi',label:'Semis'},{key:'final',label:'Final'}];
+    const rounds = [
+      {key:'r32',label:'Round of 32'},
+      {key:'r16',label:'Oitavas'},
+      {key:'quartas',label:'Quartas'},
+      {key:'semi',label:'Semis'},
+      {key:'final',label:'Final e 3º lugar'}
+    ];
     rounds.forEach(({key,label})=>{
       const data = ELIM_DATA[key];
       html += `<div class="bracket-round"><h4>${data.icon} ${label}</h4><div class="bracket-games">`;
@@ -2565,7 +2636,13 @@ async function renderChaveamento() {
         const aWin = !!winner && winner === aTeam;
         const hPenTxt = hasPen ? ` <span style="color:var(--text-muted);font-size:0.72rem">(${r.h_pen})</span>` : '';
         const aPenTxt = hasPen ? ` <span style="color:var(--text-muted);font-size:0.72rem">(${r.a_pen})</span>` : '';
+        const matchLabel = g.id === 'T1'
+          ? '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px">🥉 3º lugar</div>'
+          : (g.id === 'FIN1'
+            ? '<div style="font-size:0.7rem;color:var(--gold);margin-bottom:6px">🏆 Final</div>'
+            : '');
         html += `<div class="bracket-match">
+          ${matchLabel}
           <div class="bracket-team ${hWin?'winner':''}">${esc(hTeam)} <span class="bracket-score">${hasRes?r.h_real:''}</span>${hPenTxt}</div>
           <div class="bracket-team ${aWin?'winner':''}">${esc(aTeam)} <span class="bracket-score">${hasRes?r.a_real:''}</span>${aPenTxt}</div>
         </div>`;
@@ -2815,6 +2892,12 @@ async function _testeApplyBatch(games, mode) {
     if (mode === 'fill') {
       const h = _randScore(), a = _randScore();
       const data = { h_real: h, a_real: a, updatedAt: FV.serverTimestamp() };
+      if (_isElim(g.id)) {
+        // Evita "times presos" de simulações anteriores:
+        // o encadeamento recalcula h_team/a_team após preencher os placares.
+        data.h_team = FV.delete();
+        data.a_team = FV.delete();
+      }
       if (_isElim(g.id) && h === a) {
         // Empate em eliminatória → gera penaltis distintos para decidir vencedor
         let hp = 3 + Math.floor(Math.random() * 3); // 3..5
