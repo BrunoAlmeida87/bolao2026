@@ -2550,7 +2550,13 @@ async function renderChaveamento() {
     let html = `<div class="section-title">🔑 Chaveamento</div>
       <div class="alert alert-info" style="font-size:0.82rem">Em empates na fase eliminatória, o vencedor é decidido nos <strong>penaltis</strong> (exibidos em parênteses). Para a pontuação do bolão, apenas o placar dos 90 minutos é considerado.</div>
       <div class="bracket-wrap"><div class="bracket">`;
-    const rounds = [{key:'r32',label:'Oitavas'},{key:'r16',label:'Quartas'},{key:'semi',label:'Semis'},{key:'final',label:'Final'}];
+    const rounds = [
+      {key:'r32',label:'Round of 32'},
+      {key:'r16',label:'Oitavas'},
+      {key:'quartas',label:'Quartas'},
+      {key:'semi',label:'Semis'},
+      {key:'final',label:'Final e 3º lugar'}
+    ];
     rounds.forEach(({key,label})=>{
       const data = ELIM_DATA[key];
       html += `<div class="bracket-round"><h4>${data.icon} ${label}</h4><div class="bracket-games">`;
@@ -2565,7 +2571,13 @@ async function renderChaveamento() {
         const aWin = !!winner && winner === aTeam;
         const hPenTxt = hasPen ? ` <span style="color:var(--text-muted);font-size:0.72rem">(${r.h_pen})</span>` : '';
         const aPenTxt = hasPen ? ` <span style="color:var(--text-muted);font-size:0.72rem">(${r.a_pen})</span>` : '';
+        const matchLabel = g.id === 'T1'
+          ? '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px">🥉 3º lugar</div>'
+          : (g.id === 'FIN1'
+            ? '<div style="font-size:0.7rem;color:var(--gold);margin-bottom:6px">🏆 Final</div>'
+            : '');
         html += `<div class="bracket-match">
+          ${matchLabel}
           <div class="bracket-team ${hWin?'winner':''}">${esc(hTeam)} <span class="bracket-score">${hasRes?r.h_real:''}</span>${hPenTxt}</div>
           <div class="bracket-team ${aWin?'winner':''}">${esc(aTeam)} <span class="bracket-score">${hasRes?r.a_real:''}</span>${aPenTxt}</div>
         </div>`;
@@ -2815,6 +2827,12 @@ async function _testeApplyBatch(games, mode) {
     if (mode === 'fill') {
       const h = _randScore(), a = _randScore();
       const data = { h_real: h, a_real: a, updatedAt: FV.serverTimestamp() };
+      if (_isElim(g.id)) {
+        // Evita "times presos" de simulações anteriores:
+        // o encadeamento recalcula h_team/a_team após preencher os placares.
+        data.h_team = FV.delete();
+        data.a_team = FV.delete();
+      }
       if (_isElim(g.id) && h === a) {
         // Empate em eliminatória → gera penaltis distintos para decidir vencedor
         let hp = 3 + Math.floor(Math.random() * 3); // 3..5
