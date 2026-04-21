@@ -1446,12 +1446,68 @@ function _getBestThirdSlotDefs() {
   return out;
 }
 
-// Matriz de combinação (chave = grupos dos 3º classificados, ordenados e unidos por '-')
-// para distribuição fixa dos terceiros nas vagas da r32.
-// Formato do valor: array com os 8 grupos ocupando, nesta ordem:
-// O13.h, O13.a, O14.h, O14.a, O15.h, O15.a, O16.h, O16.a
-// Exemplo de entrada: { 'A-B-C-D-E-F-G-H': ['A','E','B','F','C','G','D','H'] }
-const BEST_THIRD_OFFICIAL_COMBO_MAP = {};
+// Matriz de combinação oficial do Anexo C (FIFA), chaveada pelos 8 grupos
+// dos melhores terceiros (ordenados e unidos por '-').
+// Formato do valor: array com os 8 grupos ocupando, nesta ordem de slots:
+// O3_a, O6_a, O7_a, O8_a, O9_a, O10_a, O13_a, O16_a
+// Exemplo de entrada:
+// { 'A-B-C-D-E-F-G-H': ['H','G','B','C','A','F','D','E'] }
+let BEST_THIRD_OFFICIAL_COMBO_MAP = {};
+let BEST_THIRD_OFFICIAL_COMBO_MAP_READY = false;
+let BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING = null;
+
+async function _ensureBestThirdOfficialComboMapLoaded() {
+  if (BEST_THIRD_OFFICIAL_COMBO_MAP_READY) return;
+  if (BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING) {
+    await BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING;
+    return;
+  }
+  BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING = (async () => {
+    try {
+      const endpoint = 'https://en.wikipedia.org/w/api.php?action=parse&page=Template:2026_FIFA_World_Cup_third-place_table&prop=text&format=json&formatversion=2&origin=*';
+      const resp = await fetch(endpoint, { cache: 'no-store' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const html = data?.parse?.text || '';
+      if (!html) throw new Error('Resposta sem HTML da tabela');
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const rows = [...doc.querySelectorAll('table.wikitable tbody tr')];
+      const groups = 'ABCDEFGHIJKL'.split('');
+      const map = {};
+
+      rows.forEach(row => {
+        const cells = [...row.querySelectorAll('th,td')].map(c => c.textContent.trim());
+        const opt = parseInt(cells[0], 10);
+        if (!Number.isFinite(opt)) return;
+        if (cells.length < 21) return;
+
+        const qualifiedGroups = [];
+        groups.forEach((g, idx) => {
+          if (cells[1 + idx] === g) qualifiedGroups.push(g);
+        });
+        if (qualifiedGroups.length !== 8) return;
+
+        const assignment = cells.slice(13, 21).map(x => (x || '').replace(/^3/, ''));
+        if (assignment.some(x => !/^[A-L]$/.test(x))) return;
+        map[qualifiedGroups.join('-')] = assignment;
+      });
+
+      if (Object.keys(map).length === 495) {
+        BEST_THIRD_OFFICIAL_COMBO_MAP = map;
+      } else {
+        console.warn('Mapa oficial de melhores terceiros incompleto:', Object.keys(map).length);
+      }
+    } catch (err) {
+      console.warn('Falha ao carregar mapa oficial dos melhores 3º (Anexo C):', err);
+    } finally {
+      BEST_THIRD_OFFICIAL_COMBO_MAP_READY = true;
+      BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING = null;
+    }
+  })();
+  await BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING;
+}
 
 function _parseAllowedThirdGroups(placeholder) {
   const m = (placeholder || '').match(/^Melhor 3º \(([A-L](?:\/[A-L])*)\)$/);
@@ -1459,28 +1515,34 @@ function _parseAllowedThirdGroups(placeholder) {
   return new Set(m[1].split('/'));
 }
 
+function _getThirdCombinationKey(bestThirdsRanking) {
+  return bestThirdsRanking
+    .slice(0, 8)
+    .map(t => t.group)
+    .sort()
+    .join('-');
+}
+
 function _createBestThirdAllocator(bestThirdsRanking, overrides = {}) {
   const qualified = bestThirdsRanking.slice(0, 8);
   const byTeam = Object.fromEntries(qualified.map(t => [t.team, t]));
+  const byGroup = Object.fromEntries(qualified.map(t => [t.group, t]));
   const usedTeams = new Set();
   const assignment = {};
   const slotDefs = _getBestThirdSlotDefs();
+  const comboKey = _getThirdCombinationKey(bestThirdsRanking);
+  const officialGroups = BEST_THIRD_OFFICIAL_COMBO_MAP[comboKey] || null;
+  const slotOrder = slotDefs.map(s => s.slotKey);
+  const officialBySlot = officialGroups && officialGroups.length === slotOrder.length
+    ? Object.fromEntries(slotOrder.map((slotKey, idx) => [slotKey, officialGroups[idx]]))
+    : null;
 
   const isAllowedForSlot = (slot, third) => {
     if (!slot.allowedGroups) return true;
     return slot.allowedGroups.has(third.group);
   };
 
-  const pickBest = (slot) => {
-    const found = qualified.find(t => !usedTeams.has(t.team) && isAllowedForSlot(slot, t));
-    if (!found) return null;
-    usedTeams.add(found.team);
-    assignment[slot.slotKey] = found.team;
-    return found.team;
-  };
-
-  // 1) Respeita escolhas do admin (quando válidas), sem duplicar time.
-  slotDefs.forEach(slot => {
+  const applyForcedTeam = (slot) => {
     const forcedTeam = overrides?.[slot.slotKey];
     if (!forcedTeam) return;
     const third = byTeam[forcedTeam];
@@ -1489,12 +1551,38 @@ function _createBestThirdAllocator(bestThirdsRanking, overrides = {}) {
     if (!isAllowedForSlot(slot, third)) return;
     usedTeams.add(third.team);
     assignment[slot.slotKey] = third.team;
-  });
+  };
 
-  // 2) Preenche automaticamente os demais slots.
+  const applyOfficialGroup = (slot) => {
+    if (!officialBySlot) return;
+    const targetGroup = officialBySlot[slot.slotKey];
+    if (!targetGroup) return;
+    const third = byGroup[targetGroup];
+    if (!third) return;
+    if (usedTeams.has(third.team)) return;
+    if (!isAllowedForSlot(slot, third)) return;
+    usedTeams.add(third.team);
+    assignment[slot.slotKey] = third.team;
+  };
+
+  const pickBestByRanking = (slot) => {
+    const found = qualified.find(t => !usedTeams.has(t.team) && isAllowedForSlot(slot, t));
+    if (!found) return;
+    usedTeams.add(found.team);
+    assignment[slot.slotKey] = found.team;
+  };
+
+  // 1) Escolhas manuais do admin (prioridade máxima).
+  slotDefs.forEach(applyForcedTeam);
+  // 2) Padrão oficial do Anexo C, quando o mapa existir.
   slotDefs.forEach(slot => {
     if (assignment[slot.slotKey]) return;
-    pickBest(slot);
+    applyOfficialGroup(slot);
+  });
+  // 3) Fallback determinístico por ranking (mantém funcionamento sem mapa completo).
+  slotDefs.forEach(slot => {
+    if (assignment[slot.slotKey]) return;
+    pickBestByRanking(slot);
   });
 
   return function resolveBestThird(str, slotKey) {
@@ -1574,6 +1662,7 @@ async function updateEliminationTeams() {
       const s = computeStandings(grp, res);
       groupLeaders[grp] = { first: s[0]?.team, second: s[1]?.team };
     });
+    await _ensureBestThirdOfficialComboMapLoaded();
     const bracketCfgSnap = await db_.collection('config').doc('bracket_thirds').get();
     const thirdOverrides = bracketCfgSnap.exists ? (bracketCfgSnap.data()?.overrides || {}) : {};
     const bestThirdAllocator = _createBestThirdAllocator(_computeBestThirds(res), thirdOverrides);
