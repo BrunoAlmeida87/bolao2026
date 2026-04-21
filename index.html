@@ -943,20 +943,20 @@ const GRUPOS_DATA = {
     {id:'O16',h:'1º K',a:'Melhor 3º (D/E/I/J/L)',date:'Jul 3'},
   ]},
   r16:{label:'Oitavas de Final',icon:'🏅',games:[
-    {id:'Q1',h:'Venc. O1',a:'Venc. O3',date:'Jul 4'},  <!-- 89 -->
-    {id:'Q2',h:'Venc. O2',a:'Venc. O5',date:'Jul 4'}, <!-- 90 -->
-    {id:'Q3',h:'Venc. O4',a:'Venc. O6',date:'Jul 5'}, <!-- 91 -->
-    {id:'Q4',h:'Venc. O7',a:'Venc. O8',date:'Jul 5'}, <!-- 92 -->
-    {id:'Q5',h:'Venc. 11',a:'Venc. O12',date:'Jul 6'}, <!-- 93 -->
-    {id:'Q6',h:'Venc. O9',a:'Venc. O10',date:'Jul 6'}, <!-- 94 -->
-    {id:'Q7',h:'Venc. O14',a:'Venc. O16',date:'Jul 7'}, <!-- 95 -->
-    {id:'Q8',h:'Venc. O13',a:'Venc. O15',date:'Jul 7'}, <!--96-->
+    {id:'Q1',h:'Venc. O1',a:'Venc. O3',date:'Jul 4'},
+    {id:'Q2',h:'Venc. O2',a:'Venc. O5',date:'Jul 4'},
+    {id:'Q3',h:'Venc. O4',a:'Venc. O6',date:'Jul 5'},
+    {id:'Q4',h:'Venc. O7',a:'Venc. O8',date:'Jul 5'},
+    {id:'Q5',h:'Venc. O11',a:'Venc. O12',date:'Jul 6'},
+    {id:'Q6',h:'Venc. O9',a:'Venc. O10',date:'Jul 6'},
+    {id:'Q7',h:'Venc. O14',a:'Venc. O16',date:'Jul 7'},
+    {id:'Q8',h:'Venc. O15',a:'Venc. O13',date:'Jul 7'},
   ]},
   quartas:{label:'Quartas de Final',icon:'🌟',games:[
-    {id:'S1',h:'Venc. Q1',a:'Venc. Q2',date:'Jul 9'}, <!-- 97 -->
-    {id:'S2',h:'Venc. Q5',a:'Venc. Q6',date:'Jul 10'}, <!-- 98 -->
-    {id:'S3',h:'Venc. Q3',a:'Venc. Q4',date:'Jul 11'}, <!-- 99 -->
-    {id:'S4',h:'Venc. Q7',a:'Venc. Q8',date:'Jul 11'}, <!-- 100 -->
+    {id:'S1',h:'Venc. Q1',a:'Venc. Q2',date:'Jul 9'},
+    {id:'S2',h:'Venc. Q5',a:'Venc. Q6',date:'Jul 10'},
+    {id:'S3',h:'Venc. Q3',a:'Venc. Q4',date:'Jul 11'},
+    {id:'S4',h:'Venc. Q7',a:'Venc. Q8',date:'Jul 11'},
   ]},
   semi:{label:'Semifinais',icon:'💫',games:[
     {id:'SF1',h:'Venc. S1',a:'Venc. S2',date:'Jul 14'}, 
@@ -972,6 +972,25 @@ const ALL_GAMES = [
   ...Object.values(GRUPOS_DATA).flatMap(g=>g.games),
   ...Object.values(ELIM_DATA).flatMap(e=>e.games)
 ];
+
+// Verificação rápida de consistência da chave: cada O1..O16 deve aparecer
+// uma única vez como origem das oitavas (Q1..Q8).
+function validateBracketStructure() {
+  const refs = [];
+  (ELIM_DATA.r16?.games || []).forEach(g => {
+    [g.h, g.a].forEach(side => {
+      const m = (side || '').match(/^Venc\. (O\d{1,2})$/);
+      if (m) refs.push(m[1]);
+    });
+  });
+  const expected = Array.from({ length: 16 }, (_, i) => `O${i + 1}`);
+  const missing = expected.filter(id => !refs.includes(id));
+  const duplicates = [...new Set(refs.filter((id, idx) => refs.indexOf(id) !== idx))];
+  if (missing.length || duplicates.length) {
+    console.warn('Inconsistência na chave eliminatória:', { missing, duplicates, refs });
+  }
+}
+validateBracketStructure();
 
 // ════════════════════════════════════════════
 // STATE
