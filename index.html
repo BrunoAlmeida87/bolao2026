@@ -2824,8 +2824,12 @@ async function renderChaveamento() {
     const rSnap = await db_.collection('resultados').get();
     const res = {};
     rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const isAdmin = currentUserDoc?.role === 'admin';
+    const thirdOverrides = isAdmin ? await _loadThirdOverrides() : {};
+    const thirdPanel = isAdmin ? _buildThirdPlaceAdminPanel(res, thirdOverrides) : '';
     let html = `<div class="section-title">🔑 Chaveamento</div>
       <div class="alert alert-info" style="font-size:0.82rem">Em empates na fase eliminatória, o vencedor é decidido nos <strong>penaltis</strong> (exibidos em parênteses). Para a pontuação do bolão, apenas o placar dos 90 minutos é considerado.</div>
+      ${isAdmin ? `<div class="alert alert-warning" style="font-size:0.8rem">👑 <b>Modo admin:</b> você pode ajustar os 8 melhores terceiros logo abaixo (aparece após os 72 jogos de grupos terem resultado).</div>${thirdPanel}` : ''}
       <div class="bracket-wrap"><div class="bracket">`;
     const rounds = [
       {key:'r32',label:'Round of 32'},
