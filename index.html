@@ -1399,6 +1399,25 @@ function _computeBestThirds(resultados) {
   return thirds.sort((a,b)=>b.pts-a.pts||b.sg-a.sg||b.gp-a.gp||a.team.localeCompare(b.team,'pt-BR'));
 }
 
+function _getBestThirdSlotDefs() {
+  const out = [];
+  const pushSlot = (game, side, token) => {
+    if (!token || !token.startsWith('Melhor 3º')) return;
+    out.push({
+      slotKey: `${game.id}_${side}`,
+      gameId: game.id,
+      side,
+      token,
+      allowedGroups: _parseAllowedThirdGroups(token)
+    });
+  };
+  (ELIM_DATA.r32?.games || []).forEach(game => {
+    pushSlot(game, 'h', game.h);
+    pushSlot(game, 'a', game.a);
+  });
+  return out;
+}
+
 // Matriz de combinação (chave = grupos dos 3º classificados, ordenados e unidos por '-')
 // para distribuição fixa dos terceiros nas vagas da r32.
 // Formato do valor: array com os 8 grupos ocupando, nesta ordem:
@@ -1412,73 +1431,47 @@ function _parseAllowedThirdGroups(placeholder) {
   return new Set(m[1].split('/'));
 }
 
-function _createBestThirdAllocator(bestThirdsRanking) {
+function _createBestThirdAllocator(bestThirdsRanking, overrides = {}) {
   const qualified = bestThirdsRanking.slice(0, 8);
-  const byGroup = Object.fromEntries(qualified.map(t => [t.group, t]));
-  const comboKey = qualified.map(t => t.group).sort().join('-');
-  const officialPattern = BEST_THIRD_OFFICIAL_COMBO_MAP[comboKey] || null;
-  const usedGroups = new Set();
+  const byTeam = Object.fromEntries(qualified.map(t => [t.team, t]));
   const usedTeams = new Set();
+  const assignment = {};
+  const slotDefs = _getBestThirdSlotDefs();
 
-  const pickByGroup = (group) => {
-    const item = byGroup[group];
-    if (!item || usedGroups.has(item.group) || usedTeams.has(item.team)) return null;
-    usedGroups.add(item.group);
-    usedTeams.add(item.team);
-    return item.team;
+  const isAllowedForSlot = (slot, third) => {
+    if (!slot.allowedGroups) return true;
+    return slot.allowedGroups.has(third.group);
   };
 
-  const pickBest = (allowedGroups) => {
-    let found = qualified.find(t =>
-      !usedGroups.has(t.group) &&
-      !usedTeams.has(t.team) &&
-      (!allowedGroups || allowedGroups.has(t.group))
-    );
-    if (!found && allowedGroups) {
-      found = qualified.find(t => !usedGroups.has(t.group) && !usedTeams.has(t.team));
-    }
+  const pickBest = (slot) => {
+    const found = qualified.find(t => !usedTeams.has(t.team) && isAllowedForSlot(slot, t));
     if (!found) return null;
-    usedGroups.add(found.group);
     usedTeams.add(found.team);
+    assignment[slot.slotKey] = found.team;
     return found.team;
   };
 
-  const slotPattern = [
-    'Melhor 3º (A/B/C/D)',
-    'Melhor 3º (E/F/G/H)',
-    'Melhor 3º (I/J/K/L)',
-    'Melhor 3º restante',
-    'Melhor 3º restante',
-    'Melhor 3º restante',
-    'Melhor 3º restante',
-    'Melhor 3º restante'
-  ];
-  const slotCache = [];
+  // 1) Respeita escolhas do admin (quando válidas), sem duplicar time.
+  slotDefs.forEach(slot => {
+    const forcedTeam = overrides?.[slot.slotKey];
+    if (!forcedTeam) return;
+    const third = byTeam[forcedTeam];
+    if (!third) return;
+    if (usedTeams.has(third.team)) return;
+    if (!isAllowedForSlot(slot, third)) return;
+    usedTeams.add(third.team);
+    assignment[slot.slotKey] = third.team;
+  });
 
-  const buildSlots = () => {
-    if (slotCache.length) return;
-    for (let i = 0; i < slotPattern.length; i++) {
-      const token = slotPattern[i];
-      const officialGroup = officialPattern?.[i];
-      if (officialGroup) {
-        const team = pickByGroup(officialGroup);
-        slotCache.push(team || null);
-        continue;
-      }
-      const allowed = _parseAllowedThirdGroups(token);
-      slotCache.push(pickBest(allowed));
-    }
-  };
+  // 2) Preenche automaticamente os demais slots.
+  slotDefs.forEach(slot => {
+    if (assignment[slot.slotKey]) return;
+    pickBest(slot);
+  });
 
-  let cursor = 0;
-  return function resolveBestThird(str) {
+  return function resolveBestThird(str, slotKey) {
     if (!str || !str.startsWith('Melhor 3º')) return str;
-    buildSlots();
-    while (cursor < slotPattern.length && slotPattern[cursor] !== str) cursor++;
-    if (cursor >= slotPattern.length) return pickBest(_parseAllowedThirdGroups(str)) || str;
-    const team = slotCache[cursor];
-    cursor++;
-    return team || str;
+    return assignment[slotKey] || str;
   };
 }
 
@@ -1517,8 +1510,8 @@ async function _applyBracketPhase(phaseKey, resolveFn, res) {
   const batch = db_.batch();
   let changes = 0;
   for (const game of ELIM_DATA[phaseKey].games) {
-    const h = resolveFn(game.h);
-    const a = resolveFn(game.a);
+    const h = resolveFn(game.h, game, 'h');
+    const a = resolveFn(game.a, game, 'a');
     const targetH = h === game.h ? undefined : h; // ainda placeholder?
     const targetA = a === game.a ? undefined : a;
     const cur = res[game.id] || {};
@@ -1553,10 +1546,12 @@ async function updateEliminationTeams() {
       const s = computeStandings(grp, res);
       groupLeaders[grp] = { first: s[0]?.team, second: s[1]?.team };
     });
-    const bestThirdAllocator = _createBestThirdAllocator(_computeBestThirds(res));
+    const bracketCfgSnap = await db_.collection('config').doc('bracket_thirds').get();
+    const thirdOverrides = bracketCfgSnap.exists ? (bracketCfgSnap.data()?.overrides || {}) : {};
+    const bestThirdAllocator = _createBestThirdAllocator(_computeBestThirds(res), thirdOverrides);
 
     // r32: resolve a partir dos grupos
-    await _applyBracketPhase('r32', str => bestThirdAllocator(_resolveGroupPlaceholders(str, groupLeaders)), res);
+    await _applyBracketPhase('r32', (str, game, side) => bestThirdAllocator(_resolveGroupPlaceholders(str, groupLeaders), `${game.id}_${side}`), res);
     // Fases seguintes: resolve Venc./Perd. da fase anterior (parcial permitido)
     await _applyBracketPhase('r16',     str => _resolveWinnerPlaceholders(str, 'r32',     res), res);
     await _applyBracketPhase('quartas', str => _resolveWinnerPlaceholders(str, 'r16',     res), res);
@@ -2874,6 +2869,87 @@ async function renderChaveamento() {
 // ════════════════════════════════════════════
 // ADMIN PAGE
 // ════════════════════════════════════════════
+async function _loadThirdOverrides() {
+  try {
+    const snap = await db_.collection('config').doc('bracket_thirds').get();
+    if (!snap.exists) return {};
+    return snap.data()?.overrides || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function _buildThirdPlaceAdminPanel(res, overrides) {
+  const thirdsRanking = _computeBestThirds(res);
+  if (!thirdsRanking.length) {
+    return `<div class="alert alert-info" style="margin-bottom:16px">
+      🧩 Classificação dos 3º colocados: disponível somente após os 72 jogos da fase de grupos estarem finalizados.
+    </div>`;
+  }
+
+  const top8 = thirdsRanking.slice(0, 8);
+  const top8ByTeam = Object.fromEntries(top8.map(t => [t.team, t]));
+  const slotDefs = _getBestThirdSlotDefs();
+  const rankingHtml = top8.map((t, i) =>
+    `<li><b>${i + 1}º</b> · Grupo ${t.group} · ${esc(t.team)} <span style="color:var(--text-muted)">(${t.pts} pts, SG ${t.sg}, GM ${t.gp})</span></li>`
+  ).join('');
+
+  const selectsHtml = slotDefs.map(slot => {
+    const allowedTeams = top8.filter(t => !slot.allowedGroups || slot.allowedGroups.has(t.group));
+    const cur = overrides?.[slot.slotKey] || '';
+    const hasCur = !!(cur && top8ByTeam[cur] && allowedTeams.some(t => t.team === cur));
+    const placeholderLabel = slot.token === 'Melhor 3º restante'
+      ? 'Melhor 3º restante (qualquer um dos 8)'
+      : slot.token;
+    let opts = `<option value="">Automático (${esc(placeholderLabel)})</option>`;
+    allowedTeams.forEach(t => {
+      const selected = (hasCur && cur === t.team) ? 'selected' : '';
+      opts += `<option value="${esc(t.team)}" ${selected}>Grupo ${t.group} · ${esc(t.team)}</option>`;
+    });
+    return `<div class="form-group" style="margin-bottom:10px">
+      <label style="font-size:0.74rem">${slot.gameId} (${slot.side === 'h' ? 'mandante' : 'visitante'})</label>
+      <select onchange="onAdminThirdOverrideChange('${slot.slotKey}', this.value)">
+        ${opts}
+      </select>
+    </div>`;
+  }).join('');
+
+  return `<div class="card" style="margin-bottom:16px;border-color:rgba(30,144,255,.45)">
+    <div class="card-header"><span class="card-title">🧩 3º colocados (Top 8) — ajuste manual do admin</span></div>
+    <div class="alert alert-warning" style="margin-bottom:10px">
+      Critérios FIFA para Top 8: <b>Pontos</b>, depois <b>Saldo de gols</b>, depois <b>Gols marcados</b>.
+      Selecione manualmente os 3º colocados por vaga (quando necessário).
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <div style="font-size:0.8rem;color:var(--gold);font-weight:700;margin-bottom:6px">Ranking automático (Top 8)</div>
+        <ol style="padding-left:18px;display:grid;gap:4px">${rankingHtml}</ol>
+      </div>
+      <div>
+        <div style="font-size:0.8rem;color:var(--gold);font-weight:700;margin-bottom:6px">Escolhas manuais por vaga da chave</div>
+        ${selectsHtml}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function onAdminThirdOverrideChange(slotKey, teamName) {
+  try {
+    const key = (slotKey || '').trim();
+    if (!key) return;
+    const clean = (teamName || '').trim();
+    const patch = {};
+    patch[`overrides.${key}`] = clean || firebase.firestore.FieldValue.delete();
+    patch.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db_.collection('config').doc('bracket_thirds').set(patch, { merge: true });
+    await updateEliminationTeams();
+    await renderAdminResultados();
+    showToast('✅ Ajuste de 3º colocado salvo', 'success');
+  } catch (e) {
+    showToast('Erro ao salvar ajuste: ' + errMsg(e), 'error');
+  }
+}
+
 function renderAdmin() {
   if (currentUserDoc?.role!=='admin') return;
   const cont = document.getElementById('admin-content');
@@ -2916,6 +2992,8 @@ async function renderAdminResultados() {
     const rSnap = await db_.collection('resultados').get();
     const res = {};
     rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const thirdOverrides = await _loadThirdOverrides();
+    const thirdPanel = _buildThirdPlaceAdminPanel(res, thirdOverrides);
     // Sort all games chronologically by date + time
     const sortedGames = ALL_GAMES.slice().sort((a,b)=>{
       const da = _parseGameDate(a.date), db2 = _parseGameDate(b.date);
@@ -2962,7 +3040,7 @@ async function renderAdminResultados() {
       ELIM_DATA[ph].games.forEach(g => { phaseOf[g.id] = meta; });
     });
 
-    let html = _testPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
+    let html = _testPanel + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
     let lastDate = null;
     let lastPhase = null;
     sortedGames.forEach(game=>{
