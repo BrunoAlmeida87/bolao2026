@@ -927,6 +927,14 @@ const GRUPOS_DATA = {
 
 
  
+   // Estrutura da fase eliminatória FWC26 (oficial FIFA, Anexo C).
+   // IMPORTANTE: a ordem dos jogos no R32 abaixo NÃO é por ID numérico;
+   // ela reflete a disposição visual do bracket de cima para baixo,
+   // de modo que pares consecutivos (O1+O3, O2+O5, O4+O6, ...) se
+   // encontrem no R16 (Q1..Q8). Os IDs O1..O16 correspondem aos slots
+   // oficiais da FIFA (Match 73=O1, 74=O3, 75=O4, 76=O2, 77=O6, 78=O5,
+   // 79=O7, 80=O8, 81=O10, 82=O9, 83=O12, 84=O11, 85=O13, 86=O15,
+   // 87=O16, 88=O14). NÃO reordenar por ID — quebra o chaveamento.
    const ELIM_DATA = {
   r32:{label:'Round of 32',icon:'⚔️',games:[
     {id:'O1',h:'2º A',a:'2º B',date:'Jun 28'},
@@ -982,9 +990,11 @@ const ALL_GAMES = [
   ...Object.values(ELIM_DATA).flatMap(e=>e.games)
 ];
 
-// Verificação rápida de consistência da chave: cada O1..O16 deve aparecer
-// uma única vez como origem das oitavas (Q1..Q8).
+// Verificação de consistência da chave: cada O1..O16 deve aparecer
+// (a) uma única vez como ID em R32 e (b) uma única vez como origem
+// das oitavas (Q1..Q8). Também valida contagem total de 104 jogos.
 function validateBracketStructure() {
+  const r32Ids = (ELIM_DATA.r32?.games || []).map(g => g.id);
   const refs = [];
   (ELIM_DATA.r16?.games || []).forEach(g => {
     [g.h, g.a].forEach(side => {
@@ -993,10 +1003,15 @@ function validateBracketStructure() {
     });
   });
   const expected = Array.from({ length: 16 }, (_, i) => `O${i + 1}`);
-  const missing = expected.filter(id => !refs.includes(id));
-  const duplicates = [...new Set(refs.filter((id, idx) => refs.indexOf(id) !== idx))];
-  if (missing.length || duplicates.length) {
-    console.warn('Inconsistência na chave eliminatória:', { missing, duplicates, refs });
+  const missingInR32 = expected.filter(id => !r32Ids.includes(id));
+  const missingInRefs = expected.filter(id => !refs.includes(id));
+  const dupR32 = [...new Set(r32Ids.filter((id, idx) => r32Ids.indexOf(id) !== idx))];
+  const dupRefs = [...new Set(refs.filter((id, idx) => refs.indexOf(id) !== idx))];
+  const total = ALL_GAMES.length;
+  if (missingInR32.length || missingInRefs.length || dupR32.length || dupRefs.length || total !== 104) {
+    console.warn('Inconsistência na chave eliminatória:', {
+      missingInR32, missingInRefs, dupR32, dupRefs, totalGames: total, expectedTotal: 104, refs
+    });
   }
 }
 validateBracketStructure();
@@ -1236,9 +1251,16 @@ function showAuthTab(tab) {
   setAuthError('login',''); setAuthError('reg','');
 }
 
+let _lastForgotPwdAt = 0;
 async function showForgotPwd() {
   const email = document.getElementById('login-email').value.trim();
   if (!email) { setAuthError('login','Insira seu e-mail acima primeiro'); return; }
+  const now = Date.now();
+  if (now - _lastForgotPwdAt < 30000) {
+    setAuthError('login','Aguarde alguns segundos antes de pedir outro e-mail.');
+    return;
+  }
+  _lastForgotPwdAt = now;
   setAuthError('login','');
   try {
     await auth_.sendPasswordResetEmail(email);
@@ -1344,10 +1366,10 @@ function calcPontos(pal, res) {
   const rSaldo = rh - ra;
   const pRes = ph>pa?'H':ph<pa?'A':'D';
   const rRes = rh>ra?'H':rh<ra?'A':'D';
-  if (pRes===rRes && pSaldo===rSaldo) return CFG.pts_vencedor_saldo||7;
+  if (pRes===rRes && pSaldo===rSaldo) return CFG.pts_vencedor_saldo ?? 7;
 
   // 3. Apenas vencedor/empate
-  if (pRes===rRes) return CFG.pts_apenas_vencedor||5;
+  if (pRes===rRes) return CFG.pts_apenas_vencedor ?? 5;
 
   // 4. Errou
   return 0;
@@ -1369,8 +1391,8 @@ function computeRanking(users, resultados, allPalpites) {
         if (pts===null) return;
         jogos++; pontos+=pts;
         if (pts===CFG.pts_exato) exatos++;
-        else if (pts===(CFG.pts_vencedor_saldo||7)) venc_saldo++;
-        else if (pts===(CFG.pts_apenas_vencedor||5)) apenas_venc++;
+        else if (pts===(CFG.pts_vencedor_saldo ?? 7)) venc_saldo++;
+        else if (pts===(CFG.pts_apenas_vencedor ?? 5)) apenas_venc++;
         else if (pts===0) erros++;
       });
       return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
@@ -1925,8 +1947,9 @@ function buildPalRow(game) {
   const teams = _getResolvedTeamsForGame(game, resultados);
   const locked = res.locked===true;
   const hasResult = res.h_real!==undefined;
+  const started = isGameStarted(game);
   const pts = calcPontos(pal,res);
-  const isClosed = locked || hasResult;
+  const isClosed = locked || hasResult || started;
   const closeAttr = isClosed ? `readonly onclick="showPalpiteClosedReason('${game.id}')" onfocus="showPalpiteClosedReason('${game.id}')"` : '';
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const lockedBadge = isClosed?`<span class="locked-badge">🔒 Encerrado</span>`:'';
@@ -1954,10 +1977,15 @@ function switchPalGroup(grp) {
   document.querySelectorAll('.pal-group').forEach(p=>p.style.display=p.dataset.group===grp?'block':'none');
 }
 
+let _bigScoreWarned = {};
 function onPalInput(gameId, side, value) {
   const v = value===''?undefined:Math.max(0,Math.min(20,parseInt(value)||0));
   if (!myPalpites[gameId]) myPalpites[gameId]={};
   myPalpites[gameId][side] = v;
+  if (v !== undefined && v >= 8 && !_bigScoreWarned[gameId+side]) {
+    _bigScoreWarned[gameId+side] = true;
+    showToast(`Placar incomum (${v}) — confira se digitou certo.`,'warning');
+  }
   const other = myPalpites[gameId][side==='h'?'a':'h'];
   const thisInp = document.getElementById(`p${side}_${gameId}`);
   const otherInp = document.getElementById(`p${side==='h'?'a':'h'}_${gameId}`);
@@ -1974,7 +2002,8 @@ async function savePalpite(gameId) {
   const pal = myPalpites[gameId];
   if (!pal||pal.h===undefined||pal.a===undefined) return;
   const res = resultados[gameId]||{};
-  if (res.locked===true || res.h_real!==undefined) {
+  const gameDef = ALL_GAMES.find(g=>g.id===gameId);
+  if (res.locked===true || res.h_real!==undefined || (gameDef && isGameStarted(gameDef) && !palpitesEditing)) {
     showPalpiteClosedReason(gameId);
     return;
   }
@@ -1988,9 +2017,28 @@ async function savePalpite(gameId) {
       uid,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, {merge:true});
-    await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).set({
+    const isAdminEdit = !!palpitesEditing && palpitesEditing !== currentUser.uid;
+    const payload = {
       h: pal.h, a: pal.a, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    };
+    if (isAdminEdit) {
+      payload.editedByAdmin = currentUser.uid;
+      payload.editedByAdminEmail = currentUser.email || null;
+    }
+    await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).set(payload);
+    if (isAdminEdit) {
+      try {
+        await db_.collection('audit').add({
+          type: 'palpite_edit',
+          targetUid: uid,
+          gameId,
+          h: pal.h, a: pal.a,
+          adminUid: currentUser.uid,
+          adminEmail: currentUser.email || null,
+          at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch(_) {}
+    }
     if (hInp) { hInp.classList.remove('saving'); hInp.classList.add('saved-ok'); }
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('saved-ok'); }
     setTimeout(()=>{ if(hInp) hInp.classList.remove('saved-ok'); if(aInp) aInp.classList.remove('saved-ok'); }, 1500);
@@ -2009,6 +2057,11 @@ function showPalpiteClosedReason(gameId) {
   }
   if (res.h_real!==undefined) {
     showToast('Resultado oficial já lançado. Não é mais possível alterar palpites.','warning');
+    return;
+  }
+  const gameDef = ALL_GAMES.find(g=>g.id===gameId);
+  if (gameDef && isGameStarted(gameDef)) {
+    showToast('⏰ O jogo já começou. Palpites foram encerrados automaticamente.','warning');
     return;
   }
   showToast('Este jogo está encerrado para palpites.','warning');
@@ -2376,6 +2429,28 @@ function _parseGameDate(dateStr) {
   return m ? new Date(2026, _MONTH_MAP[m[1]] ?? 5, parseInt(m[2])) : new Date(9999, 0, 1);
 }
 
+// Retorna o instante exato do início do jogo (fuso Brasília = UTC-3),
+// como Date independente do fuso do navegador. Retorna null se desconhecido.
+function _gameStartInstant(game) {
+  if (!game || !game.date) return null;
+  const m = String(game.date).match(/([A-Za-z]+)\s+(\d+)/);
+  if (!m) return null;
+  const month = _MONTH_MAP[m[1]];
+  if (month === undefined) return null;
+  const day = parseInt(m[2]);
+  const t = (GAME_TIMES[game.id] || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!t) return null;
+  const hh = parseInt(t[1]);
+  const mm = parseInt(t[2]);
+  // Brasília UTC-3 → UTC = local + 3h.
+  return new Date(Date.UTC(2026, month, day, hh + 3, mm));
+}
+
+function isGameStarted(game) {
+  const start = _gameStartInstant(game);
+  return start ? (Date.now() >= start.getTime()) : false;
+}
+
 function _uniqueGameDates() {
   const seen = new Set();
   ALL_GAMES.forEach(g => { if (g.date) seen.add(g.date); });
@@ -2507,8 +2582,8 @@ function _computeRankingForGameIds(users, resultados, allPalpites, gameIds) {
         if (pts===null) return;
         jogos++; pontos+=pts;
         if (pts===CFG.pts_exato) exatos++;
-        else if (pts===(CFG.pts_vencedor_saldo||7)) venc_saldo++;
-        else if (pts===(CFG.pts_apenas_vencedor||5)) apenas_venc++;
+        else if (pts===(CFG.pts_vencedor_saldo ?? 7)) venc_saldo++;
+        else if (pts===(CFG.pts_apenas_vencedor ?? 5)) apenas_venc++;
         else if (pts===0) erros++;
       });
       return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
@@ -2530,7 +2605,7 @@ function _calcRecentTrend(uid, allPals, res, n=5) {
     const pts = calcPontos(p, res[g.id]);
     if (pts===null) return;
     totalAll++;
-    if (pts >= (CFG.pts_apenas_vencedor||5)) hitAll++;
+    if (pts >= (CFG.pts_apenas_vencedor ?? 5)) hitAll++;
   });
   recent.forEach(g=>{
     const p = pals[g.id];
@@ -2538,7 +2613,7 @@ function _calcRecentTrend(uid, allPals, res, n=5) {
     const pts = calcPontos(p, res[g.id]);
     if (pts===null) return;
     totalRecent++;
-    if (pts >= (CFG.pts_apenas_vencedor||5)) hitRecent++;
+    if (pts >= (CFG.pts_apenas_vencedor ?? 5)) hitRecent++;
   });
   const recentPct = totalRecent ? (hitRecent/totalRecent*100) : 0;
   const overallPct = totalAll ? (hitAll/totalAll*100) : 0;
@@ -2603,8 +2678,8 @@ async function renderEstatisticas() {
         const pts = calcPontos(p,res[jid]);
         analiseJogos[jid].palpites.push({user:u,palpite:p,pts});
         if(pts===CFG.pts_exato) analiseJogos[jid].exatos++;
-        else if(pts===(CFG.pts_vencedor_saldo||7)) analiseJogos[jid].venc_saldo++;
-        else if(pts===(CFG.pts_apenas_vencedor||5)) analiseJogos[jid].apenas_venc++;
+        else if(pts===(CFG.pts_vencedor_saldo ?? 7)) analiseJogos[jid].venc_saldo++;
+        else if(pts===(CFG.pts_apenas_vencedor ?? 5)) analiseJogos[jid].apenas_venc++;
         else analiseJogos[jid].erros++;
       });
     });
@@ -3269,6 +3344,21 @@ async function saveResultado(gameId) {
       }
     }
     await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
+    try {
+      await db_.collection('audit').add({
+        type: 'resultado_save',
+        gameId,
+        patch: {
+          h_real: 'h' in buf ? (buf.h ?? null) : undefined,
+          a_real: 'a' in buf ? (buf.a ?? null) : undefined,
+          h_pen:  'ph' in buf ? (buf.ph ?? null) : undefined,
+          a_pen:  'pa' in buf ? (buf.pa ?? null) : undefined
+        },
+        adminUid: currentUser?.uid || null,
+        adminEmail: currentUser?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch(_) {}
     delete resultBuf[gameId];
     ['h','a','ph','pa'].forEach(s=>{ const inp=document.getElementById(`r${s}_${gameId}`); if(inp) inp.classList.add('saved'); });
     showToast('✅ Resultado salvo','success');
@@ -3286,6 +3376,15 @@ async function toggleLock(gameId) {
     const cur = snap.exists ? snap.data() : {};
     const newLocked = !cur.locked;
     await db_.collection('resultados').doc(gameId).set({ ...cur, locked:newLocked }, {merge:true});
+    try {
+      await db_.collection('audit').add({
+        type: newLocked ? 'lock_game' : 'unlock_game',
+        gameId,
+        adminUid: currentUser?.uid || null,
+        adminEmail: currentUser?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch(_) {}
     const btn = document.getElementById(`lock_${gameId}`);
     if (btn) { btn.textContent=newLocked?'🔒':'🔓'; btn.classList.toggle('locked',newLocked); }
     showToast(newLocked?'🔒 Jogo bloqueado':'🔓 Jogo desbloqueado', newLocked?'warning':'success');
@@ -3636,15 +3735,15 @@ async function renderAdminConfig() {
       <div class="card-title" style="margin-top:20px;margin-bottom:12px;font-size:0.95rem">📊 Regras de Pontuação</div>
       <div class="form-row">
         <div class="form-group"><label>Placar Exato</label><input type="number" id="cfg-pts-exato" value="${CFG.pts_exato}" min="0" max="100"></div>
-        <div class="form-group"><label>Vencedor + Saldo</label><input type="number" id="cfg-pts-venc-saldo" value="${CFG.pts_vencedor_saldo||7}" min="0" max="100"></div>
+        <div class="form-group"><label>Vencedor + Saldo</label><input type="number" id="cfg-pts-venc-saldo" value="${CFG.pts_vencedor_saldo ?? 7}" min="0" max="100"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Apenas Vencedor</label><input type="number" id="cfg-pts-apenas-venc" value="${CFG.pts_apenas_vencedor||5}" min="0" max="100"></div>
-        <div class="form-group"><label>Bônus Classificação</label><input type="number" id="cfg-pts-bonus-class" value="${CFG.pts_bonus_classificacao||3}" min="0" max="100"></div>
+        <div class="form-group"><label>Apenas Vencedor</label><input type="number" id="cfg-pts-apenas-venc" value="${CFG.pts_apenas_vencedor ?? 5}" min="0" max="100"></div>
+        <div class="form-group"><label>Bônus Classificação <span style="color:var(--gold);font-size:0.7rem">🚧 não implementado</span></label><input type="number" id="cfg-pts-bonus-class" value="${CFG.pts_bonus_classificacao ?? 3}" min="0" max="100" disabled title="Pontuação por acertar a classificação do grupo — em desenvolvimento"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Palpite Campeão</label><input type="number" id="cfg-pts-campeao" value="${CFG.pts_campeao||50}" min="0" max="200"></div>
-        <div class="form-group"><label>Palpite Artilheiro</label><input type="number" id="cfg-pts-artilheiro" value="${CFG.pts_artilheiro||30}" min="0" max="200"></div>
+        <div class="form-group"><label>Palpite Campeão <span style="color:var(--gold);font-size:0.7rem">🚧 não implementado</span></label><input type="number" id="cfg-pts-campeao" value="${CFG.pts_campeao ?? 50}" min="0" max="200" disabled title="Pontuação por acertar o campeão — em desenvolvimento"></div>
+        <div class="form-group"><label>Palpite Artilheiro <span style="color:var(--gold);font-size:0.7rem">🚧 não implementado</span></label><input type="number" id="cfg-pts-artilheiro" value="${CFG.pts_artilheiro ?? 30}" min="0" max="200" disabled title="Pontuação por acertar o artilheiro — em desenvolvimento"></div>
       </div>
 
       <div class="alert alert-info" style="margin-top:16px">
@@ -3938,7 +4037,7 @@ function errMsg(err) {
 
 function esc(str) {
   if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function fmtDate() { return new Date().toISOString().slice(0,10); }
 function downloadFile(content, filename, type) {
