@@ -346,12 +346,13 @@ a:hover{text-decoration:underline}
 .bt-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bt-name.placeholder{color:var(--text-muted);font-style:italic}
 .bracket-team.winner .bt-name{color:var(--gold);font-weight:700}
-.bracket-origin{font-size:0.66rem;color:var(--text-muted);margin-top:2px}
+.bracket-origin{font-size:0.66rem;color:var(--accent);font-weight:600;margin-top:2px}
 .bracket-sel{
   width:100%;margin-top:5px;padding:5px 6px;border-radius:6px;
-  background:rgba(255,255,255,.06);color:var(--white);
+  background:var(--mid-blue);color:var(--white);
   border:1px solid var(--border);font-size:0.72rem;
 }
+.bracket-sel option{background:var(--card);color:var(--white)}
 .bracket-sel:focus{outline:1px solid var(--gold)}
 .bracket-score{font-weight:800;color:var(--green)}
 
@@ -1010,11 +1011,6 @@ const FIFA_MATCH_NO = {
   S1:97, S2:98, S3:99, S4:100, SF1:101, SF2:102, T1:103, FIN1:104
 };
 
-// Ordem fixa e documentada dos 8 slots de melhor 3º no R32 — usada
-// para mapear o Anexo C oficial da FIFA (não depende da ordem de
-// varredura do array, evitando ambiguidade O13_a/O16_a).
-const BEST_THIRD_SLOT_ORDER = ['O3_a','O6_a','O7_a','O8_a','O9_a','O10_a','O13_a','O16_a'];
-
 const ALL_GAMES = [
   ...Object.values(GRUPOS_DATA).flatMap(g=>g.games),
   ...Object.values(ELIM_DATA).flatMap(e=>e.games)
@@ -1516,69 +1512,6 @@ function _getBestThirdSlotDefs() {
   return out;
 }
 
-// Matriz de combinação oficial do Anexo C (FIFA), chaveada pelos 8 grupos
-// dos melhores terceiros (ordenados e unidos por '-').
-// Formato do valor: array com os 8 grupos ocupando, nesta ordem de slots:
-// O3_a, O6_a, O7_a, O8_a, O9_a, O10_a, O13_a, O16_a
-// Exemplo de entrada:
-// { 'A-B-C-D-E-F-G-H': ['H','G','B','C','A','F','D','E'] }
-let BEST_THIRD_OFFICIAL_COMBO_MAP = {};
-let BEST_THIRD_OFFICIAL_COMBO_MAP_READY = false;
-let BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING = null;
-
-async function _ensureBestThirdOfficialComboMapLoaded() {
-  if (BEST_THIRD_OFFICIAL_COMBO_MAP_READY) return;
-  if (BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING) {
-    await BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING;
-    return;
-  }
-  BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING = (async () => {
-    try {
-      const endpoint = 'https://en.wikipedia.org/w/api.php?action=parse&page=Template:2026_FIFA_World_Cup_third-place_table&prop=text&format=json&formatversion=2&origin=*';
-      const resp = await fetch(endpoint, { cache: 'no-store' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      const html = data?.parse?.text || '';
-      if (!html) throw new Error('Resposta sem HTML da tabela');
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const rows = [...doc.querySelectorAll('table.wikitable tbody tr')];
-      const groups = 'ABCDEFGHIJKL'.split('');
-      const map = {};
-
-      rows.forEach(row => {
-        const cells = [...row.querySelectorAll('th,td')].map(c => c.textContent.trim());
-        const opt = parseInt(cells[0], 10);
-        if (!Number.isFinite(opt)) return;
-        if (cells.length < 21) return;
-
-        const qualifiedGroups = [];
-        groups.forEach((g, idx) => {
-          if (cells[1 + idx] === g) qualifiedGroups.push(g);
-        });
-        if (qualifiedGroups.length !== 8) return;
-
-        const assignment = cells.slice(13, 21).map(x => (x || '').replace(/^3/, ''));
-        if (assignment.some(x => !/^[A-L]$/.test(x))) return;
-        map[qualifiedGroups.join('-')] = assignment;
-      });
-
-      if (Object.keys(map).length === 495) {
-        BEST_THIRD_OFFICIAL_COMBO_MAP = map;
-      } else {
-        console.warn('Mapa oficial de melhores terceiros incompleto:', Object.keys(map).length);
-      }
-    } catch (err) {
-      console.warn('Falha ao carregar mapa oficial dos melhores 3º (Anexo C):', err);
-    } finally {
-      BEST_THIRD_OFFICIAL_COMBO_MAP_READY = true;
-      BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING = null;
-    }
-  })();
-  await BEST_THIRD_OFFICIAL_COMBO_MAP_LOADING;
-}
-
 function _parseAllowedThirdGroups(placeholder) {
   const m = (placeholder || '').match(/^Melhor 3º \(([A-L](?:\/[A-L])*)\)$/);
   if (!m) return null;
@@ -1588,28 +1521,17 @@ function _parseAllowedThirdGroups(placeholder) {
 // Aloca os 8 slots de melhor 3º do R32.
 //  - allThirds: TODOS os 3º colocados disponíveis (até 12), ordenados.
 //  - overrides: escolhas manuais do admin { slotKey: nomeDoTime }.
-//  - allComplete: true só quando os 12 grupos terminaram (libera Anexo C).
-// Prioridade: 1) override manual (qualquer 3º, sem restrição de grupo,
-// sem duplicar) → 2) Anexo C oficial (somente com 12 grupos) →
-// 3) fallback por ranking (top 8).
-function _createBestThirdAllocator(allThirds, overrides = {}, allComplete = false) {
+// O sistema NÃO faz nenhuma atribuição automática: o slot só é
+// preenchido quando o admin escolhe manualmente. Sem override, a
+// vaga permanece como placeholder ("Melhor 3º (...)").
+function _createBestThirdAllocator(allThirds, overrides = {}) {
   const list = Array.isArray(allThirds) ? allThirds : [];
-  const top8 = list.slice(0, 8);
   const byTeamAll = Object.fromEntries(list.map(t => [t.team, t]));
-  const byGroupTop8 = Object.fromEntries(top8.map(t => [t.group, t]));
   const usedTeams = new Set();
   const assignment = {};
   const slotDefs = _getBestThirdSlotDefs();
-  const comboKey = top8.map(t => t.group).sort().join('-');
-  const officialGroups = (allComplete && BEST_THIRD_OFFICIAL_COMBO_MAP[comboKey]) || null;
-  const officialBySlot = officialGroups && officialGroups.length === BEST_THIRD_SLOT_ORDER.length
-    ? Object.fromEntries(BEST_THIRD_SLOT_ORDER.map((slotKey, idx) => [slotKey, officialGroups[idx]]))
-    : null;
 
-  const isAllowedForSlot = (slot, third) =>
-    !slot.allowedGroups || slot.allowedGroups.has(third.group);
-
-  // 1) Escolhas manuais do admin (prioridade máxima, qualquer 3º, sem duplicar).
+  // Apenas as escolhas manuais do admin (qualquer 3º, sem duplicar).
   slotDefs.forEach(slot => {
     const forced = overrides?.[slot.slotKey];
     if (!forced) return;
@@ -1617,23 +1539,6 @@ function _createBestThirdAllocator(allThirds, overrides = {}, allComplete = fals
     if (!third || usedTeams.has(third.team)) return;
     usedTeams.add(third.team);
     assignment[slot.slotKey] = third.team;
-  });
-  // 2) Padrão oficial do Anexo C (só quando os 12 grupos terminaram).
-  slotDefs.forEach(slot => {
-    if (assignment[slot.slotKey] || !officialBySlot) return;
-    const third = byGroupTop8[officialBySlot[slot.slotKey]];
-    if (!third || usedTeams.has(third.team)) return;
-    usedTeams.add(third.team);
-    assignment[slot.slotKey] = third.team;
-  });
-  // 3) Fallback determinístico por ranking (top 8 respeitando o grupo permitido).
-  slotDefs.forEach(slot => {
-    if (assignment[slot.slotKey]) return;
-    let found = top8.find(t => !usedTeams.has(t.team) && isAllowedForSlot(slot, t));
-    if (!found) found = list.find(t => !usedTeams.has(t.team));
-    if (!found) return;
-    usedTeams.add(found.team);
-    assignment[slot.slotKey] = found.team;
   });
 
   const fn = function resolveBestThird(str, slotKey) {
@@ -1715,10 +1620,9 @@ async function updateEliminationTeams() {
       const s = computeStandings(grp, res);
       groupLeaders[grp] = { first: s[0]?.team, second: s[1]?.team };
     });
-    await _ensureBestThirdOfficialComboMapLoaded();
     const bracketCfgSnap = await db_.collection('config').doc('bracket_thirds').get();
     const thirdOverrides = bracketCfgSnap.exists ? (bracketCfgSnap.data()?.overrides || {}) : {};
-    const bestThirdAllocator = _createBestThirdAllocator(_computeBestThirds(res), thirdOverrides, _allGroupsComplete(res));
+    const bestThirdAllocator = _createBestThirdAllocator(_computeBestThirds(res), thirdOverrides);
 
     // r32: resolve a partir dos grupos
     await _applyBracketPhase('r32', (str, game, side) => bestThirdAllocator(_resolveGroupPlaceholders(str, groupLeaders), `${game.id}_${side}`), res);
@@ -3045,7 +2949,7 @@ function _thirdUIState(res, overrides) {
   const allThirds = _computeBestThirds(res);
   const allComplete = _allGroupsComplete(res);
   const slotDefs = _getBestThirdSlotDefs();
-  const allocator = _createBestThirdAllocator(allThirds, overrides || {}, allComplete);
+  const allocator = _createBestThirdAllocator(allThirds, overrides || {});
   return { allThirds, allComplete, slotDefs, assignment: allocator.assignment || {} };
 }
 
@@ -3053,23 +2957,20 @@ function _thirdUIState(res, overrides) {
 // disponíveis; oculta as já escolhidas explicitamente em OUTROS slots
 // (sem duplicidade); mantém a opção atual selecionada.
 function _thirdSelectHTML(slot, state, overrides, handler) {
-  const { allThirds, assignment } = state;
+  const { allThirds } = state;
   const override = (overrides && overrides[slot.slotKey]) || '';
   const chosenElsewhere = new Set(
     Object.entries(overrides || {})
       .filter(([k, v]) => k !== slot.slotKey && v)
       .map(([, v]) => v)
   );
-  let opts = `<option value="">— Automático —</option>`;
+  let opts = `<option value="" ${override ? '' : 'selected'}>— Selecione o 3º colocado —</option>`;
   allThirds.forEach(t => {
     if (chosenElsewhere.has(t.team) && t.team !== override) return;
     const sel = override === t.team ? 'selected' : '';
     opts += `<option value="${esc(t.team)}" ${sel}>Grupo ${t.group} · ${esc(t.team)} (${t.pts} pts · SG ${t.sg} · GM ${t.gp})</option>`;
   });
-  const auto = assignment[slot.slotKey];
-  const hint = !override && auto
-    ? `<div class="bracket-origin">sugestão automática: ${esc(auto)}</div>` : '';
-  return `<select class="bracket-sel" onchange="${handler}('${slot.slotKey}', this.value)">${opts}</select>${hint}`;
+  return `<select class="bracket-sel" onchange="${handler}('${slot.slotKey}', this.value)">${opts}</select>`;
 }
 
 function _bracketSideHTML(g, side, ctx) {
@@ -3114,7 +3015,7 @@ async function renderChaveamento() {
     const state = isAdmin ? _thirdUIState(res, overrides) : null;
     let html = `<div class="section-title">🔑 Chaveamento</div>
       <div class="alert alert-info" style="font-size:0.82rem">Em empates na fase eliminatória, o vencedor é decidido nos <strong>penaltis</strong> (exibidos em parênteses). Para a pontuação do bolão, apenas o placar dos 90 minutos é considerado.</div>
-      ${isAdmin ? `<div class="alert alert-warning" style="font-size:0.8rem">👑 <b>Modo admin:</b> os 8 confrontos com <b>3º colocado</b> no Round of 32 têm um seletor abaixo de cada vaga. Escolha manualmente a seleção; ela some das demais listas (sem duplicidade) e é salva automaticamente ao alterar.${state && !state.allThirds.length ? '<br><span style="color:var(--text-muted)">Nenhum grupo concluído ainda — os 3º colocados aparecem conforme os grupos terminam.</span>' : ''}</div>` : ''}
+      ${isAdmin ? `<div class="alert alert-warning" style="font-size:0.8rem">👑 <b>Modo admin:</b> as 8 vagas de <b>3º colocado</b> no Round of 32 são definidas <b>somente manualmente</b> — o sistema não preenche nada automaticamente. Escolha a seleção no seletor de cada vaga; ela some das demais listas (sem duplicidade) e é salva na hora.${state && !state.allThirds.length ? '<br><span style="color:var(--text-muted)">Nenhum grupo concluído ainda — os 3º colocados aparecem na lista conforme os grupos terminam.</span>' : ''}</div>` : ''}
       <div class="bracket-wrap"><div class="bracket">`;
     const rounds = [
       {key:'r32',label:'Round of 32'},
