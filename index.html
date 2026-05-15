@@ -3108,10 +3108,14 @@ async function onAdminThirdOverrideChange(slotKey, teamName) {
     const key = (slotKey || '').trim();
     if (!key) return;
     const clean = (teamName || '').trim();
-    const patch = {};
-    patch[`overrides.${key}`] = clean || firebase.firestore.FieldValue.delete();
-    patch.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-    await db_.collection('config').doc('bracket_thirds').set(patch, { merge: true });
+    const FV = firebase.firestore.FieldValue;
+    // Objeto aninhado + merge: set() NÃO interpreta "overrides.key" como
+    // caminho aninhado (só update() faz). Com mapa aninhado, o merge do
+    // Firestore mescla corretamente e FieldValue.delete() remove a vaga.
+    await db_.collection('config').doc('bracket_thirds').set({
+      overrides: { [key]: clean ? clean : FV.delete() },
+      updatedAt: FV.serverTimestamp()
+    }, { merge: true });
     try {
       await db_.collection('audit').add({
         type: 'third_override',
