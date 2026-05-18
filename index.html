@@ -942,14 +942,17 @@ const GRUPOS_DATA = {
 
 
  
-   // Estrutura da fase eliminatória FWC26 (oficial FIFA, Anexo C).
-   // IMPORTANTE: a ordem dos jogos no R32 abaixo NÃO é por ID numérico;
-   // ela reflete a disposição visual do bracket de cima para baixo,
-   // de modo que pares consecutivos (O1+O3, O2+O5, O4+O6, ...) se
-   // encontrem no R16 (Q1..Q8). Os IDs O1..O16 correspondem aos slots
-   // oficiais da FIFA (Match 73=O1, 74=O3, 75=O4, 76=O2, 77=O6, 78=O5,
-   // 79=O7, 80=O8, 81=O10, 82=O9, 83=O12, 84=O11, 85=O13, 86=O15,
-   // 87=O16, 88=O14). NÃO reordenar por ID — quebra o chaveamento.
+   // Estrutura da fase eliminatória FWC26 — calendário oficial FIFA.
+   // Mapa ID interno -> nº oficial da partida (ver FIFA_MATCH_NO):
+   //   R32:  O1=73 O3=74 O4=75 O2=76 O6=77 O5=78 O7=79 O8=80
+   //         O10=81 O9=82 O12=83 O11=84 O13=85 O15=86 O16=87 O14=88
+   //   R16:  Q1=89 Q2=90 Q3=91 Q4=92 Q5=93 Q6=94 Q7=95 Q8=96
+   //   QF:   S1=97 S2=98 S3=99 S4=100  SF: SF1=101 SF2=102
+   //   3º:   T1=103   Final: FIN1=104
+   // Fluxo oficial das oitavas (J89..J96):
+   //   J89=V74xV77 J90=V73xV75 J91=V76xV78 J92=V79xV80
+   //   J93=V83xV84 J94=V81xV82 J95=V86xV88 J96=V85xV87
+   // NÃO reordenar por ID — a ordem reflete o bracket visual.
    const ELIM_DATA = {
   r32:{label:'Round of 32',icon:'⚔️',games:[
     {id:'O1',h:'2º A',a:'2º B',date:'Jun 28'},
@@ -969,26 +972,26 @@ const GRUPOS_DATA = {
  
 	{id:'O14',h:'2º D',a:'2º G',date:'Jul 3'},
 	{id:'O16',h:'1º K',a:'Melhor 3º (D/E/I/J/L)',date:'Jul 3'},
-	{id:'O13',h:'1º B',a:'Melhor 3º (E/F/G/I/J)',date:'Jul 3'},
+	{id:'O13',h:'1º B',a:'Melhor 3º (E/F/G/I/J)',date:'Jul 2'},
 	{id:'O15',h:'1º J',a:'2º H',date:'Jul 3'},
     
   ]},
 	   
   r16:{label:'Oitavas de Final',icon:'🏅',games:[
-    {id:'Q1',h:'Venc. O1',a:'Venc. O3',date:'Jul 4'},
-    {id:'Q2',h:'Venc. O2',a:'Venc. O5',date:'Jul 4'},
-    {id:'Q3',h:'Venc. O4',a:'Venc. O6',date:'Jul 5'},
+    {id:'Q1',h:'Venc. O3',a:'Venc. O6',date:'Jul 4'},
+    {id:'Q2',h:'Venc. O1',a:'Venc. O4',date:'Jul 4'},
+    {id:'Q3',h:'Venc. O2',a:'Venc. O5',date:'Jul 5'},
     {id:'Q4',h:'Venc. O7',a:'Venc. O8',date:'Jul 5'},
-    {id:'Q5',h:'Venc. O11',a:'Venc. O12',date:'Jul 6'},
-    {id:'Q6',h:'Venc. O9',a:'Venc. O10',date:'Jul 6'},
-    {id:'Q7',h:'Venc. O14',a:'Venc. O16',date:'Jul 7'},
-    {id:'Q8',h:'Venc. O15',a:'Venc. O13',date:'Jul 7'},
+    {id:'Q5',h:'Venc. O12',a:'Venc. O11',date:'Jul 6'},
+    {id:'Q6',h:'Venc. O10',a:'Venc. O9',date:'Jul 6'},
+    {id:'Q7',h:'Venc. O15',a:'Venc. O14',date:'Jul 7'},
+    {id:'Q8',h:'Venc. O13',a:'Venc. O16',date:'Jul 7'},
   ]},
   quartas:{label:'Quartas de Final',icon:'🌟',games:[
     {id:'S1',h:'Venc. Q1',a:'Venc. Q2',date:'Jul 9'},
     {id:'S2',h:'Venc. Q5',a:'Venc. Q6',date:'Jul 10'},
-    {id:'S3',h:'Venc. Q3',a:'Venc. Q4',date:'Jul 11'},
-    {id:'S4',h:'Venc. Q7',a:'Venc. Q8',date:'Jul 11'},
+    {id:'S3',h:'Venc. Q3',a:'Venc. Q4',date:'Jul 12'},
+    {id:'S4',h:'Venc. Q7',a:'Venc. Q8',date:'Jul 12'},
   ]},
   semi:{label:'Semifinais',icon:'💫',games:[
     {id:'SF1',h:'Venc. S1',a:'Venc. S2',date:'Jul 14'}, 
@@ -1633,9 +1636,6 @@ async function updateEliminationTeams() {
     await _applyBracketPhase('final',   str => _resolveWinnerPlaceholders(str, 'semi',    res), res);
 
     isLoadingPage = false;
-    if (document.getElementById('page-admin')?.classList.contains('active')) {
-      setTimeout(() => renderAdminResultados(), 300);
-    }
   } catch(e) {
     console.error('Erro ao atualizar eliminatórias:', e);
     isLoadingPage = false;
@@ -3229,7 +3229,14 @@ async function renderAdminResultados() {
       ELIM_DATA[ph].games.forEach(g => { phaseOf[g.id] = meta; });
     });
 
-    let html = _testPanel + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
+    const _updateBar = `
+      <div class="card" style="margin-bottom:16px;border-color:var(--accent);background:rgba(30,144,255,.06);position:sticky;top:8px;z-index:5">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+          <span style="font-size:0.84rem">Os placares são salvos automaticamente ao digitar. A tela <b>não</b> recarrega sozinha — clique para propagar vencedores ao chaveamento e recalcular a classificação.</span>
+          <button class="btn btn-primary" onclick="atualizarChaveamentoManual()">🔄 Atualizar chaveamento e classificação</button>
+        </div>
+      </div>`;
+    let html = _testPanel + _updateBar + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
     let lastDate = null;
     let lastPhase = null;
     sortedGames.forEach(game=>{
@@ -3310,11 +3317,6 @@ function _updatePenRowVisibility(gameId) {
   penRow.style.display = draw ? 'grid' : 'none';
 }
 
-async function _cascadeAfterResult(_gameId) {
-  // updateEliminationTeams já resolve todas as fases de forma progressiva
-  return updateEliminationTeams();
-}
-
 async function saveResultado(gameId) {
   const buf = resultBuf[gameId];
   if (!buf) return;
@@ -3354,12 +3356,25 @@ async function saveResultado(gameId) {
     } catch(_) {}
     delete resultBuf[gameId];
     ['h','a','ph','pa'].forEach(s=>{ const inp=document.getElementById(`r${s}_${gameId}`); if(inp) inp.classList.add('saved'); });
-    showToast('✅ Resultado salvo','success');
-    await _cascadeAfterResult(gameId);
+    showToast('✅ Resultado salvo (clique em "Atualizar chaveamento" para propagar)','success');
     isLoadingPage = false;
   } catch(e) {
     showToast('Erro: '+e.message,'error');
     isLoadingPage = false;
+  }
+}
+
+// Ação explícita do admin: propaga resultados pelo chaveamento e
+// recarrega a tela. Só roda quando o botão é clicado — não há mais
+// refresh automático ao digitar um placar.
+async function atualizarChaveamentoManual() {
+  showToast('⏳ Atualizando chaveamento e classificação...','');
+  try {
+    await updateEliminationTeams();
+    await renderAdminResultados();
+    showToast('✅ Chaveamento e classificação atualizados','success');
+  } catch(e) {
+    showToast('Erro ao atualizar: '+errMsg(e),'error');
   }
 }
 
