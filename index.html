@@ -3003,6 +3003,39 @@ function _bracketSideHTML(g, side, ctx) {
   return `<div class="bracket-team ${isWin ? 'winner' : ''}">${body}</div>`;
 }
 
+// Ordem VISUAL das colunas do chaveamento: a árvore manda. A semi
+// define a espinha; quartas → oitavas → R32 são derivadas dos feeders
+// (Venc./Perd.) de cada jogo da rodada seguinte, na ordem em que
+// aparecem. Assim os 2 jogos cujos vencedores se enfrentam na rodada
+// seguinte ficam sempre adjacentes (ex.: Partida 74 e 77 abrem o R32,
+// pois seus vencedores se enfrentam no Jogo 89).
+function _bracketRoundOrder() {
+  const order = {};
+  order.final = ELIM_DATA.final.games.map(g => g.id);
+  order.semi  = ELIM_DATA.semi.games.map(g => g.id);
+  const derive = (roundKey, nextOrder, nextRoundKey) => {
+    const byId = Object.fromEntries(ELIM_DATA[nextRoundKey].games.map(g => [g.id, g]));
+    const out = [];
+    const seen = new Set();
+    nextOrder.forEach(nid => {
+      const g = byId[nid];
+      if (!g) return;
+      [g.h, g.a].forEach(side => {
+        const m = String(side).match(/(?:Venc|Perd)\.\s+([A-Za-z]+\d+)/);
+        if (m && !seen.has(m[1])) { seen.add(m[1]); out.push(m[1]); }
+      });
+    });
+    ELIM_DATA[roundKey].games.forEach(g => {
+      if (!seen.has(g.id)) { seen.add(g.id); out.push(g.id); }
+    });
+    return out;
+  };
+  order.quartas = derive('quartas', order.semi,    'semi');
+  order.r16     = derive('r16',     order.quartas, 'quartas');
+  order.r32     = derive('r32',     order.r16,     'r16');
+  return order;
+}
+
 async function renderChaveamento() {
   const cont = document.getElementById('chaveamento-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
@@ -3024,11 +3057,16 @@ async function renderChaveamento() {
       {key:'semi',label:'Semis'},
       {key:'final',label:'Final e 3º lugar'}
     ];
+    const roundOrder = _bracketRoundOrder();
     rounds.forEach(({key,label})=>{
       const data = ELIM_DATA[key];
       const isR32 = key === 'r32';
+      const gameById = Object.fromEntries(data.games.map(g=>[g.id,g]));
+      const orderedIds = roundOrder[key] || data.games.map(g=>g.id);
       html += `<div class="bracket-round"><h4>${data.icon} ${label}</h4><div class="bracket-games">`;
-      data.games.forEach(g=>{
+      orderedIds.forEach(id=>{
+        const g = gameById[id];
+        if (!g) return;
         const matchNo = FIFA_MATCH_NO[g.id];
         const tag = g.id === 'T1'
           ? '<span class="bmn-tag">🥉 3º lugar</span>'
