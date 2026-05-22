@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.4.0">
+<meta name="app-version" content="v1.5.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -819,7 +819,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.4.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.5.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1052,7 +1052,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.4.0',
+  app_version:'v1.5.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -1060,6 +1060,7 @@ let CFG = {
   pts_bonus_classificacao:3,
   pts_campeao:50,
   pts_artilheiro:30,
+  campeao_locked:false,
   nome_bolao:'Bolão ICN Copa 2026'
 };
 
@@ -1101,6 +1102,7 @@ const COUNTRY_FLAGS = {
 
 let myPalpites   = {};
 let resultados   = {};
+let myChampion   = null;
 let palpitesEditing = null;
 let saveDebounce = {};
 let isLoadingPage = false;
@@ -1404,10 +1406,42 @@ function calcPontos(pal, res) {
   return 0;
 }
 
-function computeRanking(users, resultados, allPalpites) {
+// Lista única e ordenada das 48 seleções participantes (extraída de GRUPOS_DATA).
+function _getAllTeams() {
+  return Object.values(GRUPOS_DATA).flatMap(g=>g.teams).sort((a,b)=>a.localeCompare(b,'pt'));
+}
+
+// Retorna o nome da seleção campeã (vencedora da Final FIN1) ou null.
+function _getFinalChampion(res) {
+  const r = (res||{})['FIN1'];
+  if (!r) return null;
+  return _winnerOf(r, r.h_team, r.a_team);
+}
+
+// Carrega o palpite de campeão de TODOS os usuários (lê palpites/{uid} parent docs).
+// Retorna mapa { uid: 'Brasil' | undefined, ... }.
+async function loadAllChampionPicks() {
+  try {
+    const snap = await db_.collection('palpites').get();
+    const map = {};
+    snap.docs.forEach(d=>{ const data=d.data()||{}; if (data.campeao) map[d.id]=data.campeao; });
+    return map;
+  } catch(_) { return {}; }
+}
+
+async function loadChampionPick(uid) {
+  try {
+    const snap = await db_.collection('palpites').doc(uid).get();
+    return snap.exists ? (snap.data()?.campeao || null) : null;
+  } catch(_) { return null; }
+}
+
+function computeRanking(users, resultados, allPalpites, championPicks={}) {
   const jogosComResultado = Object.keys(resultados).filter(id=>
     resultados[id].h_real!==undefined && resultados[id].a_real!==undefined
   );
+  const champion = _getFinalChampion(resultados);
+  const ptsCampeao = CFG.pts_campeao ?? 0;
   return users
     .filter(u=>u.ativo!==false)
     .map(u=>{
@@ -1424,7 +1458,11 @@ function computeRanking(users, resultados, allPalpites) {
         else if (pts===(CFG.pts_apenas_vencedor ?? 5)) apenas_venc++;
         else if (pts===0) erros++;
       });
-      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
+      const userChampion = championPicks[u.uid] || null;
+      const acertouCampeao = !!(champion && userChampion && userChampion===champion);
+      const bonusCampeao = acertouCampeao ? ptsCampeao : 0;
+      pontos += bonusCampeao;
+      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros, campeao: userChampion, bonus_campeao: bonusCampeao, acertou_campeao: acertouCampeao };
     })
     .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
 }
@@ -1699,12 +1737,18 @@ async function renderDashboard() {
     const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
     const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
     const allPals = {};
+    const champPicks = {};
     await Promise.all(users.map(async u=>{
-      const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get();
+      const [pSnap, pDoc] = await Promise.all([
+        db_.collection('palpites').doc(u.uid).collection('jogos').get(),
+        db_.collection('palpites').doc(u.uid).get()
+      ]);
       allPals[u.uid]={};
       pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); });
+      champPicks[u.uid] = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
     }));
-    const ranking = computeRanking(users, res, allPals);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const finalChampion = _getFinalChampion(res);
     const maxPts = ranking[0]?.pontos||1;
     const totalJogos = Object.keys(res).filter(id=>_hasFullResult(res[id])).length;
     const myRank = ranking.findIndex(r=>r.uid===currentUser.uid)+1;
@@ -1724,7 +1768,9 @@ async function renderDashboard() {
       const latestIds = new Set(roundDefs[latestRoundIdx].gameIds);
       const resPrev = {};
       Object.entries(res).forEach(([id,data])=>{ if(!latestIds.has(id)) resPrev[id]=data; });
-      computeRanking(users, resPrev, allPals).forEach((u,idx)=>{ positionDeltas[u.uid]=idx+1; });
+      // Bônus de campeão só conta na rodada que decide a final; se removemos os jogos da rodada atual,
+      // o palpite de campeão é desconsiderado naturalmente (FIN1 some, _getFinalChampion=null).
+      computeRanking(users, resPrev, allPals, champPicks).forEach((u,idx)=>{ positionDeltas[u.uid]=idx+1; });
     }
 
     if (users.length === 0) {
@@ -1772,7 +1818,7 @@ async function renderDashboard() {
           <thead><tr>
             <th>#</th><th>Participante</th><th>Pontos</th>
             <th class="hide-mobile">Exatos</th><th class="hide-mobile">V+Saldo</th><th class="hide-mobile">Vencedor</th>
-            <th class="hide-mobile">Jogos</th><th>%</th><th class="hide-mobile" title="Distância para o líder">Dist.</th>
+            <th class="hide-mobile">Jogos</th><th class="hide-mobile" title="Palpite de Campeão">🏆 Campeão</th><th>%</th><th class="hide-mobile" title="Distância para o líder">Dist.</th>
           </tr></thead><tbody>`;
 
     ranking.forEach((u,i)=>{
@@ -1787,6 +1833,9 @@ async function renderDashboard() {
         delta < 0 ? `<span style="font-size:0.65rem;font-weight:700;color:#ff6b6b;display:block;line-height:1">↓${Math.abs(delta)}</span>` :
         `<span style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
       const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
+      const champCell = u.campeao
+        ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${COUNTRY_FLAGS[u.campeao]||''} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
+        : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`;
       html += `<tr class="${isMe?'is-me':''}">
         <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}</td>
         <td style="cursor:pointer" onclick="goToUserPalpites('${u.uid}')"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
@@ -1795,6 +1844,7 @@ async function renderDashboard() {
         <td class="hide-mobile text-gold">${u.venc_saldo}</td>
         <td class="hide-mobile text-gold">${u.apenas_venc}</td>
         <td class="hide-mobile text-muted">${u.jogos}</td>
+        <td class="hide-mobile" style="font-size:0.8rem">${champCell}</td>
         <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${maxPts>0?Math.round(u.pontos/maxPts*100):0}%"></div></div>
           <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
         <td class="hide-mobile">${distLider}</td>
@@ -1803,7 +1853,7 @@ async function renderDashboard() {
 
     html += `</tbody></table></div>
     <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
-      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor</p>`;
+      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}`:''}</p>`;
     cont.innerHTML = html;
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
@@ -1819,14 +1869,16 @@ async function renderPalpites(editUid=null) {
   const cont = document.getElementById('palpites-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [pSnap, rSnap] = await Promise.all([
+    const [pSnap, rSnap, pDoc] = await Promise.all([
       db_.collection('palpites').doc(uid).collection('jogos').get(),
-      db_.collection('resultados').get()
+      db_.collection('resultados').get(),
+      db_.collection('palpites').doc(uid).get()
     ]);
     myPalpites = {};
     pSnap.docs.forEach(d=>{ myPalpites[d.id]=d.data(); });
     resultados = {};
     rSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
+    myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
 
     let who = '';
     if (editUid && editUid!==currentUser.uid) {
@@ -1841,6 +1893,7 @@ async function renderPalpites(editUid=null) {
     ];
 
     let html = `<div class="section-title">⚽ Meus Palpites</div>${who}
+      ${buildChampionPickerCard()}
       <div id="pal-progress-text" class="progress-text">Calculando...</div>
       <div class="progress-bar"><div class="progress-fill" id="pal-progress-fill" style="width:0%"></div></div>
       <div class="phase-tabs" id="phase-tabs">`;
@@ -1900,6 +1953,110 @@ function buildPalRow(game) {
     <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${closeAttr} oninput="onPalInput('${game.id}','a',this.value)">
     <div><div class="team-name">${flagA} ${esc(teams.a)}</div><div class="game-meta flex">${lockedBadge}${resultBadge}${ptsBadge}</div></div>
   </div>`;
+}
+
+// Card de seleção do "Palpite Campeão" exibido na página de palpites.
+// Quando admin estiver editando outro usuário, libera mesmo se estiver travado.
+function buildChampionPickerCard() {
+  const isAdmin = currentUserDoc?.role === 'admin';
+  const champLocked = CFG.campeao_locked === true;
+  const finalChampion = _getFinalChampion(resultados);
+  const finalDecided = !!finalChampion;
+  // Não-admin não pode mudar se travado OU se a final já foi decidida.
+  // Admin pode mudar sempre (inclusive editando palpites de outro usuário).
+  const canEdit = isAdmin ? true : (!champLocked && !finalDecided);
+  const teams = _getAllTeams();
+  const ptsCampeao = CFG.pts_campeao ?? 50;
+
+  const opts = ['<option value="">— Selecione a seleção campeã —</option>']
+    .concat(teams.map(t=>{
+      const flag = COUNTRY_FLAGS[t] || '';
+      const sel = (myChampion===t) ? 'selected' : '';
+      return `<option value="${esc(t)}" ${sel}>${flag} ${esc(t)}</option>`;
+    }))
+    .join('');
+
+  let status = '';
+  if (finalDecided) {
+    if (myChampion && myChampion===finalChampion) {
+      status = `<div class="alert alert-success" style="margin-top:10px">🎉 Você acertou! <b>${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</b> é a campeã — bônus de <b>+${ptsCampeao} pts</b>.</div>`;
+    } else if (myChampion) {
+      status = `<div class="alert alert-warning" style="margin-top:10px">A campeã foi <b>${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</b>. Seu palpite (${esc(myChampion)}) não pontuou no bônus.</div>`;
+    } else {
+      status = `<div class="alert alert-warning" style="margin-top:10px">A campeã foi <b>${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</b>. Você não escolheu uma seleção campeã.</div>`;
+    }
+  } else if (champLocked) {
+    status = `<div class="alert alert-warning" style="margin-top:10px">🔒 Palpite de campeão <b>bloqueado pelo admin</b>. Não é mais possível alterar.</div>`;
+  } else {
+    status = `<div class="text-muted" style="font-size:0.8rem;margin-top:8px">Vale <b>+${ptsCampeao} pts</b> se você acertar quem levanta a taça em 19/Jul. Salva automaticamente.</div>`;
+  }
+
+  const currentLine = myChampion
+    ? `<div style="margin-top:8px;font-size:0.85rem">Sua escolha atual: <b style="color:var(--gold)">${COUNTRY_FLAGS[myChampion]||''} ${esc(myChampion)}</b></div>`
+    : `<div style="margin-top:8px;font-size:0.85rem;color:var(--text-muted)">Nenhuma seleção escolhida ainda.</div>`;
+
+  const adminNote = (isAdmin && (champLocked || finalDecided))
+    ? `<div class="alert alert-info" style="margin-top:10px;font-size:0.78rem">👑 Como admin você pode alterar mesmo bloqueado.</div>` : '';
+
+  return `<div class="card" style="border:2px solid var(--gold);background:rgba(255,215,0,.06);margin-bottom:18px">
+    <div class="card-header"><span class="card-title">🏆 Palpite Campeão (Bônus +${ptsCampeao} pts)</span></div>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin:6px 0 10px">Escolha a seleção que você acha que será campeã da Copa do Mundo 2026.</p>
+    <select id="champion-select" onchange="onChampionChange(this.value)" ${canEdit?'':'disabled'} style="width:100%;padding:10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid var(--border);font-size:0.95rem">
+      ${opts}
+    </select>
+    ${currentLine}
+    ${status}
+    ${adminNote}
+  </div>`;
+}
+
+async function onChampionChange(team) {
+  const isAdmin = currentUserDoc?.role === 'admin';
+  const champLocked = CFG.campeao_locked === true;
+  const finalDecided = !!_getFinalChampion(resultados);
+  if (!isAdmin && (champLocked || finalDecided)) {
+    showToast(finalDecided?'Final já decidida — palpite encerrado.':'🔒 Palpite de campeão bloqueado pelo admin.','warning');
+    // Reverte a seleção visual
+    const sel = document.getElementById('champion-select');
+    if (sel) sel.value = myChampion || '';
+    return;
+  }
+  const uid = palpitesEditing || currentUser.uid;
+  const prev = myChampion;
+  myChampion = team || null;
+  try {
+    const FV = firebase.firestore.FieldValue;
+    const payload = {
+      uid,
+      campeao: team ? team : FV.delete(),
+      campeaoAt: FV.serverTimestamp(),
+      updatedAt: FV.serverTimestamp()
+    };
+    const isAdminEdit = !!palpitesEditing && palpitesEditing !== currentUser.uid;
+    if (isAdminEdit) {
+      payload.editedByAdmin = currentUser.uid;
+      payload.editedByAdminEmail = currentUser.email || null;
+    }
+    await db_.collection('palpites').doc(uid).set(payload, {merge:true});
+    if (isAdminEdit) {
+      try {
+        await db_.collection('audit').add({
+          type: 'campeao_edit',
+          targetUid: uid,
+          campeao: team || null,
+          adminUid: currentUser.uid,
+          adminEmail: currentUser.email || null,
+          at: FV.serverTimestamp()
+        });
+      } catch(_) {}
+    }
+    showToast(team?`🏆 Campeão salvo: ${team}`:'Palpite de campeão removido','success');
+  } catch(e) {
+    myChampion = prev;
+    const sel = document.getElementById('champion-select');
+    if (sel) sel.value = myChampion || '';
+    showToast('Erro ao salvar: '+e.message,'error');
+  }
 }
 
 function switchPalPhase(key) {
@@ -2064,14 +2221,24 @@ async function renderVerPalpites(selectedUid=null) {
       const selectedUser = users.find(u=>u.uid===selectedUid);
       if (!selectedUser) { cont.innerHTML = `${html}<div class="alert alert-error">Usuário não encontrado</div>`; return; }
 
-      const pSnap = await db_.collection('palpites').doc(selectedUid).collection('jogos').get();
+      const [pSnap, pDoc] = await Promise.all([
+        db_.collection('palpites').doc(selectedUid).collection('jogos').get(),
+        db_.collection('palpites').doc(selectedUid).get()
+      ]);
       const userPals = {};
       pSnap.docs.forEach(d=>{ userPals[d.id]=d.data(); });
+      const userChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
+      const finalChampion = _getFinalChampion(res);
+      const hitCampeao = !!(finalChampion && userChampion && userChampion===finalChampion);
+      const champLine = userChampion
+        ? `<div style="margin-top:10px;font-size:0.95rem">🏆 Palpite de campeão: <b style="color:${hitCampeao?'var(--green)':'var(--gold)'}">${COUNTRY_FLAGS[userChampion]||''} ${esc(userChampion)}</b>${finalChampion?(hitCampeao?` ✅ <span style="color:var(--green)">+${CFG.pts_campeao||0} pts</span>`:` ❌`):''}</div>`
+        : `<div style="margin-top:10px;font-size:0.85rem;color:var(--text-muted)">🏆 Sem palpite de campeão</div>`;
 
       html += `<div class="card" style="border:2px solid var(--gold);background:rgba(255,215,0,.08);text-align:center;padding:16px;margin-bottom:20px">
         <div style="font-size:1.2rem;font-weight:800;color:var(--gold);margin-bottom:6px">👁️ Palpites de</div>
         <div style="font-size:1.1rem;font-weight:700">${esc(selectedUser.apelido)}</div>
         <div style="font-size:0.85rem;color:var(--text-muted)">${esc(selectedUser.nome)}</div>
+        ${champLine}
       </div>
         <div id="pal-view-progress-text" class="progress-text">Calculando...</div>
         <div class="progress-bar"><div class="progress-fill" id="pal-view-progress-fill" style="width:0%"></div></div>
@@ -2233,6 +2400,11 @@ function renderRegras() {
               <td style="font-size:0.85rem">Seu palpite não bate com o resultado</td>
               <td style="font-weight:700;color:var(--text-muted)">0</td>
             </tr>
+            <tr>
+              <td style="font-weight:700;color:var(--gold)">🏆 Bônus Campeão</td>
+              <td style="font-size:0.85rem">Acertou a seleção campeã da Copa do Mundo (escolhida na aba ⚽ Palpites). O bônus é creditado quando a Final (19/Jul) for decretada.</td>
+              <td><span class="pts-badge">${CFG.pts_campeao||0}</span></td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -2254,6 +2426,10 @@ function renderRegras() {
           Quando um jogo aparece com 🔒, o palpite está travado e <strong>não pode mais ser alterado</strong>.
           O bloqueio é feito pelo administrador pouco antes do jogo começar.
           Por isso, tente preencher seus palpites com antecedência!
+        </p>
+        <p class="text-muted" style="line-height:1.8;margin-top:10px">
+          🏆 O <strong>Palpite de Campeão</strong> também pode ser bloqueado pelo admin antes do início da Copa.
+          Depois disso, ninguém consegue alterar a seleção campeã escolhida.
         </p>
       </div>
 
@@ -2289,11 +2465,17 @@ async function renderVerTodos() {
       .sort((a,b)=>a.apelido.localeCompare(b.apelido));
     const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
     const allPals = {};
+    const champPicks = {};
     await Promise.all(users.map(async u=>{
-      const ps = await db_.collection('palpites').doc(u.uid).collection('jogos').get();
+      const [ps, pdoc] = await Promise.all([
+        db_.collection('palpites').doc(u.uid).collection('jogos').get(),
+        db_.collection('palpites').doc(u.uid).get()
+      ]);
       allPals[u.uid] = {};
       ps.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); });
+      champPicks[u.uid] = pdoc.exists ? (pdoc.data()?.campeao || null) : null;
     }));
+    const finalChampion = _getFinalChampion(res);
 
     const gamesOrdered = ALL_GAMES.slice().sort((a,b)=>_parseGameDate(a.date)-_parseGameDate(b.date));
     const phaseGroups = [
@@ -2301,18 +2483,47 @@ async function renderVerTodos() {
       ...Object.entries(ELIM_DATA).map(([,v])=>({ label:`${v.icon} ${v.label}`, ids: new Set(v.games.map(g=>g.id)) }))
     ];
 
+    // Resumo dos palpites de campeão por participante.
+    const champSummary = `
+      <div class="card" style="margin-bottom:16px;border:2px solid var(--gold);background:rgba(255,215,0,.05)">
+        <div class="card-header"><span class="card-title">🏆 Palpite Campeão por Participante</span>
+          ${finalChampion?`<span class="pts-badge" style="margin-left:auto">Campeã: ${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</span>`:''}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px">
+          ${users.map(u=>{
+            const t = champPicks[u.uid];
+            const hit = !!(finalChampion && t && t===finalChampion);
+            const teamHtml = t
+              ? `<b style="color:${hit?'var(--green)':'var(--gold)'}">${COUNTRY_FLAGS[t]||''} ${esc(t)}</b>${hit?` <span style="color:var(--green);font-size:0.72rem">✅ +${CFG.pts_campeao||0}</span>`:''}`
+              : `<span style="color:var(--text-muted);font-style:italic">— sem palpite —</span>`;
+            return `<div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.03);cursor:pointer" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites">
+              <div style="font-size:0.78rem;color:var(--text-muted)">${esc(u.apelido)}</div>
+              <div style="font-size:0.92rem;margin-top:2px">${teamHtml}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+
     let html = `<div class="section-title">📋 Todos os Palpites</div>
       <div class="back-bar">
         <span style="font-size:0.82rem;color:var(--text-muted)">🟡 Exato &nbsp;🟢 Acerto &nbsp;🔴 Erro</span>
         <button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="navigateTo('ver-palpites')">👁️ Por Pessoa</button>
       </div>
+      ${champSummary}
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
       <table class="ranking-table" style="min-width:${160+users.length*72}px;font-size:0.8rem">
         <thead><tr>
           <th style="text-align:left;min-width:130px;position:sticky;left:0;z-index:2;background:var(--mid-blue)">Jogo</th>
           <th style="min-width:55px">Data</th>
           <th style="min-width:55px">Result.</th>
-          ${users.map(u=>`<th style="min-width:68px;cursor:pointer;color:var(--gold)" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites de ${esc(u.apelido)}">${esc(u.apelido)}</th>`).join('')}
+          ${users.map(u=>{
+            const t = champPicks[u.uid];
+            const hit = !!(finalChampion && t && t===finalChampion);
+            const champCell = t
+              ? `<div style="font-size:0.65rem;font-weight:600;color:${hit?'var(--green)':'var(--text-muted)'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Campeão: ${esc(t)}">🏆 ${COUNTRY_FLAGS[t]||''} ${esc(t.split(' ')[0])}</div>`
+              : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 —</div>`;
+            return `<th style="min-width:68px;cursor:pointer;color:var(--gold);vertical-align:top" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites de ${esc(u.apelido)}">${esc(u.apelido)}${champCell}</th>`;
+          }).join('')}
         </tr></thead>
         <tbody>`;
 
@@ -2597,6 +2808,7 @@ async function renderEstatisticas() {
     const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
     const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
     const allPals = {};
+    const champPicks = await loadAllChampionPicks();
     await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
 
     const jogosComResultado = Object.keys(res).filter(id=>_hasFullResult(res[id]));
@@ -2656,7 +2868,7 @@ async function renderEstatisticas() {
     const maisFacil = gameDifficulty[gameDifficulty.length - 1];
 
     // Ranking e precisão por usuário
-    const ranking = computeRanking(users, res, allPals);
+    const ranking = computeRanking(users, res, allPals, champPicks);
     const userAccStats = {};
     users.forEach(u => { userAccStats[u.uid] = calcUserAccuracyStats(u.uid, allPals, res); });
 
@@ -3736,16 +3948,19 @@ async function renderAdminPalpitesInline(uid) {
   if (!area) return;
   area.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [pSnap, rSnap] = await Promise.all([
+    const [pSnap, rSnap, pDoc] = await Promise.all([
       db_.collection('palpites').doc(uid).collection('jogos').get(),
-      db_.collection('resultados').get()
+      db_.collection('resultados').get(),
+      db_.collection('palpites').doc(uid).get()
     ]);
     myPalpites = {};
     pSnap.docs.forEach(d=>{ myPalpites[d.id]=d.data(); });
     resultados = {};
     rSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
+    myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
 
-    let html = `<div class="phase-tabs">`;
+    let html = buildChampionPickerCard();
+    html += `<div class="phase-tabs">`;
     const phases = [{key:'grupos',label:'⚽ Grupos'},...Object.entries(ELIM_DATA).map(([k,v])=>({key:k,label:v.icon+' '+v.label}))];
     phases.forEach((p,i)=>{ html += `<button class="phase-tab ${i===0?'active':''}" onclick="switchPalPhase('${p.key}')" data-phase="${p.key}">${p.label}</button>`; });
     html += `</div><div class="pal-phase" data-phase="grupos">`;
@@ -3788,15 +4003,27 @@ async function renderAdminConfig() {
         <div class="form-group"><label>Bônus Classificação <span style="color:var(--gold);font-size:0.7rem">🚧 não implementado</span></label><input type="number" id="cfg-pts-bonus-class" value="${CFG.pts_bonus_classificacao ?? 3}" min="0" max="100" disabled title="Pontuação por acertar a classificação do grupo — em desenvolvimento"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Palpite Campeão <span style="color:var(--gold);font-size:0.7rem">🚧 não implementado</span></label><input type="number" id="cfg-pts-campeao" value="${CFG.pts_campeao ?? 50}" min="0" max="200" disabled title="Pontuação por acertar o campeão — em desenvolvimento"></div>
+        <div class="form-group"><label>Palpite Campeão</label><input type="number" id="cfg-pts-campeao" value="${CFG.pts_campeao ?? 50}" min="0" max="200" title="Pontuação por acertar a seleção campeã"></div>
         <div class="form-group"><label>Palpite Artilheiro <span style="color:var(--gold);font-size:0.7rem">🚧 não implementado</span></label><input type="number" id="cfg-pts-artilheiro" value="${CFG.pts_artilheiro ?? 30}" min="0" max="200" disabled title="Pontuação por acertar o artilheiro — em desenvolvimento"></div>
       </div>
 
       <div class="alert alert-info" style="margin-top:16px">
-        💡 <strong>Hierarquia:</strong> Placar Exato (maior) → Vencedor+Saldo → Apenas Vencedor → 0 (menor)
+        💡 <strong>Hierarquia:</strong> Placar Exato (maior) → Vencedor+Saldo → Apenas Vencedor → 0 (menor). Bônus de Campeão é somado ao total quando a Final (FIN1) é decretada.
       </div>
 
       <div class="btn-group"><button class="btn btn-primary" onclick="saveCFGAdmin()">💾 Salvar</button></div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:8px">🏆 Palpite de Campeão</div>
+      <p class="text-muted" style="font-size:0.85rem;margin-bottom:16px">Antes do início da Copa, bloqueie o palpite de campeão para que ninguém mais altere a sua escolha. Admins podem alterar mesmo após o bloqueio.</p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <span style="font-size:0.9rem">Status atual:</span>
+        <span class="pts-badge" style="${CFG.campeao_locked?'background:rgba(255,68,68,.15);color:var(--red)':'background:rgba(0,200,81,.15);color:var(--green)'}">${CFG.campeao_locked?'🔒 BLOQUEADO':'🔓 ABERTO'}</span>
+      </div>
+      <div class="btn-group">
+        <button class="btn ${CFG.campeao_locked?'btn-secondary':'btn-primary'}" onclick="toggleCampeaoLock(true)" ${CFG.campeao_locked?'disabled':''}>🔒 Bloquear palpite de campeão</button>
+        <button class="btn ${CFG.campeao_locked?'btn-primary':'btn-secondary'}" onclick="toggleCampeaoLock(false)" ${CFG.campeao_locked?'':'disabled'}>🔓 Desbloquear palpite de campeão</button>
+      </div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:8px">🔒 Operações em Massa</div>
@@ -3808,6 +4035,28 @@ async function renderAdminConfig() {
         <button class="btn btn-secondary" onclick="massLock('elim',false)">🔓 Desbloquear Elim.</button>
       </div>
     </div>`;
+}
+
+async function toggleCampeaoLock(lock) {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin pode alterar.','error'); return; }
+  const acao = lock ? 'BLOQUEAR' : 'DESBLOQUEAR';
+  if (!confirm(`Confirmar ${acao} o palpite de campeão para todos os participantes?\n${lock?'Ninguém mais poderá alterar a seleção campeã (exceto admin).':'Todos voltarão a poder editar a seleção campeã.'}`)) return;
+  try {
+    await db_.collection('config').doc('geral').set({ campeao_locked: !!lock }, {merge:true});
+    CFG.campeao_locked = !!lock;
+    try {
+      await db_.collection('audit').add({
+        type: lock ? 'campeao_lock' : 'campeao_unlock',
+        adminUid: currentUser?.uid || null,
+        adminEmail: currentUser?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch(_) {}
+    showToast(lock?'🔒 Palpite de campeão bloqueado':'🔓 Palpite de campeão desbloqueado', lock?'warning':'success');
+    renderAdminConfig();
+  } catch(e) {
+    showToast('Erro: '+e.message,'error');
+  }
 }
 
 async function saveCFGAdmin() {
@@ -3830,7 +4079,7 @@ async function saveCFGAdmin() {
       pts_campeao:ptsCampeao,
       pts_artilheiro:ptsArtilheiro
     };
-    await db_.collection('config').doc('geral').set(cfg);
+    await db_.collection('config').doc('geral').set(cfg, {merge:true});
     CFG = { ...CFG, ...cfg };
     document.getElementById('bolao-nome').textContent = nome;
     showToast('✅ Configurações salvas!','success');
@@ -3933,21 +4182,27 @@ async function exportFullExcel() {
     const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
     const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
     const allPals = {};
+    const champPicks = await loadAllChampionPicks();
     await Promise.all(users.map(async u=>{ const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); }); }));
-    const ranking = computeRanking(users, res, allPals);
+    const ranking = computeRanking(users, res, allPals, champPicks);
     const totalJogosComResultado = Object.keys(res).filter(
       id => res[id].h_real !== undefined && res[id].a_real !== undefined
     ).length;
+    const finalChampion = _getFinalChampion(res);
 
     // Sheet 1 - Ranking
-    const rankingData = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','% Aproveito']];
+    const rankingData = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','% Aproveito','Palpite Campeão','Bônus Campeão']];
     ranking.forEach((u,i)=>{
       const pct = totalJogosComResultado > 0 ? Math.round((u.jogos / totalJogosComResultado) * 100) : 0;
-      rankingData.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos, pct+'%']);
+      rankingData.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos, pct+'%', u.campeao||'', u.bonus_campeao||0]);
     });
 
-    // Sheet 2 - Palpites (Matriz)
+    // Sheet 2 - Palpites (Matriz) — primeira linha mostra o palpite de campeão de cada participante.
     const palpitesData = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
+    const champRow = ['CAMPEAO','-','-','Palpite Campeão'];
+    users.forEach(u=>{ champRow.push(champPicks[u.uid]||''); });
+    users.forEach(u=>{ champRow.push(''); });
+    palpitesData.push(champRow);
     ALL_GAMES.forEach(g=>{
       const row = [g.id, g.h, g.a, g.date];
       users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.h??''); });
@@ -3971,6 +4226,8 @@ async function exportFullExcel() {
     cfgData.push(['Bônus Classificação', CFG.pts_bonus_classificacao]);
     cfgData.push(['Palpite Campeão', CFG.pts_campeao]);
     cfgData.push(['Palpite Artilheiro', CFG.pts_artilheiro]);
+    cfgData.push(['Palpite Campeão Bloqueado?', CFG.campeao_locked?'SIM':'NÃO']);
+    cfgData.push(['Seleção Campeã (FIN1)', finalChampion || '(não decidida)']);
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rankingData), 'Ranking');
@@ -3989,11 +4246,12 @@ async function exportRankingExcel() {
     const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
     const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
     const allPals = {};
+    const champPicks = await loadAllChampionPicks();
     await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
-    const ranking = computeRanking(users, res, allPals);
-    const data = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos']];
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const data = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','Palpite Campeão','Bônus Campeão']];
     ranking.forEach((u,i)=>{
-      data.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos]);
+      data.push([i+1, u.nome, u.apelido, u.pontos, u.exatos, u.venc_saldo, u.apenas_venc, u.jogos, u.campeao||'', u.bonus_campeao||0]);
     });
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -4009,8 +4267,14 @@ async function exportPalpitesExcel() {
     const [usersSnap] = await Promise.all([db_.collection('usuarios').get()]);
     const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
     const allPals = {};
+    const champPicks = await loadAllChampionPicks();
     await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
     const data = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
+    // Linha extra com o palpite de campeão por participante (mesma estrutura de colunas).
+    const champRow = ['CAMPEAO','-','-','Palpite Campeão'];
+    users.forEach(u=>{ champRow.push(champPicks[u.uid]||''); });
+    users.forEach(u=>{ champRow.push(''); });
+    data.push(champRow);
     ALL_GAMES.forEach(g=>{
       const row = [g.id, g.h, g.a, g.date];
       users.forEach(u=>{ row.push(allPals[u.uid]?.[g.id]?.h??''); });
