@@ -163,6 +163,8 @@ a:hover{text-decoration:underline}
   border-color:var(--gold);background:rgba(255,215,0,.07);
 }
 .form-group select option{background:var(--mid-blue)}
+/* Garante contraste em qualquer <select> da página (mesmo fora de .form-group) */
+select option{background:var(--mid-blue);color:var(--white)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
 /* ══════════════════════════════════════════
