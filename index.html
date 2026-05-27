@@ -3426,7 +3426,7 @@ async function renderEstatisticas() {
 
     // ── Palpites de Campeão ──
     const champVotes = {};
-    Object.values(champPicks).forEach(t => { if(t) champVotes[t] = (champVotes[t]||0) + 1; });
+    users.forEach(u => { const t = champPicks[u.uid]; if(t) champVotes[t] = (champVotes[t]||0) + 1; });
     const champVotesArr = Object.entries(champVotes).sort((a,b)=>b[1]-a[1]);
     const totalVotes = champVotesArr.reduce((s,[,v])=>s+v,0);
     const semEscolha = users.length - totalVotes;
