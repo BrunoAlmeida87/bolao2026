@@ -2341,16 +2341,34 @@ function onPalInput(gameId, side, value) {
 
 async function savePalpite(gameId) {
   const pal = myPalpites[gameId];
-  if (!pal||pal.h===undefined||pal.a===undefined) return;
+  const uid = palpitesEditing||currentUser.uid;
+  const hInp = document.getElementById(`ph_${gameId}`);
+  const aInp = document.getElementById(`pa_${gameId}`);
+
+  // Ambos os campos apagados → apaga o documento do Firestore
+  if (!pal || (pal.h===undefined && pal.a===undefined)) {
+    try {
+      await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).delete();
+      delete myPalpites[gameId];
+      ['filled','saving','saved-ok','save-err','saving'].forEach(c=>{
+        if(hInp) hInp.classList.remove(c);
+        if(aInp) aInp.classList.remove(c);
+      });
+      updatePalProgress();
+      updateGroupTabState();
+    } catch(e) { showToast('Erro ao apagar palpite: '+e.message,'error'); }
+    return;
+  }
+
+  // Só um lado preenchido → aguarda o outro (não salva parcialmente)
+  if (pal.h===undefined||pal.a===undefined) return;
+
   const res = resultados[gameId]||{};
   const gameDef = ALL_GAMES.find(g=>g.id===gameId);
   if (res.locked===true || res.h_real!==undefined || (gameDef && isGameStarted(gameDef) && !palpitesEditing)) {
     showPalpiteClosedReason(gameId);
     return;
   }
-  const uid = palpitesEditing||currentUser.uid;
-  const hInp = document.getElementById(`ph_${gameId}`);
-  const aInp = document.getElementById(`pa_${gameId}`);
   if (hInp) hInp.classList.add('saving');
   if (aInp) aInp.classList.add('saving');
   try {
