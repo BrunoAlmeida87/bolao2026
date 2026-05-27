@@ -962,6 +962,25 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   </footer>
 </div>
 
+<!-- MODAL ADMIN EDITAR NOME -->
+<div id="modal-nome-admin" class="modal-overlay hidden" onclick="if(event.target===this)closeNomeAdminModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeNomeAdminModal()">✕</button>
+    <h3>✏️ Alterar Nome do Participante</h3>
+    <div id="nome-admin-user-label" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:14px"></div>
+    <div class="form-group">
+      <label>Nome completo</label>
+      <input type="text" id="input-nome-admin" placeholder="Nome completo" maxlength="80"
+        onkeydown="if(event.key==='Enter') salvarNomeAdmin()">
+    </div>
+    <div id="nome-admin-error" class="alert alert-error" style="display:none;margin-bottom:12px"></div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="btn btn-primary" onclick="salvarNomeAdmin()">💾 Salvar</button>
+      <button class="btn btn-secondary" onclick="closeNomeAdminModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL EDITAR APELIDO -->
 <div id="modal-apelido" class="modal-overlay hidden" onclick="if(event.target===this)closeApelidoModal()">
   <div class="modal-box">
@@ -4240,6 +4259,7 @@ async function renderAdminUsuarios() {
           </label>
           <span style="font-size:0.78rem;color:var(--text-muted);min-width:40px">ADMIN</span>
           ${!isSelf?`<button class="btn ${u.ativo===false?'btn-green':'btn-red'} btn-sm" onclick="toggleAtivo('${u.uid}',${u.ativo!==false})">${u.ativo===false?'Ativar':'Desativar'}</button>`:''}
+          <button class="btn btn-secondary btn-sm" onclick="adminEditNome('${u.uid}','${esc(u.nome)}','${esc(u.apelido)}')">✏️ Nome</button>
           <button class="btn btn-secondary btn-sm" onclick="adminGoEditPalpites('${u.uid}')">✏️ Palpites</button>
           ${mailBtn}
           ${!isSelf?`<button class="btn btn-red btn-sm" onclick="deleteUserClick('${u.uid}','${esc(u.apelido)}')">🗑️ Excluir</button>`:''}
@@ -4529,6 +4549,45 @@ async function renderAdminPalpitesInline(uid) {
 }
 
 function adminGoEditPalpites(uid) { switchAdminTab('palpites-admin'); renderAdminEditPalpites(uid); }
+
+let _nomeAdminUid = null;
+
+function adminEditNome(uid, nomeAtual, apelido) {
+  _nomeAdminUid = uid;
+  const label = document.getElementById('nome-admin-user-label');
+  const input = document.getElementById('input-nome-admin');
+  const err   = document.getElementById('nome-admin-error');
+  if (!input || !err) return;
+  if (label) label.textContent = `Participante: ${apelido}`;
+  input.value = nomeAtual || '';
+  err.style.display = 'none';
+  document.getElementById('modal-nome-admin').classList.remove('hidden');
+  setTimeout(() => input.focus(), 80);
+}
+
+function closeNomeAdminModal() {
+  document.getElementById('modal-nome-admin').classList.add('hidden');
+  _nomeAdminUid = null;
+}
+
+async function salvarNomeAdmin() {
+  const input = document.getElementById('input-nome-admin');
+  const err   = document.getElementById('nome-admin-error');
+  if (!input || !err || !_nomeAdminUid) return;
+  const novo = input.value.trim();
+  err.style.display = 'none';
+  if (!novo) { err.textContent = 'Digite o nome.'; err.style.display = 'block'; return; }
+  if (novo.length < 2) { err.textContent = 'Nome muito curto (mínimo 2 caracteres).'; err.style.display = 'block'; return; }
+  try {
+    await db_.collection('usuarios').doc(_nomeAdminUid).update({ nome: novo });
+    showToast('✅ Nome atualizado!', 'success');
+    closeNomeAdminModal();
+    renderAdminUsuarios();
+  } catch(e) {
+    err.textContent = 'Erro ao salvar: ' + errMsg(e);
+    err.style.display = 'block';
+  }
+}
 
 async function renderAdminConfig() {
   const cont = document.getElementById('admin-config');
