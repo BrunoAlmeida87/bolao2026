@@ -802,7 +802,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
         <div class="prize-card bronze-prize">
           <span class="prize-medal">🥉</span>
           <span class="prize-pct">3º lugar</span>
-          <span class="prize-val">10%</span>
+          <span class="prize-val">20%</span>
           <span class="prize-lbl">do total arrecadado</span>
         </div>
       </div>
@@ -2003,7 +2003,7 @@ async function renderDashboard() {
         </div>
         <div class="prize-pool-item">
           <div class="ppi-val" style="color:#CD7F32">🥉 ${formatBRL(_premios.terceiro)}</div>
-          <div class="ppi-lbl">3º lugar (10%)</div>
+          <div class="ppi-lbl">3º lugar (20%)</div>
         </div>
       </div>
 
@@ -2727,7 +2727,7 @@ function renderRegras() {
           <div class="prize-card bronze-prize">
             <span class="prize-medal">🥉</span>
             <span class="prize-pct">3º lugar</span>
-            <span class="prize-val">10%</span>
+            <span class="prize-val">20%</span>
             <span class="prize-lbl">do total arrecadado</span>
           </div>
         </div>
@@ -3426,7 +3426,7 @@ async function renderEstatisticas() {
 
     // ── Palpites de Campeão ──
     const champVotes = {};
-    Object.values(champPicks).forEach(t => { if(t) champVotes[t] = (champVotes[t]||0) + 1; });
+    users.forEach(u => { const t = champPicks[u.uid]; if(t) champVotes[t] = (champVotes[t]||0) + 1; });
     const champVotesArr = Object.entries(champVotes).sort((a,b)=>b[1]-a[1]);
     const totalVotes = champVotesArr.reduce((s,[,v])=>s+v,0);
     const semEscolha = users.length - totalVotes;
@@ -4367,7 +4367,7 @@ async function renderAdminFinanceiro() {
             <span class="prize-medal">🥉</span>
             <span class="prize-pct">3º Lugar</span>
             <span class="prize-val" style="color:#CD7F32">${formatBRL(premios.terceiro)}</span>
-            <span class="prize-lbl">10% do total</span>
+            <span class="prize-lbl">20% do total</span>
           </div>
         </div>
         <div class="alert alert-info" style="margin-top:16px;font-size:0.82rem">
@@ -4881,7 +4881,7 @@ function calcPremios(total) {
   return {
     primeiro: total * 0.5,
     segundo:  total * 0.3,
-    terceiro: total * 0.1
+    terceiro: total * 0.2
   };
 }
 
