@@ -121,9 +121,10 @@ a:hover{text-decoration:underline}
    AUTH SCREEN
 ══════════════════════════════════════════ */
 .auth-wrap{
-  min-height:100vh;display:flex;align-items:center;justify-content:center;
-  padding:20px;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  padding:40px 20px 40px;
   background:radial-gradient(ellipse at center top,#1A2E4A 0%,#0A1628 60%);
+  overflow-y:auto;
 }
 .auth-card{
   background:var(--card);border:1px solid var(--border);
@@ -622,6 +623,41 @@ body.light-theme .result-row{background:#f8fafc;border:1px solid var(--border);b
 body.light-theme .toast{background:#1a2e4a;color:#fff}
 body.light-theme .section-title{border-color:var(--border);color:var(--white)}
 body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
+
+/* ══════════════════════════════════════════
+   BOLÃO INFO (auth page & rules)
+══════════════════════════════════════════ */
+.bolao-info-wrap{width:100%;max-width:860px;margin:28px auto 0;padding:0 16px 32px;display:flex;flex-direction:column;gap:16px}
+.bolao-info-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px}
+.bolao-info-card h3{font-size:1rem;font-weight:800;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.pix-box{background:rgba(255,215,0,.08);border:2px dashed var(--gold);border-radius:12px;padding:14px 18px;margin-top:10px;display:flex;flex-direction:column;gap:4px}
+.pix-key{font-size:1.1rem;font-weight:800;color:var(--gold);letter-spacing:.5px}
+.prize-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.prize-card{border-radius:12px;padding:14px 10px;text-align:center;border:1px solid var(--border)}
+.prize-card.gold-prize{background:rgba(255,215,0,.1);border-color:var(--gold)}
+.prize-card.silver-prize{background:rgba(192,192,192,.1);border-color:#C0C0C0}
+.prize-card.bronze-prize{background:rgba(205,127,50,.1);border-color:#CD7F32}
+.prize-medal{font-size:1.8rem;display:block;margin-bottom:4px}
+.prize-pct{font-size:1rem;font-weight:800;color:var(--white);display:block}
+.prize-val{font-size:0.92rem;font-weight:700;color:var(--gold);display:block;margin-top:2px}
+.prize-lbl{font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px}
+.qr-code-block{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:12px}
+.qr-code-img{width:180px;height:180px;border-radius:12px;object-fit:contain;border:2px solid var(--border);background:rgba(255,255,255,.05)}
+.qr-placeholder{width:180px;height:180px;border-radius:12px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--text-muted);font-size:0.78rem;background:rgba(255,255,255,.02)}
+/* Arrecadação no dashboard */
+.prize-pool-bar{background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,140,0,.06));border:1px solid rgba(255,215,0,.3);border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+.prize-pool-item{text-align:center;min-width:90px}
+.prize-pool-item .ppi-val{font-size:1.2rem;font-weight:800;color:var(--gold)}
+.prize-pool-item .ppi-lbl{font-size:0.7rem;color:var(--text-muted);margin-top:2px}
+/* Paid checkbox in admin users */
+.paid-toggle{display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-muted)}
+.paid-toggle input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--green)}
+.paid-badge{display:inline-block;background:rgba(0,200,81,.15);color:var(--green);border:1px solid var(--green);border-radius:10px;padding:1px 8px;font-size:0.7rem;font-weight:700}
+.unpaid-badge{display:inline-block;background:rgba(255,68,68,.1);color:var(--red);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:1px 8px;font-size:0.7rem;font-weight:700}
+/* QR Code upload area */
+.qr-upload-area{border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.02)}
+.qr-upload-area:hover{border-color:var(--gold);background:rgba(255,215,0,.04)}
+.total-arrecadado-card{background:linear-gradient(135deg,rgba(0,200,81,.12),rgba(0,200,81,.06));border:2px solid var(--green);border-radius:14px;padding:20px 24px;margin-bottom:16px}
 </style>
 </head>
 <body>
@@ -702,6 +738,80 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 
     </div>
   </div>
+
+  <!-- Info / Orientações -->
+  <div class="bolao-info-wrap">
+
+    <!-- Como participar -->
+    <div class="bolao-info-card">
+      <h3>📋 Como Participar</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;color:var(--text-muted);font-size:0.88rem;line-height:1.7">
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:1.2rem">1️⃣</span><span><strong style="color:var(--white)">Crie sua conta</strong> — preencha seu nome, apelido e e-mail nesta página.</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:1.2rem">2️⃣</span><span><strong style="color:var(--white)">Pague a inscrição</strong> — R$ 50,00 via Pix para a chave abaixo.</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:1.2rem">3️⃣</span><span><strong style="color:var(--white)">Envie o comprovante</strong> — mande o print do pagamento no grupo do WhatsApp para validação.</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:1.2rem">4️⃣</span><span><strong style="color:var(--white)">Faça seus palpites</strong> — acesse a aba ⚽ Palpites e preencha os placares de todos os jogos.</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:1.2rem">5️⃣</span><span><strong style="color:var(--white)">Acompanhe o ranking</strong> — os pontos são calculados automaticamente após cada resultado.</span></div>
+      </div>
+
+      <div class="pix-box">
+        <span style="font-size:0.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Chave Pix · CPF</span>
+        <span class="pix-key">128.712.527-18</span>
+        <span style="font-size:0.78rem;color:var(--text-muted)">Valor: <strong style="color:var(--gold)">R$ 50,00</strong> por participante</span>
+      </div>
+    </div>
+
+    <!-- Premiação -->
+    <div class="bolao-info-card">
+      <h3>🏆 Premiação</h3>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:4px">A premiação é calculada automaticamente sobre o total arrecadado:</p>
+      <div class="prize-grid">
+        <div class="prize-card gold-prize">
+          <span class="prize-medal">🥇</span>
+          <span class="prize-pct">1º lugar</span>
+          <span class="prize-val">50%</span>
+          <span class="prize-lbl">do total arrecadado</span>
+        </div>
+        <div class="prize-card silver-prize">
+          <span class="prize-medal">🥈</span>
+          <span class="prize-pct">2º lugar</span>
+          <span class="prize-val">30%</span>
+          <span class="prize-lbl">do total arrecadado</span>
+        </div>
+        <div class="prize-card bronze-prize">
+          <span class="prize-medal">🥉</span>
+          <span class="prize-pct">3º lugar</span>
+          <span class="prize-val">10%</span>
+          <span class="prize-lbl">do total arrecadado</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Regras resumidas -->
+    <div class="bolao-info-card">
+      <h3>📖 Resumo das Regras</h3>
+      <ul style="color:var(--text-muted);font-size:0.86rem;line-height:2;padding-left:18px">
+        <li><strong style="color:var(--white)">Placar Exato</strong> → maior pontuação</li>
+        <li><strong style="color:var(--white)">Vencedor + Saldo de Gols</strong> → pontuação intermediária</li>
+        <li><strong style="color:var(--white)">Apenas o Vencedor</strong> → pontuação básica</li>
+        <li><strong style="color:var(--white)">Palpite de Campeão</strong> → bônus especial ao acertar o campeão</li>
+        <li>Palpites são bloqueados pelo admin pouco antes de cada jogo</li>
+        <li>Desempate: exatos → vencedor+saldo → vencedor</li>
+      </ul>
+    </div>
+
+    <!-- QR Code WhatsApp -->
+    <div class="bolao-info-card">
+      <h3>💬 Entre no Grupo do WhatsApp</h3>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:4px">Escaneie o QR Code para entrar no grupo, enviar o comprovante e acompanhar as novidades:</p>
+      <div class="qr-code-block">
+        <div id="auth-qr-container">
+          <div class="qr-placeholder"><span style="font-size:2rem">💬</span><span>QR Code do grupo<br>será exibido aqui</span></div>
+        </div>
+        <span style="font-size:0.75rem;color:var(--text-muted)">QR Code atualizado pelo administrador</span>
+      </div>
+    </div>
+
+  </div><!-- /bolao-info-wrap -->
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -1063,7 +1173,9 @@ let CFG = {
   pts_campeao:50,
   pts_artilheiro:30,
   campeao_locked:false,
-  nome_bolao:'Bolão ICN Copa 2026'
+  nome_bolao:'Bolão ICN Copa 2026',
+  valor_participacao:50,
+  qrcode_whatsapp:''
 };
 
 // Horários dos jogos (Brasília - fuso -3)
@@ -1317,6 +1429,8 @@ async function loadCFG() {
     document.getElementById('bolao-nome').textContent = CFG.nome_bolao;
     const appVersion = document.getElementById('app-version');
     if (appVersion) appVersion.textContent = `${CFG.nome_bolao} • ${CFG.app_version}`;
+    // Atualiza QR Code na tela de auth (visível antes do login)
+    _renderQRCode('auth-qr-container');
   } catch(e) { console.error('loadCFG:', e); }
 }
 
@@ -1786,8 +1900,32 @@ async function renderDashboard() {
       return;
     }
 
+    const _totalArr = calcTotalArrecadado(usersSnap.docs.map(d=>({uid:d.id,...d.data()})));
+    const _premios = calcPremios(_totalArr);
+
     let html = `
       <div class="section-title">🏆 ${esc(CFG.nome_bolao)}</div>
+
+      <!-- Painel de arrecadação e premiação -->
+      <div class="prize-pool-bar">
+        <div class="prize-pool-item">
+          <div class="ppi-val">${formatBRL(_totalArr)}</div>
+          <div class="ppi-lbl">💰 Total Arrecadado</div>
+        </div>
+        <div class="prize-pool-item">
+          <div class="ppi-val" style="color:var(--gold)">🥇 ${formatBRL(_premios.primeiro)}</div>
+          <div class="ppi-lbl">1º lugar (50%)</div>
+        </div>
+        <div class="prize-pool-item">
+          <div class="ppi-val" style="color:#C0C0C0">🥈 ${formatBRL(_premios.segundo)}</div>
+          <div class="ppi-lbl">2º lugar (30%)</div>
+        </div>
+        <div class="prize-pool-item">
+          <div class="ppi-val" style="color:#CD7F32">🥉 ${formatBRL(_premios.terceiro)}</div>
+          <div class="ppi-lbl">3º lugar (10%)</div>
+        </div>
+      </div>
+
       <div style="background:linear-gradient(135deg,rgba(255,215,0,.1),rgba(255,215,0,.05));border:2px solid var(--gold);border-radius:12px;padding:20px;margin-bottom:24px">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
           <div style="text-align:center">
@@ -2444,9 +2582,60 @@ function renderRegras() {
           <li>No celular, use a barra de navegação inferior para acessar as seções</li>
           <li>Toque no nome de alguém no ranking para ver todos os palpites dela</li>
         </ul>
+      </div>
+
+      <!-- Participação e pagamento -->
+      <div class="card" style="border-color:rgba(255,215,0,.3)">
+        <div class="card-title" style="margin-bottom:16px">💰 Participação & Pagamento</div>
+        <p class="text-muted" style="font-size:0.88rem;line-height:1.7;margin-bottom:12px">
+          O valor de participação no bolão é de <strong style="color:var(--gold)">R$ 50,00</strong> por pessoa.
+          Após efetuar o pagamento, envie o comprovante no grupo do WhatsApp para validação pela administração.
+        </p>
+        <div class="pix-box">
+          <span style="font-size:0.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Chave Pix · CPF</span>
+          <span class="pix-key">128.712.527-18</span>
+          <span style="font-size:0.78rem;color:var(--text-muted)">Valor: <strong style="color:var(--gold)">R$ 50,00</strong> por participante</span>
+        </div>
+      </div>
+
+      <!-- Premiação -->
+      <div class="card" style="border-color:rgba(255,215,0,.3)">
+        <div class="card-title" style="margin-bottom:16px">🏆 Premiação</div>
+        <p class="text-muted" style="font-size:0.88rem;margin-bottom:12px">Os prêmios são calculados automaticamente sobre o total arrecadado:</p>
+        <div class="prize-grid">
+          <div class="prize-card gold-prize">
+            <span class="prize-medal">🥇</span>
+            <span class="prize-pct">1º lugar</span>
+            <span class="prize-val">50%</span>
+            <span class="prize-lbl">do total arrecadado</span>
+          </div>
+          <div class="prize-card silver-prize">
+            <span class="prize-medal">🥈</span>
+            <span class="prize-pct">2º lugar</span>
+            <span class="prize-val">30%</span>
+            <span class="prize-lbl">do total arrecadado</span>
+          </div>
+          <div class="prize-card bronze-prize">
+            <span class="prize-medal">🥉</span>
+            <span class="prize-pct">3º lugar</span>
+            <span class="prize-val">10%</span>
+            <span class="prize-lbl">do total arrecadado</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- WhatsApp QR Code -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px">💬 Grupo do WhatsApp</div>
+        <p class="text-muted" style="font-size:0.85rem;margin-bottom:12px">Escaneie o QR Code para entrar no grupo, enviar o comprovante de pagamento e acompanhar as novidades:</p>
+        <div class="qr-code-block">
+          <div id="regras-qr-container"></div>
+          <span style="font-size:0.75rem;color:var(--text-muted)">QR Code atualizado pelo administrador</span>
+        </div>
       </div>`;
 
     cont.innerHTML = html;
+    _renderQRCode('regras-qr-container');
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
@@ -3399,12 +3588,14 @@ function renderAdmin() {
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="resultados" onclick="switchAdminTab('resultados')">🎯 Resultados</button>
       <button class="admin-tab" data-tab="usuarios" onclick="switchAdminTab('usuarios')">👥 Usuários</button>
+      <button class="admin-tab" data-tab="financeiro" onclick="switchAdminTab('financeiro')">💰 Financeiro</button>
       <button class="admin-tab" data-tab="palpites-admin" onclick="switchAdminTab('palpites-admin')">✏️ Editar Palpites</button>
       <button class="admin-tab" data-tab="config" onclick="switchAdminTab('config')">⚙️ Config</button>
       <button class="admin-tab" data-tab="export" onclick="switchAdminTab('export')">⬇️ Exportar</button>
     </div>
     <div id="admin-resultados" class="admin-content active"></div>
     <div id="admin-usuarios" class="admin-content"></div>
+    <div id="admin-financeiro" class="admin-content"></div>
     <div id="admin-palpites-admin" class="admin-content"></div>
     <div id="admin-config" class="admin-content"></div>
     <div id="admin-export" class="admin-content"></div>`;
@@ -3419,6 +3610,7 @@ function switchAdminTab(tab) {
   switch(tab){
     case 'resultados': renderAdminResultados(); break;
     case 'usuarios': renderAdminUsuarios(); break;
+    case 'financeiro': renderAdminFinanceiro(); break;
     case 'palpites-admin': renderAdminEditPalpites(); break;
     case 'config': renderAdminConfig(); break;
     case 'export': renderAdminExport(); break;
@@ -3821,7 +4013,35 @@ async function renderAdminUsuarios() {
     const incompleteEmails = incomplete.map(u=>u.email).join(',');
     const bulkMailto = incompleteEmails ? `mailto:${incompleteEmails}?subject=${encodeURIComponent('[Bolão ICN] Palpites pendentes')}&body=${encodeURIComponent('Olá! Lembrete: você ainda tem palpites pendentes no Bolão ICN Copa 2026. Acesse e complete seus palpites antes dos jogos começarem!')}` : '';
 
-    let html = `<div class="alert alert-info">${users.length} usuário(s) registrado(s) · ${activeUsers.length} ativo(s).</div>`;
+    const totalArrecadado = calcTotalArrecadado(users);
+    const premios = calcPremios(totalArrecadado);
+    const pagosCount = users.filter(u=>u.pago===true && u.ativo!==false).length;
+
+    let html = `
+      <div class="total-arrecadado-card">
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Total Arrecadado</div>
+            <div id="admin-total-arrecadado" style="font-size:1.8rem;font-weight:800;color:var(--green)">${formatBRL(totalArrecadado)}</div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">${pagosCount} pagamento(s) confirmado(s) · R$ ${CFG.valor_participacao||50},00 por participante</div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div style="text-align:center;min-width:90px">
+              <div id="admin-premio-1" style="font-size:1rem;font-weight:800;color:var(--gold)">🥇 ${formatBRL(premios.primeiro)}</div>
+              <div style="font-size:0.68rem;color:var(--text-muted)">1º (50%)</div>
+            </div>
+            <div style="text-align:center;min-width:90px">
+              <div id="admin-premio-2" style="font-size:1rem;font-weight:800;color:#C0C0C0">🥈 ${formatBRL(premios.segundo)}</div>
+              <div style="font-size:0.68rem;color:var(--text-muted)">2º (30%)</div>
+            </div>
+            <div style="text-align:center;min-width:90px">
+              <div id="admin-premio-3" style="font-size:1rem;font-weight:800;color:#CD7F32">🥉 ${formatBRL(premios.terceiro)}</div>
+              <div style="font-size:0.68rem;color:var(--text-muted)">3º (10%)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="alert alert-info">${users.length} usuário(s) registrado(s) · ${activeUsers.length} ativo(s) · marque "Pago" para confirmar pagamento.</div>`;
     if (bulkMailto) {
       html += `<div style="margin-bottom:16px"><a href="${esc(bulkMailto)}" class="btn btn-primary btn-sm">📧 Email para todos com palpites incompletos (${incomplete.length})</a></div>`;
     }
@@ -3831,6 +4051,7 @@ async function renderAdminUsuarios() {
       const filled = userPalCounts[u.uid]??0;
       const pct = Math.round(filled/total*100);
       const isComplete = filled>=total;
+      const isPago = u.pago === true;
       const statusBadge = u.ativo===false ? '' :
         isComplete
           ? `<span style="background:rgba(0,200,81,.15);color:var(--green);border:1px solid var(--green);border-radius:12px;padding:2px 8px;font-size:0.72rem;font-weight:700">✅ Em dia ${filled}/${total}</span>`
@@ -3839,14 +4060,20 @@ async function renderAdminUsuarios() {
       const mailBtn = u.email && !isComplete && u.ativo!==false
         ? `<a href="mailto:${esc(u.email)}?subject=${encodeURIComponent('[Bolão ICN] Seus palpites estão incompletos')}&body=${encodeURIComponent(mailBody)}" class="btn btn-secondary btn-sm">📧 Lembrete</a>`
         : '';
-      html += `<div class="user-row">
+      html += `<div class="user-row" id="user-row-${u.uid}">
         <div class="user-info-col">
           <div class="user-name-big">${esc(u.apelido)} <span class="badge ${u.role==='admin'?'badge-admin-tag':'badge-user'}">${u.role}</span>
-            ${u.ativo===false?'<span class="badge badge-inactive">Inativo</span>':statusBadge}</div>
+            ${u.ativo===false?'<span class="badge badge-inactive">Inativo</span>':statusBadge}
+            ${isPago?`<span class="paid-badge">💚 Pago</span>`:`<span class="unpaid-badge">⏳ Pendente</span>`}
+          </div>
           <div class="user-email">${esc(u.nome)} · ${esc(u.email)}</div>
           ${u.ativo!==false?`<div style="margin-top:4px"><div style="height:4px;border-radius:2px;background:var(--border);width:100%;max-width:160px"><div style="height:4px;border-radius:2px;background:${isComplete?'var(--green)':'var(--orange)'};width:${pct}%"></div></div></div>`:''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label class="paid-toggle" title="Marcar como pago (R$ ${CFG.valor_participacao||50},00)">
+            <input type="checkbox" id="pago-${u.uid}" ${isPago?'checked':''} onchange="togglePago('${u.uid}',this.checked)">
+            <span>Pago</span>
+          </label>
           <label class="toggle-switch" title="${isSelf?'Você não pode remover seu próprio status de admin':''}">
             <input type="checkbox" ${u.role==='admin'?'checked':''} ${isSelf?'disabled':''} onchange="toggleAdminCheckbox('${u.uid}',this.checked)">
             <span class="toggle-slider"></span>
@@ -3861,6 +4088,44 @@ async function renderAdminUsuarios() {
     });
     cont.innerHTML = html;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
+}
+
+// Estado local dos usuários para recalcular totais sem recarregar
+let _adminUserCache = [];
+
+async function togglePago(uid, isChecked) {
+  try {
+    await db_.collection('usuarios').doc(uid).update({pago: isChecked});
+    // Atualiza badge inline sem recarregar a lista
+    const row = document.getElementById('user-row-'+uid);
+    if (row) {
+      const badgeEl = row.querySelector('.paid-badge, .unpaid-badge');
+      if (badgeEl) {
+        badgeEl.className = isChecked ? 'paid-badge' : 'unpaid-badge';
+        badgeEl.textContent = isChecked ? '💚 Pago' : '⏳ Pendente';
+      }
+    }
+    // Recalcula totais na tela sem recarregar todos os usuários
+    const snap = await db_.collection('usuarios').get();
+    const allUsers = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    const newTotal = calcTotalArrecadado(allUsers);
+    const newPremios = calcPremios(newTotal);
+    const pagosCount = allUsers.filter(u=>u.pago===true && u.ativo!==false).length;
+    const elTotal = document.getElementById('admin-total-arrecadado');
+    const el1 = document.getElementById('admin-premio-1');
+    const el2 = document.getElementById('admin-premio-2');
+    const el3 = document.getElementById('admin-premio-3');
+    if (elTotal) elTotal.textContent = formatBRL(newTotal);
+    if (el1) el1.textContent = '🥇 '+formatBRL(newPremios.primeiro);
+    if (el2) el2.textContent = '🥈 '+formatBRL(newPremios.segundo);
+    if (el3) el3.textContent = '🥉 '+formatBRL(newPremios.terceiro);
+    showToast(isChecked ? '💚 Pagamento confirmado' : '⏳ Pagamento removido', isChecked ? 'success' : 'warning');
+  } catch(e) {
+    showToast('Erro: '+e.message, 'error');
+    // Reverte checkbox em caso de erro
+    const cb = document.getElementById('pago-'+uid);
+    if (cb) cb.checked = !isChecked;
+  }
 }
 
 async function toggleAdminCheckbox(uid, isChecked) {
@@ -3920,6 +4185,124 @@ async function deleteUser(uid) {
   } catch(e) {
     showToast('❌ Erro ao excluir: '+e.message,'error');
   }
+}
+
+async function renderAdminFinanceiro() {
+  const cont = document.getElementById('admin-financeiro');
+  if (!cont) return;
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const snap = await db_.collection('usuarios').get();
+    const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    const totalArrecadado = calcTotalArrecadado(users);
+    const premios = calcPremios(totalArrecadado);
+    const pagosCount = users.filter(u=>u.pago===true && u.ativo!==false).length;
+    const vp = CFG.valor_participacao || 50;
+
+    const qrPreview = CFG.qrcode_whatsapp
+      ? `<img src="${esc(CFG.qrcode_whatsapp)}" class="qr-code-img" alt="QR Code WhatsApp" style="max-width:200px;border-radius:12px;border:2px solid var(--border)">`
+      : `<div class="qr-placeholder"><span style="font-size:2rem">💬</span><span>Nenhum QR Code enviado</span></div>`;
+
+    cont.innerHTML = `
+      <!-- Total Arrecadado -->
+      <div class="card" style="border-color:var(--green)">
+        <div class="card-title" style="margin-bottom:16px">💰 Total Arrecadado</div>
+        <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">
+          <div>
+            <div style="font-size:2.2rem;font-weight:800;color:var(--green)">${formatBRL(totalArrecadado)}</div>
+            <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px">${pagosCount} participante(s) com pagamento confirmado · ${formatBRL(vp)} por pessoa</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px">
+          <div class="prize-card gold-prize">
+            <span class="prize-medal">🥇</span>
+            <span class="prize-pct">1º Lugar</span>
+            <span class="prize-val">${formatBRL(premios.primeiro)}</span>
+            <span class="prize-lbl">50% do total</span>
+          </div>
+          <div class="prize-card silver-prize">
+            <span class="prize-medal">🥈</span>
+            <span class="prize-pct">2º Lugar</span>
+            <span class="prize-val" style="color:#C0C0C0">${formatBRL(premios.segundo)}</span>
+            <span class="prize-lbl">30% do total</span>
+          </div>
+          <div class="prize-card bronze-prize">
+            <span class="prize-medal">🥉</span>
+            <span class="prize-pct">3º Lugar</span>
+            <span class="prize-val" style="color:#CD7F32">${formatBRL(premios.terceiro)}</span>
+            <span class="prize-lbl">10% do total</span>
+          </div>
+        </div>
+        <div class="alert alert-info" style="margin-top:16px;font-size:0.82rem">
+          💡 O total é calculado automaticamente com base nos usuários marcados como <strong>"Pago"</strong> na aba 👥 Usuários.
+          Cada participante pago soma <strong>${formatBRL(vp)}</strong>. Os prêmios são atualizados em tempo real.
+        </div>
+      </div>
+
+      <!-- Upload QR Code WhatsApp -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">💬 QR Code do Grupo WhatsApp</div>
+        <p class="text-muted" style="font-size:0.85rem;margin-bottom:16px">
+          Faça upload da imagem do QR Code. Ela será exibida automaticamente na <strong>página inicial (login)</strong> e na <strong>página de Regras</strong>.
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+          <div>
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;font-weight:700">QR Code atual:</div>
+            ${qrPreview}
+            ${CFG.qrcode_whatsapp?`<div style="margin-top:8px"><button class="btn btn-red btn-sm" onclick="removeQRCode()">🗑️ Remover QR Code</button></div>`:''}
+          </div>
+          <div style="flex:1;min-width:220px">
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;font-weight:700">Enviar novo QR Code:</div>
+            <label class="qr-upload-area" for="qr-file-input">
+              <span style="font-size:2rem">📤</span>
+              <span style="font-size:0.88rem;color:var(--text-muted)">Clique para selecionar imagem<br><small>(PNG, JPG — max 1 MB)</small></span>
+            </label>
+            <input type="file" id="qr-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="uploadQRCode(this)">
+            <div id="qr-upload-status" style="margin-top:8px;font-size:0.82rem;color:var(--text-muted)"></div>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
+}
+
+async function uploadQRCode(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('qr-upload-status');
+  if (file.size > 1.2 * 1024 * 1024) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">❌ Imagem muito grande (máx. 1 MB). Reduza o tamanho e tente novamente.</span>';
+    return;
+  }
+  if (statusEl) statusEl.textContent = '⏳ Processando...';
+  try {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target.result;
+      await db_.collection('config').doc('geral').set({ qrcode_whatsapp: base64 }, { merge: true });
+      CFG.qrcode_whatsapp = base64;
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--green)">✅ QR Code salvo com sucesso!</span>';
+      showToast('✅ QR Code atualizado!', 'success');
+      // Atualiza exibição em todas as telas
+      _renderQRCode('auth-qr-container');
+      _renderQRCode('regras-qr-container');
+      setTimeout(()=>renderAdminFinanceiro(), 600);
+    };
+    reader.readAsDataURL(file);
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">❌ Erro: ${esc(errMsg(e))}</span>`;
+  }
+}
+
+async function removeQRCode() {
+  if (!confirm('Remover o QR Code do grupo de WhatsApp?')) return;
+  try {
+    await db_.collection('config').doc('geral').set({ qrcode_whatsapp: '' }, { merge: true });
+    CFG.qrcode_whatsapp = '';
+    showToast('QR Code removido', 'warning');
+    _renderQRCode('auth-qr-container');
+    _renderQRCode('regras-qr-container');
+    renderAdminFinanceiro();
+  } catch(e) { showToast('Erro: '+errMsg(e), 'error'); }
 }
 
 async function renderAdminEditPalpites(selectedUid=null) {
@@ -4345,6 +4728,34 @@ document.addEventListener('click', function(e) {
 function errMsg(err) {
   if (!err) return 'Erro desconhecido';
   return err.message ? String(err.message) : String(err);
+}
+
+function formatBRL(value) {
+  return 'R$ ' + Number(value).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function calcTotalArrecadado(users) {
+  const vp = CFG.valor_participacao || 50;
+  const pagos = users.filter(u => u.pago === true && u.ativo !== false).length;
+  return pagos * vp;
+}
+
+function calcPremios(total) {
+  return {
+    primeiro: total * 0.5,
+    segundo:  total * 0.3,
+    terceiro: total * 0.1
+  };
+}
+
+function _renderQRCode(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (CFG.qrcode_whatsapp) {
+    el.innerHTML = `<img src="${esc(CFG.qrcode_whatsapp)}" class="qr-code-img" alt="QR Code WhatsApp">`;
+  } else {
+    el.innerHTML = `<div class="qr-placeholder"><span style="font-size:2rem">💬</span><span>QR Code do grupo<br>será exibido aqui</span></div>`;
+  }
 }
 
 function esc(str) {
