@@ -360,6 +360,36 @@ select option{background:var(--mid-blue);color:var(--white)}
 .bracket-score{font-weight:800;color:var(--green)}
 
 /* ══════════════════════════════════════════
+   BILATERAL BRACKET
+══════════════════════════════════════════ */
+.bil-page-wrap{width:100%;overflow-x:auto;padding-bottom:24px}
+.bil-bracket{display:flex;align-items:stretch;min-width:1060px;padding:0 2px}
+.bil-side{display:flex;flex:1;align-items:stretch}
+.bil-side.right{flex-direction:row-reverse}
+.bil-center{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;min-width:114px;flex-shrink:0;gap:6px}
+.bil-center-lbl{font-size:0.62rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;text-align:center}
+.bil-round{flex:1;display:flex;flex-direction:column;padding:0 3px;min-width:0}
+.bil-rtitle{font-size:0.64rem;font-weight:700;text-align:center;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;padding:4px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--border);margin-bottom:4px}
+.bil-games{display:flex;flex-direction:column;flex:1}
+.bil-pair{display:flex;flex-direction:column;flex:1;position:relative;padding-right:12px}
+.bil-side.right .bil-pair{padding-right:0;padding-left:12px}
+.bil-side.left .bil-pair::after{content:'';position:absolute;right:3px;top:25%;bottom:25%;width:2px;background:rgba(255,215,0,.22);pointer-events:none}
+.bil-side.right .bil-pair::after{content:'';position:absolute;left:3px;top:25%;bottom:25%;width:2px;background:rgba(255,215,0,.22);pointer-events:none}
+.bil-match{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;padding:6px 7px;margin:3px 0;font-size:0.74rem;flex:1;display:flex;flex-direction:column;justify-content:center;position:relative}
+.bil-side.left .bil-pair .bil-match::after{content:'';position:absolute;right:-12px;top:calc(50% - 1px);width:11px;height:2px;background:rgba(255,215,0,.22)}
+.bil-side.right .bil-pair .bil-match::after{content:'';position:absolute;left:-12px;top:calc(50% - 1px);width:11px;height:2px;background:rgba(255,215,0,.22)}
+.bil-match.final-match{border-color:var(--gold);background:rgba(255,215,0,.1)}
+.bil-match.third-match{border-color:var(--accent);background:rgba(93,156,236,.07)}
+.bil-team{display:flex;align-items:center;gap:4px;padding:2px 0}
+.bil-team+.bil-team{border-top:1px dashed rgba(255,255,255,.08);margin-top:2px;padding-top:3px}
+.bil-team.winner .bil-tname{color:var(--gold);font-weight:700}
+.bil-tname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.73rem}
+.bil-tname.ph{color:var(--text-muted);font-style:italic;font-size:0.67rem}
+.bil-tscore{font-weight:800;color:var(--green);font-size:0.78rem;margin-left:4px}
+.bil-pen{color:var(--text-muted);font-size:0.65rem}
+.bil-minfo{font-size:0.6rem;color:var(--text-muted);margin-bottom:3px;font-weight:600;letter-spacing:.03em}
+
+/* ══════════════════════════════════════════
    ADMIN PANEL
 ══════════════════════════════════════════ */
 .admin-tabs{display:flex;gap:6px;margin-bottom:24px;border-bottom:2px solid var(--border);padding-bottom:0}
@@ -848,6 +878,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
       <button class="nav-btn" data-page="ver-palpites" onclick="navigateTo('ver-palpites')">👁️ Ver</button>
       <button class="nav-btn" data-page="tabelas" onclick="navigateTo('tabelas')">📊 Tabelas</button>
       <button class="nav-btn" data-page="chaveamento" onclick="navigateTo('chaveamento')">🔑 Chaves</button>
+      <button class="nav-btn" data-page="chaveamento-bilateral" onclick="navigateTo('chaveamento-bilateral')">🏆 Bilateral</button>
       <button class="nav-btn" data-page="estatisticas" onclick="navigateTo('estatisticas')">📈 Stats</button>
       <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
       <button class="nav-btn" data-page="admin" id="admin-nav" style="display:none" onclick="navigateTo('admin')">⚙️ Admin</button>
@@ -861,6 +892,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
         <a onclick="navigateTo('palpites');toggleDropdown()">⚽ Palpites</a>
         <a onclick="navigateTo('tabelas');toggleDropdown()">📊 Tabelas</a>
         <a onclick="navigateTo('chaveamento');toggleDropdown()">🔑 Chaveamento</a>
+        <a onclick="navigateTo('chaveamento-bilateral');toggleDropdown()">🏆 Chave Bilateral</a>
         <a onclick="navigateTo('regras');toggleDropdown()">📋 Regras</a>
         <a onclick="navigateTo('estatisticas');toggleDropdown()">📈 Estatísticas</a>
         <a onclick="navigateTo('ver-palpites');toggleDropdown()">👁️ Ver Palpites</a>
@@ -911,6 +943,13 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
     <!-- ── CHAVEAMENTO ── -->
     <div id="page-chaveamento" class="page">
       <div class="container" id="chaveamento-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ── CHAVEAMENTO BILATERAL ── -->
+    <div id="page-chaveamento-bilateral" class="page">
+      <div class="container" id="chaveamento-bilateral-content">
         <div class="loading-wrap"><div class="spinner"></div></div>
       </div>
     </div>
@@ -1580,6 +1619,7 @@ function navigateTo(page) {
     case 'ver-todos':   renderVerTodos(); break;
     case 'tabelas':     renderTabelas(); break;
     case 'chaveamento': renderChaveamento(); break;
+    case 'chaveamento-bilateral': renderChaveamentoBilateral(); break;
     case 'regras':      renderRegras(); break;
     case 'estatisticas': renderEstatisticas(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
@@ -1589,7 +1629,7 @@ function navigateTo(page) {
 
 function _restorePageFromHash() {
   const hash = (location.hash||'').replace('#','').trim();
-  const valid = ['dashboard','palpites','tabelas','chaveamento','regras','estatisticas','admin'];
+  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','admin'];
   const page = valid.includes(hash) ? hash : 'dashboard';
   // admin só restaura se usuário for admin
   if (page === 'admin' && currentUserDoc?.role !== 'admin') return navigateTo('dashboard');
@@ -2512,6 +2552,10 @@ async function renderVerPalpites(selectedUid=null) {
       const selectedUser = users.find(u=>u.uid===selectedUid);
       if (!selectedUser) { cont.innerHTML = `${html}<div class="alert alert-error">Usuário não encontrado</div>`; return; }
 
+      const isAdmin = currentUserDoc?.role === 'admin';
+      const isOwner = selectedUid === currentUser.uid;
+      const canReveal = isAdmin || isOwner;
+
       const [pSnap, pDoc] = await Promise.all([
         db_.collection('palpites').doc(selectedUid).collection('jogos').get(),
         db_.collection('palpites').doc(selectedUid).get()
@@ -2520,10 +2564,13 @@ async function renderVerPalpites(selectedUid=null) {
       pSnap.docs.forEach(d=>{ userPals[d.id]=d.data(); });
       const userChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
       const finalChampion = _getFinalChampion(res);
+      const champUnlocked = canReveal || CFG.campeao_locked === true || !!finalChampion;
       const hitCampeao = !!(finalChampion && userChampion && userChampion===finalChampion);
-      const champLine = userChampion
-        ? `<div style="margin-top:10px;font-size:0.95rem">🏆 Palpite de campeão: <b style="color:${hitCampeao?'var(--green)':'var(--gold)'}">${COUNTRY_FLAGS[userChampion]||''} ${esc(userChampion)}</b>${finalChampion?(hitCampeao?` ✅ <span style="color:var(--green)">+${CFG.pts_campeao||0} pts</span>`:` ❌`):''}</div>`
-        : `<div style="margin-top:10px;font-size:0.85rem;color:var(--text-muted)">🏆 Sem palpite de campeão</div>`;
+      const champLine = champUnlocked
+        ? (userChampion
+          ? `<div style="margin-top:10px;font-size:0.95rem">🏆 Palpite de campeão: <b style="color:${hitCampeao?'var(--green)':'var(--gold)'}">${COUNTRY_FLAGS[userChampion]||''} ${esc(userChampion)}</b>${finalChampion?(hitCampeao?` ✅ <span style="color:var(--green)">+${CFG.pts_campeao||0} pts</span>`:` ❌`):''}</div>`
+          : `<div style="margin-top:10px;font-size:0.85rem;color:var(--text-muted)">🏆 Sem palpite de campeão</div>`)
+        : `<div style="margin-top:10px;font-size:0.85rem;color:var(--text-muted)">🏆 Campeão: <span style="color:var(--text-muted)">🔒 oculto até bloqueio</span></div>`;
 
       html += `<div class="card" style="border:2px solid var(--gold);background:rgba(255,215,0,.08);text-align:center;padding:16px;margin-bottom:20px">
         <div style="font-size:1.2rem;font-weight:800;color:var(--gold);margin-bottom:6px">👁️ Palpites de</div>
@@ -2550,7 +2597,7 @@ async function renderVerPalpites(selectedUid=null) {
       groupKeys.forEach((g,i)=>{
         html += `<div class="pal-group-view" data-group="${g}" style="${i===0?'':'display:none'}">
           <p class="text-muted" style="font-size:0.8rem;margin-bottom:12px">Grupo ${g}: ${GRUPOS_DATA[g].teams.join(', ')}</p>`;
-        GRUPOS_DATA[g].games.forEach(game=>{ html += buildVerPalRow(game, userPals, res); });
+        GRUPOS_DATA[g].games.forEach(game=>{ html += buildVerPalRow(game, userPals, res, canReveal); });
         html += `</div>`;
       });
       html += `</div>`;
@@ -2558,7 +2605,7 @@ async function renderVerPalpites(selectedUid=null) {
       Object.entries(ELIM_DATA).forEach(([key,data])=>{
         html += `<div class="pal-phase-view" data-phase="${key}" style="display:none">
           <p class="text-muted" style="font-size:0.8rem;margin-bottom:12px">${data.icon} ${data.label}</p>`;
-        data.games.forEach(game=>{ html += buildVerPalRow(game, userPals, res); });
+        data.games.forEach(game=>{ html += buildVerPalRow(game, userPals, res, canReveal); });
         html += `</div>`;
       });
 
@@ -2582,24 +2629,29 @@ async function renderVerPalpites(selectedUid=null) {
   }
 }
 
-function buildVerPalRow(game, userPals, res) {
+function buildVerPalRow(game, userPals, res, canReveal=true) {
   const pal = userPals[game.id]||{};
   const r = res[game.id]||{};
   const teams = _getResolvedTeamsForGame(game, res);
   const hasResult = r.h_real!==undefined;
+  const isLocked = r.locked===true || hasResult;
+  const showPal = canReveal || isLocked;
   const pts = calcPontos(pal,r);
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
-  const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
+  const ptsBadge = (showPal&&pts!==null)?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = COUNTRY_FLAGS[teams.h] || '';
   const flagA = COUNTRY_FLAGS[teams.a] || '';
   const time = GAME_TIMES[game.id] || '--:--';
+  const hiddenBadge = !showPal && pal.h!==undefined ? `<span style="font-size:0.72rem;color:var(--text-muted)">🔒 oculto</span>` : '';
+  const hVal = showPal ? (pal.h!==undefined?pal.h:'') : '';
+  const aVal = showPal ? (pal.a!==undefined?pal.a:'') : '';
   return `<div class="game-row">
     <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
-    <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.h!==undefined?pal.h:''}">
-    <div class="vs-badge">✕</div>
-    <input type="number" class="score-input ${iCls}" disabled placeholder="–" value="${pal.a!==undefined?pal.a:''}">
-    <div><div class="team-name">${flagA} ${esc(teams.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}</div></div>
+    <input type="number" class="score-input ${iCls}" disabled placeholder="${showPal?'–':'🔒'}" value="${hVal}">
+    <div class="vs-badge">${showPal?'✕':'🔒'}</div>
+    <input type="number" class="score-input ${iCls}" disabled placeholder="${showPal?'–':'🔒'}" value="${aVal}">
+    <div><div class="team-name">${flagA} ${esc(teams.a)}</div><div class="game-meta flex">${resultBadge}${ptsBadge}${hiddenBadge}</div></div>
   </div>`;
 }
 
@@ -2818,6 +2870,8 @@ async function renderVerTodos() {
       champPicks[u.uid] = pdoc.exists ? (pdoc.data()?.campeao || null) : null;
     }));
     const finalChampion = _getFinalChampion(res);
+    const isAdminView = currentUserDoc?.role === 'admin';
+    const champRevealed = isAdminView || CFG.campeao_locked === true || !!finalChampion;
 
     const gamesOrdered = ALL_GAMES.slice().sort((a,b)=>_parseGameDate(a.date)-_parseGameDate(b.date));
     const phaseGroups = [
@@ -2829,15 +2883,19 @@ async function renderVerTodos() {
     const champSummary = `
       <div class="card" style="margin-bottom:16px;border:2px solid var(--gold);background:rgba(255,215,0,.05)">
         <div class="card-header"><span class="card-title">🏆 Palpite Campeão por Participante</span>
-          ${finalChampion?`<span class="pts-badge" style="margin-left:auto">Campeã: ${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</span>`:''}
+          ${finalChampion?`<span class="pts-badge" style="margin-left:auto">Campeã: ${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</span>`:(champRevealed?'':` <span style="font-size:0.75rem;color:var(--text-muted)">🔒 Visível após bloqueio</span>`)}
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px">
           ${users.map(u=>{
-            const t = champPicks[u.uid];
+            const isOwn = u.uid === currentUser.uid;
+            const canSeeChamp = champRevealed || isOwn;
+            const t = canSeeChamp ? champPicks[u.uid] : null;
             const hit = !!(finalChampion && t && t===finalChampion);
-            const teamHtml = t
-              ? `<b style="color:${hit?'var(--green)':'var(--gold)'}">${COUNTRY_FLAGS[t]||''} ${esc(t)}</b>${hit?` <span style="color:var(--green);font-size:0.72rem">✅ +${CFG.pts_campeao||0}</span>`:''}`
-              : `<span style="color:var(--text-muted);font-style:italic">— sem palpite —</span>`;
+            const teamHtml = canSeeChamp
+              ? (t
+                ? `<b style="color:${hit?'var(--green)':'var(--gold)'}">${COUNTRY_FLAGS[t]||''} ${esc(t)}</b>${hit?` <span style="color:var(--green);font-size:0.72rem">✅ +${CFG.pts_campeao||0}</span>`:''}`
+                : `<span style="color:var(--text-muted);font-style:italic">— sem palpite —</span>`)
+              : `<span style="color:var(--text-muted)">🔒 oculto</span>`;
             return `<div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.03);cursor:pointer" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites">
               <div style="font-size:0.78rem;color:var(--text-muted)">${esc(u.apelido)}</div>
               <div style="font-size:0.92rem;margin-top:2px">${teamHtml}</div>
@@ -2859,11 +2917,15 @@ async function renderVerTodos() {
           <th style="min-width:55px">Data</th>
           <th style="min-width:55px">Result.</th>
           ${users.map(u=>{
-            const t = champPicks[u.uid];
+            const isOwn = u.uid === currentUser.uid;
+            const canSeeChamp = champRevealed || isOwn;
+            const t = canSeeChamp ? champPicks[u.uid] : null;
             const hit = !!(finalChampion && t && t===finalChampion);
-            const champCell = t
-              ? `<div style="font-size:0.65rem;font-weight:600;color:${hit?'var(--green)':'var(--text-muted)'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Campeão: ${esc(t)}">🏆 ${COUNTRY_FLAGS[t]||''} ${esc(t.split(' ')[0])}</div>`
-              : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 —</div>`;
+            const champCell = canSeeChamp
+              ? (t
+                ? `<div style="font-size:0.65rem;font-weight:600;color:${hit?'var(--green)':'var(--text-muted)'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Campeão: ${esc(t)}">🏆 ${COUNTRY_FLAGS[t]||''} ${esc(t.split(' ')[0])}</div>`
+                : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 —</div>`)
+              : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 🔒</div>`;
             return `<th style="min-width:68px;cursor:pointer;color:var(--gold);vertical-align:top" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites de ${esc(u.apelido)}">${esc(u.apelido)}${champCell}</th>`;
           }).join('')}
         </tr></thead>
@@ -2889,7 +2951,17 @@ async function renderVerTodos() {
         <td style="font-weight:600;color:${hasResult?'var(--green)':'var(--text-muted)'};white-space:nowrap">${resultStr}</td>`;
       users.forEach(u=>{
         const pal = allPals[u.uid]?.[g.id];
-        if (!pal||pal.h===undefined) { html += `<td style="color:var(--text-muted)">—</td>`; return; }
+        const isOwn = u.uid === currentUser.uid;
+        const isGameLocked = r.locked===true || hasResult;
+        const canSeePal = isAdminView || isOwn || isGameLocked;
+        if (!pal||pal.h===undefined) {
+          html += `<td style="color:var(--text-muted)">—</td>`;
+          return;
+        }
+        if (!canSeePal) {
+          html += `<td style="color:var(--text-muted);font-size:0.72rem">🔒</td>`;
+          return;
+        }
         const pts = calcPontos(pal, r);
         const palStr = `${pal.h}-${pal.a}`;
         let bg='', col='';
@@ -3663,6 +3735,104 @@ async function renderChaveamento() {
       html += `</div></div>`;
     });
     html += `</div></div>`;
+    cont.innerHTML = html;
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
+}
+
+// ════════════════════════════════════════════
+// CHAVEAMENTO BILATERAL PAGE
+// ════════════════════════════════════════════
+async function renderChaveamentoBilateral() {
+  const cont = document.getElementById('chaveamento-bilateral-content');
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const rSnap = await db_.collection('resultados').get();
+    const res = {};
+    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+
+    const roundOrder = _bracketRoundOrder();
+
+    function bilMatchCard(gameId, extraCls) {
+      const gameDef = ALL_GAMES.find(g=>g.id===gameId);
+      const r = res[gameId]||{};
+      const hasRes = r.h_real!==undefined && r.a_real!==undefined;
+      const hasPen = r.h_pen!==undefined && r.a_pen!==undefined;
+      const winner = _winnerOf(r, r.h_team||(gameDef?.h)||'?', r.a_team||(gameDef?.a)||'?');
+      const mno = FIFA_MATCH_NO[gameId];
+      const infoLine = (mno||gameDef?.date) ? `<div class="bil-minfo">${mno?`P${mno}`:''}${mno&&gameDef?.date?' · ':''}${gameDef?.date||''}</div>` : '';
+
+      function teamLine(side) {
+        const rawToken = side==='h' ? (gameDef?.h||'?') : (gameDef?.a||'?');
+        const resolved = (side==='h' ? r.h_team : r.a_team) || rawToken;
+        const isPh = _isPlaceholder(resolved);
+        const flag = (!isPh && COUNTRY_FLAGS[resolved]) ? COUNTRY_FLAGS[resolved] : '';
+        const score = hasRes ? (side==='h' ? r.h_real : r.a_real) : '';
+        const pen = hasPen ? ` <span class="bil-pen">(${side==='h'?r.h_pen:r.a_pen})</span>` : '';
+        const isWin = !!winner && winner===resolved;
+        const shortName = isPh ? (resolved||'?').replace(/^(?:Venc\.|Perd\.)\s*/,'') : (resolved||'?');
+        return `<div class="bil-team ${isWin?'winner':''}">
+          ${flag?`<span>${flag}</span>`:''}
+          <span class="bil-tname ${isPh?'ph':''}">${esc(shortName)}</span>
+          <span class="bil-tscore">${score}</span>${pen}
+        </div>`;
+      }
+
+      return `<div class="bil-match${extraCls?' '+extraCls:''}">${infoLine}${teamLine('h')}${teamLine('a')}</div>`;
+    }
+
+    function roundHTML(gameIds) {
+      let html = '';
+      for (let i=0; i<gameIds.length; i+=2) {
+        const pair = gameIds.slice(i, i+2);
+        if (pair.length===2) {
+          html += `<div class="bil-pair">${pair.map(id=>bilMatchCard(id)).join('')}</div>`;
+        } else {
+          html += bilMatchCard(pair[0]);
+        }
+      }
+      return html;
+    }
+
+    const r32Ids  = roundOrder.r32     || [];
+    const r16Ids  = roundOrder.r16     || [];
+    const qfIds   = roundOrder.quartas || [];
+    const sfIds   = roundOrder.semi    || [];
+    const finIds  = roundOrder.final   || [];
+
+    const h32=Math.ceil(r32Ids.length/2), h16=Math.ceil(r16Ids.length/2), hqf=Math.ceil(qfIds.length/2);
+    const r32L=r32Ids.slice(0,h32), r32R=r32Ids.slice(h32);
+    const r16L=r16Ids.slice(0,h16), r16R=r16Ids.slice(h16);
+    const qfL =qfIds.slice(0,hqf),  qfR =qfIds.slice(hqf);
+    const sfL  = sfIds[0] ? [sfIds[0]] : [];
+    const sfR  = sfIds[1] ? [sfIds[1]] : [];
+    const finalId = finIds.find(id=>id==='FIN1');
+    const thirdId = finIds.find(id=>id==='T1');
+
+    const html = `<div class="section-title">🏆 Chaveamento Bilateral</div>
+      <div class="alert alert-info" style="font-size:0.82rem">Visualização em árvore bilateral — as duas metades convergem para a <strong>Final</strong> no centro. As linhas mostram quais partidas alimentam a próxima fase.</div>
+      <div class="bil-page-wrap">
+        <div class="bil-bracket">
+          <div class="bil-side left">
+            <div class="bil-round"><div class="bil-rtitle">Round of 32</div><div class="bil-games">${roundHTML(r32L)}</div></div>
+            <div class="bil-round"><div class="bil-rtitle">Oitavas de Final</div><div class="bil-games">${roundHTML(r16L)}</div></div>
+            <div class="bil-round"><div class="bil-rtitle">Quartas de Final</div><div class="bil-games">${roundHTML(qfL)}</div></div>
+            <div class="bil-round"><div class="bil-rtitle">Semifinal</div><div class="bil-games">${sfL.map(id=>bilMatchCard(id)).join('')}</div></div>
+          </div>
+          <div class="bil-center">
+            <div class="bil-center-lbl">🏆 Final</div>
+            ${finalId ? bilMatchCard(finalId,'final-match') : '<div class="bil-match final-match" style="min-height:70px"></div>'}
+            <div class="bil-center-lbl" style="margin-top:12px">🥉 3º Lugar</div>
+            ${thirdId ? bilMatchCard(thirdId,'third-match') : '<div class="bil-match third-match" style="min-height:70px"></div>'}
+          </div>
+          <div class="bil-side right">
+            <div class="bil-round"><div class="bil-rtitle">Semifinal</div><div class="bil-games">${sfR.map(id=>bilMatchCard(id)).join('')}</div></div>
+            <div class="bil-round"><div class="bil-rtitle">Quartas de Final</div><div class="bil-games">${roundHTML(qfR)}</div></div>
+            <div class="bil-round"><div class="bil-rtitle">Oitavas de Final</div><div class="bil-games">${roundHTML(r16R)}</div></div>
+            <div class="bil-round"><div class="bil-rtitle">Round of 32</div><div class="bil-games">${roundHTML(r32R)}</div></div>
+          </div>
+        </div>
+      </div>`;
+
     cont.innerHTML = html;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
