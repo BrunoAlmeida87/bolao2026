@@ -2005,6 +2005,8 @@ async function renderDashboard() {
     }));
     const ranking = computeRanking(users, res, allPals, champPicks);
     const finalChampion = _getFinalChampion(res);
+    const isAdminDash = currentUserDoc?.role === 'admin';
+    const champRevealed = isAdminDash || CFG.campeao_locked === true || !!finalChampion;
     const maxPts = ranking[0]?.pontos||1;
     const totalJogos = Object.keys(res).filter(id=>_hasFullResult(res[id])).length;
     const myRank = ranking.findIndex(r=>r.uid===currentUser.uid)+1;
@@ -2113,9 +2115,13 @@ async function renderDashboard() {
         delta < 0 ? `<span style="font-size:0.65rem;font-weight:700;color:#ff6b6b;display:block;line-height:1">↓${Math.abs(delta)}</span>` :
         `<span style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
       const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
-      const champCell = u.campeao
-        ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${COUNTRY_FLAGS[u.campeao]||''} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
-        : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`;
+      const isOwnRow = u.uid === currentUser.uid;
+      const canSeeChampRow = champRevealed || isOwnRow;
+      const champCell = !canSeeChampRow
+        ? `<span style="color:var(--text-muted);font-size:0.78rem">🔒</span>`
+        : (u.campeao
+          ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${COUNTRY_FLAGS[u.campeao]||''} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
+          : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`);
       html += `<tr class="${isMe?'is-me':''}">
         <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}</td>
         <td style="cursor:pointer" onclick="goToUserPalpites('${u.uid}')"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
