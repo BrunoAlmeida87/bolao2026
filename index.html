@@ -658,6 +658,28 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .qr-upload-area{border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.02)}
 .qr-upload-area:hover{border-color:var(--gold);background:rgba(255,215,0,.04)}
 .total-arrecadado-card{background:linear-gradient(135deg,rgba(0,200,81,.12),rgba(0,200,81,.06));border:2px solid var(--green);border-radius:14px;padding:20px 24px;margin-bottom:16px}
+
+/* ══════════════════════════════════════════
+   MODAL GENÉRICO
+══════════════════════════════════════════ */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-box{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:28px 24px;width:100%;max-width:420px;position:relative}
+.modal-box h3{font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:18px}
+.modal-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;line-height:1}
+.modal-close:hover{color:var(--white)}
+/* Champion select bloqueado */
+.champion-locked-wrap{position:relative;pointer-events:none}
+.champion-locked-wrap select{opacity:.55;cursor:not-allowed!important}
+.champion-lock-badge{display:flex;align-items:center;gap:6px;background:rgba(255,68,68,.12);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:8px 14px;margin-top:8px;font-size:0.85rem;color:var(--red);font-weight:700}
+/* Champion stats bars */
+.champ-stat-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.champ-stat-row:last-child{border-bottom:none}
+.champ-stat-team{flex:1;font-size:0.88rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.champ-stat-bar-wrap{width:120px;flex-shrink:0}
+.champ-stat-count{font-size:0.78rem;color:var(--text-muted);min-width:28px;text-align:right}
+/* Header apelido clicável */
+#header-apelido{cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s}
+#header-apelido:hover{border-bottom-color:var(--gold);color:var(--gold)}
 </style>
 </head>
 <body>
@@ -843,11 +865,12 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
         <a onclick="navigateTo('estatisticas');toggleDropdown()">📈 Estatísticas</a>
         <a onclick="navigateTo('ver-palpites');toggleDropdown()">👁️ Ver Palpites</a>
         <a onclick="navigateTo('ver-todos');toggleDropdown()">📋 Todos os Palpites</a>
+        <a onclick="showApelidoModal();toggleDropdown()">✏️ Alterar Apelido</a>
         <a id="admin-dropdown" style="display:none" onclick="navigateTo('admin');toggleDropdown()">⚙️ Admin</a>
       </div>
     </div>
     <div class="app-user">
-      <span class="user-name" id="header-apelido">—</span>
+      <span class="user-name" id="header-apelido" onclick="showApelidoModal()" title="Clique para alterar seu apelido">—</span>
       <span class="badge-admin" id="header-admin-badge" style="display:none">ADMIN</span>
       <button class="theme-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">🌙</button>
       <button class="btn-logout" onclick="doLogout()">Sair</button>
@@ -937,6 +960,24 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
       </button>
     </div>
   </footer>
+</div>
+
+<!-- MODAL EDITAR APELIDO -->
+<div id="modal-apelido" class="modal-overlay hidden" onclick="if(event.target===this)closeApelidoModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeApelidoModal()">✕</button>
+    <h3>✏️ Alterar Apelido</h3>
+    <div class="form-group">
+      <label>Novo apelido</label>
+      <input type="text" id="input-novo-apelido" placeholder="Seu apelido no bolão" maxlength="30"
+        onkeydown="if(event.key==='Enter') salvarApelido()">
+    </div>
+    <div id="apelido-error" class="alert alert-error" style="display:none;margin-bottom:12px"></div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="btn btn-primary" onclick="salvarApelido()">💾 Salvar</button>
+      <button class="btn btn-secondary" onclick="closeApelidoModal()">Cancelar</button>
+    </div>
+  </div>
 </div>
 
 <!-- TOAST -->
@@ -1382,6 +1423,46 @@ function doLogout() {
   myPalpites = {};
   resultados = {};
   auth_.signOut();
+}
+
+// ════════════════════════════════════════════
+// EDITAR APELIDO
+// ════════════════════════════════════════════
+function showApelidoModal() {
+  const modal = document.getElementById('modal-apelido');
+  const input = document.getElementById('input-novo-apelido');
+  const err = document.getElementById('apelido-error');
+  if (!modal || !input) return;
+  input.value = currentUserDoc?.apelido || '';
+  err.style.display = 'none';
+  modal.classList.remove('hidden');
+  setTimeout(()=>input.focus(),80);
+}
+
+function closeApelidoModal() {
+  const modal = document.getElementById('modal-apelido');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function salvarApelido() {
+  const input = document.getElementById('input-novo-apelido');
+  const err = document.getElementById('apelido-error');
+  if (!input || !err) return;
+  const novo = input.value.trim();
+  err.style.display = 'none';
+  if (!novo) { err.textContent = 'Digite um apelido.'; err.style.display='block'; return; }
+  if (novo.length < 2) { err.textContent = 'Apelido muito curto (mínimo 2 caracteres).'; err.style.display='block'; return; }
+  if (novo.length > 30) { err.textContent = 'Apelido muito longo (máximo 30 caracteres).'; err.style.display='block'; return; }
+  try {
+    await db_.collection('usuarios').doc(currentUser.uid).update({ apelido: novo });
+    currentUserDoc = { ...currentUserDoc, apelido: novo };
+    document.getElementById('header-apelido').textContent = novo;
+    closeApelidoModal();
+    showToast('✅ Apelido atualizado!', 'success');
+  } catch(e) {
+    err.textContent = 'Erro ao salvar: ' + errMsg(e);
+    err.style.display = 'block';
+  }
 }
 
 function setAuthError(form, msg) {
@@ -2138,12 +2219,22 @@ function buildChampionPickerCard() {
   const adminNote = (isAdmin && (champLocked || finalDecided))
     ? `<div class="alert alert-info" style="margin-top:10px;font-size:0.78rem">👑 Como admin você pode alterar mesmo bloqueado.</div>` : '';
 
+  const selectEl = `<select id="champion-select" onchange="onChampionChange(this.value)"
+    ${canEdit?'':'disabled tabindex="-1"'}
+    style="width:100%;padding:10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid ${canEdit?'var(--border)':'rgba(255,68,68,.4)'};font-size:0.95rem;${canEdit?'':'cursor:not-allowed;'}">
+    ${opts}
+  </select>`;
+
+  const lockBanner = !canEdit && !finalDecided
+    ? `<div class="champion-lock-badge">🔒 Escolha bloqueada pelo administrador — não é possível alterar</div>` : '';
+
   return `<div class="card" style="border:2px solid var(--gold);background:rgba(255,215,0,.06);margin-bottom:18px">
     <div class="card-header"><span class="card-title">🏆 Palpite Campeão (Bônus +${ptsCampeao} pts)</span></div>
     <p style="font-size:0.85rem;color:var(--text-muted);margin:6px 0 10px">Escolha a seleção que você acha que será campeã da Copa do Mundo 2026.</p>
-    <select id="champion-select" onchange="onChampionChange(this.value)" ${canEdit?'':'disabled'} style="width:100%;padding:10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid var(--border);font-size:0.95rem">
-      ${opts}
-    </select>
+    ${canEdit
+      ? selectEl
+      : `<div class="champion-locked-wrap">${selectEl}</div>`}
+    ${lockBanner}
     ${currentLine}
     ${status}
     ${adminNote}
@@ -2152,14 +2243,32 @@ function buildChampionPickerCard() {
 
 async function onChampionChange(team) {
   const isAdmin = currentUserDoc?.role === 'admin';
-  const champLocked = CFG.campeao_locked === true;
-  const finalDecided = !!_getFinalChampion(resultados);
-  if (!isAdmin && (champLocked || finalDecided)) {
-    showToast(finalDecided?'Final já decidida — palpite encerrado.':'🔒 Palpite de campeão bloqueado pelo admin.','warning');
-    // Reverte a seleção visual
-    const sel = document.getElementById('champion-select');
-    if (sel) sel.value = myChampion || '';
+  const revertSel = () => { const s = document.getElementById('champion-select'); if (s) s.value = myChampion || ''; };
+
+  // Verificação local imediata (estado em memória)
+  if (!isAdmin && (CFG.campeao_locked === true || !!_getFinalChampion(resultados))) {
+    showToast(!!_getFinalChampion(resultados)?'Final já decidida — palpite encerrado.':'🔒 Palpite de campeão bloqueado pelo admin.','warning');
+    revertSel();
     return;
+  }
+
+  // Re-verifica no Firestore para evitar race condition (admin pode ter bloqueado enquanto a tela estava aberta)
+  if (!isAdmin) {
+    try {
+      const cfgSnap = await db_.collection('config').doc('geral').get();
+      if (cfgSnap.exists) {
+        const freshLocked = cfgSnap.data().campeao_locked === true;
+        if (freshLocked) {
+          CFG.campeao_locked = true; // sincroniza memória
+          showToast('🔒 Palpite de campeão bloqueado pelo admin.','warning');
+          revertSel();
+          // Regera o card para mostrar o bloqueio visualmente
+          const card = document.querySelector('.champion-locked-wrap')?.closest('.card') || document.getElementById('champion-select')?.closest('.card');
+          if (card) card.outerHTML = buildChampionPickerCard();
+          return;
+        }
+      }
+    } catch(_) {} // falha silenciosa: continua com estado local
   }
   const uid = palpitesEditing || currentUser.uid;
   const prev = myChampion;
@@ -3314,6 +3423,34 @@ async function renderEstatisticas() {
           <p style="font-size:1.2rem;font-weight:700;color:var(--green);margin-top:12px">${resultMaisComum[0]} <span style="font-size:0.85rem;color:var(--text-muted)">(${resultMaisComum[1]} jogos)</span></p>
         ` : '<p class="text-muted">Sem dados</p>'}
       </div>`;
+
+    // ── Palpites de Campeão ──
+    const champVotes = {};
+    Object.values(champPicks).forEach(t => { if(t) champVotes[t] = (champVotes[t]||0) + 1; });
+    const champVotesArr = Object.entries(champVotes).sort((a,b)=>b[1]-a[1]);
+    const totalVotes = champVotesArr.reduce((s,[,v])=>s+v,0);
+    const semEscolha = users.length - totalVotes;
+    const finalChampionEst = _getFinalChampion(res);
+    if (champVotesArr.length > 0) {
+      const maxVotes = champVotesArr[0][1] || 1;
+      html += `<div class="card">
+        <div class="card-title" style="margin-bottom:14px">🏆 Palpites de Campeão (${totalVotes} escolha${totalVotes!==1?'s':''})</div>
+        ${finalChampionEst?`<div class="alert alert-success" style="margin-bottom:12px;font-size:0.82rem">🏆 Campeã definida: <b>${COUNTRY_FLAGS[finalChampionEst]||''} ${esc(finalChampionEst)}</b></div>`:''}
+        ${champVotesArr.map(([team,count])=>{
+          const flag = COUNTRY_FLAGS[team]||'';
+          const pct = totalVotes>0?Math.round(count/totalVotes*100):0;
+          const isWinner = team===finalChampionEst;
+          return `<div class="champ-stat-row">
+            <div class="champ-stat-team">${flag} ${esc(team)}${isWinner?' ✅':''}</div>
+            <div class="champ-stat-bar-wrap">
+              <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round(count/maxVotes*100)}%;${isWinner?'background:var(--green)':''}"></div></div>
+            </div>
+            <span class="champ-stat-count">${count} (${pct}%)</span>
+          </div>`;
+        }).join('')}
+        ${semEscolha>0?`<div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${semEscolha} participante(s) ainda sem escolha de campeão</div>`:''}
+      </div>`;
+    }
 
     cont.innerHTML = html;
   } catch(e) {
