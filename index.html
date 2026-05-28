@@ -248,11 +248,13 @@ select option{background:var(--mid-blue);color:var(--white)}
 .pts-badge{
   background:rgba(255,215,0,.12);color:var(--gold);
   font-weight:800;padding:3px 8px;border-radius:6px;font-size:0.85rem;
+  white-space:nowrap;display:inline-block;
 }
 .mini-bar{
   height:6px;background:var(--border);border-radius:3px;
-  overflow:hidden;min-width:60px;margin-top:3px;
+  overflow:hidden;min-width:50px;margin-top:3px;
 }
+.dashboard-stats-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
 .mini-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),#FFA500);border-radius:3px}
 
 /* ══════════════════════════════════════════
@@ -607,6 +609,17 @@ select option{background:var(--mid-blue);color:var(--white)}
   .result-row{grid-template-columns:1fr 46px 16px 46px 1fr auto;gap:4px}
   .result-input{width:46px;height:42px;font-size:1rem}
   .ranking-table .hide-mobile{display:none}
+  .ranking-table th,.ranking-table td{padding:7px 8px;font-size:0.8rem}
+  .rank-pos{width:26px;height:26px;font-size:0.75rem}
+  .mini-bar{min-width:36px}
+  .dashboard-stats-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .dashboard-stats-grid > div > div:first-child{font-size:1.5rem}
+  .prize-pool-bar{padding:12px 14px;gap:8px}
+  .prize-pool-item{min-width:0;flex:1 1 40%}
+  .prize-pool-item .ppi-val{font-size:1rem}
+  .prize-grid{grid-template-columns:1fr}
+  .stats-alt-grid{grid-template-columns:1fr}
+  .champ-stat-bar-wrap{width:80px}
   .stats-pair{grid-template-columns:1fr}
   .card{padding:14px;border-radius:12px;margin-bottom:14px}
   .stat-card .val{font-size:1.5rem}
@@ -2068,7 +2081,7 @@ async function renderDashboard() {
       </div>
 
       <div style="background:linear-gradient(135deg,rgba(255,215,0,.1),rgba(255,215,0,.05));border:2px solid var(--gold);border-radius:12px;padding:20px;margin-bottom:24px">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
+        <div class="dashboard-stats-grid">
           <div style="text-align:center">
             <div style="font-size:2rem;font-weight:800;color:var(--gold)">${ranking.length}</div>
             <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Participantes</div>
@@ -2094,7 +2107,7 @@ async function renderDashboard() {
       </div>`;
     }
 
-    html += `<div class="card" style="padding:0;overflow:hidden">
+    html += `<div class="card ranking-card-wrap" style="padding:0;overflow-x:auto">
         <table class="ranking-table">
           <thead><tr>
             <th>#</th><th>Participante</th><th>Pontos</th>
