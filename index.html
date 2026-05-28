@@ -2194,6 +2194,7 @@ async function renderPalpites(editUid=null) {
       ${buildChampionPickerCard()}
       <div id="pal-progress-text" class="progress-text">Calculando...</div>
       <div class="progress-bar"><div class="progress-fill" id="pal-progress-fill" style="width:0%"></div></div>
+      ${_ptsLegendHtml()}
       <div class="phase-tabs" id="phase-tabs">`;
     phases.forEach((p,i)=>{ html += `<button class="phase-tab ${i===0?'active':''}" onclick="switchPalPhase('${p.key}')" data-phase="${p.key}">${p.label}</button>`; });
     html += `</div><div id="pal-phases">`;
@@ -2227,6 +2228,25 @@ async function renderPalpites(editUid=null) {
   }
 }
 
+function _ptsBadgeStyle(pts) {
+  if (pts === null || pts === undefined) return null;
+  if (pts === CFG.pts_exato)           return {bg:'rgba(255,215,0,.18)',  color:'var(--gold)',  label:'Exato'};
+  if (pts === CFG.pts_vencedor_saldo)  return {bg:'rgba(76,175,80,.18)',  color:'#4CAF50',     label:'Venc.+Saldo'};
+  if (pts === CFG.pts_apenas_vencedor) return {bg:'rgba(100,181,246,.18)',color:'#64B5F6',     label:'Vencedor'};
+  if (pts === 0)                       return {bg:'rgba(255,68,68,.12)',   color:'var(--red)',  label:'Erro'};
+  return {bg:'rgba(255,255,255,.08)', color:'var(--text-muted)', label:''};
+}
+function _ptsLegendHtml() {
+  const s = (bg,c,lbl) => `<span style="font-size:0.72rem;padding:2px 8px;border-radius:10px;background:${bg};color:${c};border:1px solid ${c}40">${lbl}</span>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center">
+    <span style="font-size:0.72rem;color:var(--text-muted);margin-right:2px">Legenda:</span>
+    ${s('rgba(255,215,0,.18)','var(--gold)','🎯 Exato')}
+    ${s('rgba(76,175,80,.18)','#4CAF50','✓ Venc.+Saldo')}
+    ${s('rgba(100,181,246,.18)','#64B5F6','↑ Vencedor')}
+    ${s('rgba(255,68,68,.12)','var(--red)','✗ Erro')}
+  </div>`;
+}
+
 function buildPalRow(game) {
   const pal = myPalpites[game.id]||{};
   const res = resultados[game.id]||{};
@@ -2240,7 +2260,8 @@ function buildPalRow(game) {
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const lockedBadge = isClosed?`<span class="locked-badge">🔒 Encerrado</span>`:'';
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
-  const ptsBadge = pts!==null?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
+  const _ps = _ptsBadgeStyle(pts);
+  const ptsBadge = _ps!==null?`<span class="result-badge" style="background:${_ps.bg};color:${_ps.color}">${_ps.label?_ps.label+' ':''}${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = COUNTRY_FLAGS[teams.h] || '';
   const flagA = COUNTRY_FLAGS[teams.a] || '';
   const time = GAME_TIMES[game.id] || '--:--';
@@ -2597,6 +2618,7 @@ async function renderVerPalpites(selectedUid=null) {
         <div style="font-size:0.85rem;color:var(--text-muted)">${esc(selectedUser.nome)}</div>
         ${champLine}
       </div>
+        ${_ptsLegendHtml()}
         <div id="pal-view-progress-text" class="progress-text">Calculando...</div>
         <div class="progress-bar"><div class="progress-fill" id="pal-view-progress-fill" style="width:0%"></div></div>
         <div class="phase-tabs" id="phase-tabs-view">`;
@@ -2658,7 +2680,8 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const pts = calcPontos(pal,r);
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
-  const ptsBadge = (showPal&&pts!==null)?`<span class="result-badge" style="${pts===CFG.pts_exato?'background:rgba(255,215,0,.15);color:var(--gold)':pts===0?'background:rgba(255,68,68,.1);color:var(--red)':''}">${pts>0?'+'+pts:'0'}pts</span>`:'';
+  const _ps = _ptsBadgeStyle(pts);
+  const ptsBadge = (showPal&&_ps!==null)?`<span class="result-badge" style="background:${_ps.bg};color:${_ps.color}">${_ps.label?_ps.label+' ':''}${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = COUNTRY_FLAGS[teams.h] || '';
   const flagA = COUNTRY_FLAGS[teams.a] || '';
   const time = GAME_TIMES[game.id] || '--:--';
@@ -4914,7 +4937,94 @@ async function renderAdminExport() {
         <button class="btn btn-secondary" onclick="exportPalpitesExcel()">⚽ Exportar Palpites</button>
         <button class="btn btn-secondary" onclick="exportResultadosExcel()">🎯 Exportar Resultados</button>
       </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title" style="margin-bottom:16px">💳 Extrato de Pagamentos</div>
+      <div class="alert alert-info">Relatório com todos os participantes e status de pagamento.</div>
+      <button class="btn btn-primary" onclick="exportExtratoPagamentos()">📋 Gerar Extrato de Pagamentos (Excel)</button>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title" style="margin-bottom:16px">💾 Backup Completo</div>
+      <div class="alert alert-info">Fotografia completa do sistema — palpites, resultados, usuários e configurações — em JSON.</div>
+      <button class="btn btn-primary" onclick="exportBackupJSON()">💾 Gerar Backup JSON</button>
     </div>`;
+}
+
+async function exportExtratoPagamentos() {
+  showToast('⏳ Gerando extrato...','');
+  try {
+    const snap = await db_.collection('usuarios').get();
+    const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    users.sort((a,b)=>(a.pago===b.pago?0:a.pago?-1:1)||(a.apelido||'').localeCompare(b.apelido||''));
+    const ativos = users.filter(u=>u.ativo!==false);
+    const pagos = ativos.filter(u=>u.pago===true);
+    const pendentes = ativos.filter(u=>u.pago!==true);
+    const totalArrecadado = pagos.length*(CFG.valor_participacao||50);
+    const data = [
+      [`EXTRATO DE PAGAMENTOS — ${CFG.nome_bolao||'Bolão'}`],
+      ['Gerado em:', new Date().toLocaleString('pt-BR')],
+      [],
+      ['Nome','Apelido','Email','Status','Valor (R$)'],
+      ...ativos.map(u=>[
+        u.nome||'', u.apelido||'', u.email||'',
+        u.pago===true?'PAGO':'PENDENTE',
+        u.pago===true?(CFG.valor_participacao||50):0
+      ]),
+      [],
+      ['RESUMO'],
+      ['Pagamentos confirmados:', pagos.length],
+      ['Pagamentos pendentes:', pendentes.length],
+      ['Valor por participante (R$):', CFG.valor_participacao||50],
+      ['Total arrecadado (R$):', totalArrecadado],
+    ];
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{wch:30},{wch:20},{wch:35},{wch:12},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Extrato');
+    XLSX.writeFile(wb, `Extrato_Pagamentos_${fmtDate()}.xlsx`);
+    showToast('✅ Extrato gerado!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function exportBackupJSON() {
+  showToast('⏳ Gerando backup completo...','');
+  try {
+    const [usersSnap, resSnap, cfgSnap] = await Promise.all([
+      db_.collection('usuarios').get(),
+      db_.collection('resultados').get(),
+      db_.collection('configuracoes').get()
+    ]);
+    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()}));
+    const resultados = {}; resSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
+    const cfgData = {}; cfgSnap.docs.forEach(d=>{ cfgData[d.id]=d.data(); });
+    const palpites = {};
+    await Promise.all(users.map(async u=>{
+      const [pDoc, jogosSnap] = await Promise.all([
+        db_.collection('palpites').doc(u.uid).get(),
+        db_.collection('palpites').doc(u.uid).collection('jogos').get()
+      ]);
+      const jogos = {}; jogosSnap.docs.forEach(d=>{ jogos[d.id]=d.data(); });
+      palpites[u.uid] = {campeao: pDoc.exists?(pDoc.data()?.campeao||null):null, jogos};
+    }));
+    const backup = {
+      _info: {
+        timestamp: new Date().toISOString(),
+        date: new Date().toLocaleString('pt-BR'),
+        bolao: CFG.nome_bolao,
+        version: CFG.app_version||'unknown'
+      },
+      configuracoes: cfgData,
+      usuarios: Object.fromEntries(users.map(u=>[u.uid, u])),
+      resultados,
+      palpites
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `backup_bolao_${fmtDate()}.json`;
+    a.click();
+    showToast('✅ Backup gerado!','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
 async function exportAllCSV() {
