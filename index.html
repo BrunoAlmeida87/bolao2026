@@ -1090,10 +1090,10 @@ const GRUPOS_DATA = {
   D:{teams:['EUA','Turquia','Austrália','Paraguai'],games:[
     {id:'D1',r:1,h:'EUA',a:'Paraguai',date:'Jun 12'},
     {id:'D2',r:1,h:'Turquia',a:'Austrália',date:'Jun 13'},
-    {id:'D3',r:2,h:'EUA',a:'Turquia',date:'Jun 25'},
-    {id:'D4',r:2,h:'Austrália',a:'Paraguai',date:'Jun 25'},
-    {id:'D5',r:3,h:'EUA',a:'Austrália',date:'Jun 19'},
-    {id:'D6',r:3,h:'Turquia',a:'Paraguai',date:'Jun 19'},
+    {id:'D3',r:2,h:'EUA',a:'Turquia',date:'Jun 19'},
+    {id:'D4',r:2,h:'Austrália',a:'Paraguai',date:'Jun 19'},
+    {id:'D5',r:3,h:'EUA',a:'Austrália',date:'Jun 25'},
+    {id:'D6',r:3,h:'Turquia',a:'Paraguai',date:'Jun 25'},
   ]},
   E:{teams:['Alemanha','Curaçao','Costa do Marfim','Equador'],games:[
     {id:'E1',r:1,h:'Alemanha',a:'Curaçao',date:'Jun 14'},
@@ -2244,8 +2244,9 @@ function buildPalRow(game) {
   const flagH = COUNTRY_FLAGS[teams.h] || '';
   const flagA = COUNTRY_FLAGS[teams.a] || '';
   const time = GAME_TIMES[game.id] || '--:--';
+  const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
+    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${closeAttr} oninput="onPalInput('${game.id}','a',this.value)">
@@ -2664,8 +2665,9 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const hiddenBadge = !showPal && pal.h!==undefined ? `<span style="font-size:0.72rem;color:var(--text-muted)">🔒 oculto</span>` : '';
   const hVal = showPal ? (pal.h!==undefined?pal.h:'') : '';
   const aVal = showPal ? (pal.a!==undefined?pal.a:'') : '';
+  const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span></div></div>
+    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${game.date} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="${showPal?'–':'🔒'}" value="${hVal}">
     <div class="vs-badge">${showPal?'✕':'🔒'}</div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="${showPal?'–':'🔒'}" value="${aVal}">
