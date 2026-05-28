@@ -2107,12 +2107,12 @@ async function renderDashboard() {
       </div>`;
     }
 
-    html += `<div class="card ranking-card-wrap" style="padding:0;overflow-x:auto">
-        <table class="ranking-table">
+    html += `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
+        <table class="ranking-table" style="min-width:660px">
           <thead><tr>
-            <th>#</th><th>Participante</th><th>Pontos</th>
-            <th class="hide-mobile">Exatos</th><th class="hide-mobile">V+Saldo</th><th class="hide-mobile">Vencedor</th>
-            <th class="hide-mobile">Jogos</th><th class="hide-mobile" title="Palpite de Campeão">🏆 Campeão</th><th>%</th><th class="hide-mobile" title="Distância para o líder">Dist.</th>
+            <th>#</th><th style="min-width:110px">Participante</th><th>Pontos</th>
+            <th>Exatos</th><th>V+Saldo</th><th>Vencedor</th>
+            <th>Jogos</th><th title="Palpite de Campeão">🏆 Campeão</th><th>%</th><th title="Distância para o líder">Dist.</th>
           </tr></thead><tbody>`;
 
     ranking.forEach((u,i)=>{
@@ -2138,14 +2138,14 @@ async function renderDashboard() {
         <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}</td>
         <td style="cursor:pointer" onclick="goToUserPalpites('${u.uid}')"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
         <td><span class="pts-badge">${u.pontos}</span></td>
-        <td class="hide-mobile text-green">${u.exatos}</td>
-        <td class="hide-mobile text-gold">${u.venc_saldo}</td>
-        <td class="hide-mobile text-gold">${u.apenas_venc}</td>
-        <td class="hide-mobile text-muted">${u.jogos}</td>
-        <td class="hide-mobile" style="font-size:0.8rem">${champCell}</td>
+        <td class="text-green">${u.exatos}</td>
+        <td class="text-gold">${u.venc_saldo}</td>
+        <td class="text-gold">${u.apenas_venc}</td>
+        <td class="text-muted">${u.jogos}</td>
+        <td style="font-size:0.8rem">${champCell}</td>
         <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${maxPts>0?Math.round(u.pontos/maxPts*100):0}%"></div></div>
           <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
-        <td class="hide-mobile">${distLider}</td>
+        <td>${distLider}</td>
       </tr>`;
     });
 
@@ -3563,7 +3563,15 @@ async function renderEstatisticas() {
     const totalVotes = champVotesArr.reduce((s,[,v])=>s+v,0);
     const semEscolha = users.length - totalVotes;
     const finalChampionEst = _getFinalChampion(res);
-    if (champVotesArr.length > 0) {
+    const isAdminEst = currentUserDoc?.role === 'admin';
+    const champEstRevealed = isAdminEst || CFG.campeao_locked === true || !!finalChampionEst;
+    if (!champEstRevealed) {
+      html += `<div class="card" style="text-align:center;padding:20px">
+        <div style="font-size:1.5rem;margin-bottom:8px">🔒</div>
+        <div style="font-weight:700;color:var(--gold);margin-bottom:4px">Estatísticas de Campeão</div>
+        <div style="font-size:0.85rem;color:var(--text-muted)">Visível após o bloqueio das escolhas de campeão pelo admin</div>
+      </div>`;
+    } else if (champVotesArr.length > 0) {
       const maxVotes = champVotesArr[0][1] || 1;
       html += `<div class="card">
         <div class="card-title" style="margin-bottom:14px">🏆 Palpites de Campeão (${totalVotes} escolha${totalVotes!==1?'s':''})</div>
