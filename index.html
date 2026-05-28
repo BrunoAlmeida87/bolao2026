@@ -2948,17 +2948,18 @@ async function renderVerTodos() {
       </div>`;
 
     let html = `<div class="section-title">📋 Todos os Palpites</div>
-      <div class="back-bar">
-        <span style="font-size:0.82rem;color:var(--text-muted)">🟡 Exato &nbsp;🟢 Acerto &nbsp;🔴 Erro</span>
+      <div class="back-bar" style="margin-bottom:10px">
+        <span></span>
         <button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="navigateTo('ver-palpites')">👁️ Por Pessoa</button>
       </div>
+      ${_ptsLegendHtml()}
       ${champSummary}
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <table class="ranking-table" style="min-width:${160+users.length*72}px;font-size:0.8rem">
+      <div style="overflow:auto;max-height:calc(100vh - 220px);-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px">
+      <table class="ranking-table" style="min-width:${160+users.length*80}px;font-size:0.8rem;border-collapse:separate;border-spacing:0">
         <thead><tr>
-          <th style="text-align:left;min-width:130px;position:sticky;left:0;z-index:2;background:var(--mid-blue)">Jogo</th>
-          <th style="min-width:55px">Data</th>
-          <th style="min-width:55px">Result.</th>
+          <th style="text-align:left;min-width:140px;position:sticky;left:0;top:0;z-index:3;background:var(--mid-blue)">Jogo</th>
+          <th style="min-width:55px;position:sticky;top:0;z-index:2;background:var(--mid-blue)">Data</th>
+          <th style="min-width:60px;position:sticky;top:0;z-index:2;background:var(--mid-blue)">Result.</th>
           ${users.map(u=>{
             const isOwn = u.uid === currentUser.uid;
             const canSeeChamp = champRevealed || isOwn;
@@ -2969,7 +2970,7 @@ async function renderVerTodos() {
                 ? `<div style="font-size:0.65rem;font-weight:600;color:${hit?'var(--green)':'var(--text-muted)'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Campeão: ${esc(t)}">🏆 ${COUNTRY_FLAGS[t]||''} ${esc(t.split(' ')[0])}</div>`
                 : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 —</div>`)
               : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 🔒</div>`;
-            return `<th style="min-width:68px;cursor:pointer;color:var(--gold);vertical-align:top" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites de ${esc(u.apelido)}">${esc(u.apelido)}${champCell}</th>`;
+            return `<th style="min-width:80px;cursor:pointer;color:var(--gold);vertical-align:top;position:sticky;top:0;z-index:2;background:var(--mid-blue)" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites de ${esc(u.apelido)}">${esc(u.apelido)}${champCell}</th>`;
           }).join('')}
         </tr></thead>
         <tbody>`;
@@ -3007,11 +3008,11 @@ async function renderVerTodos() {
         }
         const pts = calcPontos(pal, r);
         const palStr = `${pal.h}-${pal.a}`;
-        let bg='', col='';
-        if (pts===CFG.pts_exato)        { bg='rgba(255,215,0,.12)'; col='var(--gold)'; }
-        else if (pts!==null && pts>0)   { col='var(--green)'; }
-        else if (pts===0 && hasResult)  { col='#ff6b6b'; }
-        html += `<td style="${bg?`background:${bg};`:''}${col?`color:${col};`:''}font-weight:600">${palStr}</td>`;
+        const _ps = _ptsBadgeStyle(pts);
+        const cellBg = _ps ? `background:${_ps.bg};` : '';
+        const cellCol = _ps ? `color:${_ps.color};` : '';
+        const ptsLine = _ps && pts!==null ? `<div style="font-size:0.65rem;margin-top:1px;opacity:0.85">${pts>0?'+'+pts+'pts':'0pts'}</div>` : '';
+        html += `<td style="${cellBg}${cellCol}font-weight:600;vertical-align:middle"><div>${palStr}</div>${ptsLine}</td>`;
       });
       html += `</tr>`;
     });
