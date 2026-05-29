@@ -4509,8 +4509,10 @@ async function onScheduleChange(gameId) {
   const defTime = GAME_TIMES[gameId] || '';
   const FV = firebase.firestore.FieldValue;
   const patch = { updatedAt: FV.serverTimestamp() };
-  patch.date_override = (iso && iso !== defISO) ? iso : FV.delete();
-  patch.time_override = (time && time !== defTime) ? time : FV.delete();
+  const dateChanged = iso && iso !== defISO;
+  const timeChanged = time && time !== defTime;
+  patch.date_override = dateChanged ? iso : FV.delete();
+  patch.time_override = timeChanged ? time : FV.delete();
   try {
     await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
     _scDel('res');
@@ -4522,8 +4524,21 @@ async function onScheduleChange(gameId) {
         at: FV.serverTimestamp()
       });
     } catch(_) {}
+    // Atualiza apenas o indicador visual sem re-renderizar a página toda
+    const row = document.getElementById(`row_${gameId}`)?.parentElement;
+    const btnEl = row?.querySelector(`button[onclick="resetSchedule('${gameId}')"]`);
+    const overrideSpan = btnEl?.nextElementSibling;
+    const schedRow = document.getElementById(`gd_${gameId}`)?.closest('div[style]');
+    if (dateChanged || timeChanged) {
+      if (!btnEl && schedRow) {
+        schedRow.insertAdjacentHTML('beforeend',
+          `<button class="btn btn-sm" style="padding:3px 8px;font-size:0.7rem" onclick="resetSchedule('${gameId}')" title="Restaurar data/hora padrão">↩︎ Padrão</button><span style="color:var(--orange)">• horário alterado</span>`);
+      }
+    } else {
+      if (btnEl) btnEl.remove();
+      if (overrideSpan) overrideSpan.remove();
+    }
     showToast('🕒 Horário do jogo atualizado','success');
-    renderAdminResultados();
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
