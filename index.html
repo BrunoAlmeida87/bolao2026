@@ -3762,15 +3762,35 @@ async function renderEstatisticas() {
           return acc + (p && p.h !== undefined && p.a !== undefined ? _maxPts : 0);
         }, 0);
       });
+      // Scenarios to test for each game (generic + each user's exact bet added below)
+      const _baseScenarios = [{h_real:1,a_real:0},{h_real:0,a_real:0},{h_real:0,a_real:1}];
+      // For a pair (challenger, target): is there any result where challenger ends up ahead?
+      function _checkOvertake(chalUid, tgtUid, chalCur, tgtCur) {
+        for (const game of _nextGames) {
+          const palChal = allPals[chalUid]?.[game.id];
+          if (!palChal || palChal.h === undefined) continue;
+          const palTgt = allPals[tgtUid]?.[game.id];
+          const scenarios = _baseScenarios.slice();
+          scenarios.push({h_real: parseInt(palChal.h)||0, a_real: parseInt(palChal.a)||0});
+          if (palTgt && palTgt.h !== undefined)
+            scenarios.push({h_real: parseInt(palTgt.h)||0, a_real: parseInt(palTgt.a)||0});
+          for (const sc of scenarios) {
+            const gainChal = calcPontos(palChal, sc);
+            const gainTgt = palTgt ? calcPontos(palTgt, sc) : 0;
+            if (chalCur + gainChal > tgtCur + gainTgt)
+              return { possible: true, gainChal, gainTgt, sc };
+          }
+        }
+        return { possible: false };
+      }
+
       // Who can overtake
       const _canOvertake = [];
       ranking.forEach((u, idx) => {
         if (idx === 0) return;
-        const proj = u.pontos + _maxGain[u.uid];
         for (let i = 0; i < idx; i++) {
-          if (proj > ranking[i].pontos) {
-            _canOvertake.push({ u, target: ranking[i], pts: _maxGain[u.uid] });
-          }
+          const r = _checkOvertake(u.uid, ranking[i].uid, u.pontos, ranking[i].pontos);
+          if (r.possible) _canOvertake.push({ u, target: ranking[i], gainChal: r.gainChal, gainTgt: r.gainTgt });
         }
       });
       // Points at stake in next group
@@ -3779,18 +3799,24 @@ async function renderEstatisticas() {
         return acc + cnt * _maxPts;
       }, 0);
       const _gap12 = ranking.length >= 2 ? (ranking[0].pontos - ranking[1].pontos) : 0;
-      const _nearTop = ranking.slice(1).filter(u => _maxGain[u.uid] > 0 && (u.pontos + _maxGain[u.uid]) >= ranking[0].pontos);
+      const _nearTop = ranking.slice(1).filter(u => {
+        const r = _checkOvertake(u.uid, ranking[0].uid, u.pontos, ranking[0].pontos);
+        return r.possible;
+      });
 
-      const _overtakeRows = _canOvertake.slice(0, 6).map(({u, target, pts}) =>
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:0.83rem">'
-        + '<span><b style="color:var(--gold)">' + esc(u.apelido||u.nome) + '</b> → pode ultrapassar <b>' + esc(target.apelido||target.nome) + '</b> <span style="font-size:0.73rem;color:var(--text-muted)">(se cravar e o alvo não pontuar)</span></span>'
-        + '<span style="color:var(--green);font-weight:600">+' + pts + ' pts</span>'
-        + '</div>'
-      ).join('');
+      const _overtakeRows = _canOvertake.slice(0, 6).map(({u, target, gainChal, gainTgt}) => {
+        const detail = gainTgt > 0
+          ? `(+${gainChal} pts vs +${gainTgt} pts do alvo)`
+          : `(+${gainChal} pts, alvo não pontua nesse cenário)`;
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:0.83rem">'
+          + '<span><b style="color:var(--gold)">' + esc(u.apelido||u.nome) + '</b> → pode ultrapassar <b>' + esc(target.apelido||target.nome) + '</b> '
+          + '<span style="font-size:0.73rem;color:var(--text-muted)">' + detail + '</span></span>'
+          + '</div>';
+      }).join('');
 
       const _overtakeSection = _canOvertake.length > 0
         ? '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px">'
-          + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Podem ultrapassar com placar exato</div>'
+          + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Podem ultrapassar em algum cenário</div>'
           + _overtakeRows
           + '</div>'
         : (_nextGames.length > 0
@@ -3800,8 +3826,8 @@ async function renderEstatisticas() {
       const _explainImpact = '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:10px;line-height:1.5;background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px">'
         + '💡 <b>Como é calculado:</b> '
         + '"Pontos máximos em disputa" = nº de palpites enviados × pontos do placar exato (' + _maxPts + ' pts). '
-        + '"Podem alcançar a pontuação atual do líder" = participantes que, se cravarem o placar exato, atingem ou superam os pontos que o líder tem <i>agora</i> (o líder também pode pontuar). '
-        + '"Pode ultrapassar" = cenário máximo se o participante cravar e o alvo não pontuar.'
+        + '"Podem alcançar a pontuação atual do líder" = participantes para quem existe algum resultado onde eles passam o líder, considerando o que ambos apostaram. '
+        + '"Pode ultrapassar" = existe pelo menos um resultado onde o saldo de pontos inverte — o detalhe entre parênteses mostra os pontos de cada um nesse cenário.'
         + '</div>';
 
       _beforeHtml += '<div class="card">'
