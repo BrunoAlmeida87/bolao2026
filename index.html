@@ -3465,6 +3465,17 @@ function _calcHeadToHead(users, allPals, res) {
 // ════════════════════════════════════════════
 // ESTATÍSTICAS PAGE
 // ════════════════════════════════════════════
+function _getStatNextGroup(res) {
+  const now = Date.now();
+  const upcoming = ALL_GAMES
+    .map(g => ({ game: g, start: _effectiveStartInstant(g, (res||{})[g.id]) }))
+    .filter(x => x.start && x.start.getTime() > now)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+  if (!upcoming.length) return { start: null, items: [] };
+  const t0 = upcoming[0].start.getTime();
+  return { start: t0, items: upcoming.filter(x => x.start.getTime() === t0) };
+}
+
 async function renderEstatisticas() {
   const cont = document.getElementById('estatisticas-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
@@ -3565,9 +3576,253 @@ async function renderEstatisticas() {
     // Insights automáticos
     const insights = generateInsights(ranking, userAccStats, analiseJogos, res);
 
-    let html = `<div class="section-title">📈 Estatísticas & Curiosidades</div>
+    // ── SEÇÃO: PRÓXIMA(S) PARTIDA(S) ──────────────────────────────────────────
+    const _statNextGrp = _getStatNextGroup(res);
+    const _nowMs = Date.now();
+    let _beforeHtml = '';
 
-      <div class="stats-grid">
+    if (_statNextGrp.items.length > 0) {
+      const _isPlural = _statNextGrp.items.length > 1;
+
+      const _gameCards = _statNextGrp.items.map(({game, start}) => {
+        const _gr = res[game.id] || {};
+        const _closed = isPalpiteClosed(game, _gr);
+        const _diff = start.getTime() - _nowMs;
+        const _lockAt = start.getTime() - LOCK_LEAD_MS;
+        const _diffToLock = _lockAt - _nowMs;
+
+        // Status badge
+        let _statusHtml;
+        if (_gr.locked === true) {
+          _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado pelo admin</span>';
+        } else if (_closed) {
+          _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Palpites encerrados</span>';
+        } else if (_diffToLock > 0 && _diffToLock <= LOCK_LEAD_MS) {
+          const _lm = Math.floor(_diffToLock / 60000);
+          _statusHtml = '<span style="color:var(--orange);font-weight:700">⚠️ Trava em ' + _lm + 'min</span>';
+        } else {
+          _statusHtml = '<span style="color:var(--green);font-weight:700">✅ Aberto</span>';
+        }
+
+        // Countdown (static)
+        let _cdStr;
+        if (_diff <= 0) {
+          _cdStr = '🟢 Em andamento';
+        } else {
+          const _d = Math.floor(_diff / 86400000);
+          const _h = Math.floor((_diff % 86400000) / 3600000);
+          const _m = Math.floor((_diff % 3600000) / 60000);
+          const _parts = [];
+          if (_d > 0) _parts.push(_d + 'd');
+          _parts.push(_h + 'h ' + _m + 'min');
+          _cdStr = _parts.join(' ');
+        }
+
+        // Participation
+        const _withPal = users.filter(u => { const p=allPals[u.uid]?.[game.id]; return p&&p.h!==undefined&&p.a!==undefined; }).length;
+        const _pending = users.length - _withPal;
+        const _pct = users.length > 0 ? Math.round(_withPal / users.length * 100) : 0;
+
+        // Labels
+        const _gKey = Object.keys(GRUPOS_DATA).find(k => GRUPOS_DATA[k].games.some(gm => gm.id === game.id));
+        const _groupLbl = _gKey ? 'Grupo ' + _gKey : '';
+        const _time = _gr.time_override || GAME_TIMES[game.id] || '--:--';
+        const _dateStr = _gr.date_override ? _isoToGameDate(_gr.date_override) : (game.date || '');
+
+        // Post-lock stats
+        let _postLock = '';
+        if (_closed) {
+          const _gPals = users.map(u=>allPals[u.uid]?.[game.id]).filter(p=>p&&p.h!==undefined&&p.a!==undefined);
+          const _tot = _gPals.length;
+          if (_tot > 0) {
+            const _hw = _gPals.filter(p=>parseInt(p.h)>parseInt(p.a)).length;
+            const _dr = _gPals.filter(p=>parseInt(p.h)===parseInt(p.a)).length;
+            const _aw = _gPals.filter(p=>parseInt(p.h)<parseInt(p.a)).length;
+            const _phw = Math.round(_hw/_tot*100);
+            const _pdr = Math.round(_dr/_tot*100);
+            const _paw = Math.round(_aw/_tot*100);
+            const _avgH = (_gPals.reduce((a,p)=>a+parseInt(p.h||0),0)/_tot).toFixed(1);
+            const _avgA = (_gPals.reduce((a,p)=>a+parseInt(p.a||0),0)/_tot).toFixed(1);
+            const _sf={}; _gPals.forEach(p=>{const k=p.h+'-'+p.a;_sf[k]=(_sf[k]||0)+1;});
+            const _top = Object.entries(_sf).sort((a,b)=>b[1]-a[1])[0];
+            const _maxPct=Math.max(_phw,_pdr,_paw);
+            const _minPct=Math.min(_phw,_pdr,_paw);
+            const _favLbl = _phw===_maxPct ? esc(game.h) : (_paw===_maxPct ? esc(game.a) : 'Empate');
+            const _zebLbl = _phw===_minPct ? esc(game.h) : (_paw===_minPct ? esc(game.a) : 'Empate');
+            const _scenarios = [
+              {label: esc(game.h) + ' vence', r:{h_real:1,a_real:0}},
+              {label: 'Empate', r:{h_real:0,a_real:0}},
+              {label: esc(game.a) + ' vence', r:{h_real:0,a_real:1}},
+            ];
+            const _scRows = _scenarios.map(sc => {
+              const cnt = _gPals.filter(p=>calcPontos(p,sc.r)>0).length;
+              const pSc = _tot>0 ? Math.round(cnt/_tot*100) : 0;
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)">'
+                + '<span style="font-size:0.83rem">' + sc.label + '</span>'
+                + '<div style="display:flex;gap:8px;align-items:center">'
+                + '<div class="mini-bar" style="width:70px"><div class="mini-bar-fill" style="width:' + pSc + '%"></div></div>'
+                + '<span style="font-size:0.8rem;font-weight:600;min-width:90px;text-align:right">' + cnt + ' pont. (' + pSc + '%)</span>'
+                + '</div></div>';
+            }).join('');
+            const _zebraCard = _minPct <= 25
+              ? '<div style="background:rgba(255,100,100,.08);border:1px solid rgba(255,100,100,.2);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
+                + '<div style="font-size:0.68rem;color:#ff9a9a">🦓 Zebra interna</div>'
+                + '<div style="font-size:0.92rem;font-weight:700;color:#ff7a7a">' + _zebLbl + ' (' + _minPct + '%)</div>'
+                + '</div>'
+              : '';
+            _postLock = '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:12px">'
+              + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Distribuição dos Palpites (pós-bloqueio)</div>'
+              + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">'
+              + '<div style="text-align:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px">'
+              + '<div style="font-size:1.05rem;font-weight:800;color:var(--gold)">' + _phw + '%</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + esc(game.h) + '</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + _hw + ' palpite(s)</div>'
+              + '</div>'
+              + '<div style="text-align:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px">'
+              + '<div style="font-size:1.05rem;font-weight:800;color:var(--accent)">' + _pdr + '%</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">Empate</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + _dr + ' palpite(s)</div>'
+              + '</div>'
+              + '<div style="text-align:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px">'
+              + '<div style="font-size:1.05rem;font-weight:800;color:#ff8a8a">' + _paw + '%</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + esc(game.a) + '</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + _aw + ' palpite(s)</div>'
+              + '</div>'
+              + '</div>'
+              + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+              + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">🗳️ Palpite do Povo</div>'
+              + '<div style="font-size:0.92rem;font-weight:700;color:var(--gold)">' + _avgH + ' × ' + _avgA + '</div>'
+              + '</div>'
+              + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">🎯 Placar mais escolhido</div>'
+              + '<div style="font-size:0.92rem;font-weight:700;color:var(--green)">' + _top[0] + ' <span style="font-size:0.7rem;font-weight:400">(' + _top[1] + 'x)</span></div>'
+              + '</div>'
+              + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">📣 Favorito do bolão</div>'
+              + '<div style="font-size:0.92rem;font-weight:700;color:var(--accent)">' + _favLbl + ' (' + _maxPct + '%)</div>'
+              + '</div>'
+              + _zebraCard
+              + '</div>'
+              + '<div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">O que cada resultado causa?</div>'
+              + _scRows
+              + '</div>';
+          }
+        }
+
+        return '<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;flex:1;min-width:260px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:10px">'
+          + '<div>'
+          + (_groupLbl ? '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">' + esc(_groupLbl) + '</div>' : '')
+          + '<div style="font-size:1rem;font-weight:800">' + teamFlag(game.h) + ' ' + esc(game.h) + ' × ' + teamFlag(game.a) + ' ' + esc(game.a) + '</div>'
+          + '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:2px">' + esc(_dateStr) + ' · ' + esc(_time) + ' (Brasília)</div>'
+          + '</div>'
+          + '<div style="text-align:right">'
+          + _statusHtml
+          + '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">⏱ ' + _cdStr + '</div>'
+          + '</div>'
+          + '</div>'
+          + '<div style="display:flex;gap:7px;flex-wrap:wrap">'
+          + '<div style="background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.25);border-radius:8px;padding:5px 10px;text-align:center">'
+          + '<div style="font-size:0.95rem;font-weight:700;color:#00b4ff">' + _withPal + '/' + users.length + '</div>'
+          + '<div style="font-size:0.65rem;color:var(--text-muted)">Palpites enviados</div>'
+          + '</div>'
+          + (_pending > 0
+            ? '<div style="background:rgba(255,140,0,.1);border:1px solid rgba(255,140,0,.25);border-radius:8px;padding:5px 10px;text-align:center"><div style="font-size:0.95rem;font-weight:700;color:var(--orange)">' + _pending + '</div><div style="font-size:0.65rem;color:var(--text-muted)">Pendente(s)</div></div>'
+            : '<div style="background:rgba(76,175,80,.1);border:1px solid rgba(76,175,80,.25);border-radius:8px;padding:5px 10px;text-align:center"><div style="font-size:0.95rem;font-weight:700;color:var(--green)">✅ 100%</div><div style="font-size:0.65rem;color:var(--text-muted)">Todos enviaram</div></div>'
+          )
+          + '<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:5px 10px;text-align:center">'
+          + '<div style="font-size:0.95rem;font-weight:700;color:var(--gold)">' + _pct + '%</div>'
+          + '<div style="font-size:0.65rem;color:var(--text-muted)">Participação</div>'
+          + '</div>'
+          + '</div>'
+          + _postLock
+          + '</div>';
+      }).join('');
+
+      _beforeHtml += '<div class="card">'
+        + '<div class="card-title">⚽ ' + (_isPlural ? 'Próximas Partidas (simultâneas)' : 'Próxima Partida') + '</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">' + _gameCards + '</div>'
+        + '</div>';
+    }
+
+    // ── SEÇÃO: IMPACTO POTENCIAL NO RANKING ───────────────────────────────────
+    if (ranking.length >= 2) {
+      const _maxPts = CFG.pts_exato || 10;
+      const _nextGames = _statNextGrp.items.map(x => x.game);
+      // Max pts each user can gain from next group
+      const _maxGain = {};
+      users.forEach(u => {
+        _maxGain[u.uid] = _nextGames.reduce((acc, g) => {
+          const p = allPals[u.uid]?.[g.id];
+          return acc + (p && p.h !== undefined && p.a !== undefined ? _maxPts : 0);
+        }, 0);
+      });
+      // Who can overtake
+      const _canOvertake = [];
+      ranking.forEach((u, idx) => {
+        if (idx === 0) return;
+        const proj = u.pontos + _maxGain[u.uid];
+        for (let i = 0; i < idx; i++) {
+          if (proj > ranking[i].pontos) {
+            _canOvertake.push({ u, target: ranking[i], pts: _maxGain[u.uid] });
+          }
+        }
+      });
+      // Points at stake in next group
+      const _totalAtStake = _nextGames.reduce((acc, g) => {
+        const cnt = users.filter(u => { const p=allPals[u.uid]?.[g.id]; return p&&p.h!==undefined&&p.a!==undefined; }).length;
+        return acc + cnt * _maxPts;
+      }, 0);
+      const _gap12 = ranking.length >= 2 ? (ranking[0].pontos - ranking[1].pontos) : 0;
+      const _nearTop = ranking.slice(1).filter(u => _maxGain[u.uid] > 0 && (u.pontos + _maxGain[u.uid]) >= ranking[0].pontos);
+
+      const _overtakeRows = _canOvertake.slice(0, 6).map(({u, target, pts}) =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:0.83rem">'
+        + '<span><b style="color:var(--gold)">' + esc(u.apelido||u.nome) + '</b> → pode ultrapassar <b>' + esc(target.apelido||target.nome) + '</b></span>'
+        + '<span style="color:var(--green);font-weight:600">+' + pts + ' pts</span>'
+        + '</div>'
+      ).join('');
+
+      const _overtakeSection = _canOvertake.length > 0
+        ? '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px">'
+          + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Podem ultrapassar com placar exato</div>'
+          + _overtakeRows
+          + '</div>'
+        : (_nextGames.length > 0
+          ? '<div style="font-size:0.82rem;color:var(--text-muted);margin-top:10px">Nenhuma mudança de posição possível com os palpites atuais desta partida.</div>'
+          : '');
+
+      _beforeHtml += '<div class="card">'
+        + '<div class="card-title">⚡ Impacto Potencial no Ranking</div>'
+        + '<div class="stats-alt-grid" style="margin-top:12px">'
+        + '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">'
+        + '<div style="font-size:1.4rem;font-weight:800;color:var(--gold)">' + _totalAtStake + '</div>'
+        + '<div style="font-size:0.72rem;color:var(--text-muted)">Pontos em disputa</div>'
+        + '</div>'
+        + '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">'
+        + '<div style="font-size:1.4rem;font-weight:800;color:' + (_gap12 <= _maxPts ? 'var(--orange)' : 'var(--accent)') + '">' + _gap12 + '</div>'
+        + '<div style="font-size:0.72rem;color:var(--text-muted)">Diferença 1º → 2º lugar</div>'
+        + '</div>'
+        + '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">'
+        + '<div style="font-size:1.4rem;font-weight:800;color:var(--green)">' + _nearTop.length + '</div>'
+        + '<div style="font-size:0.72rem;color:var(--text-muted)">Podem alcançar o líder</div>'
+        + '</div>'
+        + '</div>'
+        + _overtakeSection
+        + '</div>';
+    }
+
+    const _sectionDivider = '<div style="margin:20px 0 16px;display:flex;align-items:center;gap:10px">'
+      + '<div style="flex:1;height:1px;background:var(--border)"></div>'
+      + '<span style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);white-space:nowrap">Histórico & Retrospectiva</span>'
+      + '<div style="flex:1;height:1px;background:var(--border)"></div>'
+      + '</div>';
+
+    let html = '<div class="section-title">📈 Estatísticas & Curiosidades</div>'
+      + _beforeHtml
+      + _sectionDivider
+      + `<div class="stats-grid">
         <div class="stat-card"><div class="val">${users.length}</div><div class="lbl">Participantes</div></div>
         <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos Resultado</div></div>
         <div class="stat-card"><div class="val">${Object.values(analiseJogos).reduce((a,b)=>a+b.exatos,0)}</div><div class="lbl">Placares Exatos</div></div>
