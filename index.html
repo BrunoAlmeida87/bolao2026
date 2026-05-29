@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.6.0">
+<meta name="app-version" content="v1.7.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -422,6 +422,7 @@ select option{background:var(--mid-blue);color:var(--white)}
   background:transparent;cursor:pointer;font-size:1rem;transition:all .2s;
 }
 .lock-btn.locked{background:rgba(255,68,68,.15);border-color:var(--red);color:var(--red)}
+.lock-btn.open{background:rgba(76,175,80,.15);border-color:var(--green);color:var(--green)}
 .lock-btn:hover{border-color:var(--gold)}
 .user-row{
   display:flex;align-items:center;justify-content:space-between;
@@ -695,6 +696,13 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ngc-vs{font-size:1rem;font-weight:800;color:var(--text-muted)}
 .ngc-date{font-size:0.78rem;color:var(--text-muted);margin-bottom:8px}
 .ngc-countdown{font-size:1.5rem;font-weight:800;color:#00b4ff;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.ngc-note{font-size:0.72rem;color:var(--text-muted);margin-top:6px}
+.next-games-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
+.next-games-grid .next-game-card{margin-bottom:0}
+.next-game-card.locked-soon{background:linear-gradient(135deg,rgba(255,68,68,.14),rgba(200,0,0,.07));border-color:rgba(255,68,68,.55)}
+.next-game-card.locked-soon .ngc-label{color:rgba(255,90,90,.95)}
+.next-game-card.locked-soon .ngc-countdown{color:#ff5a5a}
+.next-game-card.locked-soon .ngc-note{color:#ff7a7a;font-weight:700}
 .prize-pool-item{text-align:center;min-width:90px}
 .prize-pool-item .ppi-val{font-size:1.2rem;font-weight:800;color:var(--gold)}
 .prize-pool-item .ppi-lbl{font-size:0.7rem;color:var(--text-muted);margin-top:2px}
@@ -1012,7 +1020,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.6.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.7.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1288,7 +1296,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.6.0',
+  app_version:'v1.7.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -2061,60 +2069,63 @@ function computeStandings(grupKey, resultados) {
 // ════════════════════════════════════════════
 // DASHBOARD PAGE
 // ════════════════════════════════════════════
-function _getNextGame() {
+// Mapa de resultados (com overrides de data/hora) usado pelos timers do dashboard.
+let _dashResults = {};
+
+// Retorna o grupo de partidas que compartilham o próximo horário de início.
+// Jogos simultâneos retornam juntos → múltiplos timers.
+function _nextGamesGroup() {
   const now = Date.now();
   const upcoming = ALL_GAMES
-    .map(g => ({ game: g, start: _gameStartInstant(g) }))
+    .map(g => ({ game: g, start: _effectiveStartInstant(g, _dashResults[g.id]) }))
     .filter(x => x.start && x.start.getTime() > now)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
-  return upcoming.length > 0 ? upcoming[0] : null;
+  if (!upcoming.length) return { key:'none', start:null, items:[] };
+  const t0 = upcoming[0].start.getTime();
+  return { key:String(t0), start:t0, items: upcoming.filter(x => x.start.getTime() === t0) };
 }
 
-function _buildNextGameCard(next) {
-  if (!next) {
+function _buildNextGamesHtml(group) {
+  if (!group.items.length) {
     return `<div class="next-game-card">
       <div class="ngc-label">⏱️ Próxima Partida</div>
       <div class="ngc-teams" style="font-size:0.95rem;color:var(--text-muted)">Nenhuma partida agendada</div>
     </div>`;
   }
-  const { game, start } = next;
-  const homeFlag = teamFlag(game.h);
-  const awayFlag = teamFlag(game.a);
-  const time = GAME_TIMES[game.id] || '--:--';
-  const dateStr = game.date || '';
-  const fmtDate = dateStr ? `${dateStr} às ${time} (Brasília)` : time;
-  const _gKey = Object.keys(GRUPOS_DATA).find(k => GRUPOS_DATA[k].games.some(gm => gm.id === game.id));
-  const groupLabel = _gKey ? `Grupo ${_gKey}` : (game.phase || '');
-
-  return `<div class="next-game-card" id="next-game-card">
-    <div class="ngc-label">⏱️ Próxima Partida${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
-    <div class="ngc-teams">
-      <span class="ngc-team">${homeFlag} ${esc(game.h)}</span>
-      <span class="ngc-vs">×</span>
-      <span class="ngc-team">${awayFlag} ${esc(game.a)}</span>
-    </div>
-    <div class="ngc-date">${esc(fmtDate)}</div>
-    <div class="ngc-countdown" id="ngc-countdown">—</div>
-  </div>`;
+  const multi = group.items.length > 1;
+  const cards = group.items.map(({ game }) => {
+    const res = _dashResults[game.id] || {};
+    const homeFlag = teamFlag(game.h);
+    const awayFlag = teamFlag(game.a);
+    const time = res.time_override || GAME_TIMES[game.id] || '--:--';
+    const dateStr = res.date_override ? _isoToGameDate(res.date_override) : (game.date || '');
+    const fmtDate = dateStr ? `${dateStr} às ${time} (Brasília)` : time;
+    const _gKey = Object.keys(GRUPOS_DATA).find(k => GRUPOS_DATA[k].games.some(gm => gm.id === game.id));
+    const groupLabel = _gKey ? `Grupo ${_gKey}` : '';
+    return `<div class="next-game-card" data-gid="${game.id}">
+      <div class="ngc-label">⏱️ ${multi ? 'Partida Simultânea' : 'Próxima Partida'}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
+      <div class="ngc-teams">
+        <span class="ngc-team">${homeFlag} ${esc(game.h)}</span>
+        <span class="ngc-vs">×</span>
+        <span class="ngc-team">${awayFlag} ${esc(game.a)}</span>
+      </div>
+      <div class="ngc-date">${esc(fmtDate)}</div>
+      <div class="ngc-countdown" id="ngc-cd-${game.id}">—</div>
+      <div class="ngc-note" id="ngc-note-${game.id}">🔒 Palpites bloqueiam 1h antes do início</div>
+    </div>`;
+  }).join('');
+  return multi ? `<div class="next-games-grid">${cards}</div>` : cards;
 }
 
 let _countdownTimer = null;
 function _startCountdownTimer() {
-  if (_countdownTimer) clearInterval(_countdownTimer);
-  const el = document.getElementById('ngc-countdown');
-  if (!el) return;
-  const next = _getNextGame();
-  if (!next) return;
-  const target = next.start.getTime();
-  function _tick() {
-    const diff = target - Date.now();
-    const el2 = document.getElementById('ngc-countdown');
-    if (!el2) { clearInterval(_countdownTimer); return; }
-    if (diff <= 0) {
-      el2.textContent = '🟢 Partida em andamento!';
-      clearInterval(_countdownTimer);
-      return;
-    }
+  if (_countdownTimer) { clearInterval(_countdownTimer); _countdownTimer = null; }
+  const wrap = document.getElementById('next-games-wrap');
+  if (!wrap) return;
+  let group = _nextGamesGroup();
+  wrap.innerHTML = _buildNextGamesHtml(group);
+
+  function _fmtDiff(diff) {
     const d = Math.floor(diff / 86400000);
     const h = Math.floor((diff % 86400000) / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
@@ -2124,7 +2135,33 @@ function _startCountdownTimer() {
     parts.push(`${String(h).padStart(2,'0')}h`);
     parts.push(`${String(m).padStart(2,'0')}m`);
     parts.push(`${String(s).padStart(2,'0')}s`);
-    el2.textContent = parts.join(' ');
+    return parts.join(' ');
+  }
+
+  function _tick() {
+    const wrap2 = document.getElementById('next-games-wrap');
+    if (!wrap2) { clearInterval(_countdownTimer); _countdownTimer = null; return; }
+    const now = Date.now();
+    // Quando o horário do grupo atual chega, avança para o próximo grupo.
+    if (group.start !== null && now >= group.start) {
+      group = _nextGamesGroup();
+      wrap2.innerHTML = _buildNextGamesHtml(group);
+    }
+    if (!group.items.length) return;
+    group.items.forEach(({ game, start }) => {
+      const cd = document.getElementById(`ngc-cd-${game.id}`);
+      if (!cd) return;
+      const card = cd.closest('.next-game-card');
+      const note = document.getElementById(`ngc-note-${game.id}`);
+      const diff = start.getTime() - now;
+      if (diff <= 0) { cd.textContent = '🟢 Em andamento'; return; }
+      cd.textContent = _fmtDiff(diff);
+      const lockedSoon = diff <= LOCK_LEAD_MS;
+      if (card) card.classList.toggle('locked-soon', lockedSoon);
+      if (note) note.textContent = lockedSoon
+        ? '🔒 Palpites BLOQUEADOS para esta partida'
+        : '🔒 Palpites bloqueiam 1h antes do início';
+    });
   }
   _tick();
   _countdownTimer = setInterval(_tick, 1000);
@@ -2179,14 +2216,13 @@ async function renderDashboard() {
     const _totalArr = calcTotalArrecadado(usersSnap.docs.map(d=>({uid:d.id,...d.data()})));
     const _premios = calcPremios(_totalArr);
 
-    // Próxima partida
-    const _nextGame = _getNextGame();
-    const _nextGameHtml = _buildNextGameCard(_nextGame);
+    // Próxima(s) partida(s) — guarda o mapa de resultados p/ overrides de data/hora.
+    _dashResults = res;
 
     let html = `
       <div class="section-title">🏆 ${esc(CFG.nome_bolao)}${_refreshBtn()}</div>
 
-      ${_nextGameHtml}
+      <div id="next-games-wrap"></div>
 
       <!-- Painel de arrecadação e premiação -->
       <div class="prize-pool-bar">
@@ -2379,11 +2415,9 @@ function buildPalRow(game) {
   const pal = myPalpites[game.id]||{};
   const res = resultados[game.id]||{};
   const teams = _getResolvedTeamsForGame(game, resultados);
-  const locked = res.locked===true;
   const hasResult = res.h_real!==undefined;
-  const started = isGameStarted(game);
   const pts = calcPontos(pal,res);
-  const isClosed = locked || hasResult || started;
+  const isClosed = isPalpiteClosed(game, res);
   const closeAttr = isClosed ? `readonly onclick="showPalpiteClosedReason('${game.id}')" onfocus="showPalpiteClosedReason('${game.id}')"` : '';
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const lockedBadge = isClosed?`<span class="locked-badge">🔒 Encerrado</span>`:'';
@@ -2579,7 +2613,7 @@ async function savePalpite(gameId) {
   // Ambos os campos apagados → apaga o documento do Firestore
   // (mesma guarda do caminho de save: não permite em jogo fechado)
   if (!pal || (pal.h===undefined && pal.a===undefined)) {
-    if (res.locked===true || res.h_real!==undefined || (gameDef && isGameStarted(gameDef) && !palpitesEditing)) {
+    if (isPalpiteClosedForSave(gameDef, res, !!palpitesEditing)) {
       showPalpiteClosedReason(gameId);
       return;
     }
@@ -2599,7 +2633,7 @@ async function savePalpite(gameId) {
 
   // Só um lado preenchido → aguarda o outro (não salva parcialmente)
   if (pal.h===undefined||pal.a===undefined) return;
-  if (res.locked===true || res.h_real!==undefined || (gameDef && isGameStarted(gameDef) && !palpitesEditing)) {
+  if (isPalpiteClosedForSave(gameDef, res, !!palpitesEditing)) {
     showPalpiteClosedReason(gameId);
     return;
   }
@@ -2654,8 +2688,13 @@ function showPalpiteClosedReason(gameId) {
     return;
   }
   const gameDef = ALL_GAMES.find(g=>g.id===gameId);
-  if (gameDef && isGameStarted(gameDef)) {
-    showToast('⏰ O jogo já começou. Palpites foram encerrados automaticamente.','warning');
+  const start = gameDef ? _effectiveStartInstant(gameDef, res) : null;
+  if (start) {
+    if (Date.now() >= start.getTime()) {
+      showToast('⏰ O jogo já começou. Palpites foram encerrados automaticamente.','warning');
+    } else {
+      showToast('🔒 Palpites encerrados: falta menos de 1h para o início desta partida.','warning');
+    }
     return;
   }
   showToast('Este jogo está encerrado para palpites.','warning');
@@ -3166,6 +3205,60 @@ function _gameStartInstant(game) {
 function isGameStarted(game) {
   const start = _gameStartInstant(game);
   return start ? (Date.now() >= start.getTime()) : false;
+}
+
+// ── Override de data/hora por jogo (admin) e trava automática ──
+// Antecedência da trava de palpites antes do início (1 hora).
+const LOCK_LEAD_MS = 3600000;
+const _MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// "Jun 11" → "2026-06-11" (formato de <input type="date">)
+function _gameDateToISO(dateStr) {
+  const m = (dateStr||'').match(/([A-Za-z]+)\s+(\d+)/);
+  if (!m) return '';
+  const month = _MONTH_MAP[m[1]];
+  if (month === undefined) return '';
+  return `2026-${String(month+1).padStart(2,'0')}-${String(parseInt(m[2])).padStart(2,'0')}`;
+}
+// "2026-06-11" → "Jun 11" (exibição)
+function _isoToGameDate(iso) {
+  const m = (iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso||'';
+  return `${_MONTH_ABBR[parseInt(m[2])-1]} ${parseInt(m[3])}`;
+}
+
+// Instante de início considerando override de data/hora salvo em resultados.
+// res.date_override = "YYYY-MM-DD", res.time_override = "HH:MM" (Brasília).
+function _effectiveStartInstant(game, res) {
+  res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
+  const iso  = res.date_override || _gameDateToISO(game?.date);
+  const time = res.time_override || GAME_TIMES[game?.id] || '';
+  const dm = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const tm = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!dm || !tm) return null;
+  // Brasília UTC-3 → UTC = local + 3h.
+  return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, parseInt(dm[3]), parseInt(tm[1]) + 3, parseInt(tm[2])));
+}
+
+// Palpites encerrados? Prioridade: resultado lançado > trava manual >
+// liberação manual (override) > regra automática (1h antes do início).
+function isPalpiteClosed(game, res) {
+  res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
+  if (res.h_real !== undefined) return true;
+  if (res.locked === true) return true;
+  if (res.unlock_override === true) return false;
+  const start = _effectiveStartInstant(game, res);
+  return start ? (Date.now() >= start.getTime() - LOCK_LEAD_MS) : false;
+}
+
+// Variante para salvar: admin editando outro usuário ignora a trava automática
+// por tempo, mas continua respeitando trava manual e resultado lançado.
+function isPalpiteClosedForSave(game, res, adminEditing) {
+  res = res || {};
+  if (res.h_real !== undefined) return true;
+  if (res.locked === true) return true;
+  if (adminEditing) return false;
+  return isPalpiteClosed(game, res);
 }
 
 function _uniqueGameDates() {
@@ -4194,16 +4287,20 @@ async function renderAdminResultados() {
           <button class="btn btn-primary" onclick="atualizarChaveamentoManual()">🔄 Atualizar chaveamento e classificação</button>
         </div>
       </div>`;
-    let html = _testPanel + _updateBar + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Clique em 🔒 para bloquear (impede alterações nos palpites).</div>`;
+    let html = _testPanel + _updateBar + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Palpites travam <b>automaticamente 1h antes</b> do início. Use o botão de trava para alternar: <b>⏱️ Automático → 🔒 Travado → 🟢 Liberado</b> (sobrepõe a regra). Edite a <b>data/hora (Brasília)</b> de cada jogo se o horário mudar.</div>`;
     let lastDate = null;
     let lastPhase = null;
     sortedGames.forEach(game=>{
       const r = res[game.id]||{};
-      const locked = r.locked===true;
+      const lockState = r.locked===true ? 'on' : (r.unlock_override===true ? 'off' : 'auto');
+      const lockView = _lockBtnView(lockState);
       const hasH = r.h_real!==undefined;
       const hasA = r.a_real!==undefined;
       const hasVal = hasH && hasA;
-      const time = GAME_TIMES[game.id]||'--:--';
+      const time = r.time_override || GAME_TIMES[game.id]||'--:--';
+      const effISO = r.date_override || _gameDateToISO(game.date);
+      const effTime = r.time_override || GAME_TIMES[game.id] || '';
+      const schedOverridden = !!(r.date_override || r.time_override);
       const phase = phaseOf[game.id] || { label:'Jogos', icon:'⚽' };
       if (phase.label !== lastPhase) {
         if (lastDate!==null) { html += `</div>`; lastDate = null; }
@@ -4232,7 +4329,7 @@ async function renderAdminResultados() {
         <div style="text-align:center;color:var(--text-muted);font-size:0.8rem">✕</div>
         <input type="number" class="result-input ${hasA?'saved':''}" id="ra_${game.id}" min="0" max="20" placeholder="–" value="${hasA?r.a_real:''}" oninput="onResultInput('${game.id}','a',this.value)">
         <div><div style="font-size:0.85rem;font-weight:600">${displayA}</div></div>
-        <button class="lock-btn ${locked?'locked':''}" title="${locked?'Desbloquear':'Bloquear'}" onclick="toggleLock('${game.id}')" id="lock_${game.id}">${locked?'🔒':'🔓'}</button>
+        <button class="lock-btn ${lockState==='on'?'locked':lockState==='off'?'open':''}" title="${lockView.title}" onclick="toggleLock('${game.id}')" id="lock_${game.id}">${lockView.icon}</button>
       </div>`;
       if (isElim) {
         html += `<div class="result-row pen-row" id="pen_row_${game.id}" style="display:${showPenRow?'grid':'none'};background:rgba(30,144,255,.06);border-radius:8px;padding:8px 10px;margin-top:-4px">
@@ -4244,6 +4341,15 @@ async function renderAdminResultados() {
           <div></div>
         </div>`;
       }
+      // Linha de edição de data/hora (Brasília) + estado da trava
+      const _inpStyle = "padding:4px 6px;border-radius:6px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid var(--border);font-size:0.72rem;color-scheme:dark";
+      html += `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:0.72rem;color:var(--text-muted);padding:2px 2px 10px;margin-top:-2px;border-bottom:1px dashed var(--border);margin-bottom:10px">
+        <span>🕒 Início (Brasília):</span>
+        <input type="date" id="gd_${game.id}" value="${effISO}" onchange="onScheduleChange('${game.id}')" style="${_inpStyle}">
+        <input type="time" id="gt_${game.id}" value="${effTime}" onchange="onScheduleChange('${game.id}')" style="${_inpStyle}">
+        ${schedOverridden?`<button class="btn btn-sm" style="padding:3px 8px;font-size:0.7rem" onclick="resetSchedule('${game.id}')" title="Restaurar data/hora padrão">↩︎ Padrão</button><span style="color:var(--orange)">• horário alterado</span>`:''}
+        <span style="margin-left:auto" id="lockstate_${game.id}">${_lockStateLabel(lockState)}</span>
+      </div>`;
     });
     if (lastDate!==null) html += `</div>`;
     cont.innerHTML = html;
@@ -4337,25 +4443,98 @@ async function atualizarChaveamentoManual() {
   }
 }
 
+// Visual do botão de trava conforme estado: 'auto' | 'on' | 'off'.
+function _lockBtnView(state) {
+  if (state==='on')  return { icon:'🔒', title:'Travado manualmente — clique para liberar' };
+  if (state==='off') return { icon:'🟢', title:'Liberado manualmente (ignora regra 1h) — clique para automático' };
+  return { icon:'⏱️', title:'Automático: trava 1h antes do início — clique para travar' };
+}
+function _lockStateLabel(state) {
+  if (state==='on')  return '🔒 Travado (manual)';
+  if (state==='off') return '🟢 Liberado (manual)';
+  return '⏱️ Trava automática 1h antes';
+}
+function _applyLockButton(gameId, state) {
+  const btn = document.getElementById(`lock_${gameId}`);
+  if (btn) {
+    const v = _lockBtnView(state);
+    btn.textContent = v.icon;
+    btn.title = v.title;
+    btn.classList.toggle('locked', state==='on');
+    btn.classList.toggle('open', state==='off');
+  }
+  const lbl = document.getElementById(`lockstate_${gameId}`);
+  if (lbl) lbl.textContent = _lockStateLabel(state);
+}
+
+// Cicla a trava: automático → travado → liberado → automático.
 async function toggleLock(gameId) {
   try {
     const snap = await db_.collection('resultados').doc(gameId).get();
     const cur = snap.exists ? snap.data() : {};
-    const newLocked = !cur.locked;
-    await db_.collection('resultados').doc(gameId).set({ ...cur, locked:newLocked }, {merge:true});
+    const state = cur.locked===true ? 'on' : (cur.unlock_override===true ? 'off' : 'auto');
+    const next = state==='auto' ? 'on' : (state==='on' ? 'off' : 'auto');
+    const FV = firebase.firestore.FieldValue;
+    const patch = { updatedAt: FV.serverTimestamp() };
+    if (next==='on')   { patch.locked = true;          patch.unlock_override = FV.delete(); }
+    if (next==='off')  { patch.locked = false;         patch.unlock_override = true; }
+    if (next==='auto') { patch.locked = FV.delete();   patch.unlock_override = FV.delete(); }
+    await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
     _scDel('res');
     try {
       await db_.collection('audit').add({
-        type: newLocked ? 'lock_game' : 'unlock_game',
-        gameId,
+        type: 'lock_state', gameId, state: next,
         adminUid: currentUser?.uid || null,
         adminEmail: currentUser?.email || null,
-        at: firebase.firestore.FieldValue.serverTimestamp()
+        at: FV.serverTimestamp()
       });
     } catch(_) {}
-    const btn = document.getElementById(`lock_${gameId}`);
-    if (btn) { btn.textContent=newLocked?'🔒':'🔓'; btn.classList.toggle('locked',newLocked); }
-    showToast(newLocked?'🔒 Jogo bloqueado':'🔓 Jogo desbloqueado', newLocked?'warning':'success');
+    _applyLockButton(gameId, next);
+    const msg = next==='on' ? '🔒 Travado manualmente'
+              : next==='off' ? '🟢 Liberado manualmente (ignora regra de 1h)'
+              : '⏱️ Trava automática (1h antes do início)';
+    showToast(msg, next==='on'?'warning':'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// Salva override de data/hora (Brasília) do jogo. Apaga o campo se voltar ao padrão.
+async function onScheduleChange(gameId) {
+  const dEl = document.getElementById(`gd_${gameId}`);
+  const tEl = document.getElementById(`gt_${gameId}`);
+  if (!dEl || !tEl) return;
+  const iso = dEl.value, time = tEl.value;
+  const game = ALL_GAMES.find(g=>g.id===gameId);
+  const defISO = _gameDateToISO(game?.date);
+  const defTime = GAME_TIMES[gameId] || '';
+  const FV = firebase.firestore.FieldValue;
+  const patch = { updatedAt: FV.serverTimestamp() };
+  patch.date_override = (iso && iso !== defISO) ? iso : FV.delete();
+  patch.time_override = (time && time !== defTime) ? time : FV.delete();
+  try {
+    await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
+    _scDel('res');
+    try {
+      await db_.collection('audit').add({
+        type:'schedule_edit', gameId,
+        date_override: iso||null, time_override: time||null,
+        adminUid: currentUser?.uid||null, adminEmail: currentUser?.email||null,
+        at: FV.serverTimestamp()
+      });
+    } catch(_) {}
+    showToast('🕒 Horário do jogo atualizado','success');
+    renderAdminResultados();
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function resetSchedule(gameId) {
+  const FV = firebase.firestore.FieldValue;
+  try {
+    await db_.collection('resultados').doc(gameId).set({
+      date_override: FV.delete(), time_override: FV.delete(), updatedAt: FV.serverTimestamp()
+    }, {merge:true});
+    _scDel('res');
+    showToast('↩︎ Horário restaurado para o padrão','success');
+    renderAdminResultados();
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
