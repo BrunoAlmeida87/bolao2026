@@ -1387,6 +1387,11 @@ async function _fetchPals(users) {
 let saveDebounce = {};
 let isLoadingPage = false;
 let eliminationCache = {};
+let _currentPage = 'dashboard';
+function refreshPage() { _scDel('res','usr','pals'); navigateTo(_currentPage); }
+function _refreshBtn() {
+  return `<button onclick="refreshPage()" title="Atualizar dados" style="float:right;background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:20px;padding:3px 12px;font-size:0.8rem;cursor:pointer;line-height:1;margin-top:2px" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">↻</button>`;
+}
 let deferredPwaPrompt = null;
 
 // ════════════════════════════════════════════
@@ -1672,6 +1677,7 @@ function goToUserPalpites(uid) {
 const _TRANSIENT_PAGES = new Set(['ver-palpites','ver-todos']);
 
 function navigateTo(page) {
+  _currentPage = page;
   if (_countdownTimer && page !== 'dashboard') { clearInterval(_countdownTimer); _countdownTimer = null; }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
@@ -2173,7 +2179,7 @@ async function renderDashboard() {
     const _nextGameHtml = _buildNextGameCard(_nextGame);
 
     let html = `
-      <div class="section-title">🏆 ${esc(CFG.nome_bolao)}</div>
+      <div class="section-title">🏆 ${esc(CFG.nome_bolao)}${_refreshBtn()}</div>
 
       ${_nextGameHtml}
 
@@ -2307,7 +2313,7 @@ async function renderPalpites(editUid=null) {
       ...Object.entries(ELIM_DATA).map(([k,v])=>({key:k,label:v.icon+' '+v.label}))
     ];
 
-    let html = `<div class="section-title">⚽ Meus Palpites</div>${who}
+    let html = `<div class="section-title">⚽ Meus Palpites${_refreshBtn()}</div>${who}
       ${buildChampionPickerCard()}
       <div id="pal-progress-text" class="progress-text">Calculando...</div>
       <div class="progress-bar"><div class="progress-fill" id="pal-progress-fill" style="width:0%"></div></div>
@@ -2678,7 +2684,7 @@ async function renderVerPalpites(selectedUid=null) {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false);
 
-    let html = `<div class="section-title">👁️ Ver Palpites</div>
+    let html = `<div class="section-title">👁️ Ver Palpites${_refreshBtn()}</div>
       <div class="back-bar" style="margin-bottom:16px">
         <span style="font-size:0.85rem;color:var(--text-muted)">Selecione um participante para ver os palpites</span>
         <button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="navigateTo('ver-todos')">📋 Ver Todos de Uma Vez</button>
@@ -3047,7 +3053,7 @@ async function renderVerTodos() {
         </div>
       </div>`;
 
-    let html = `<div class="section-title">📋 Todos os Palpites</div>
+    let html = `<div class="section-title">📋 Todos os Palpites${_refreshBtn()}</div>
       <div class="back-bar" style="margin-bottom:10px">
         <span></span>
         <button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="navigateTo('ver-palpites')">👁️ Por Pessoa</button>
