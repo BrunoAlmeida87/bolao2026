@@ -1346,6 +1346,44 @@ let myPalpites   = {};
 let resultados   = {};
 let myChampion   = null;
 let palpitesEditing = null;
+
+// ─── SESSION CACHE ────────────────────────────────────────────────────────────
+// Reduz leituras no Firestore guardando resultados, usuários e palpites em
+// memória por TTL. Invalidado automaticamente nas escritas relevantes.
+const _SC = {};
+const _SC_TTL = { res: 3*60000, usr: 5*60000, pals: 3*60000 };
+function _scGet(k)        { const e=_SC[k]; return (e&&Date.now()<e.x)?e.v:null; }
+function _scSet(k,v,ttl)  { _SC[k]={v,x:Date.now()+(ttl||180000)}; }
+function _scDel(...keys)  { keys.forEach(k=>delete _SC[k]); }
+
+async function _fetchRes() {
+  let r=_scGet('res'); if(r) return r;
+  const snap=await db_.collection('resultados').get();
+  r={}; snap.docs.forEach(d=>{r[d.id]=d.data();});
+  _scSet('res',r,_SC_TTL.res); return r;
+}
+async function _fetchUsr() {
+  let u=_scGet('usr'); if(u) return u;
+  const snap=await db_.collection('usuarios').get();
+  u=snap.docs.map(d=>({uid:d.id,...d.data()}));
+  _scSet('usr',u,_SC_TTL.usr); return u;
+}
+async function _fetchPals(users) {
+  let p=_scGet('pals'); if(p) return p;
+  const allPals={},champPicks={};
+  await Promise.all((users||[]).map(async u=>{
+    const [ps,pdoc]=await Promise.all([
+      db_.collection('palpites').doc(u.uid).collection('jogos').get(),
+      db_.collection('palpites').doc(u.uid).get()
+    ]);
+    allPals[u.uid]={};
+    ps.docs.forEach(d=>{allPals[u.uid][d.id]=d.data();});
+    champPicks[u.uid]=pdoc.exists?(pdoc.data()?.campeao||null):null;
+  }));
+  const data={allPals,champPicks};
+  _scSet('pals',data,_SC_TTL.pals); return data;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 let saveDebounce = {};
 let isLoadingPage = false;
 let eliminationCache = {};
@@ -2085,23 +2123,9 @@ async function renderDashboard() {
   const cont = document.getElementById('dashboard-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [usersSnap, resSnap] = await Promise.all([
-      db_.collection('usuarios').get(),
-      db_.collection('resultados').get()
-    ]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    const champPicks = {};
-    await Promise.all(users.map(async u=>{
-      const [pSnap, pDoc] = await Promise.all([
-        db_.collection('palpites').doc(u.uid).collection('jogos').get(),
-        db_.collection('palpites').doc(u.uid).get()
-      ]);
-      allPals[u.uid]={};
-      pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); });
-      champPicks[u.uid] = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
-    }));
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const finalChampion = _getFinalChampion(res);
     const isAdminDash = currentUserDoc?.role === 'admin';
@@ -2261,15 +2285,14 @@ async function renderPalpites(editUid=null) {
   const cont = document.getElementById('palpites-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [pSnap, rSnap, pDoc] = await Promise.all([
+    const [pSnap, pDoc, resCache] = await Promise.all([
       db_.collection('palpites').doc(uid).collection('jogos').get(),
-      db_.collection('resultados').get(),
-      db_.collection('palpites').doc(uid).get()
+      db_.collection('palpites').doc(uid).get(),
+      _fetchRes()
     ]);
     myPalpites = {};
     pSnap.docs.forEach(d=>{ myPalpites[d.id]=d.data(); });
-    resultados = {};
-    rSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
+    resultados = resCache;
     myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
 
     let who = '';
@@ -2480,6 +2503,7 @@ async function onChampionChange(team) {
       payload.editedByAdminEmail = currentUser.email || null;
     }
     await db_.collection('palpites').doc(uid).set(payload, {merge:true});
+    _scDel('pals');
     if (isAdminEdit) {
       try {
         await db_.collection('audit').add({
@@ -2596,6 +2620,7 @@ async function savePalpite(gameId) {
         });
       } catch(_) {}
     }
+    _scDel('pals');
     if (hInp) { hInp.classList.remove('saving'); hInp.classList.add('saved-ok'); }
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('saved-ok'); }
     setTimeout(()=>{ if(hInp) hInp.classList.remove('saved-ok'); if(aInp) aInp.classList.remove('saved-ok'); }, 1500);
@@ -2650,13 +2675,8 @@ async function renderVerPalpites(selectedUid=null) {
   const cont = document.getElementById('ver-palpites-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [usersSnap, rSnap] = await Promise.all([
-      db_.collection('usuarios').get(),
-      db_.collection('resultados').get()
-    ]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false);
 
     let html = `<div class="section-title">👁️ Ver Palpites</div>
       <div class="back-bar" style="margin-bottom:16px">
@@ -2988,24 +3008,10 @@ async function renderVerTodos() {
   const cont = document.getElementById('ver-todos-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [usersSnap, resSnap] = await Promise.all([
-      db_.collection('usuarios').get(),
-      db_.collection('resultados').get()
-    ]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false)
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false)
       .sort((a,b)=>a.apelido.localeCompare(b.apelido));
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    const champPicks = {};
-    await Promise.all(users.map(async u=>{
-      const [ps, pdoc] = await Promise.all([
-        db_.collection('palpites').doc(u.uid).collection('jogos').get(),
-        db_.collection('palpites').doc(u.uid).get()
-      ]);
-      allPals[u.uid] = {};
-      ps.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); });
-      champPicks[u.uid] = pdoc.exists ? (pdoc.data()?.campeao || null) : null;
-    }));
+    const {allPals, champPicks} = await _fetchPals(users);
     const finalChampion = _getFinalChampion(res);
     const isAdminView = currentUserDoc?.role === 'admin';
     const champRevealed = isAdminView || CFG.campeao_locked === true || !!finalChampion;
@@ -4278,6 +4284,7 @@ async function saveResultado(gameId) {
       }
     }
     await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
+    _scDel('res');
     try {
       await db_.collection('audit').add({
         type: 'resultado_save',
@@ -4323,6 +4330,7 @@ async function toggleLock(gameId) {
     const cur = snap.exists ? snap.data() : {};
     const newLocked = !cur.locked;
     await db_.collection('resultados').doc(gameId).set({ ...cur, locked:newLocked }, {merge:true});
+    _scDel('res');
     try {
       await db_.collection('audit').add({
         type: newLocked ? 'lock_game' : 'unlock_game',
@@ -4591,7 +4599,7 @@ let _adminUserCache = [];
 
 async function togglePago(uid, isChecked) {
   try {
-    await db_.collection('usuarios').doc(uid).update({pago: isChecked});
+    await db_.collection('usuarios').doc(uid).update({pago: isChecked}); _scDel('usr');
     // Atualiza badge inline sem recarregar a lista
     const row = document.getElementById('user-row-'+uid);
     if (row) {
@@ -4627,7 +4635,7 @@ async function togglePago(uid, isChecked) {
 async function toggleAdminCheckbox(uid, isChecked) {
   const newRole = isChecked ? 'admin' : 'user';
   try {
-    await db_.collection('usuarios').doc(uid).update({role:newRole});
+    await db_.collection('usuarios').doc(uid).update({role:newRole}); _scDel('usr');
     showToast(`✅ Usuário agora é ${newRole}`, 'success');
     renderAdminUsuarios();
   } catch(e) {
@@ -4649,7 +4657,7 @@ async function toggleAdmin(uid, currentRole) {
 async function toggleAtivo(uid, currentAtivo) {
   if (!confirm(`Confirmar: ${currentAtivo?'desativar':'ativar'} este usuário?`)) return;
   try {
-    await db_.collection('usuarios').doc(uid).update({ativo:!currentAtivo});
+    await db_.collection('usuarios').doc(uid).update({ativo:!currentAtivo}); _scDel('usr');
     showToast('✅ Atualizado','success');
     renderAdminUsuarios();
   } catch(e) { showToast('Erro: '+e.message,'error'); }
@@ -4900,7 +4908,7 @@ async function salvarNomeAdmin() {
   if (novoNome.length < 2) { err.textContent = 'Nome muito curto (mínimo 2 caracteres).'; err.style.display = 'block'; return; }
   if (novoEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novoEmail)) { err.textContent = 'E-mail inválido.'; err.style.display = 'block'; return; }
   try {
-    await db_.collection('usuarios').doc(_nomeAdminUid).update({ nome: novoNome, email: novoEmail });
+    await db_.collection('usuarios').doc(_nomeAdminUid).update({ nome: novoNome, email: novoEmail }); _scDel('usr');
     showToast('✅ Dados atualizados!', 'success');
     closeNomeAdminModal();
     renderAdminUsuarios();
