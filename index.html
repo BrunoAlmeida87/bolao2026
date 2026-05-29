@@ -4900,9 +4900,7 @@ async function salvarNomeAdmin() {
   if (novoNome.length < 2) { err.textContent = 'Nome muito curto (mínimo 2 caracteres).'; err.style.display = 'block'; return; }
   if (novoEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novoEmail)) { err.textContent = 'E-mail inválido.'; err.style.display = 'block'; return; }
   try {
-    const payload = { nome: novoNome };
-    if (novoEmail) payload.email = novoEmail;
-    await db_.collection('usuarios').doc(_nomeAdminUid).update(payload);
+    await db_.collection('usuarios').doc(_nomeAdminUid).update({ nome: novoNome, email: novoEmail });
     showToast('✅ Dados atualizados!', 'success');
     closeNomeAdminModal();
     renderAdminUsuarios();
