@@ -1388,7 +1388,12 @@ let saveDebounce = {};
 let isLoadingPage = false;
 let eliminationCache = {};
 let _currentPage = 'dashboard';
-function refreshPage() { _scDel('res','usr','pals'); navigateTo(_currentPage); }
+let _currentVerPalpitesUid = null;
+function refreshPage() {
+  if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
+  _scDel('res','usr','pals');
+  navigateTo(_currentPage);
+}
 function _refreshBtn() {
   return `<button onclick="refreshPage()" title="Atualizar dados" style="float:right;background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:20px;padding:3px 12px;font-size:0.8rem;cursor:pointer;line-height:1;margin-top:2px" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">↻</button>`;
 }
@@ -2587,6 +2592,7 @@ async function savePalpite(gameId) {
       });
       updatePalProgress();
       updateGroupTabState();
+      _scDel('pals');
     } catch(e) { showToast('Erro ao apagar palpite: '+e.message,'error'); }
     return;
   }
@@ -2678,6 +2684,7 @@ function updateGroupTabState() {
 // VER PALPITES PAGE (VISUALIZAÇÃO PÚBLICA)
 // ════════════════════════════════════════════
 async function renderVerPalpites(selectedUid=null) {
+  _currentVerPalpitesUid = selectedUid;
   const cont = document.getElementById('ver-palpites-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
