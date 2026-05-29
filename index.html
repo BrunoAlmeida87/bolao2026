@@ -4538,6 +4538,12 @@ async function onScheduleChange(gameId) {
       if (btnEl) btnEl.remove();
       if (overrideSpan) overrideSpan.remove();
     }
+    // Atualiza _dashResults em memória para o timer do dashboard usar imediatamente
+    if (!_dashResults[gameId]) _dashResults[gameId] = {};
+    if (dateChanged) _dashResults[gameId].date_override = iso;
+    else delete _dashResults[gameId].date_override;
+    if (timeChanged) _dashResults[gameId].time_override = time;
+    else delete _dashResults[gameId].time_override;
     showToast('🕒 Horário do jogo atualizado','success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
@@ -4549,6 +4555,10 @@ async function resetSchedule(gameId) {
       date_override: FV.delete(), time_override: FV.delete(), updatedAt: FV.serverTimestamp()
     }, {merge:true});
     _scDel('res');
+    if (_dashResults[gameId]) {
+      delete _dashResults[gameId].date_override;
+      delete _dashResults[gameId].time_override;
+    }
     showToast('↩︎ Horário restaurado para o padrão','success');
     renderAdminResultados();
   } catch(e) { showToast('Erro: '+e.message,'error'); }
