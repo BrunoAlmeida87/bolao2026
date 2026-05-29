@@ -3247,7 +3247,7 @@ function _effectiveStartInstant(game, res) {
 // liberação manual (override) > regra automática (1h antes do início).
 function isPalpiteClosed(game, res) {
   res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
-  if (res.h_real !== undefined) return true;
+  if (res.h_real !== undefined && res.a_real !== undefined) return true;
   if (res.locked === true) return true;
   if (res.unlock_override === true) return false;
   const start = _effectiveStartInstant(game, res);
@@ -3707,7 +3707,9 @@ async function renderEstatisticas() {
               + _zebraCard
               + '</div>'
               + '<div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">O que cada resultado causa?</div>'
+              + '<div style="font-size:0.71rem;color:var(--text-muted);margin-bottom:8px">Mostra quantos participantes pontuariam e qual % do bolão seria beneficiado em cada cenário.</div>'
               + _scRows
+              + '<div style="font-size:0.71rem;color:var(--text-muted);margin-top:8px">💡 <b>Distribuição</b> = % dos palpites enviados por vitória da casa, empate ou vitória fora. Visível apenas após o bloqueio.</div>'
               + '</div>';
           }
         }
@@ -3781,7 +3783,7 @@ async function renderEstatisticas() {
 
       const _overtakeRows = _canOvertake.slice(0, 6).map(({u, target, pts}) =>
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:0.83rem">'
-        + '<span><b style="color:var(--gold)">' + esc(u.apelido||u.nome) + '</b> → pode ultrapassar <b>' + esc(target.apelido||target.nome) + '</b></span>'
+        + '<span><b style="color:var(--gold)">' + esc(u.apelido||u.nome) + '</b> → pode ultrapassar <b>' + esc(target.apelido||target.nome) + '</b> <span style="font-size:0.73rem;color:var(--text-muted)">(se cravar e o alvo não pontuar)</span></span>'
         + '<span style="color:var(--green);font-weight:600">+' + pts + ' pts</span>'
         + '</div>'
       ).join('');
@@ -3795,12 +3797,19 @@ async function renderEstatisticas() {
           ? '<div style="font-size:0.82rem;color:var(--text-muted);margin-top:10px">Nenhuma mudança de posição possível com os palpites atuais desta partida.</div>'
           : '');
 
+      const _explainImpact = '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:10px;line-height:1.5;background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px">'
+        + '💡 <b>Como é calculado:</b> '
+        + '"Pontos máximos em disputa" = nº de palpites enviados × pontos do placar exato (' + _maxPts + ' pts). '
+        + '"Podem alcançar a pontuação atual do líder" = participantes que, se cravarem o placar exato, atingem ou superam os pontos que o líder tem <i>agora</i> (o líder também pode pontuar). '
+        + '"Pode ultrapassar" = cenário máximo se o participante cravar e o alvo não pontuar.'
+        + '</div>';
+
       _beforeHtml += '<div class="card">'
         + '<div class="card-title">⚡ Impacto Potencial no Ranking</div>'
         + '<div class="stats-alt-grid" style="margin-top:12px">'
         + '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">'
         + '<div style="font-size:1.4rem;font-weight:800;color:var(--gold)">' + _totalAtStake + '</div>'
-        + '<div style="font-size:0.72rem;color:var(--text-muted)">Pontos em disputa</div>'
+        + '<div style="font-size:0.72rem;color:var(--text-muted)">Pontos máximos em disputa</div>'
         + '</div>'
         + '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">'
         + '<div style="font-size:1.4rem;font-weight:800;color:' + (_gap12 <= _maxPts ? 'var(--orange)' : 'var(--accent)') + '">' + _gap12 + '</div>'
@@ -3808,10 +3817,11 @@ async function renderEstatisticas() {
         + '</div>'
         + '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">'
         + '<div style="font-size:1.4rem;font-weight:800;color:var(--green)">' + _nearTop.length + '</div>'
-        + '<div style="font-size:0.72rem;color:var(--text-muted)">Podem alcançar o líder</div>'
+        + '<div style="font-size:0.72rem;color:var(--text-muted)">Podem alcançar a pontuação atual do líder</div>'
         + '</div>'
         + '</div>'
         + _overtakeSection
+        + _explainImpact
         + '</div>';
     }
 
