@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.5.0">
+<meta name="app-version" content="v1.6.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1012,7 +1012,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.5.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.6.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1282,7 +1282,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.5.0',
+  app_version:'v1.6.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -1318,19 +1318,23 @@ const GAME_TIMES = {
 };
 
 const COUNTRY_FLAGS = {
-  'EUA':'🇺🇸','México':'🇲🇽','Canadá':'🇨🇦','Panamá':'🇵🇦',
-  'Brasil':'🇧🇷','Argentina':'🇦🇷','Uruguai':'🇺🇾','Equador':'🇪🇨',
-  'Colômbia':'🇨🇴','Paraguai':'🇵🇾','Haiti':'🇭🇹',
-  'Inglaterra':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Escócia':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','França':'🇫🇷','Espanha':'🇪🇸',
-  'Alemanha':'🇩🇪','Portugal':'🇵🇹','Países Baixos':'🇳🇱','Bélgica':'🇧🇪',
-  'Croácia':'🇭🇷','Suécia':'🇸🇪','Noruega':'🇳🇴','Áustria':'🇦🇹',
-  'Suíça':'🇨🇭','Bósnia e Herzegovina':'🇧🇦','Rep. Tcheca':'🇨🇿','Uzbequistão':'🇺🇿',
-  'Japão':'🇯🇵','Coreia do Sul':'🇰🇷','Austrália':'🇦🇺','Nova Zelândia':'🇳🇿',
-  'Irã':'🇮🇷','Arábia Saudita':'🇸🇦','Iraque':'🇮🇶','Jordânia':'🇯🇴','Catar':'🇶🇦',
-  'Marrocos':'🇲🇦','Egito':'🇪🇬','Senegal':'🇸🇳','Gana':'🇬🇭',
-  'Costa do Marfim':'🇨🇮','África do Sul':'🇿🇦','Rep. Dem. Congo':'🇨🇩','Cabo Verde':'🇨🇻',
-  'Turquia':'🇹🇷','Argélia':'🇩🇿','Curaçao':'🇨🇼','Tunísia':'🇹🇳',
+  'EUA':'us','México':'mx','Canadá':'ca','Panamá':'pa',
+  'Brasil':'br','Argentina':'ar','Uruguai':'uy','Equador':'ec',
+  'Colômbia':'co','Paraguai':'py','Haiti':'ht',
+  'Inglaterra':'gb-eng','Escócia':'gb-sct','França':'fr','Espanha':'es',
+  'Alemanha':'de','Portugal':'pt','Países Baixos':'nl','Bélgica':'be',
+  'Croácia':'hr','Suécia':'se','Noruega':'no','Áustria':'at',
+  'Suíça':'ch','Bósnia e Herzegovina':'ba','Rep. Tcheca':'cz','Uzbequistão':'uz',
+  'Japão':'jp','Coreia do Sul':'kr','Austrália':'au','Nova Zelândia':'nz',
+  'Irã':'ir','Arábia Saudita':'sa','Iraque':'iq','Jordânia':'jo','Catar':'qa',
+  'Marrocos':'ma','Egito':'eg','Senegal':'sn','Gana':'gh',
+  'Costa do Marfim':'ci','África do Sul':'za','Rep. Dem. Congo':'cd','Cabo Verde':'cv',
+  'Turquia':'tr','Argélia':'dz','Curaçao':'cw','Tunísia':'tn',
 };
+function teamFlag(name) {
+  const code = COUNTRY_FLAGS[name];
+  return code ? `<img src="https://flagcdn.com/20x15/${code}.png" alt="${name}" style="vertical-align:middle;margin-right:2px;border-radius:2px;display:inline-block">` : '';
+}
 
 let myPalpites   = {};
 let resultados   = {};
@@ -2019,8 +2023,8 @@ function _buildNextGameCard(next) {
     </div>`;
   }
   const { game, start } = next;
-  const homeFlag = COUNTRY_FLAGS[game.h] || '🏳️';
-  const awayFlag = COUNTRY_FLAGS[game.a] || '🏳️';
+  const homeFlag = teamFlag(game.h);
+  const awayFlag = teamFlag(game.a);
   const time = GAME_TIMES[game.id] || '--:--';
   const dateStr = game.date || '';
   const fmtDate = dateStr ? `${dateStr} às ${time} (Brasília)` : time;
@@ -2215,7 +2219,7 @@ async function renderDashboard() {
       const champCell = !canSeeChampRow
         ? `<span style="color:var(--text-muted);font-size:0.78rem">🔒</span>`
         : (u.campeao
-          ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${COUNTRY_FLAGS[u.campeao]||''} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
+          ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${teamFlag(u.campeao)} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
           : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`);
       html += `<tr class="${isMe?'is-me':''}">
         <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}</td>
@@ -2234,7 +2238,7 @@ async function renderDashboard() {
 
     html += `</tbody></table></div>
     <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
-      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}`:''}</p>`;
+      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>`;
     cont.innerHTML = html;
     _startCountdownTimer();
   } catch(e) {
@@ -2346,8 +2350,8 @@ function buildPalRow(game) {
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
   const _ps = _ptsBadgeStyle(pts);
   const ptsBadge = _ps!==null?`<span class="result-badge" style="background:${_ps.bg};color:${_ps.color}">${_ps.label?_ps.label+' ':''}${pts>0?'+'+pts:'0'}pts</span>`:'';
-  const flagH = COUNTRY_FLAGS[teams.h] || '';
-  const flagA = COUNTRY_FLAGS[teams.a] || '';
+  const flagH = teamFlag(teams.h);
+  const flagA = teamFlag(teams.a);
   const time = GAME_TIMES[game.id] || '--:--';
   const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
   return `<div class="game-row">
@@ -2374,7 +2378,7 @@ function buildChampionPickerCard() {
 
   const opts = ['<option value="">— Selecione a seleção campeã —</option>']
     .concat(teams.map(t=>{
-      const flag = COUNTRY_FLAGS[t] || '';
+      const flag = teamFlag(t);
       const sel = (myChampion===t) ? 'selected' : '';
       return `<option value="${esc(t)}" ${sel}>${flag} ${esc(t)}</option>`;
     }))
@@ -2383,11 +2387,11 @@ function buildChampionPickerCard() {
   let status = '';
   if (finalDecided) {
     if (myChampion && myChampion===finalChampion) {
-      status = `<div class="alert alert-success" style="margin-top:10px">🎉 Você acertou! <b>${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</b> é a campeã — bônus de <b>+${ptsCampeao} pts</b>.</div>`;
+      status = `<div class="alert alert-success" style="margin-top:10px">🎉 Você acertou! <b>${teamFlag(finalChampion)} ${esc(finalChampion)}</b> é a campeã — bônus de <b>+${ptsCampeao} pts</b>.</div>`;
     } else if (myChampion) {
-      status = `<div class="alert alert-warning" style="margin-top:10px">A campeã foi <b>${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</b>. Seu palpite (${esc(myChampion)}) não pontuou no bônus.</div>`;
+      status = `<div class="alert alert-warning" style="margin-top:10px">A campeã foi <b>${teamFlag(finalChampion)} ${esc(finalChampion)}</b>. Seu palpite (${esc(myChampion)}) não pontuou no bônus.</div>`;
     } else {
-      status = `<div class="alert alert-warning" style="margin-top:10px">A campeã foi <b>${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</b>. Você não escolheu uma seleção campeã.</div>`;
+      status = `<div class="alert alert-warning" style="margin-top:10px">A campeã foi <b>${teamFlag(finalChampion)} ${esc(finalChampion)}</b>. Você não escolheu uma seleção campeã.</div>`;
     }
   } else if (champLocked) {
     status = `<div class="alert alert-warning" style="margin-top:10px">🔒 Palpite de campeão <b>bloqueado pelo admin</b>. Não é mais possível alterar.</div>`;
@@ -2396,7 +2400,7 @@ function buildChampionPickerCard() {
   }
 
   const currentLine = myChampion
-    ? `<div style="margin-top:8px;font-size:0.85rem">Sua escolha atual: <b style="color:var(--gold)">${COUNTRY_FLAGS[myChampion]||''} ${esc(myChampion)}</b></div>`
+    ? `<div style="margin-top:8px;font-size:0.85rem">Sua escolha atual: <b style="color:var(--gold)">${teamFlag(myChampion)} ${esc(myChampion)}</b></div>`
     : `<div style="margin-top:8px;font-size:0.85rem;color:var(--text-muted)">Nenhuma seleção escolhida ainda.</div>`;
 
   const adminNote = (isAdmin && (champLocked || finalDecided))
@@ -2692,7 +2696,7 @@ async function renderVerPalpites(selectedUid=null) {
       const hitCampeao = !!(finalChampion && userChampion && userChampion===finalChampion);
       const champLine = champUnlocked
         ? (userChampion
-          ? `<div style="margin-top:10px;font-size:0.95rem">🏆 Palpite de campeão: <b style="color:${hitCampeao?'var(--green)':'var(--gold)'}">${COUNTRY_FLAGS[userChampion]||''} ${esc(userChampion)}</b>${finalChampion?(hitCampeao?` ✅ <span style="color:var(--green)">+${CFG.pts_campeao||0} pts</span>`:` ❌`):''}</div>`
+          ? `<div style="margin-top:10px;font-size:0.95rem">🏆 Palpite de campeão: <b style="color:${hitCampeao?'var(--green)':'var(--gold)'}">${teamFlag(userChampion)} ${esc(userChampion)}</b>${finalChampion?(hitCampeao?` ✅ <span style="color:var(--green)">+${CFG.pts_campeao||0} pts</span>`:` ❌`):''}</div>`
           : `<div style="margin-top:10px;font-size:0.85rem;color:var(--text-muted)">🏆 Sem palpite de campeão</div>`)
         : `<div style="margin-top:10px;font-size:0.85rem;color:var(--text-muted)">🏆 Campeão: <span style="color:var(--text-muted)">🔒 oculto até bloqueio</span></div>`;
 
@@ -2766,8 +2770,8 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
   const _ps = _ptsBadgeStyle(pts);
   const ptsBadge = (showPal&&_ps!==null)?`<span class="result-badge" style="background:${_ps.bg};color:${_ps.color}">${_ps.label?_ps.label+' ':''}${pts>0?'+'+pts:'0'}pts</span>`:'';
-  const flagH = COUNTRY_FLAGS[teams.h] || '';
-  const flagA = COUNTRY_FLAGS[teams.a] || '';
+  const flagH = teamFlag(teams.h);
+  const flagA = teamFlag(teams.a);
   const time = GAME_TIMES[game.id] || '--:--';
   const hiddenBadge = !showPal && pal.h!==undefined ? `<span style="font-size:0.72rem;color:var(--text-muted)">🔒 oculto</span>` : '';
   const hVal = showPal ? (pal.h!==undefined?pal.h:'') : '';
@@ -3010,7 +3014,7 @@ async function renderVerTodos() {
     const champSummary = `
       <div class="card" style="margin-bottom:16px;border:2px solid var(--gold);background:rgba(255,215,0,.05)">
         <div class="card-header"><span class="card-title">🏆 Palpite Campeão por Participante</span>
-          ${finalChampion?`<span class="pts-badge" style="margin-left:auto">Campeã: ${COUNTRY_FLAGS[finalChampion]||''} ${esc(finalChampion)}</span>`:(champRevealed?'':` <span style="font-size:0.75rem;color:var(--text-muted)">🔒 Visível após bloqueio</span>`)}
+          ${finalChampion?`<span class="pts-badge" style="margin-left:auto">Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}</span>`:(champRevealed?'':` <span style="font-size:0.75rem;color:var(--text-muted)">🔒 Visível após bloqueio</span>`)}
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px">
           ${users.map(u=>{
@@ -3020,7 +3024,7 @@ async function renderVerTodos() {
             const hit = !!(finalChampion && t && t===finalChampion);
             const teamHtml = canSeeChamp
               ? (t
-                ? `<b style="color:${hit?'var(--green)':'var(--gold)'}">${COUNTRY_FLAGS[t]||''} ${esc(t)}</b>${hit?` <span style="color:var(--green);font-size:0.72rem">✅ +${CFG.pts_campeao||0}</span>`:''}`
+                ? `<b style="color:${hit?'var(--green)':'var(--gold)'}">${teamFlag(t)} ${esc(t)}</b>${hit?` <span style="color:var(--green);font-size:0.72rem">✅ +${CFG.pts_campeao||0}</span>`:''}`
                 : `<span style="color:var(--text-muted);font-style:italic">— sem palpite —</span>`)
               : `<span style="color:var(--text-muted)">🔒 oculto</span>`;
             return `<div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.03);cursor:pointer" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites">
@@ -3051,7 +3055,7 @@ async function renderVerTodos() {
             const hit = !!(finalChampion && t && t===finalChampion);
             const champCell = canSeeChamp
               ? (t
-                ? `<div style="font-size:0.65rem;font-weight:600;color:${hit?'var(--green)':'var(--text-muted)'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Campeão: ${esc(t)}">🏆 ${COUNTRY_FLAGS[t]||''} ${esc(t.split(' ')[0])}</div>`
+                ? `<div style="font-size:0.65rem;font-weight:600;color:${hit?'var(--green)':'var(--text-muted)'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Campeão: ${esc(t)}">🏆 ${teamFlag(t)} ${esc(t.split(' ')[0])}</div>`
                 : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 —</div>`)
               : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 🔒</div>`;
             return `<th style="min-width:80px;cursor:pointer;color:var(--gold);vertical-align:top;position:sticky;top:0;z-index:2;background:var(--mid-blue)" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites de ${esc(u.apelido)}">${esc(u.apelido)}${champCell}</th>`;
@@ -3070,8 +3074,8 @@ async function renderVerTodos() {
       const r = res[g.id]||{};
       const hasResult = r.h_real!==undefined;
       const resultStr = hasResult?`${r.h_real}-${r.a_real}`:'—';
-      const flagH = COUNTRY_FLAGS[g.h]||'';
-      const flagA = COUNTRY_FLAGS[g.a]||'';
+      const flagH = teamFlag(g.h);
+      const flagA = teamFlag(g.a);
       const short = t => t.split(' ')[0];
       html += `<tr>
         <td style="text-align:left;white-space:nowrap;position:sticky;left:0;z-index:1;background:var(--card)">${flagH} ${esc(short(g.h))} × ${flagA} ${esc(short(g.a))}</td>
@@ -3685,9 +3689,9 @@ async function renderEstatisticas() {
       const maxVotes = champVotesArr[0][1] || 1;
       html += `<div class="card">
         <div class="card-title" style="margin-bottom:14px">🏆 Palpites de Campeão (${totalVotes} escolha${totalVotes!==1?'s':''})</div>
-        ${finalChampionEst?`<div class="alert alert-success" style="margin-bottom:12px;font-size:0.82rem">🏆 Campeã definida: <b>${COUNTRY_FLAGS[finalChampionEst]||''} ${esc(finalChampionEst)}</b></div>`:''}
+        ${finalChampionEst?`<div class="alert alert-success" style="margin-bottom:12px;font-size:0.82rem">🏆 Campeã definida: <b>${teamFlag(finalChampionEst)} ${esc(finalChampionEst)}</b></div>`:''}
         ${champVotesArr.map(([team,count])=>{
-          const flag = COUNTRY_FLAGS[team]||'';
+          const flag = teamFlag(team);
           const pct = totalVotes>0?Math.round(count/totalVotes*100):0;
           const isWinner = team===finalChampionEst;
           return `<div class="champ-stat-row">
@@ -3901,7 +3905,7 @@ async function renderChaveamentoBilateral() {
         const rawToken = side==='h' ? (gameDef?.h||'?') : (gameDef?.a||'?');
         const resolved = (side==='h' ? r.h_team : r.a_team) || rawToken;
         const isPh = _isPlaceholder(resolved);
-        const flag = (!isPh && COUNTRY_FLAGS[resolved]) ? COUNTRY_FLAGS[resolved] : '';
+        const flag = isPh ? '' : teamFlag(resolved);
         const score = hasRes ? (side==='h' ? r.h_real : r.a_real) : '';
         const pen = hasPen ? ` <span class="bil-pen">(${side==='h'?r.h_pen:r.a_pen})</span>` : '';
         const isWin = !!winner && winner===resolved;
