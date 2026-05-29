@@ -2111,7 +2111,7 @@ function _buildNextGamesHtml(group) {
       </div>
       <div class="ngc-date">${esc(fmtDate)}</div>
       <div class="ngc-countdown" id="ngc-cd-${game.id}">—</div>
-      <div class="ngc-note" id="ngc-note-${game.id}">🔒 Palpites bloqueiam 1h antes do início</div>
+      <div class="ngc-note" id="ngc-note-${game.id}">Os palpites serão bloqueados às 22h do dia anterior à partida</div>
     </div>`;
   }).join('');
   return multi ? `<div class="next-games-grid">${cards}</div>` : cards;
@@ -2156,11 +2156,12 @@ function _startCountdownTimer() {
       const diff = start.getTime() - now;
       if (diff <= 0) { cd.textContent = '🟢 Em andamento'; return; }
       cd.textContent = _fmtDiff(diff);
-      const lockedSoon = diff <= LOCK_LEAD_MS;
+      const manualLocked = _dashResults[game.id]?.locked === true;
+      const lockedSoon = manualLocked || diff <= LOCK_LEAD_MS;
       if (card) card.classList.toggle('locked-soon', lockedSoon);
       if (note) note.textContent = lockedSoon
         ? '🔒 Palpites BLOQUEADOS para esta partida'
-        : '🔒 Palpites bloqueiam 1h antes do início';
+        : 'Os palpites serão bloqueados às 22h do dia anterior à partida';
     });
   }
   _tick();
