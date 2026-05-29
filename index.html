@@ -2213,7 +2213,7 @@ async function renderDashboard() {
       return;
     }
 
-    const _totalArr = calcTotalArrecadado(usersSnap.docs.map(d=>({uid:d.id,...d.data()})));
+    const _totalArr = calcTotalArrecadado(allUsers);
     const _premios = calcPremios(_totalArr);
 
     // Próxima(s) partida(s) — guarda o mapa de resultados p/ overrides de data/hora.
