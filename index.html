@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.7.0">
+<meta name="app-version" content="v1.9.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1020,7 +1020,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.7.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.9.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1292,7 +1292,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.8.0',
+  app_version:'v1.9.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -2126,7 +2126,9 @@ function _buildNextGamesHtml(group) {
     const _gKey = Object.keys(GRUPOS_DATA).find(k => GRUPOS_DATA[k].games.some(gm => gm.id === game.id));
     const groupLabel = _gKey ? `Grupo ${_gKey}` : '';
     const isLockedNow = isPalpiteClosed(game, res);
-    const distribHtml = _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]);
+    // Só embute as barras no HTML inicial se a partida JÁ está bloqueada. Para partidas
+    // ainda abertas o container fica vazio e o timer (_tick) injeta ao cruzar a trava.
+    const distribHtml = isLockedNow ? _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]) : '';
     return `<div class="next-game-card" data-gid="${game.id}">
       <div class="ngc-label">⏱️ ${multi ? 'Partida Simultânea' : 'Próxima Partida'}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
@@ -2189,7 +2191,14 @@ function _startCountdownTimer() {
         ? '🔒 Palpites BLOQUEADOS para esta partida'
         : 'Os palpites serão bloqueados às 22h do dia anterior à partida';
       const distribWrap = document.getElementById(`ngc-prob-${game.id}`);
-      if (distribWrap && distribWrap.innerHTML) distribWrap.style.display = lockedSoon ? 'block' : 'none';
+      if (distribWrap) {
+        // Injeta as barras no momento em que a partida bloqueia (caso o dashboard já
+        // estivesse aberto antes da trava e o container tenha sido renderizado vazio).
+        if (lockedSoon && !distribWrap.innerHTML) {
+          distribWrap.innerHTML = _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]);
+        }
+        if (distribWrap.innerHTML) distribWrap.style.display = lockedSoon ? 'block' : 'none';
+      }
     });
   }
   _tick();
@@ -2207,11 +2216,13 @@ async function renderDashboard() {
     const finalChampion = _getFinalChampion(res);
     const isAdminDash = currentUserDoc?.role === 'admin';
 
-    // Pré-computa distribuição do bolão para as próximas partidas (exibida no timer pós-bloqueio)
+    // Pré-computa distribuição do bolão para TODAS as partidas (exibida no timer só após o bloqueio).
+    // Calcula independente do estado de trava para que o timer possa injetar as barras quando o
+    // contador cruzar o limite de bloqueio, mesmo com o dashboard aberto desde antes da trava.
+    // (allPals já está em memória no cliente, então pré-computar não expõe nada novo.)
     _dashResults = Object.assign({}, res);
     _dashBolaoDistrib = {};
     ALL_GAMES.forEach(g => {
-      if (!isPalpiteClosed(g, res[g.id])) return;
       const gPals = users.map(u => allPals[u.uid]?.[g.id]).filter(p => p && p.h !== undefined && p.a !== undefined);
       if (!gPals.length) return;
       const tot = gPals.length;
@@ -2644,6 +2655,22 @@ function onPalInput(gameId, side, value) {
   saveDebounce[gameId] = setTimeout(()=>savePalpite(gameId), 800);
 }
 
+// Registra cada alteração de palpite numa subcoleção de histórico imutável:
+//   palpites/{uid}/historico/{autoId}
+// Guarda o que mudou, quem mudou e quando — para auditoria e para evitar
+// problemas futuros (ex.: reconstruir o estado correto de um palpite).
+async function _logPalpiteHistory(uid, gameId, entry) {
+  try {
+    await db_.collection('palpites').doc(uid).collection('historico').add({
+      gameId,
+      ...entry,
+      by: currentUser?.uid || null,
+      byEmail: currentUser?.email || null,
+      at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(_) { /* histórico é best-effort; não bloqueia o save */ }
+}
+
 async function savePalpite(gameId) {
   const pal = myPalpites[gameId];
   const uid = palpitesEditing||currentUser.uid;
@@ -2662,6 +2689,7 @@ async function savePalpite(gameId) {
     }
     try {
       await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).delete();
+      _logPalpiteHistory(uid, gameId, { action: 'delete', adminEdit: !!palpitesEditing && palpitesEditing !== currentUser.uid });
       delete myPalpites[gameId];
       ['filled','saving','saved-ok','save-err','saving'].forEach(c=>{
         if(hInp) hInp.classList.remove(c);
@@ -2696,6 +2724,7 @@ async function savePalpite(gameId) {
       payload.editedByAdminEmail = currentUser.email || null;
     }
     await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).set(payload);
+    _logPalpiteHistory(uid, gameId, { action: 'set', h: pal.h, a: pal.a, adminEdit: isAdminEdit });
     if (isAdminEdit) {
       try {
         await db_.collection('audit').add({
@@ -4639,7 +4668,23 @@ async function renderAdminResultados() {
           <button class="btn btn-primary" onclick="atualizarChaveamentoManual()">🔄 Atualizar chaveamento e classificação</button>
         </div>
       </div>`;
-    let html = _testPanel + _updateBar + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Palpites travam <b>automaticamente 1h antes</b> do início. Use o botão de trava para alternar: <b>⏱️ Automático → 🔒 Travado → 🟢 Liberado</b> (sobrepõe a regra). Edite a <b>data/hora (Brasília)</b> de cada jogo se o horário mudar.</div>`;
+    const _migOrientPanel = `
+      <div class="card" style="margin-bottom:16px;border-color:var(--gold);background:rgba(255,215,0,.06)">
+        <div class="card-header"><span class="card-title">🔧 Corrigir orientação de palpites (jogos com mandante/visitante trocado)</span></div>
+        <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+          Em v1.8.1 corrigimos o mandante/visitante de 23 jogos. Palpites salvos <b>antes</b> dessa correção
+          ficaram com casa/fora invertidos. Esta ferramenta inverte o placar (h↔a) apenas dos palpites
+          modificados <b>antes</b> de 30/05/2026 02:13 (UTC) nos jogos afetados. É <b>idempotente</b>
+          (marca cada palpite corrigido e nunca inverte duas vezes). Faça um <b>backup JSON</b> antes.
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="migrarOrientacaoPalpites(true)">🔍 Simular (dry-run)</button>
+          <button class="btn btn-primary btn-sm" onclick="migrarOrientacaoPalpites(false)">✅ Aplicar correção</button>
+          <span id="mig-orient-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
+        </div>
+        <pre id="mig-orient-log" style="display:none;margin-top:10px;max-height:240px;overflow:auto;font-size:0.72rem;background:rgba(0,0,0,.25);padding:10px;border-radius:8px;white-space:pre-wrap"></pre>
+      </div>`;
+    let html = _testPanel + _updateBar + _migOrientPanel + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Palpites travam <b>automaticamente 1h antes</b> do início. Use o botão de trava para alternar: <b>⏱️ Automático → 🔒 Travado → 🟢 Liberado</b> (sobrepõe a regra). Edite a <b>data/hora (Brasília)</b> de cada jogo se o horário mudar.</div>`;
     let lastDate = null;
     let lastPhase = null;
     sortedGames.forEach(game=>{
@@ -4706,6 +4751,78 @@ async function renderAdminResultados() {
     if (lastDate!==null) html += `</div>`;
     cont.innerHTML = html;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
+}
+
+// IDs dos 23 jogos que tiveram mandante/visitante trocados em v1.8.1
+const ORIENT_FIX_GAME_IDS = ['A4','A5','B4','B5','C4','C5','D2','E4','E5','F4','F5','G4','G5','H4','H5','I4','I5','J4','J5','K1','K4','L4','L5'];
+// Corte: merge do PR #87 (v1.8.1) — palpites modificados antes disso estavam invertidos.
+const ORIENT_FIX_CUTOFF_MS = Date.parse('2026-05-30T02:13:33Z');
+
+// Migração idempotente: inverte h<->a dos palpites salvos ANTES da correção de orientação.
+// dryRun=true apenas simula e lista o que seria alterado, sem gravar.
+async function migrarOrientacaoPalpites(dryRun) {
+  if (currentUserDoc?.role !== 'admin') return;
+  const statusEl = document.getElementById('mig-orient-status');
+  const logEl = document.getElementById('mig-orient-log');
+  if (!dryRun && !confirm('Aplicar a correção de orientação? Faça um backup JSON antes. Esta ação grava no banco.')) return;
+  if (statusEl) statusEl.textContent = dryRun ? 'Simulando…' : 'Aplicando…';
+  if (logEl) { logEl.style.display = 'block'; logEl.textContent = ''; }
+  const lines = [];
+  let toFix = 0, skippedAfter = 0, skippedFlag = 0, fixed = 0, errors = 0;
+  try {
+    const usersSnap = await db_.collection('usuarios').get();
+    for (const uDoc of usersSnap.docs) {
+      const uid = uDoc.id;
+      const uname = uDoc.data()?.nome || uDoc.data()?.apelido || uid.slice(0,6);
+      for (const gameId of ORIENT_FIX_GAME_IDS) {
+        let jogoSnap;
+        try { jogoSnap = await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).get(); }
+        catch(_) { continue; }
+        if (!jogoSnap.exists) continue;
+        const d = jogoSnap.data() || {};
+        if (d.h === undefined || d.a === undefined) continue;
+        if (d.orientationFixedV181 === true) { skippedFlag++; continue; }
+        const upMs = d.updatedAt?.toMillis ? d.updatedAt.toMillis() : (d.updatedAt?.seconds ? d.updatedAt.seconds*1000 : null);
+        // Sem updatedAt OU updatedAt >= corte => já está na orientação correta; só marca a flag.
+        if (upMs === null || upMs >= ORIENT_FIX_CUTOFF_MS) {
+          skippedAfter++;
+          if (!dryRun) {
+            try { await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).set({ orientationFixedV181: true }, {merge:true}); }
+            catch(_) {}
+          }
+          continue;
+        }
+        // Modificado antes do corte => inverter h<->a.
+        toFix++;
+        lines.push(`${dryRun?'[simular] ':'[corrigir] '}${uname} · ${gameId}: ${d.h}-${d.a} → ${d.a}-${d.h}`);
+        if (!dryRun) {
+          try {
+            await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).set({
+              h: d.a, a: d.h, orientationFixedV181: true,
+              orientationFixedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, {merge:true});
+            await db_.collection('audit').add({
+              type: 'palpite_orientation_fix', targetUid: uid, gameId,
+              from: { h: d.h, a: d.a }, to: { h: d.a, a: d.h },
+              adminUid: currentUser.uid, adminEmail: currentUser.email || null,
+              at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            fixed++;
+          } catch(e) { errors++; lines.push(`  ⚠️ erro em ${uname}/${gameId}: ${errMsg(e)}`); }
+        }
+      }
+    }
+    const resumo = dryRun
+      ? `Simulação: ${toFix} palpite(s) seriam invertidos · ${skippedAfter} já corretos (pós-corte) · ${skippedFlag} já marcados.`
+      : `Concluído: ${fixed} invertido(s) · ${skippedAfter} marcados como corretos · ${skippedFlag} já estavam marcados · ${errors} erro(s).`;
+    lines.unshift(resumo + '\n');
+    if (logEl) logEl.textContent = lines.join('\n');
+    if (statusEl) statusEl.textContent = dryRun ? 'Simulação concluída.' : 'Correção aplicada.';
+    if (!dryRun) { _scDel('pals'); }
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Erro: ' + errMsg(e);
+    if (logEl) logEl.textContent = lines.join('\n') + '\n\nERRO: ' + errMsg(e);
+  }
 }
 
 let resultBuf = {};
