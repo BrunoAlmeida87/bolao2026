@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.9.1">
+<meta name="app-version" content="v1.9.2">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1020,7 +1020,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.9.1</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.9.2</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1292,7 +1292,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.9.1',
+  app_version:'v1.9.2',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3548,6 +3548,44 @@ function _getStatNextGroup(res) {
   return { start: t0, items: upcoming.filter(x => x.start.getTime() === t0) };
 }
 
+// Ranking "Mais Indeciso" — sob demanda. Usa count() agregado (1 leitura por
+// usuário, independente do nº de registros) para contar as alterações no histórico.
+async function calcMaisIndeciso() {
+  const btn = document.getElementById('indeciso-btn');
+  const out = document.getElementById('indeciso-result');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Calculando…'; }
+  try {
+    const users = (await _fetchUsr()).filter(u => u.ativo !== false);
+    const counts = await Promise.all(users.map(async u => {
+      let total = 0;
+      try {
+        const agg = await db_.collection('palpites').doc(u.uid).collection('historico').count().get();
+        total = agg.data().count;
+      } catch(_) { total = 0; }
+      return { user: u, total };
+    }));
+    const top = counts.filter(c => c.total > 0).sort((a,b) => b.total - a.total).slice(0, 5);
+    if (btn) { btn.style.display = 'none'; }
+    if (!top.length) {
+      out.innerHTML = `<div class="alert alert-info">Ainda não há alterações registradas. O histórico começa a contar a partir da v1.9.x.</div>`;
+      return;
+    }
+    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+    out.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
+      ${top.map((c,i)=>`
+        <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 14px">
+          <span style="font-size:1.3rem;min-width:30px">${medals[i]}</span>
+          <span style="flex:1;font-weight:700">${esc(c.user.apelido || c.user.nome || c.user.uid)}</span>
+          <span style="font-weight:800;color:var(--gold)">${c.total}</span>
+          <span style="font-size:0.78rem;color:var(--text-muted)">alteraç${c.total===1?'ão':'ões'}</span>
+        </div>`).join('')}
+    </div>`;
+  } catch(e) {
+    out.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = '📊 Calcular ranking'; }
+  }
+}
+
 async function renderEstatisticas() {
   const cont = document.getElementById('estatisticas-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
@@ -4004,6 +4042,17 @@ async function renderEstatisticas() {
         </div>
       </div>`;
     }
+
+    // ── Mais Indeciso (Top 5) — sob demanda (lê o histórico de cada usuário) ──
+    html += `<div class="card">
+      <div class="card-title">🤔 Mais Indeciso (Top 5)</div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.5">
+        Ranking de quem mais alterou palpites — quanto mais mudanças registradas, mais indeciso.
+        É calculado <b>sob demanda</b> para economizar leituras do banco. (Conta a partir da v1.9.x.)
+      </div>
+      <button class="btn btn-primary btn-sm" id="indeciso-btn" onclick="calcMaisIndeciso()">📊 Calcular ranking</button>
+      <div id="indeciso-result" style="margin-top:12px"></div>
+    </div>`;
 
     // ── Heatmap de placares mais palpitados ──
     const topPlacares = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1]).slice(0, 12);
