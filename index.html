@@ -1165,12 +1165,12 @@ const GRUPOS_DATA = {
     {id:'J6',r:3,h:'Argélia',a:'Áustria',date:'Jun 27'},
   ]},
   K:{teams:['Portugal','Colômbia','Rep. Dem. Congo','Uzbequistão'],games:[
-    {id:'K1',r:1,h:'Portugal',a:'Colômbia',date:'Jun 27'},
-    {id:'K2',r:1,h:'Rep. Dem. Congo',a:'Uzbequistão',date:'Jun 27'},
-    {id:'K3',r:2,h:'Portugal',a:'Rep. Dem. Congo',date:'Jun 17'},
-    {id:'K4',r:2,h:'Colômbia',a:'Uzbequistão',date:'Jun 17'},
-    {id:'K5',r:3,h:'Portugal',a:'Uzbequistão',date:'Jun 23'},
-    {id:'K6',r:3,h:'Colômbia',a:'Rep. Dem. Congo',date:'Jun 23'},
+    {id:'K1',r:1,h:'Portugal',a:'Colômbia',date:'Jun 17'},
+    {id:'K2',r:1,h:'Rep. Dem. Congo',a:'Uzbequistão',date:'Jun 17'},
+    {id:'K3',r:2,h:'Portugal',a:'Rep. Dem. Congo',date:'Jun 23'},
+    {id:'K4',r:2,h:'Colômbia',a:'Uzbequistão',date:'Jun 23'},
+    {id:'K5',r:3,h:'Portugal',a:'Uzbequistão',date:'Jun 27'},
+    {id:'K6',r:3,h:'Colômbia',a:'Rep. Dem. Congo',date:'Jun 27'},
   ]},
   L:{teams:['Inglaterra','Croácia','Gana','Panamá'],games:[
     {id:'L1',r:1,h:'Inglaterra',a:'Croácia',date:'Jun 17'},
@@ -1199,26 +1199,22 @@ const GRUPOS_DATA = {
    // NÃO reordenar por ID — a ordem reflete o bracket visual.
    const ELIM_DATA = {
   r32:{label:'Round of 32',icon:'⚔️',games:[
-    {id:'O1',h:'2º A',a:'2º B',date:'Jun 28'},
-	{id:'O3',h:'1º E',a:'Melhor 3º (A/B/C/D/F)',date:'Jun 29'},
-	{id:'O2',h:'1º C',a:'2º F',date:'Jun 29'},
-	{id:'O5',h:'2º E',a:'2º I',date:'Jun 30'}, 
-	{id:'O4',h:'1º F',a:'2º C',date:'Jun 29'},
-	
-    {id:'O6',h:'1º I',a:'Melhor 3º (C/D/F/G/H)',date:'Jun 30'},
-	{id:'O7',h:'1º A',a:'Melhor 3º (C/E/F/H/I)',date:'Jun 30'},
-	{id:'O8',h:'1º L',a:'Melhor 3º (E/H/I/J/K)',date:'Jul 1'},
-
-	{id:'O11',h:'1º H',a:'2º J',date:'Jul 2'},
-    {id:'O12',h:'2º K',a:'2º L',date:'Jul 2'},	
-	{id:'O9',h:'1º G',a:'Melhor 3º (A/E/H/I/J)',date:'Jul 1'},
-    {id:'O10',h:'1º D',a:'Melhor 3º (B/E/F/I/J)',date:'Jul 1'},
- 
-	{id:'O14',h:'2º D',a:'2º G',date:'Jul 3'},
-	{id:'O16',h:'1º K',a:'Melhor 3º (D/E/I/J/L)',date:'Jul 3'},
-	{id:'O13',h:'1º B',a:'Melhor 3º (E/F/G/I/J)',date:'Jul 2'},
-	{id:'O15',h:'1º J',a:'2º H',date:'Jul 3'},
-    
+    {id:'O1', h:'2º A',  a:'2º B',                          date:'Jun 28'},
+    {id:'O2', h:'1º C',  a:'2º F',                          date:'Jun 29'},
+    {id:'O3', h:'1º E',  a:'Melhor 3º (A/B/C/D/F)',         date:'Jun 29'},
+    {id:'O4', h:'1º F',  a:'2º C',                          date:'Jun 29'},
+    {id:'O5', h:'2º E',  a:'2º I',                          date:'Jun 30'},
+    {id:'O6', h:'1º I',  a:'Melhor 3º (C/D/F/G/H)',         date:'Jun 30'},
+    {id:'O7', h:'1º A',  a:'Melhor 3º (C/E/F/H/I)',         date:'Jun 30'},
+    {id:'O8', h:'1º L',  a:'Melhor 3º (E/H/I/J/K)',         date:'Jul 1'},
+    {id:'O9', h:'1º G',  a:'Melhor 3º (A/E/H/I/J)',         date:'Jul 1'},
+    {id:'O10',h:'1º D',  a:'Melhor 3º (B/E/F/I/J)',         date:'Jul 1'},
+    {id:'O11',h:'1º H',  a:'2º J',                          date:'Jul 2'},
+    {id:'O12',h:'2º K',  a:'2º L',                          date:'Jul 2'},
+    {id:'O13',h:'1º B',  a:'Melhor 3º (E/F/G/I/J)',         date:'Jul 2'},
+    {id:'O14',h:'2º D',  a:'2º G',                          date:'Jul 3'},
+    {id:'O15',h:'1º J',  a:'2º H',                          date:'Jul 3'},
+    {id:'O16',h:'1º K',  a:'Melhor 3º (D/E/I/J/L)',         date:'Jul 3'},
   ]},
 	   
   r16:{label:'Oitavas de Final',icon:'🏅',games:[
@@ -3765,22 +3761,39 @@ async function renderEstatisticas() {
       // Scenarios to test for each game (generic + each user's exact bet added below)
       const _baseScenarios = [{h_real:1,a_real:0},{h_real:0,a_real:0},{h_real:0,a_real:1}];
       // For a pair (challenger, target): is there any result where challenger ends up ahead?
-      function _checkOvertake(chalUid, tgtUid, chalCur, tgtCur) {
-        for (const game of _nextGames) {
-          const palChal = allPals[chalUid]?.[game.id];
-          if (!palChal || palChal.h === undefined) continue;
-          const palTgt = allPals[tgtUid]?.[game.id];
-          const scenarios = _baseScenarios.slice();
+      // Builds per-game gain pairs for all distinct result scenarios
+      function _gameGainPairs(game, chalUid, tgtUid) {
+        const palChal = allPals[chalUid]?.[game.id];
+        const palTgt  = allPals[tgtUid]?.[game.id];
+        const scenarios = _baseScenarios.slice();
+        if (palChal && palChal.h !== undefined)
           scenarios.push({h_real: parseInt(palChal.h)||0, a_real: parseInt(palChal.a)||0});
-          if (palTgt && palTgt.h !== undefined)
-            scenarios.push({h_real: parseInt(palTgt.h)||0, a_real: parseInt(palTgt.a)||0});
-          for (const sc of scenarios) {
-            const gainChal = calcPontos(palChal, sc);
-            const gainTgt = palTgt ? calcPontos(palTgt, sc) : 0;
-            if (chalCur + gainChal > tgtCur + gainTgt)
-              return { possible: true, gainChal, gainTgt, sc };
-          }
+        if (palTgt && palTgt.h !== undefined)
+          scenarios.push({h_real: parseInt(palTgt.h)||0, a_real: parseInt(palTgt.a)||0});
+        const seen = new Set();
+        return scenarios
+          .filter(sc => { const k=sc.h_real+'-'+sc.a_real; return seen.has(k)?false:(seen.add(k),true); })
+          .map(sc => ({
+            gainChal: palChal && palChal.h !== undefined ? calcPontos(palChal, sc) : 0,
+            gainTgt:  palTgt  && palTgt.h  !== undefined ? calcPontos(palTgt,  sc) : 0
+          }));
+      }
+      // Checks all combinations of outcomes across all simultaneous games
+      function _checkOvertake(chalUid, tgtUid, chalCur, tgtCur) {
+        const perGame = _nextGames.map(g => _gameGainPairs(g, chalUid, tgtUid));
+        if (!perGame.length) return { possible: false };
+        // Cartesian product via iteration (avoids generator for compatibility)
+        let combos = [{ gainChal:0, gainTgt:0 }];
+        for (const pairs of perGame) {
+          const next = [];
+          for (const c of combos)
+            for (const p of pairs)
+              next.push({ gainChal: c.gainChal + p.gainChal, gainTgt: c.gainTgt + p.gainTgt });
+          combos = next;
         }
+        for (const { gainChal, gainTgt } of combos)
+          if (chalCur + gainChal > tgtCur + gainTgt)
+            return { possible: true, gainChal, gainTgt };
         return { possible: false };
       }
 
