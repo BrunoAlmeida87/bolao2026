@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.9.2">
+<meta name="app-version" content="v1.9.3">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1020,7 +1020,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.9.2</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.9.3</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1292,7 +1292,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.9.2',
+  app_version:'v1.9.3',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -1347,6 +1347,10 @@ function teamFlag(name) {
 }
 
 let myPalpites   = {};
+// Jogos que já têm palpite persistido para o contexto carregado atualmente.
+// Usado para marcar no histórico se um save é o 1º preenchimento (edit:false)
+// ou uma re-edição (edit:true) — base da estatística "Mais Indeciso".
+let _palpitesSalvosSet = new Set();
 let resultados   = {};
 let myChampion   = null;
 let palpitesEditing = null;
@@ -2392,6 +2396,7 @@ async function renderPalpites(editUid=null) {
     ]);
     myPalpites = {};
     pSnap.docs.forEach(d=>{ myPalpites[d.id]=d.data(); });
+    _palpitesSalvosSet = new Set(pSnap.docs.map(d=>d.id));
     resultados = resCache;
     myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
 
@@ -2689,7 +2694,9 @@ async function savePalpite(gameId) {
     }
     try {
       await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).delete();
-      _logPalpiteHistory(uid, gameId, { action: 'delete', adminEdit: !!palpitesEditing && palpitesEditing !== currentUser.uid });
+      // Apagar um palpite é sempre uma mudança de ideia → conta como edição.
+      _logPalpiteHistory(uid, gameId, { action: 'delete', edit: true, adminEdit: !!palpitesEditing && palpitesEditing !== currentUser.uid });
+      _palpitesSalvosSet.delete(gameId);
       delete myPalpites[gameId];
       ['filled','saving','saved-ok','save-err','saving'].forEach(c=>{
         if(hInp) hInp.classList.remove(c);
@@ -2724,7 +2731,10 @@ async function savePalpite(gameId) {
       payload.editedByAdminEmail = currentUser.email || null;
     }
     await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).set(payload);
-    _logPalpiteHistory(uid, gameId, { action: 'set', h: pal.h, a: pal.a, adminEdit: isAdminEdit });
+    // edit:false = 1º preenchimento deste jogo; edit:true = re-edição (mudança de palpite).
+    const _isReedit = _palpitesSalvosSet.has(gameId);
+    _logPalpiteHistory(uid, gameId, { action: 'set', h: pal.h, a: pal.a, edit: _isReedit, adminEdit: isAdminEdit });
+    _palpitesSalvosSet.add(gameId);
     if (isAdminEdit) {
       try {
         await db_.collection('audit').add({
@@ -3559,7 +3569,10 @@ async function calcMaisIndeciso() {
     const counts = await Promise.all(users.map(async u => {
       let total = 0;
       try {
-        const agg = await db_.collection('palpites').doc(u.uid).collection('historico').count().get();
+        // Conta só re-edições (edit:true), excluindo o 1º preenchimento de cada jogo,
+        // para medir indecisão real e não volume de participação.
+        const agg = await db_.collection('palpites').doc(u.uid).collection('historico')
+          .where('edit', '==', true).count().get();
         total = agg.data().count;
       } catch(_) { total = 0; }
       return { user: u, total };
