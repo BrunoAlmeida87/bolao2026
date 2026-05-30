@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.9.0">
+<meta name="app-version" content="v1.9.1">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1020,7 +1020,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.9.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.9.1</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1292,7 +1292,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.9.0',
+  app_version:'v1.9.1',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -4579,6 +4579,7 @@ function renderAdmin() {
       <button class="admin-tab" data-tab="financeiro" onclick="switchAdminTab('financeiro')">💰 Financeiro</button>
       <button class="admin-tab" data-tab="palpites-admin" onclick="switchAdminTab('palpites-admin')">✏️ Editar Palpites</button>
       <button class="admin-tab" data-tab="config" onclick="switchAdminTab('config')">⚙️ Config</button>
+      <button class="admin-tab" data-tab="historico" onclick="switchAdminTab('historico')">📜 Histórico</button>
       <button class="admin-tab" data-tab="export" onclick="switchAdminTab('export')">⬇️ Exportar</button>
     </div>
     <div id="admin-resultados" class="admin-content active"></div>
@@ -4586,6 +4587,7 @@ function renderAdmin() {
     <div id="admin-financeiro" class="admin-content"></div>
     <div id="admin-palpites-admin" class="admin-content"></div>
     <div id="admin-config" class="admin-content"></div>
+    <div id="admin-historico" class="admin-content"></div>
     <div id="admin-export" class="admin-content"></div>`;
   renderAdminResultados();
 }
@@ -4601,6 +4603,7 @@ function switchAdminTab(tab) {
     case 'financeiro': renderAdminFinanceiro(); break;
     case 'palpites-admin': renderAdminEditPalpites(); break;
     case 'config': renderAdminConfig(); break;
+    case 'historico': renderAdminHistorico(); break;
     case 'export': renderAdminExport(); break;
   }
 }
@@ -5717,6 +5720,94 @@ async function massLock(phase, lock) {
     await batch.commit();
     showToast(`✅ ${games.length} jogos ${lock?'bloqueados':'desbloqueados'}!`,'success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// Aba Histórico — NÃO consulta o banco ao abrir. Só busca quando o admin clica.
+function renderAdminHistorico() {
+  const cont = document.getElementById('admin-historico');
+  if (!cont) return;
+  cont.innerHTML = `
+    <div class="card">
+      <div class="card-header"><span class="card-title">📜 Histórico de alterações de palpites</span></div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
+        Mostra cada alteração de palpite (salvar/apagar), com placar, quem fez e quando.
+        Para <b>não gastar leituras do banco à toa</b>, nada é carregado automaticamente —
+        carregue a lista de usuários e busque sob demanda.
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" onclick="histLoadUsers()">👥 Carregar lista de usuários</button>
+        <select id="hist-user-select" style="display:none;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid var(--border);font-size:0.85rem;min-width:200px"></select>
+        <button id="hist-buscar-btn" class="btn btn-primary btn-sm" style="display:none" onclick="histBuscar()">🔍 Buscar histórico</button>
+        <span id="hist-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
+      </div>
+      <div id="hist-result"></div>
+    </div>`;
+}
+
+async function histLoadUsers() {
+  const sel = document.getElementById('hist-user-select');
+  const btn = document.getElementById('hist-buscar-btn');
+  const status = document.getElementById('hist-status');
+  if (status) status.textContent = 'Carregando usuários…';
+  try {
+    const users = await _fetchUsr(); // cacheado — evita leitura repetida
+    const ordered = users.slice().sort((a,b)=>(a.nome||a.apelido||a.uid).localeCompare(b.nome||b.apelido||b.uid));
+    sel.innerHTML = `<option value="">— Selecione um usuário —</option>` +
+      ordered.map(u=>`<option value="${esc(u.uid)}">${esc(u.nome||u.apelido||u.uid)}${u.email?` (${esc(u.email)})`:''}</option>`).join('');
+    sel.style.display = '';
+    if (btn) btn.style.display = '';
+    if (status) status.textContent = `${ordered.length} usuário(s) carregado(s).`;
+  } catch(e) {
+    if (status) status.textContent = 'Erro: ' + errMsg(e);
+  }
+}
+
+async function histBuscar() {
+  const sel = document.getElementById('hist-user-select');
+  const status = document.getElementById('hist-status');
+  const out = document.getElementById('hist-result');
+  const uid = sel?.value;
+  if (!uid) { if (status) status.textContent = 'Selecione um usuário primeiro.'; return; }
+  const uname = sel.options[sel.selectedIndex]?.text || uid;
+  if (status) status.textContent = 'Buscando histórico…';
+  if (out) out.innerHTML = '';
+  try {
+    const snap = await db_.collection('palpites').doc(uid).collection('historico')
+      .orderBy('at', 'desc').limit(500).get();
+    if (snap.empty) {
+      if (status) status.textContent = '';
+      if (out) out.innerHTML = `<div class="alert alert-info">Nenhum registro de histórico para <b>${esc(uname)}</b>. (Só há registros a partir da v1.9.0.)</div>`;
+      return;
+    }
+    const rows = snap.docs.map(d => {
+      const x = d.data();
+      const when = x.at?.toDate ? x.at.toDate().toLocaleString('pt-BR') : '—';
+      const gdef = ALL_GAMES.find(g=>g.id===x.gameId);
+      const jogo = gdef ? `${esc(gdef.h)} × ${esc(gdef.a)}` : '';
+      const placar = x.action === 'delete'
+        ? `<span style="color:var(--red)">apagou</span>`
+        : `<b>${x.h ?? '?'} × ${x.a ?? '?'}</b>`;
+      const quem = x.adminEdit ? `<span style="color:var(--orange)">admin (${esc(x.byEmail||x.by||'')})</span>` : esc(x.byEmail||x.by||'próprio usuário');
+      return `<tr>
+        <td style="white-space:nowrap">${esc(when)}</td>
+        <td><b>${esc(x.gameId||'')}</b> <span style="color:var(--text-muted)">${jogo}</span></td>
+        <td>${placar}</td>
+        <td style="font-size:0.78rem">${quem}</td>
+      </tr>`;
+    }).join('');
+    if (status) status.textContent = `${snap.size} registro(s).`;
+    if (out) out.innerHTML = `
+      <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+          <thead><tr style="background:rgba(255,255,255,.05);text-align:left">
+            <th style="padding:8px">Quando</th><th style="padding:8px">Jogo</th><th style="padding:8px">Alteração</th><th style="padding:8px">Por</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    if (status) status.textContent = 'Erro: ' + errMsg(e);
+  }
 }
 
 async function renderAdminExport() {
