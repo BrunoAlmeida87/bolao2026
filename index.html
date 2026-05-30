@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.1">
+<meta name="app-version" content="v1.10.2">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1088,7 +1088,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.1</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.2</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1360,7 +1360,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.1',
+  app_version:'v1.10.2',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -6012,14 +6012,16 @@ async function exportExtratoPagamentos() {
 async function exportBackupJSON() {
   showToast('⏳ Gerando backup completo...','');
   try {
-    const [usersSnap, resSnap, cfgSnap] = await Promise.all([
+    const [usersSnap, resSnap, cfgSnap, auditSnap] = await Promise.all([
       db_.collection('usuarios').get(),
       db_.collection('resultados').get(),
-      db_.collection('configuracoes').get()
+      db_.collection('config').get(),
+      db_.collection('audit').get()
     ]);
     const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()}));
     const resultados = {}; resSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
     const cfgData = {}; cfgSnap.docs.forEach(d=>{ cfgData[d.id]=d.data(); });
+    const auditData = auditSnap.docs.map(d=>({_id:d.id,...d.data()}));
     const palpites = {};
     await Promise.all(users.map(async u=>{
       const [pDoc, jogosSnap] = await Promise.all([
@@ -6036,10 +6038,11 @@ async function exportBackupJSON() {
         bolao: CFG.nome_bolao,
         version: CFG.app_version||'unknown'
       },
-      configuracoes: cfgData,
+      config: cfgData,
       usuarios: Object.fromEntries(users.map(u=>[u.uid, u])),
       resultados,
-      palpites
+      palpites,
+      audit: auditData
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8'});
     const a = document.createElement('a');
