@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.9.3">
+<meta name="app-version" content="v1.10.0">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -573,7 +573,9 @@ select option{background:var(--mid-blue);color:var(--white)}
    BOTTOM NAVIGATION (MOBILE)
 ══════════════════════════════════════════ */
 .bottom-nav{
-  position:fixed;bottom:0;left:0;right:0;height:56px;
+  position:fixed;bottom:0;left:0;right:0;
+  height:calc(56px + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
   background:var(--mid-blue);border-top:1px solid var(--border);
   z-index:200;display:none;align-items:stretch;
 }
@@ -581,11 +583,39 @@ select option{background:var(--mid-blue);color:var(--white)}
   flex:1;background:transparent;border:none;
   color:var(--text-muted);cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:2px;font-size:1.1rem;padding:4px 2px;transition:all .2s;
+  gap:2px;font-size:1.1rem;padding:4px 2px;transition:all .2s;min-height:48px;
 }
 .bottom-nav button span{font-size:0.58rem;font-weight:600}
 .bottom-nav button.active{color:var(--gold)}
 .bottom-nav button.active span{color:var(--gold)}
+/* Folha "Mais" (mobile) */
+.mais-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  z-index:210;opacity:0;visibility:hidden;transition:opacity .2s;
+}
+.mais-overlay.show{opacity:1;visibility:visible}
+.mais-sheet{
+  position:fixed;left:0;right:0;
+  bottom:calc(56px + env(safe-area-inset-bottom));
+  background:var(--mid-blue);border-top:1px solid var(--border);
+  border-radius:16px 16px 0 0;z-index:220;
+  padding:8px 0 calc(12px + env(safe-area-inset-bottom));
+  transform:translateY(110%);transition:transform .25s ease;
+  box-shadow:0 -8px 24px rgba(0,0,0,.35);max-height:70vh;overflow-y:auto;
+}
+.mais-sheet.show{transform:translateY(0)}
+.mais-handle{width:40px;height:4px;border-radius:2px;background:var(--border);margin:6px auto 10px}
+.mais-sheet a{
+  display:block;padding:14px 20px;color:var(--white);text-decoration:none;
+  cursor:pointer;font-size:0.95rem;font-weight:600;transition:background .15s;
+}
+.mais-sheet a:active{background:rgba(255,215,0,.12)}
+.mais-sheet a.active{color:var(--gold);background:rgba(255,215,0,.08)}
+.mais-divider{height:1px;background:var(--border);margin:6px 16px}
+.mais-sheet a.mais-logout{color:var(--red)}
+body.light-theme .mais-sheet{background:#fff}
+body.light-theme .mais-sheet a{color:#1a2e4a}
+body.light-theme .mais-sheet a.active{color:var(--accent)}
 .app-main{flex:1}
 .app-footer{
   text-align:center;padding:12px 16px;color:var(--text-muted);font-size:0.75rem;
@@ -599,7 +629,7 @@ select option{background:var(--mid-blue);color:var(--white)}
 @media(max-width:600px){
   .bottom-nav{display:flex}
   .app-nav{display:none}
-  .container{padding-bottom:76px;padding-left:12px;padding-right:12px}
+  .container{padding-bottom:calc(84px + env(safe-area-inset-bottom));padding-left:12px;padding-right:12px}
   .grid2{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
   .standings-grid{grid-template-columns:1fr}
@@ -633,9 +663,32 @@ select option{background:var(--mid-blue);color:var(--white)}
   .theme-btn{padding:4px 6px;font-size:0.85rem}
   .btn-logout{padding:4px 8px;font-size:0.72rem}
   .badge-admin{display:none}
-  .app-footer{padding:10px 12px 72px}
+  .app-footer{padding:10px 12px calc(80px + env(safe-area-inset-bottom))}
   .footer-row{gap:6px}
+  /* Alvos de toque maiores (item 9) */
+  .btn-sm{padding:9px 14px;font-size:0.82rem;min-height:40px}
+  .phase-tab,.group-tab{padding:9px 14px;font-size:0.82rem;min-height:40px}
+  .refresh-btn,.btn-refresh{min-height:40px;min-width:40px}
+  /* Dica de arraste em tabelas roláveis (item 7) */
+  .hscroll-hint{
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    font-size:0.7rem;color:var(--text-muted);margin:0 0 6px;
+    opacity:.85;font-weight:600;
+  }
 }
+
+/* Breakpoint intermediário: tablets / celulares grandes / dobráveis (item 8) */
+@media(max-width:900px) and (min-width:601px){
+  .container{padding-left:16px;padding-right:16px}
+  .grid2{grid-template-columns:1fr}
+  .stats-alt-grid{grid-template-columns:1fr 1fr}
+  .dashboard-stats-grid{grid-template-columns:repeat(3,1fr)}
+  .app-logo{font-size:1rem}
+  .nav-btn{padding:6px 9px;font-size:0.78rem}
+}
+
+/* A dica de arraste só aparece no mobile; escondida por padrão */
+.hscroll-hint{display:none}
 
 body.light-theme .auth-wrap{background:radial-gradient(ellipse at center top,#e8edf5 0%,#f0f4f8 60%)}
 body.light-theme .auth-card,
@@ -941,9 +994,25 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
     <button class="active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠<span>Ranking</span></button>
     <button data-page="palpites" onclick="navigateTo('palpites')">⚽<span>Palpites</span></button>
     <button data-page="ver-palpites" onclick="navigateTo('ver-palpites')">👁️<span>Ver</span></button>
-    <button data-page="tabelas" onclick="navigateTo('tabelas')">📊<span>Tabelas</span></button>
-    <button data-page="admin" id="admin-bottom-nav" style="display:none" onclick="navigateTo('admin')">⚙️<span>Admin</span></button>
+    <button data-page="estatisticas" onclick="navigateTo('estatisticas')">📈<span>Stats</span></button>
+    <button id="mais-bottom-nav" onclick="toggleMaisSheet()">☰<span>Mais</span></button>
   </nav>
+
+  <!-- Folha "Mais" (Mobile) -->
+  <div class="mais-overlay" id="mais-overlay" onclick="closeMaisSheet()"></div>
+  <div class="mais-sheet" id="mais-sheet" role="dialog" aria-label="Mais opções">
+    <div class="mais-handle"></div>
+    <a data-page="tabelas" onclick="navigateTo('tabelas');closeMaisSheet()">📊 Tabelas</a>
+    <a data-page="chaveamento" onclick="navigateTo('chaveamento');closeMaisSheet()">🔑 Chaveamento</a>
+    <a data-page="chaveamento-bilateral" onclick="navigateTo('chaveamento-bilateral');closeMaisSheet()">🏆 Chave Bilateral</a>
+    <a data-page="ver-todos" onclick="navigateTo('ver-todos');closeMaisSheet()">📋 Todos os Palpites</a>
+    <a data-page="regras" onclick="navigateTo('regras');closeMaisSheet()">📋 Regras</a>
+    <a id="mais-admin" data-page="admin" style="display:none" onclick="navigateTo('admin');closeMaisSheet()">⚙️ Admin</a>
+    <div class="mais-divider"></div>
+    <a onclick="showApelidoModal();closeMaisSheet()">✏️ Alterar Apelido</a>
+    <a onclick="toggleTheme()">🌓 Tema claro/escuro</a>
+    <a class="mais-logout" onclick="doLogout()">🚪 Sair</a>
+  </div>
 
   <main class="app-main">
     <!-- ── DASHBOARD ── -->
@@ -1020,7 +1089,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.9.3</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1292,7 +1361,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.9.3',
+  app_version:'v1.10.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -1672,8 +1741,8 @@ function showApp() {
   document.getElementById('header-admin-badge').style.display = isAdmin?'inline':'none';
   document.getElementById('admin-nav').style.display = isAdmin?'inline-block':'none';
   document.getElementById('admin-dropdown').style.display = isAdmin?'block':'none';
-  const adminBottom = document.getElementById('admin-bottom-nav');
-  if (adminBottom) adminBottom.style.display = isAdmin?'flex':'none';
+  const adminMais = document.getElementById('mais-admin');
+  if (adminMais) adminMais.style.display = isAdmin?'block':'none';
 }
 
 // ════════════════════════════════════════════
@@ -1695,6 +1764,11 @@ function navigateTo(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+  // Páginas que vivem na folha "Mais" acendem o botão Mais na bottom nav.
+  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','regras','admin']);
+  const _maisBtn = document.getElementById('mais-bottom-nav');
+  if (_maisBtn) _maisBtn.classList.toggle('active', _maisPages.has(page));
+  document.querySelectorAll('#mais-sheet a').forEach(a=>a.classList.toggle('active',a.dataset.page===page));
   const el = document.getElementById('page-'+page);
   if (el) el.classList.add('active');
   // Persiste a página no hash para sobreviver a reloads
@@ -1712,6 +1786,8 @@ function navigateTo(page) {
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
   window.scrollTo({top:0,behavior:'smooth'});
+  // Após o render (alguns são assíncronos), insere as dicas de arraste no mobile.
+  setTimeout(addScrollHints, 350);
 }
 
 function _restorePageFromHash() {
@@ -6173,6 +6249,33 @@ async function exportResultadosExcel() {
 function toggleDropdown() {
   const menu = document.getElementById('dropdown-menu');
   if (menu) menu.classList.toggle('show');
+}
+
+// Folha "Mais" da navegação inferior (mobile)
+function toggleMaisSheet() {
+  const sheet = document.getElementById('mais-sheet');
+  const ov = document.getElementById('mais-overlay');
+  const open = sheet?.classList.toggle('show');
+  if (ov) ov.classList.toggle('show', open);
+}
+function closeMaisSheet() {
+  document.getElementById('mais-sheet')?.classList.remove('show');
+  document.getElementById('mais-overlay')?.classList.remove('show');
+}
+
+// Item 7: no mobile, mostra "⇆ arraste para ver mais" acima de tabelas que
+// têm rolagem horizontal, pois muita gente não percebe que dá para arrastar.
+function addScrollHints() {
+  if (!window.matchMedia('(max-width:600px)').matches) return;
+  const wraps = document.querySelectorAll('.page.active [style*="overflow-x:auto"], .page.active [style*="overflow-x: auto"]');
+  wraps.forEach(w => {
+    if (w.previousElementSibling?.classList?.contains('hscroll-hint')) return;
+    if (w.scrollWidth <= w.clientWidth + 4) return; // não rola → sem dica
+    const hint = document.createElement('div');
+    hint.className = 'hscroll-hint';
+    hint.textContent = '⇆ arraste para o lado para ver mais';
+    w.parentNode.insertBefore(hint, w);
+  });
 }
 
 function toggleTheme() {
