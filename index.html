@@ -4701,7 +4701,7 @@ async function renderAdminResultados() {
         <input type="time" id="gt_${game.id}" value="${effTime}" onchange="onScheduleChange('${game.id}')" style="${_inpStyle}">
         ${schedOverridden?`<button class="btn btn-sm" style="padding:3px 8px;font-size:0.7rem" onclick="resetSchedule('${game.id}')" title="Restaurar data/hora padrão">↩︎ Padrão</button><span style="color:var(--orange)">• horário alterado</span>`:''}
         <span style="margin-left:auto" id="lockstate_${game.id}">${_lockStateLabel(lockState)}</span>
-      </div>
+      </div>`;
     });
     if (lastDate!==null) html += `</div>`;
     cont.innerHTML = html;
