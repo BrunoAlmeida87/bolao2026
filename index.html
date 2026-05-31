@@ -2562,8 +2562,9 @@ function buildPalRow(game) {
   const time = res.time_override || GAME_TIMES[game.id] || '--:--';
   const displayDate = res.date_override ? _isoToGameDate(res.date_override) : (game.date || '');
   const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
+  const idBadge = `<span style="font-size:0.62rem;font-weight:800;background:rgba(255,255,255,.1);color:var(--text-muted);padding:1px 5px;border-radius:5px;letter-spacing:.03em">${esc(game.id)}</span> `;
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${displayDate} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
+    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${idBadge}${displayDate} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input ${iCls}" id="pa_${game.id}" min="0" max="20" placeholder="–" value="${pal.a!==undefined?pal.a:''}" ${closeAttr} oninput="onPalInput('${game.id}','a',this.value)">
@@ -3013,8 +3014,9 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const hVal = showPal ? (pal.h!==undefined?pal.h:'') : '';
   const aVal = showPal ? (pal.a!==undefined?pal.a:'') : '';
   const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
+  const idBadge = `<span style="font-size:0.62rem;font-weight:800;background:rgba(255,255,255,.1);color:var(--text-muted);padding:1px 5px;border-radius:5px;letter-spacing:.03em">${esc(game.id)}</span> `;
   return `<div class="game-row">
-    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${displayDate} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
+    <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${idBadge}${displayDate} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="${showPal?'–':'🔒'}" value="${hVal}">
     <div class="vs-badge">${showPal?'✕':'🔒'}</div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="${showPal?'–':'🔒'}" value="${aVal}">
