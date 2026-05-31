@@ -4135,8 +4135,9 @@ async function renderEstatisticas() {
     html += `<div class="card">
       <div class="card-title">🤔 Mais Indeciso (Top 5)</div>
       <div style="font-size:0.82rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.5">
-        Ranking de quem mais alterou palpites — quanto mais mudanças registradas, mais indeciso.
-        É calculado <b>sob demanda</b> para economizar leituras do banco. (Conta a partir da v1.9.x.)
+        Ranking de quem mais <b>alterou</b> palpites — conta apenas re-edições, <b>não</b> o primeiro preenchimento.
+        Salvar um palpite pela primeira vez não conta; só conta se você salvar de novo com um placar diferente (ou apagar e refazer).
+        Histórico disponível a partir da <b>v1.9.x</b>. Calculado <b>sob demanda</b> para economizar leituras do banco.
       </div>
       <button class="btn btn-primary btn-sm" id="indeciso-btn" onclick="calcMaisIndeciso()">📊 Calcular ranking</button>
       <div id="indeciso-result" style="margin-top:12px"></div>
@@ -5875,6 +5876,7 @@ function renderAdminHistorico() {
         <button class="btn btn-secondary btn-sm" onclick="histLoadUsers()">👥 Carregar lista de usuários</button>
         <select id="hist-user-select" style="display:none;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid var(--border);font-size:0.85rem;min-width:200px"></select>
         <button id="hist-buscar-btn" class="btn btn-primary btn-sm" style="display:none" onclick="histBuscar()">🔍 Buscar histórico</button>
+        <button id="hist-apagar-btn" class="btn btn-sm" style="display:none;background:#c0392b;color:#fff" onclick="histApagarHistorico()">🗑️ Apagar todo histórico</button>
         <span id="hist-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
       </div>
       <div id="hist-result"></div>
@@ -5893,6 +5895,8 @@ async function histLoadUsers() {
       ordered.map(u=>`<option value="${esc(u.uid)}">${esc(u.nome||u.apelido||u.uid)}${u.email?` (${esc(u.email)})`:''}</option>`).join('');
     sel.style.display = '';
     if (btn) btn.style.display = '';
+    const apagarBtn = document.getElementById('hist-apagar-btn');
+    if (apagarBtn) apagarBtn.style.display = '';
     if (status) status.textContent = `${ordered.length} usuário(s) carregado(s).`;
   } catch(e) {
     if (status) status.textContent = 'Erro: ' + errMsg(e);
@@ -5942,6 +5946,33 @@ async function histBuscar() {
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+  } catch(e) {
+    if (status) status.textContent = 'Erro: ' + errMsg(e);
+  }
+}
+
+async function histApagarHistorico() {
+  const sel = document.getElementById('hist-user-select');
+  const status = document.getElementById('hist-status');
+  const out = document.getElementById('hist-result');
+  const uid = sel?.value;
+  if (!uid) { if (status) status.textContent = 'Selecione um usuário primeiro.'; return; }
+  const uname = sel.options[sel.selectedIndex]?.text || uid;
+  if (!confirm(`Apagar TODO o histórico de palpites de "${uname}"?\n\nEssa ação não pode ser desfeita. O ranking "Mais Indeciso" será zerado para esse usuário.`)) return;
+  if (status) status.textContent = 'Apagando histórico…';
+  if (out) out.innerHTML = '';
+  try {
+    let total = 0;
+    let snap = await db_.collection('palpites').doc(uid).collection('historico').limit(400).get();
+    while (!snap.empty) {
+      const batch = db_.batch();
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      total += snap.size;
+      snap = await db_.collection('palpites').doc(uid).collection('historico').limit(400).get();
+    }
+    if (status) status.textContent = `Histórico apagado: ${total} registro(s) removidos.`;
+    if (out) out.innerHTML = `<div class="alert alert-info">Histórico de <b>${esc(uname)}</b> apagado com sucesso (${total} registros).</div>`;
   } catch(e) {
     if (status) status.textContent = 'Erro: ' + errMsg(e);
   }
