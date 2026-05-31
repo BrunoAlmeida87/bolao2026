@@ -5876,7 +5876,7 @@ function renderAdminHistorico() {
         <button class="btn btn-secondary btn-sm" onclick="histLoadUsers()">👥 Carregar lista de usuários</button>
         <select id="hist-user-select" style="display:none;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid var(--border);font-size:0.85rem;min-width:200px"></select>
         <button id="hist-buscar-btn" class="btn btn-primary btn-sm" style="display:none" onclick="histBuscar()">🔍 Buscar histórico</button>
-        <button id="hist-apagar-btn" class="btn btn-sm" style="display:none;background:#c0392b;color:#fff" onclick="histApagarHistorico()">🗑️ Apagar todo histórico</button>
+        <button id="hist-apagar-btn" class="btn btn-sm" style="display:none;background:#c0392b;color:#fff" onclick="histApagarHistorico()">🗑️ Apagar histórico deste usuário</button>
         <span id="hist-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
       </div>
       <div id="hist-result"></div>
@@ -5958,7 +5958,7 @@ async function histApagarHistorico() {
   const uid = sel?.value;
   if (!uid) { if (status) status.textContent = 'Selecione um usuário primeiro.'; return; }
   const uname = sel.options[sel.selectedIndex]?.text || uid;
-  if (!confirm(`Apagar TODO o histórico de palpites de "${uname}"?\n\nEssa ação não pode ser desfeita. O ranking "Mais Indeciso" será zerado para esse usuário.`)) return;
+  if (!confirm(`Apagar o histórico de palpites APENAS do usuário "${uname}"?\n\nSomente este usuário será afetado — o histórico dos demais permanece intacto.\nEssa ação não pode ser desfeita. O ranking "Mais Indeciso" será zerado para este usuário.`)) return;
   if (status) status.textContent = 'Apagando histórico…';
   if (out) out.innerHTML = '';
   try {
