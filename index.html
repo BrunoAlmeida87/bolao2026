@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.7">
+<meta name="app-version" content="v1.10.8">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1112,7 +1112,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.7</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.8</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1384,7 +1384,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.7',
+  app_version:'v1.10.8',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3972,6 +3972,57 @@ async function calcMaisIndeciso() {
   }
 }
 
+async function calcJogosIndicisos() {
+  const btn = document.getElementById('jogos-indicisos-btn');
+  const out = document.getElementById('jogos-indicisos-result');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Calculando…'; }
+  try {
+    const users = (await _fetchUsr()).filter(u => u.ativo !== false);
+    const res = await _fetchRes();
+    // Agrega re-edições por gameId lendo historico de todos os usuários
+    const gameChanges = {};
+    await Promise.all(users.map(async u => {
+      try {
+        const snap = await db_.collection('palpites').doc(u.uid).collection('historico')
+          .where('edit', '==', true).get();
+        snap.docs.forEach(d => {
+          const gid = d.data().gameId;
+          if (!gid) return;
+          gameChanges[gid] = (gameChanges[gid] || { count: 0, uids: new Set() });
+          gameChanges[gid].count++;
+          gameChanges[gid].uids.add(u.uid);
+        });
+      } catch(_) {}
+    }));
+    const top = Object.entries(gameChanges)
+      .map(([gid, data]) => ({ gid, count: data.count, users: data.uids.size, game: ALL_GAMES.find(g=>g.id===gid) }))
+      .filter(x => x.game)
+      .sort((a,b) => b.count - a.count)
+      .slice(0, 5);
+    if (btn) btn.style.display = 'none';
+    if (!top.length) {
+      out.innerHTML = `<div class="alert alert-info">Nenhuma alteração registrada ainda.</div>`;
+      return;
+    }
+    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+    out.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
+      ${top.map((x,i) => {
+        const r = res[x.gid] || {};
+        const result = r.h_real !== undefined ? `(resultado: ${r.h_real}–${r.a_real})` : '';
+        return `<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 14px">
+          <span style="font-size:1.3rem;min-width:30px">${medals[i]}</span>
+          <span style="flex:1;font-weight:700">${esc(x.game.h)} × ${esc(x.game.a)} <span style="font-size:0.75rem;font-weight:400;color:var(--text-muted)">${result}</span></span>
+          <span style="font-weight:800;color:var(--gold)">${x.count}</span>
+          <span style="font-size:0.78rem;color:var(--text-muted)">${x.count===1?'troca':'trocas'} · ${x.users} pessoa${x.users>1?'s':''}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } catch(e) {
+    out.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = '📊 Calcular'; }
+  }
+}
+
 let _aiInsightsCache = null; // {cards, updatedAt, updatedBy} — carregado uma vez por sessão
 function _fmtAITimestamp(cache) {
   const d = cache?.updatedAt?.toDate?.() || null;
@@ -4637,6 +4688,103 @@ async function renderEstatisticas() {
       }
     }
 
+    // ── Perfis de Apostador ──
+    if (users.length > 0) {
+      const profiles = users.map(u => {
+        const pals = Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined);
+        if (!pals.length) return null;
+        const avgGols = pals.reduce((s,p)=>s+parseInt(p.h||0)+parseInt(p.a||0),0)/pals.length;
+        const empPct = Math.round(pals.filter(p=>parseInt(p.h)===parseInt(p.a)).length/pals.length*100);
+        let profile, icon, color;
+        if (avgGols < 1.8)      { profile='Conservador'; icon='🛡️'; color='#60A5FA'; }
+        else if (avgGols < 2.8) { profile='Equilibrado'; icon='⚖️'; color='var(--green)'; }
+        else                    { profile='Ousado';       icon='🚀'; color='var(--orange)'; }
+        return { u, profile, icon, color, avgGols, empPct };
+      }).filter(Boolean);
+      if (profiles.length) {
+        html += `<div class="card">
+          <div class="card-title">🎭 Perfis de Apostador</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Estilo de jogo baseado na média de gols palpitados — não tem a ver com acertos.</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${profiles.map(a=>`<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px;flex-wrap:wrap">
+              <span style="font-weight:600;min-width:80px;flex:1">${esc(a.u.apelido||a.u.nome)}</span>
+              <span style="color:${a.color};font-weight:700;min-width:110px">${a.icon} ${a.profile}</span>
+              <span style="font-size:0.78rem;color:var(--text-muted)">Ø${a.avgGols.toFixed(1)} gols/jogo</span>
+              <span style="font-size:0.78rem;color:var(--text-muted)">${a.empPct}% apostas em empate</span>
+            </div>`).join('')}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:10px">🛡️ Conservador &lt;1.8 gols · ⚖️ Equilibrado 1.8–2.8 · 🚀 Ousado &gt;2.8</div>
+        </div>`;
+      }
+    }
+
+    // ── Consenso & Dissenso + Placar Favorito ──
+    const lockedGamesStats = ALL_GAMES.map(game => {
+      const r = res[game.id]||{};
+      if (!isPalpiteClosed(game, r)) return null;
+      const gPals = users.map(u=>allPals[u.uid]?.[game.id]).filter(p=>p&&p.h!==undefined&&p.a!==undefined);
+      if (gPals.length < Math.max(3, Math.floor(users.length*0.4))) return null;
+      const tot=gPals.length;
+      const hw=gPals.filter(p=>parseInt(p.h)>parseInt(p.a)).length;
+      const dr=gPals.filter(p=>parseInt(p.h)===parseInt(p.a)).length;
+      const aw=gPals.filter(p=>parseInt(p.h)<parseInt(p.a)).length;
+      const maxPct=Math.max(hw,dr,aw)/tot*100;
+      return { game, tot, hw, dr, aw, maxPct, spread: maxPct - Math.min(hw,dr,aw)/tot*100 };
+    }).filter(Boolean);
+
+    if (lockedGamesStats.length >= 2) {
+      const consensual = [...lockedGamesStats].sort((a,b)=>b.maxPct-a.maxPct)[0];
+      const polemico   = [...lockedGamesStats].sort((a,b)=>a.spread-b.spread)[0];
+      const mkDistBar = (g) => {
+        const tot=g.tot, phw=Math.round(g.hw/tot*100), pdr=Math.round(g.dr/tot*100), paw=Math.round(g.aw/tot*100);
+        return `<div style="font-size:0.8rem;font-weight:600;margin-bottom:6px">${esc(g.game.h)} × ${esc(g.game.a)}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:0.72rem;text-align:center">
+            <div><div style="background:rgba(0,196,255,.2);border-radius:4px;padding:3px">${phw}%</div><div style="color:var(--text-muted);margin-top:2px">${esc(g.game.h)}</div></div>
+            <div><div style="background:rgba(255,255,255,.1);border-radius:4px;padding:3px">${pdr}%</div><div style="color:var(--text-muted);margin-top:2px">Empate</div></div>
+            <div><div style="background:rgba(255,100,100,.2);border-radius:4px;padding:3px">${paw}%</div><div style="color:var(--text-muted);margin-top:2px">${esc(g.game.a)}</div></div>
+          </div>`;
+      };
+      html += `<div class="card">
+        <div class="card-title">🗳️ Consenso & Dissenso do Bolão</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+          <div style="background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.2);border-radius:10px;padding:14px">
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green);margin-bottom:10px">🤝 Mais Consensual</div>
+            ${mkDistBar(consensual)}
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">${Math.round(consensual.maxPct)}% apostaram no mesmo resultado</div>
+          </div>
+          <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:10px;padding:14px">
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--red);margin-bottom:10px">💥 Mais Polêmico</div>
+            ${mkDistBar(polemico)}
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">Opiniões divididas — spread de ${Math.round(polemico.spread)}pp</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // Placar favorito por participante
+    const favPlacares = users.map(u=>{
+      const pals=Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined);
+      if (!pals.length) return null;
+      const freq={};
+      pals.forEach(p=>{const k=`${p.h}×${p.a}`;freq[k]=(freq[k]||0)+1;});
+      const [placar,count]=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0];
+      return count>=2?{u,placar,count,total:pals.length}:null;
+    }).filter(Boolean).sort((a,b)=>b.count/b.total-a.count/a.total);
+
+    if (favPlacares.length >= 3) {
+      html += `<div class="card">
+        <div class="card-title">🔁 Placar Favorito</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">O placar que cada um mais aposta — revela o "palpite padrão" de cada participante.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${favPlacares.map(f=>`<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:5px 12px;font-size:0.82rem">
+            <span style="font-weight:600">${esc(f.u.apelido||f.u.nome)}</span>
+            <span style="color:var(--gold);margin-left:6px">${f.placar}</span>
+            <span style="color:var(--text-muted);font-size:0.72rem;margin-left:4px">(${f.count}×)</span>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
     // ── Mais Indeciso (Top 5) — sob demanda (lê o histórico de cada usuário) ──
     html += `<div class="card">
       <div class="card-title">🤔 Mais Indeciso (Top 5)</div>
@@ -4647,6 +4795,17 @@ async function renderEstatisticas() {
       </div>
       <button class="btn btn-primary btn-sm" id="indeciso-btn" onclick="calcMaisIndeciso()">📊 Calcular ranking</button>
       <div id="indeciso-result" style="margin-top:12px"></div>
+    </div>`;
+
+    // ── Jogos que mais geraram mudanças — sob demanda ──
+    html += `<div class="card">
+      <div class="card-title">🔄 Jogos Mais Indicisos do Bolão</div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.5">
+        Quais partidas fizeram o bolão mais mudar de ideia? Conta todas as re-edições de palpite por jogo.
+        Calculado <b>sob demanda</b> — mesma leitura do histórico do "Mais Indeciso".
+      </div>
+      <button class="btn btn-primary btn-sm" id="jogos-indicisos-btn" onclick="calcJogosIndicisos()">📊 Calcular</button>
+      <div id="jogos-indicisos-result" style="margin-top:12px"></div>
     </div>`;
 
     // ── Heatmap de placares mais palpitados ──
