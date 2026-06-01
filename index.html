@@ -756,6 +756,9 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ngc-date{font-size:0.78rem;color:var(--text-muted);margin-bottom:8px}
 .ngc-countdown{font-size:1.5rem;font-weight:800;color:#00b4ff;letter-spacing:.04em;font-variant-numeric:tabular-nums}
 .ngc-note{font-size:0.72rem;color:var(--text-muted);margin-top:6px}
+.ngc-mypalpite{font-size:0.78rem;margin-top:8px;padding:5px 10px;border-radius:6px;display:inline-block}
+.ngc-mypalpite-set{color:#5fd16b;background:rgba(76,175,80,.13)}
+.ngc-mypalpite-missing{color:var(--orange);background:rgba(255,152,0,.12);font-weight:600}
 .next-games-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
 .next-games-grid .next-game-card{margin-bottom:0}
 .next-game-card.locked-soon{background:linear-gradient(135deg,rgba(255,68,68,.14),rgba(200,0,0,.07));border-color:rgba(255,68,68,.55)}
@@ -2219,6 +2222,21 @@ function computeStandings(grupKey, resultados) {
 let _dashResults = {};
 // Distribuição do bolão para as próximas partidas (% vit. casa, empate, vit. visitante)
 let _dashBolaoDistrib = {};
+// Palpites do usuário logado — usados nos cards de próximas partidas
+let _dashMyPals = {};
+function _refreshDashMyPalCard(gameId) {
+  const el = document.getElementById(`ngc-mypalpite-${gameId}`);
+  if (!el) return;
+  const myPal = _dashMyPals[gameId];
+  const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
+  if (hasPal) {
+    el.className = 'ngc-mypalpite ngc-mypalpite-set';
+    el.innerHTML = `✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong>`;
+  } else {
+    el.className = 'ngc-mypalpite ngc-mypalpite-missing';
+    el.innerHTML = '⚠️ Você ainda não palpitou!';
+  }
+}
 
 // Renderiza barras de distribuição do bolão para uma partida bloqueada.
 // bolaoDistrib: { phw, pdr, paw } em %.  Retorna '' se não houver dados.
@@ -2324,6 +2342,11 @@ function _buildNextGamesHtml(group) {
     // Só embute as barras no HTML inicial se a partida JÁ está bloqueada. Para partidas
     // ainda abertas o container fica vazio e o timer (_tick) injeta ao cruzar a trava.
     const distribHtml = isLockedNow ? _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]) : '';
+    const myPal = _dashMyPals[game.id];
+    const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
+    const myPalHtml = hasPal
+      ? `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-set">✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong></div>`
+      : `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-missing">⚠️ Você ainda não palpitou!</div>`;
     return `<div class="next-game-card" data-gid="${game.id}">
       <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
@@ -2334,6 +2357,7 @@ function _buildNextGamesHtml(group) {
       <div class="ngc-date">${esc(fmtDate)}</div>
       <div class="ngc-countdown" id="ngc-cd-${game.id}">—</div>
       <div class="ngc-note" id="ngc-note-${game.id}">Bloqueio: ${_lockDisplayStr(_gameLockInstant(game, res))}</div>
+      ${myPalHtml}
       <div id="ngc-prob-${game.id}" style="display:${isLockedNow&&distribHtml?'block':'none'}">${distribHtml}</div>
     </div>`;
   }).join('');
@@ -2449,6 +2473,7 @@ async function renderDashboard() {
     // contador cruzar o limite de bloqueio, mesmo com o dashboard aberto desde antes da trava.
     // (allPals já está em memória no cliente, então pré-computar não expõe nada novo.)
     _dashResults = Object.assign({}, res);
+    _dashMyPals   = allPals[currentUser.uid] || {};
     _applyAutoLocks(_dashResults); // verifica e grava auto-lock para jogos que já passaram das 23h
     _dashBolaoDistrib = {};
     ALL_GAMES.forEach(g => {
@@ -2931,7 +2956,8 @@ async function savePalpite(gameId) {
     try {
       await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).delete();
       // Apagar um palpite é sempre uma mudança de ideia → conta como edição.
-      _logPalpiteHistory(uid, gameId, { action: 'delete', edit: true, adminEdit: !!palpitesEditing && palpitesEditing !== currentUser.uid });
+      const _isAdminDel = !!palpitesEditing && palpitesEditing !== currentUser.uid;
+      _logPalpiteHistory(uid, gameId, { action: 'delete', edit: true, adminEdit: _isAdminDel });
       _palpitesSalvosSet.delete(gameId);
       delete myPalpites[gameId];
       ['filled','saving','saved-ok','save-err','saving'].forEach(c=>{
@@ -2941,6 +2967,7 @@ async function savePalpite(gameId) {
       updatePalProgress();
       updateGroupTabState();
       _scDel('pals');
+      if (!_isAdminDel) { delete _dashMyPals[gameId]; _refreshDashMyPalCard(gameId); }
     } catch(e) { showToast('Erro ao apagar palpite: '+e.message,'error'); }
     return;
   }
@@ -2985,6 +3012,7 @@ async function savePalpite(gameId) {
       } catch(_) {}
     }
     _scDel('pals');
+    if (!isAdminEdit) { _dashMyPals[gameId] = { h: pal.h, a: pal.a }; _refreshDashMyPalCard(gameId); }
     if (hInp) { hInp.classList.remove('saving'); hInp.classList.add('saved-ok'); }
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('saved-ok'); }
     setTimeout(()=>{ if(hInp) hInp.classList.remove('saved-ok'); if(aInp) aInp.classList.remove('saved-ok'); }, 1500);
