@@ -762,6 +762,10 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .next-game-card.locked-soon .ngc-label{color:rgba(255,90,90,.95)}
 .next-game-card.locked-soon .ngc-countdown{color:#ff5a5a}
 .next-game-card.locked-soon .ngc-note{color:#ff7a7a;font-weight:700}
+.next-game-card.in-progress{background:linear-gradient(135deg,rgba(76,175,80,.14),rgba(40,140,60,.06));border-color:rgba(76,175,80,.5)}
+.next-game-card.in-progress .ngc-label{color:rgba(120,210,130,.95)}
+.next-game-card.in-progress .ngc-countdown{color:#5fd16b;font-size:1.15rem}
+.next-game-card.in-progress .ngc-note{color:#8fd99a;font-weight:700}
 .prize-pool-item{text-align:center;min-width:90px}
 .prize-pool-item .ppi-val{font-size:1.2rem;font-weight:800;color:var(--gold)}
 .prize-pool-item .ppi-lbl{font-size:0.7rem;color:var(--text-muted);margin-top:2px}
@@ -2188,38 +2192,51 @@ function _bolaoDistribBarsHtml(game, bolaoDistrib) {
 // madrugada, que cola na rodada da véspera); a virada para o dia seguinte tem
 // intervalo noturno bem maior, então quebra o agrupamento aqui.
 const TIMER_CLUSTER_GAP_MS = 8 * 3600000;
+// Tempo após o início em que a partida é exibida como "em andamento"; depois disso
+// (sem resultado lançado) passa para "aguardando oficialização".
+const MATCH_DURATION_MS = 120 * 60000;
 
 // Conjunto de partidas exibidas nos timers do dashboard.
-// Regra automática: agrupa a próxima "leva" de jogos por proximidade (gap ≤ 8h).
-// Override manual (campo timerMode em resultados): 'show' força exibir, 'hide'
-// força ocultar — a flag manual sempre vence a regra automática.
+// Inclui: (a) jogos futuros da próxima "leva" (agrupados por proximidade, gap ≤ 8h)
+// e (b) jogos que JÁ começaram mas ainda não têm resultado lançado (em andamento /
+// aguardando oficialização) — estes só somem quando o admin lança o resultado.
+// Override manual (campo timerMode): 'show' força exibir um futuro, 'hide' oculta sempre.
 function _nextGamesGroup() {
   const now = Date.now();
-  const upcoming = ALL_GAMES
+  const _resolved = id => { const r = _dashResults[id] || {}; return r.h_real !== undefined && r.a_real !== undefined; };
+  const all = ALL_GAMES
     .map(g => ({ game: g, start: _effectiveStartInstant(g, _dashResults[g.id]) }))
-    .filter(x => x.start && x.start.getTime() > now)
+    .filter(x => x.start)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
-  if (!upcoming.length) return { key:'none', start:null, items:[] };
+
+  const upcoming = all.filter(x => x.start.getTime() > now);
 
   // Leva automática: começa no próximo jogo e segue enquanto o intervalo até o
   // jogo seguinte for pequeno (mesma rodada). Para no primeiro "buraco" grande.
-  const wave = new Set([upcoming[0].game.id]);
-  for (let i = 1; i < upcoming.length; i++) {
-    if (upcoming[i].start.getTime() - upcoming[i-1].start.getTime() <= TIMER_CLUSTER_GAP_MS) {
-      wave.add(upcoming[i].game.id);
-    } else break;
+  const wave = new Set();
+  if (upcoming.length) {
+    wave.add(upcoming[0].game.id);
+    for (let i = 1; i < upcoming.length; i++) {
+      if (upcoming[i].start.getTime() - upcoming[i-1].start.getTime() <= TIMER_CLUSTER_GAP_MS) {
+        wave.add(upcoming[i].game.id);
+      } else break;
+    }
   }
 
-  // Aplica overrides manuais por jogo.
-  const items = upcoming.filter(x => {
+  const items = all.filter(x => {
     const mode = (_dashResults[x.game.id] || {}).timerMode;
-    if (mode === 'hide') return false;       // nunca mostra
-    if (mode === 'show') return true;        // sempre mostra (mesmo fora da leva)
-    return wave.has(x.game.id);              // automático: dentro da leva
+    if (mode === 'hide') return false;                 // oculto manualmente: nunca
+    const started = x.start.getTime() <= now;
+    if (started) return !_resolved(x.game.id);         // em andamento/aguardando até ter resultado
+    if (mode === 'show') return true;                  // futuro fixado manualmente
+    return wave.has(x.game.id);                        // futuro dentro da leva automática
   });
-  if (!items.length) return { key:'none', start:null, items:[] };
+  if (!items.length) return { key:'none', nextKickoff:null, items:[] };
 
-  return { key: items.map(x => x.game.id).join(','), start: items[0].start.getTime(), items };
+  // nextKickoff = início do próximo jogo futuro (gatilho de re-render do _tick para
+  // trazer um jogo de "futuro" para "em andamento" e re-ancorar a leva). null se não houver.
+  const nextKickoff = upcoming.length ? upcoming[0].start.getTime() : null;
+  return { key: items.map(x => x.game.id).join(','), nextKickoff, items };
 }
 
 function _buildNextGamesHtml(group) {
@@ -2232,7 +2249,7 @@ function _buildNextGamesHtml(group) {
   const multi = group.items.length > 1;
   // Todos no mesmo instante? Então é "Partida Simultânea"; senão é uma leva/rodada.
   const sameInstant = multi && group.items.every(x => x.start.getTime() === group.items[0].start.getTime());
-  const cards = group.items.map(({ game }) => {
+  const cards = group.items.map(({ game, start }) => {
     const res = _dashResults[game.id] || {};
     const homeFlag = teamFlag(game.h);
     const awayFlag = teamFlag(game.a);
@@ -2242,7 +2259,8 @@ function _buildNextGamesHtml(group) {
     const _gKey = Object.keys(GRUPOS_DATA).find(k => GRUPOS_DATA[k].games.some(gm => gm.id === game.id));
     const groupLabel = _gKey ? `Grupo ${_gKey}` : '';
     const isLockedNow = isPalpiteClosed(game, res);
-    const cardLabel = !multi ? 'Próxima Partida' : (sameInstant ? 'Partida Simultânea' : 'Partida');
+    const started = start.getTime() <= Date.now();
+    const cardLabel = started ? 'Partida' : (!multi ? 'Próxima Partida' : (sameInstant ? 'Partida Simultânea' : 'Partida'));
     // Só embute as barras no HTML inicial se a partida JÁ está bloqueada. Para partidas
     // ainda abertas o container fica vazio e o timer (_tick) injeta ao cruzar a trava.
     const distribHtml = isLockedNow ? _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]) : '';
@@ -2287,8 +2305,9 @@ function _startCountdownTimer() {
     const wrap2 = document.getElementById('next-games-wrap');
     if (!wrap2) { clearInterval(_countdownTimer); _countdownTimer = null; return; }
     const now = Date.now();
-    // Quando o horário do grupo atual chega, avança para o próximo grupo.
-    if (group.start !== null && now >= group.start) {
+    // Quando um jogo futuro chega ao seu início, re-renderiza para movê-lo de
+    // "contagem regressiva" para "em andamento" e re-ancorar a leva automática.
+    if (group.nextKickoff !== null && now >= group.nextKickoff) {
       group = _nextGamesGroup();
       wrap2.innerHTML = _buildNextGamesHtml(group);
     }
@@ -2298,23 +2317,37 @@ function _startCountdownTimer() {
       if (!cd) return;
       const card = cd.closest('.next-game-card');
       const note = document.getElementById(`ngc-note-${game.id}`);
-      const diff = start.getTime() - now;
-      if (diff <= 0) { cd.textContent = '🟢 Em andamento'; return; }
-      cd.textContent = _fmtDiff(diff);
-      const manualLocked = _dashResults[game.id]?.locked === true;
-      const lockedSoon = manualLocked || diff <= LOCK_LEAD_MS;
-      if (card) card.classList.toggle('locked-soon', lockedSoon);
-      if (note) note.textContent = lockedSoon
-        ? '🔒 Palpites BLOQUEADOS para esta partida'
-        : 'Os palpites serão bloqueados às 22h do dia anterior à partida';
       const distribWrap = document.getElementById(`ngc-prob-${game.id}`);
-      if (distribWrap) {
-        // Injeta as barras no momento em que a partida bloqueia (caso o dashboard já
-        // estivesse aberto antes da trava e o container tenha sido renderizado vazio).
-        if (lockedSoon && !distribWrap.innerHTML) {
-          distribWrap.innerHTML = _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]);
+      const diff = start.getTime() - now;
+      if (diff > 0) {
+        // Ainda não começou: contagem regressiva.
+        cd.textContent = _fmtDiff(diff);
+        const manualLocked = _dashResults[game.id]?.locked === true;
+        const lockedSoon = manualLocked || diff <= LOCK_LEAD_MS;
+        if (card) { card.classList.toggle('locked-soon', lockedSoon); card.classList.remove('in-progress'); }
+        if (note) note.textContent = lockedSoon
+          ? '🔒 Palpites BLOQUEADOS para esta partida'
+          : 'Os palpites serão bloqueados às 22h do dia anterior à partida';
+        if (distribWrap) {
+          // Injeta as barras no momento em que a partida bloqueia (caso o dashboard já
+          // estivesse aberto antes da trava e o container tenha sido renderizado vazio).
+          if (lockedSoon && !distribWrap.innerHTML) {
+            distribWrap.innerHTML = _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]);
+          }
+          if (distribWrap.innerHTML) distribWrap.style.display = lockedSoon ? 'block' : 'none';
         }
-        if (distribWrap.innerHTML) distribWrap.style.display = lockedSoon ? 'block' : 'none';
+      } else {
+        // Já começou e ainda sem resultado: em andamento (até +120min) → aguardando.
+        const sinceStart = now - start.getTime();
+        cd.textContent = sinceStart <= MATCH_DURATION_MS
+          ? '🟢 Em andamento'
+          : '⏳ Aguardando oficialização do resultado';
+        if (card) { card.classList.remove('locked-soon'); card.classList.add('in-progress'); }
+        if (note) note.textContent = '🔒 Palpites encerrados';
+        if (distribWrap) {
+          if (!distribWrap.innerHTML) distribWrap.innerHTML = _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]);
+          if (distribWrap.innerHTML) distribWrap.style.display = 'block';
+        }
       }
     });
   }
