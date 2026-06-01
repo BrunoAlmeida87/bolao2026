@@ -1443,7 +1443,7 @@ const _SC = {};
 // já invalidam o cache localmente via _scDel. Por isso TTLs longos são seguros e
 // reduzem muito as leituras do Firestore em picos de acesso. O botão "Atualizar"
 // força a releitura imediata quando alguém quiser os dados na hora.
-const _SC_TTL = { res: 10*60000, usr: 10*60000, pals: 10*60000 };
+const _SC_TTL = { res: 20*60000, usr: 20*60000, pals: 20*60000 };
 function _scGet(k)        { const e=_SC[k]; return (e&&Date.now()<e.x)?e.v:null; }
 function _scSet(k,v,ttl)  { _SC[k]={v,x:Date.now()+(ttl||180000)}; }
 function _scDel(...keys)  { keys.forEach(k=>delete _SC[k]); }
