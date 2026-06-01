@@ -4277,7 +4277,7 @@ async function renderEstatisticas() {
             const _paw = Math.round(_aw/_tot*100);
             const _avgH = (_gPals.reduce((a,p)=>a+parseInt(p.h||0),0)/_tot).toFixed(1);
             const _avgA = (_gPals.reduce((a,p)=>a+parseInt(p.a||0),0)/_tot).toFixed(1);
-            const _sf={}; _gPals.forEach(p=>{ const _ph=parseInt(p.h)||0,_pa=parseInt(p.a)||0; const k=`${Math.max(_ph,_pa)}×${Math.min(_ph,_pa)}`; _sf[k]=(_sf[k]||0)+1; });
+            const _sf={}; _gPals.forEach(p=>{const k=`${parseInt(p.h)||0}×${parseInt(p.a)||0}`;_sf[k]=(_sf[k]||0)+1;});
             const _top = Object.entries(_sf).sort((a,b)=>b[1]-a[1])[0];
             const _maxPct=Math.max(_phw,_pdr,_paw);
             const _minPct=Math.min(_phw,_pdr,_paw);
