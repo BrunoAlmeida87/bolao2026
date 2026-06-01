@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.6">
+<meta name="app-version" content="v1.10.7">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1112,7 +1112,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.6</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.7</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1384,7 +1384,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.6',
+  app_version:'v1.10.7',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3754,31 +3754,39 @@ function calcUserAccuracyStats(uid, allPals, res) {
     .filter(g => _hasFullResult(res[g.id]))
     .sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
   const userPals = allPals[uid] || {};
-  let acertos = 0, exatos = 0, totalGolDiff = 0, count = 0, maxStreak = 0, tempStreak = 0;
+  let acertos = 0, exatos = 0, totalGolDiff = 0, count = 0;
+  let maxStreak = 0, tempStreak = 0, maxExactStreak = 0, tempExactStreak = 0;
   for (const g of gamesOrdered) {
     const p = userPals[g.id];
-    if (!p) { tempStreak = 0; continue; }
+    if (!p) { tempStreak = 0; tempExactStreak = 0; continue; }
     count++;
     const pts = calcPontos(p, res[g.id]);
     if (pts >= (CFG.pts_apenas_vencedor || 5)) {
       acertos++; tempStreak++; maxStreak = Math.max(maxStreak, tempStreak);
     } else { tempStreak = 0; }
-    if (pts === CFG.pts_exato) exatos++;
+    if (pts === CFG.pts_exato) {
+      exatos++; tempExactStreak++; maxExactStreak = Math.max(maxExactStreak, tempExactStreak);
+    } else { tempExactStreak = 0; }
     totalGolDiff += Math.abs(parseInt(p.h) - parseInt(res[g.id].h_real)) + Math.abs(parseInt(p.a) - parseInt(res[g.id].a_real));
   }
-  let currentStreak = 0;
+  let currentStreak = 0, currentExactStreak = 0;
   for (let i = gamesOrdered.length - 1; i >= 0; i--) {
     const p = userPals[gamesOrdered[i].id];
     if (!p) break;
     const pts = calcPontos(p, res[gamesOrdered[i].id]);
-    if (pts >= (CFG.pts_apenas_vencedor || 5)) currentStreak++;
-    else break;
+    if (pts >= (CFG.pts_apenas_vencedor || 5)) currentStreak++; else break;
+  }
+  for (let i = gamesOrdered.length - 1; i >= 0; i--) {
+    const p = userPals[gamesOrdered[i].id];
+    if (!p) break;
+    const pts = calcPontos(p, res[gamesOrdered[i].id]);
+    if (pts === CFG.pts_exato) currentExactStreak++; else break;
   }
   return {
     acertoPct: count > 0 ? (acertos / count * 100).toFixed(1) : '-',
     exatoPct: count > 0 ? (exatos / count * 100).toFixed(1) : '-',
     erroMedio: count > 0 ? (totalGolDiff / count).toFixed(1) : '-',
-    currentStreak, maxStreak, count
+    currentStreak, maxStreak, currentExactStreak, maxExactStreak, count
   };
 }
 
@@ -4512,6 +4520,117 @@ async function renderEstatisticas() {
       </div>`;
     }
 
+    // ── Sequências & Recordes ──
+    if (totalJogos > 0) {
+      const accAll = users.map(u => ({ u, ...calcUserAccuracyStats(u.uid, allPals, res) }));
+
+      // Maior sequência ativa (qualquer acerto)
+      const streakAtivo = accAll.filter(a=>a.currentStreak>0).sort((a,b)=>b.currentStreak-a.currentStreak);
+      // Maior sequência histórica (qualquer acerto)
+      const streakRecord = accAll.filter(a=>a.maxStreak>0).sort((a,b)=>b.maxStreak-a.maxStreak);
+      // Hat-trick: 3+ exatos consecutivos em qualquer momento
+      const hatTricks = accAll.filter(a=>a.maxExactStreak>=3).sort((a,b)=>b.maxExactStreak-a.maxExactStreak);
+      // Sequência de exatos ativa
+      const exactStreakAtivo = accAll.filter(a=>a.currentExactStreak>0).sort((a,b)=>b.currentExactStreak-a.currentExactStreak);
+
+      // Sniper por rodada
+      const rounds = [
+        { label:'Rodada 1', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
+        { label:'Rodada 2', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
+        { label:'Rodada 3', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
+        ...Object.values(ELIM_DATA).map(d=>({ label: d.label, ids: d.games.map(g=>g.id) }))
+      ].map(rd => {
+        const gamesWithRes = rd.ids.filter(id => _hasFullResult(res[id]));
+        if (!gamesWithRes.length) return null;
+        const byExatos = users.map(u => {
+          const ex = gamesWithRes.filter(id => {
+            const p = allPals[u.uid]?.[id]; return p && calcPontos(p, res[id]) === CFG.pts_exato;
+          }).length;
+          return { u, ex };
+        }).sort((a,b) => b.ex-a.ex);
+        const top = byExatos[0];
+        return top.ex > 0 ? { label: rd.label, user: top.u, ex: top.ex, total: gamesWithRes.length } : null;
+      }).filter(Boolean);
+
+      let seqHtml = '';
+
+      // Sequências ativas
+      if (streakAtivo.length) {
+        const top3 = streakAtivo.slice(0,3);
+        seqHtml += `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🔥 Sequência Ativa (acertos consecutivos)</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${top3.map((a,i)=>{
+              const medal = i===0?'🥇':i===1?'🥈':'🥉';
+              const exactNote = a.currentExactStreak>=3 ? ` <span style="color:var(--gold);font-size:0.75rem">🎩 ${a.currentExactStreak} exatos seguidos!</span>` : a.currentExactStreak>0 ? ` <span style="color:var(--text-muted);font-size:0.75rem">(${a.currentExactStreak} exato${a.currentExactStreak>1?'s':''})</span>` : '';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
+                <span style="font-weight:600">${medal} ${esc(a.u.apelido||a.u.nome)}</span>
+                <span style="color:var(--green);font-weight:700">${a.currentStreak} seguido${a.currentStreak>1?'s':''}${exactNote}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }
+
+      // Recordes históricos
+      if (streakRecord.length) {
+        const top3 = streakRecord.slice(0,3);
+        seqHtml += `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">⚡ Maior Sequência Histórica</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${top3.map((a,i)=>{
+              const medal = i===0?'🥇':i===1?'🥈':'🥉';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
+                <span style="font-weight:600">${medal} ${esc(a.u.apelido||a.u.nome)}</span>
+                <span style="color:#60A5FA;font-weight:700">${a.maxStreak} acerto${a.maxStreak>1?'s':''}${a.maxStreak===a.currentStreak&&a.currentStreak>0?' <span style="font-size:0.72rem;color:var(--green)">(ativo!)</span>':''}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }
+
+      // Hat-tricks
+      if (hatTricks.length) {
+        seqHtml += `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎩 Hat-tricks (3+ exatos consecutivos)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${hatTricks.map(a=>{
+              const isActive = a.currentExactStreak >= 3;
+              return `<div style="background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);border-radius:20px;padding:5px 12px;font-size:0.83rem;font-weight:600;color:var(--gold)">
+                🎩 ${esc(a.u.apelido||a.u.nome)} (${a.maxExactStreak}x)${isActive?' 🔥':''}
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">🔥 = sequência ainda ativa</div>
+        </div>`;
+      } else if (totalJogos >= 3) {
+        seqHtml += `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎩 Hat-tricks (3+ exatos consecutivos)</div>
+          <div style="font-size:0.85rem;color:var(--text-muted)">Nenhum hat-trick ainda — quem vai ser o primeiro? 👀</div>
+        </div>`;
+      }
+
+      // Sniper por rodada
+      if (rounds.length) {
+        seqHtml += `<div>
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎯 Sniper da Rodada</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${rounds.map(rd=>`<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
+              <span style="font-size:0.82rem;color:var(--text-muted)">${esc(rd.label)}</span>
+              <span style="font-weight:600">${esc(rd.user.apelido||rd.user.nome)} <span style="color:var(--gold)">${rd.ex}/${rd.total} exato${rd.ex>1?'s':''}</span></span>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+
+      if (seqHtml) {
+        html += `<div class="card">
+          <div class="card-title">🏆 Sequências & Recordes</div>
+          <div style="margin-top:14px">${seqHtml}</div>
+        </div>`;
+      }
+    }
+
     // ── Mais Indeciso (Top 5) — sob demanda (lê o histórico de cada usuário) ──
     html += `<div class="card">
       <div class="card-title">🤔 Mais Indeciso (Top 5)</div>
@@ -5169,7 +5288,7 @@ async function exportAIData() {
     // Ranking lines
     const rankingLines = ranking.map((u,i)=>{
       const acc = calcUserAccuracyStats(u.uid, allPals, res);
-      return `${i+1}. ${u.apelido||u.nome} — ${u.pontos}pts | ${u.exatos} exatos | ${u.jogos} jogos | ${acc.pct.toFixed(0)}% aproveit.`;
+      return `${i+1}. ${u.apelido||u.nome} — ${u.pontos}pts | ${u.exatos} exatos | ${u.jogos} jogos | ${acc.acertoPct}% aproveit.`;
     }).join('\n');
 
     // Top 3 jogos mais difíceis
@@ -5209,6 +5328,15 @@ ${emAlta||'  (sem dados ainda)'}
 
 == EM QUEDA (últimos 5 jogos vs geral) ==
 ${emQueda||'  (sem dados ainda)'}
+
+== SEQUÊNCIAS & HAT-TRICKS ==
+${(()=>{
+  const accAll = users.map(u=>({u,...calcUserAccuracyStats(u.uid,allPals,res)}));
+  const ativo = accAll.filter(a=>a.currentStreak>0).sort((a,b)=>b.currentStreak-a.currentStreak).slice(0,3).map(a=>`  • ${a.u.apelido||a.u.nome}: ${a.currentStreak} acertos seguidos${a.currentExactStreak>=3?' 🎩 HAT-TRICK ATIVO!':''}`).join('\n');
+  const hats = accAll.filter(a=>a.maxExactStreak>=3).sort((a,b)=>b.maxExactStreak-a.maxExactStreak).map(a=>`  • ${a.u.apelido||a.u.nome}: ${a.maxExactStreak} exatos seguidos${a.currentExactStreak>=3?' (ativo!)':''}`).join('\n');
+  const record = accAll.sort((a,b)=>b.maxStreak-a.maxStreak)[0];
+  return [ativo?`Sequências ativas:\n${ativo}`:'',hats?`Hat-tricks (3+ exatos seguidos):\n${hats}`:'Nenhum hat-trick ainda.',record&&record.maxStreak>0?`Maior sequência histórica: ${record.u.apelido||record.u.nome} com ${record.maxStreak} acertos seguidos`:'' ].filter(Boolean).join('\n\n');
+})()}
 
 ==========================================================
 INSTRUÇÕES PARA A IA (não inclua este bloco na resposta)
