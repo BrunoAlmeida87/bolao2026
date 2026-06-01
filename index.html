@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.4">
+<meta name="app-version" content="v1.10.5">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1099,7 +1099,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.4</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.5</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1371,7 +1371,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.4',
+  app_version:'v1.10.5',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -1460,8 +1460,8 @@ async function _fetchUsr() {
   u=snap.docs.map(d=>({uid:d.id,...d.data()}));
   _scSet('usr',u,_SC_TTL.usr); return u;
 }
-async function _fetchPals(users) {
-  let p=_scGet('pals'); if(p) return p;
+async function _fetchPals(users, force) {
+  if (!force) { let p=_scGet('pals'); if(p) return p; }
   const allPals={},champPicks={};
   await Promise.all((users||[]).map(async u=>{
     const [ps,pdoc]=await Promise.all([
@@ -2997,7 +2997,7 @@ async function savePalpite(gameId) {
 
 function showPalpiteClosedReason(gameId) {
   const res = resultados[gameId] || {};
-  if (res.locked===true) {
+  if (res.locked===true || res.autoLocked===true) {
     showToast('Este jogo está bloqueado. Não é mais possível alterar palpites.','warning');
     return;
   }
@@ -3474,7 +3474,7 @@ async function renderVerTodos() {
       users.forEach(u=>{
         const pal = allPals[u.uid]?.[g.id];
         const isOwn = u.uid === currentUser.uid;
-        const isGameLocked = r.locked===true || hasResult;
+        const isGameLocked = r.locked===true || r.autoLocked===true || hasResult;
         const canSeePal = isAdminView || isOwn || isGameLocked;
         if (!pal||pal.h===undefined) {
           html += `<td style="color:var(--text-muted)">—</td>`;
@@ -3619,17 +3619,19 @@ function isPalpiteClosed(game, res) {
   if (res.h_real !== undefined && res.a_real !== undefined) return true;
   if (res.locked === true) return true;
   if (res.unlock_override === true) return false;
+  if (res.autoLocked === true) return true;
   const lockAt = _gameLockInstant(game, res);
   return lockAt ? (Date.now() >= lockAt.getTime()) : false;
 }
 
-// Variante para salvar: admin editando outro usuário ignora a trava automática
-// por tempo, mas continua respeitando trava manual e resultado lançado.
+// Variante para salvar: admin editando outro usuário ignora trava automática
+// (por tempo ou autoLocked), mas continua respeitando trava manual e resultado.
 function isPalpiteClosedForSave(game, res, adminEditing) {
   res = res || {};
   if (res.h_real !== undefined) return true;
   if (res.locked === true) return true;
   if (adminEditing) return false;
+  if (res.autoLocked === true) return true;
   return isPalpiteClosed(game, res);
 }
 
@@ -3645,7 +3647,7 @@ async function _applyAutoLocks(res) {
     const FV = firebase.firestore.FieldValue;
     const toAutoLock = ALL_GAMES.filter(game => {
       const r = res[game.id] || {};
-      if (r.locked === true || r.h_real !== undefined || r.unlock_override === true) return false;
+      if (r.locked === true || r.autoLocked === true || r.h_real !== undefined || r.unlock_override === true) return false;
       if (_autoLockApplied.has(game.id)) return false;
       const autoLockAt = _gameAutoLockInstant(game, r);
       return autoLockAt && now >= autoLockAt.getTime();
@@ -3656,7 +3658,7 @@ async function _applyAutoLocks(res) {
     const batch = db_.batch();
     toAutoLock.forEach(game => {
       batch.set(db_.collection('resultados').doc(game.id),
-        { locked: true, updatedAt: FV.serverTimestamp() },
+        { autoLocked: true, updatedAt: FV.serverTimestamp() },
         { merge: true });
     });
     await batch.commit();
@@ -4040,6 +4042,8 @@ async function renderEstatisticas() {
         let _statusHtml;
         if (_gr.locked === true) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado pelo admin</span>';
+        } else if (_gr.autoLocked === true) {
+          _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado automaticamente</span>';
         } else if (_closed) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Palpites encerrados</span>';
         } else if (_diffToLock > 0 && _diffToLock <= 3600000) {
@@ -6391,7 +6395,7 @@ async function exportAllCSV() {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers;
     const activeForPals = allUsers.filter(u=>u.ativo!==false);
-    const {allPals} = await _fetchPals(activeForPals);
+    const {allPals} = await _fetchPals(activeForPals, true);
     let csv = 'Participante,Apelido,JogoID,Time_Casa,Palpite_Casa,Palpite_Fora,Time_Fora,Resultado_Casa,Resultado_Fora,Locked,Pontos\n';
     users.filter(u=>u.ativo!==false).forEach(u=>{
       ALL_GAMES.forEach(g=>{
@@ -6412,7 +6416,7 @@ async function exportRankingCSV() {
     const [allUsersR, resR] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsersR.filter(u=>u.ativo!==false);
     const res = resR;
-    const {allPals} = await _fetchPals(users);
+    const {allPals} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals);
     let csv = 'Posição,Participante,Apelido,Pontos,Exatos,Venc+Saldo,Apenas Venc,Jogos\n';
     ranking.forEach((u,i)=>{ csv+=`${i+1},"${u.nome}","${u.apelido}",${u.pontos},${u.exatos},${u.venc_saldo},${u.apenas_venc},${u.jogos}\n`; });
@@ -6425,7 +6429,7 @@ async function exportPalpitesCSV() {
   try {
     const allUsersP = await _fetchUsr();
     const users = allUsersP.filter(u=>u.ativo!==false);
-    const {allPals} = await _fetchPals(users);
+    const {allPals} = await _fetchPals(users, true);
     const headerCasa = users.map(u=>`"${u.apelido}_Casa"`).join(',');
     const headerFora = users.map(u=>`"${u.apelido}_Fora"`).join(',');
     let csv = `JogoID,Time_Casa,Time_Fora,Data,${headerCasa},${headerFora}\n`;
@@ -6448,7 +6452,7 @@ async function exportFullExcel() {
     const [allUsersE, resE] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsersE.filter(u=>u.ativo!==false);
     const res = resE;
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const totalJogosComResultado = Object.keys(res).filter(
       id => res[id].h_real !== undefined && res[id].a_real !== undefined
@@ -6510,7 +6514,7 @@ async function exportRankingExcel() {
     const [allUsersRE, resRE] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsersRE.filter(u=>u.ativo!==false);
     const res = resRE;
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const data = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','Palpite Campeão','Bônus Campeão']];
     ranking.forEach((u,i)=>{
@@ -6529,7 +6533,7 @@ async function exportPalpitesExcel() {
   try {
     const allUsersPE = await _fetchUsr();
     const users = allUsersPE.filter(u=>u.ativo!==false);
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const data = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
     // Linha extra com o palpite de campeão por participante (mesma estrutura de colunas).
     const champRow = ['CAMPEAO','-','-','Palpite Campeão'];
