@@ -4834,7 +4834,12 @@ async function renderEstatisticas() {
 
     // ── Mapa de calor visual (grade triangular) ──
     {
-      const _HM = 5;
+      // Expande a grade para cobrir o maior placar real; cap=8 para não crescer demais
+      // (placares acima do cap ainda aparecem no Top 12 abaixo).
+      const _HM = Math.min(
+        Math.max(5, ...Object.keys(placarFreq).map(k => parseInt(k.split('×')[0]) || 0)),
+        8
+      );
       const _hmCells = [];
       let _hmHasData = false;
       for (let w = 0; w <= _HM; w++)
