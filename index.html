@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.5">
+<meta name="app-version" content="v1.10.6">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -770,6 +770,16 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .next-game-card.in-progress .ngc-countdown{color:#5fd16b;font-size:1.15rem}
 .next-game-card.in-progress .ngc-note{color:#8fd99a;font-weight:700}
 .prize-pool-item{text-align:center;min-width:90px}
+.bump-chart-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.bump-chart-wrap svg text{font-family:inherit}
+.ai-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px}
+.ai-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.ai-card-icon{font-size:1.7rem;line-height:1}
+.ai-card-title{font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.ai-card-value{font-size:1.15rem;font-weight:800;color:var(--gold);line-height:1.2}
+.ai-card-text{font-size:0.8rem;color:var(--text-muted);line-height:1.45}
+.ai-updated{font-size:0.72rem;color:var(--text-muted);margin-top:10px;text-align:right}
+.light-theme .ai-card{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.09)}
 .prize-pool-item .ppi-val{font-size:1.2rem;font-weight:800;color:var(--gold)}
 .prize-pool-item .ppi-lbl{font-size:0.7rem;color:var(--text-muted);margin-top:2px}
 /* Paid checkbox in admin users */
@@ -1102,7 +1112,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.5</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.6</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1374,7 +1384,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.5',
+  app_version:'v1.10.6',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3954,6 +3964,63 @@ async function calcMaisIndeciso() {
   }
 }
 
+let _aiInsightsCache = null; // {cards, updatedAt, updatedBy} — carregado uma vez por sessão
+
+function _buildBumpChart(users, res, allPals) {
+  if (!users.length) return '';
+  const grR1 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id));
+  const grR2 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id));
+  const grR3 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id));
+  const phases = [
+    { label:'Rodada 1', newIds: grR1 },
+    { label:'Rodada 2', newIds: grR2 },
+    { label:'Rodada 3', newIds: grR3 },
+    ...Object.values(ELIM_DATA).map(d=>({ label: d.label, newIds: d.games.map(g=>g.id) }))
+  ];
+  let cumIds = [];
+  const checkpoints = [];
+  phases.forEach(ph => {
+    const hasNew = ph.newIds.some(id => res[id] && _hasFullResult(res[id]));
+    cumIds = [...cumIds, ...ph.newIds];
+    if (hasNew) checkpoints.push({ label: ph.label, gameIds: [...cumIds] });
+  });
+  if (checkpoints.length < 2) return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem">São necessárias pelo menos 2 rodadas com resultados para exibir o gráfico</div>`;
+  const rankingsAtCp = checkpoints.map(cp => _computeRankingForGameIds(users, res, allPals, cp.gameIds));
+  const finalRanking = rankingsAtCp[rankingsAtCp.length - 1];
+  const n = users.length, numCp = checkpoints.length;
+  const svgW=700, padL=30, padR=130, padT=18, padB=28, rowH=Math.max(18, Math.min(26, Math.floor(420/n)));
+  const svgH = padT + padB + n * rowH;
+  const chartW = svgW - padL - padR;
+  const xFor = i => padL + (numCp<2 ? chartW/2 : (i/(numCp-1))*chartW);
+  const yFor = rank => padT + (rank-1)*rowH + rowH/2;
+  const palette = ['#FFD700','#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA','#34D399','#F87171',
+    '#60A5FA','#FBBF24','#C084FC','#4ADE80','#FB923C','#38BDF8','#E879F9','#86EFAC',
+    '#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4','#BAE6FD','#DDD6FE','#BBF7D0','#FED7AA','#BFDBFE'];
+  const uidColor = {};
+  finalRanking.forEach((u,i) => { uidColor[u.uid] = palette[i % palette.length]; });
+  let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:320px">`;
+  // Grid
+  for (let r=1;r<=n;r++) { const y=yFor(r); svg+=`<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="rgba(255,255,255,.05)" stroke-width="1"/><text x="${padL-4}" y="${y+3.5}" text-anchor="end" font-size="9" fill="rgba(255,255,255,.3)">${r}°</text>`; }
+  checkpoints.forEach((cp,i) => { const x=xFor(i); svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.1)" stroke-width="1" stroke-dasharray="3,4"/><text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.45)">${esc(cp.label)}</text>`; });
+  // Lines per user
+  users.forEach(u => {
+    const color = uidColor[u.uid]||'#888';
+    const isLeader = u.uid === finalRanking[0]?.uid;
+    const positions = rankingsAtCp.map(rk => { const idx=rk.findIndex(r=>r.uid===u.uid); return idx>=0?idx+1:null; });
+    const pts = positions.map((p,i)=>p!==null?{x:xFor(i),y:yFor(p)}:null).filter(Boolean);
+    if (!pts.length) return;
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i=1;i<pts.length;i++) { const cp2=(pts[i-1].x+pts[i].x)/2; d+=` C ${cp2} ${pts[i-1].y},${cp2} ${pts[i].y},${pts[i].x} ${pts[i].y}`; }
+    svg += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${isLeader?3:1.8}" opacity="${isLeader?1:.6}"/>`;
+    pts.forEach(pt => { svg+=`<circle cx="${pt.x}" cy="${pt.y}" r="${isLeader?4:2.8}" fill="${color}" stroke="rgba(0,0,0,.35)" stroke-width="1"/>`; });
+    const last=pts[pts.length-1], finalPos=positions[positions.length-1];
+    const name=esc((u.apelido||u.nome||'').substring(0,12));
+    svg+=`<text x="${svgW-padR+8}" y="${last.y+4}" font-size="${isLeader?12:10}" fill="${color}" font-weight="${isLeader?700:400}" opacity="${isLeader?1:.75}">${finalPos}° ${name}</text>`;
+  });
+  svg += '</svg>';
+  return svg;
+}
+
 async function renderEstatisticas() {
   const cont = document.getElementById('estatisticas-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
@@ -3961,6 +4028,14 @@ async function renderEstatisticas() {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false);
     const {allPals, champPicks} = await _fetchPals(users);
+
+    // Carrega AI insights (1 leitura, sem cache — admin pode atualizar a qualquer momento)
+    if (!_aiInsightsCache) {
+      try {
+        const aiSnap = await db_.collection('config').doc('ai_insights').get();
+        _aiInsightsCache = aiSnap.exists ? aiSnap.data() : {};
+      } catch(_) { _aiInsightsCache = {}; }
+    }
 
     const jogosComResultado = Object.keys(res).filter(id=>_hasFullResult(res[id]));
     const totalJogos = jogosComResultado.length;
@@ -4358,6 +4433,33 @@ async function renderEstatisticas() {
         <div class="stat-card"><div class="val">${Object.values(analiseJogos).reduce((a,b)=>a+b.exatos,0)}</div><div class="lbl">Placares Exatos</div></div>
         <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
       </div>`;
+
+    // ── Bump Chart: evolução do ranking ──
+    const bumpSvg = _buildBumpChart(users, res, allPals);
+    html += `<div class="card">
+      <div class="card-title">📈 Evolução do Ranking</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Posição de cada participante ao longo das rodadas. Linha dourada = líder atual.</div>
+      <div class="bump-chart-wrap">${bumpSvg}</div>
+    </div>`;
+
+    // ── Análise IA (se o admin já enviou) ──
+    const aiCards = _aiInsightsCache?.cards;
+    if (Array.isArray(aiCards) && aiCards.length > 0) {
+      const aiUpdated = _aiInsightsCache.updatedAt?.toDate?.() || null;
+      const aiDateStr = aiUpdated ? aiUpdated.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+      html += `<div class="card">
+        <div class="card-title">🤖 Análise da IA</div>
+        <div class="ai-cards-grid">
+          ${aiCards.map(c=>`<div class="ai-card">
+            <div class="ai-card-icon">${esc(c.icon||'🤖')}</div>
+            <div class="ai-card-title">${esc(c.title||'')}</div>
+            ${c.value?`<div class="ai-card-value">${esc(c.value)}</div>`:''}
+            <div class="ai-card-text">${esc(c.text||'')}</div>
+          </div>`).join('')}
+        </div>
+        ${aiDateStr?`<div class="ai-updated">Atualizado em ${aiDateStr}${_aiInsightsCache.updatedBy?' por '+esc(_aiInsightsCache.updatedBy):''}</div>`:''}
+      </div>`;
+    }
 
     // ── Insights automáticos ──
     if (insights.length > 0) {
@@ -4992,6 +5094,7 @@ function renderAdmin() {
       <button class="admin-tab" data-tab="config" onclick="switchAdminTab('config')">⚙️ Config</button>
       <button class="admin-tab" data-tab="historico" onclick="switchAdminTab('historico')">📜 Histórico</button>
       <button class="admin-tab" data-tab="export" onclick="switchAdminTab('export')">⬇️ Exportar</button>
+      <button class="admin-tab" data-tab="ia" onclick="switchAdminTab('ia')">🤖 IA</button>
     </div>
     <div id="admin-resultados" class="admin-content active"></div>
     <div id="admin-usuarios" class="admin-content"></div>
@@ -4999,8 +5102,166 @@ function renderAdmin() {
     <div id="admin-palpites-admin" class="admin-content"></div>
     <div id="admin-config" class="admin-content"></div>
     <div id="admin-historico" class="admin-content"></div>
-    <div id="admin-export" class="admin-content"></div>`;
+    <div id="admin-export" class="admin-content"></div>
+    <div id="admin-ia" class="admin-content"></div>`;
   renderAdminResultados();
+}
+
+async function renderAdminIA() {
+  const cont = document.getElementById('admin-ia');
+  if (!cont) return;
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const snap = await db_.collection('config').doc('ai_insights').get();
+    const current = snap.exists ? snap.data() : null;
+    const dateStr = current?.updatedAt?.toDate?.()?.toLocaleString('pt-BR') || '—';
+    const previewCards = Array.isArray(current?.cards) ? current.cards : [];
+    cont.innerHTML = `
+      <div style="margin-top:16px">
+        <div class="card">
+          <div class="card-title">🤖 Análise IA — Painel do Admin</div>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin:8px 0 14px;line-height:1.5">
+            Exporte os dados do bolão, cole no Claude com o prompt gerado, receba um JSON de cards
+            e salve aqui. Os cards aparecerão automaticamente na página de Estatísticas.
+          </p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+            <button class="btn btn-primary" onclick="exportAIData()">📋 Copiar dados + prompt para IA</button>
+          </div>
+          <hr style="border-color:var(--border);margin:16px 0">
+          <div class="card-title" style="margin-bottom:10px">📥 Colar resposta da IA</div>
+          <textarea id="ai-json-input" rows="8" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-family:monospace;font-size:0.82rem;resize:vertical" placeholder='Cole aqui o JSON gerado pela IA.&#10;Exemplo: [{"icon":"🎯","title":"Mais certeiro","value":"João Silva","text":"73% de aproveitamento..."}]'></textarea>
+          <button class="btn btn-primary" style="margin-top:10px" onclick="saveAIInsights()">💾 Salvar análise</button>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-title">📊 Análise atual ${current?`<span style="font-size:0.75rem;font-weight:400;color:var(--text-muted)">— salva em ${dateStr}</span>`:'<span style="font-size:0.75rem;color:var(--text-muted)">(nenhuma ainda)</span>'}</div>
+          ${previewCards.length ? `<div class="ai-cards-grid" style="margin-top:12px">
+            ${previewCards.map(c=>`<div class="ai-card">
+              <div class="ai-card-icon">${esc(c.icon||'🤖')}</div>
+              <div class="ai-card-title">${esc(c.title||'')}</div>
+              ${c.value?`<div class="ai-card-value">${esc(c.value)}</div>`:''}
+              <div class="ai-card-text">${esc(c.text||'')}</div>
+            </div>`).join('')}
+          </div>` : '<p style="color:var(--text-muted);font-size:0.85rem;margin-top:8px">Nenhuma análise salva ainda.</p>'}
+        </div>
+      </div>`;
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
+}
+
+async function exportAIData() {
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const totalJogosRes = Object.keys(res).filter(id=>_hasFullResult(res[id])).length;
+    const today = new Date().toLocaleDateString('pt-BR');
+
+    // Determina fase atual
+    const hasFinal = ELIM_DATA.final.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasSemi = ELIM_DATA.semi.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasQuartas = ELIM_DATA.quartas.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasR16 = ELIM_DATA.r16.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasR32 = ELIM_DATA.r32.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasG3 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3)).some(gm=>res[gm.id]&&_hasFullResult(res[gm.id]));
+    const hasG2 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2)).some(gm=>res[gm.id]&&_hasFullResult(res[gm.id]));
+    const fase = hasFinal?'Final / 3º lugar':hasSemi?'Semifinais':hasQuartas?'Quartas de Final':hasR16?'Oitavas de Final':hasR32?'Round of 32':hasG3?'Grupos — Rodada 3 concluída':hasG2?'Grupos — Rodada 2 concluída':'Grupos — Rodada 1';
+
+    // Ranking lines
+    const rankingLines = ranking.map((u,i)=>{
+      const acc = calcUserAccuracyStats(u.uid, allPals, res);
+      return `${i+1}. ${u.apelido||u.nome} — ${u.pontos}pts | ${u.exatos} exatos | ${u.jogos} jogos | ${acc.pct.toFixed(0)}% aproveit.`;
+    }).join('\n');
+
+    // Top 3 jogos mais difíceis
+    const jogosComp = Object.entries(res).filter(([,r])=>_hasFullResult(r)).map(([id,r])=>{
+      const game = ALL_GAMES.find(g=>g.id===id);
+      const pals = users.map(u=>allPals[u.uid]?.[id]).filter(Boolean);
+      const acertos = pals.filter(p=>calcPontos(p,r)>0).length;
+      const pct = pals.length>0?Math.round(acertos/pals.length*100):0;
+      return {id, game, pct, result:`${r.h_real}-${r.a_real}`, label:game?`${game.h} x ${game.a}`:'?'};
+    }).sort((a,b)=>a.pct-b.pct);
+    const maisDificeis = jogosComp.slice(0,3).map(j=>`  • ${j.label} (${j.result}) — ${j.pct}% acertaram`).join('\n');
+    const maisAcertados = jogosComp.slice(-3).reverse().map(j=>`  • ${j.label} (${j.result}) — ${j.pct}% acertaram`).join('\n');
+
+    // Tendência recente (top 3 em alta / em queda)
+    const trendLines = ranking.map(u=>({u, ..._calcRecentTrend(u.uid, allPals, res, 5)}))
+      .filter(t=>t.count>0).sort((a,b)=>b.delta-a.delta);
+    const emAlta = trendLines.slice(0,3).map(t=>`  • ${t.u.apelido||t.u.nome}: Δ${t.delta>=0?'+':''}${t.delta.toFixed(1)}pp`).join('\n');
+    const emQueda = trendLines.slice(-3).reverse().map(t=>`  • ${t.u.apelido||t.u.nome}: Δ${t.delta>=0?'+':''}${t.delta.toFixed(1)}pp`).join('\n');
+
+    const data = `=== BOLÃO COPA 2026 — DADOS PARA ANÁLISE IA ===
+Data: ${today}
+Fase atual: ${fase}
+Participantes: ${users.length}
+Jogos com resultado: ${totalJogosRes} de ${ALL_GAMES.length}
+
+== RANKING ATUAL ==
+${rankingLines}
+
+== JOGOS MAIS DIFÍCEIS (menos acertos) ==
+${maisDificeis||'  (sem dados ainda)'}
+
+== JOGOS MAIS FÁCEIS (mais acertos) ==
+${maisAcertados||'  (sem dados ainda)'}
+
+== EM ALTA (últimos 5 jogos vs geral) ==
+${emAlta||'  (sem dados ainda)'}
+
+== EM QUEDA (últimos 5 jogos vs geral) ==
+${emQueda||'  (sem dados ainda)'}
+
+==========================================================
+INSTRUÇÕES PARA A IA (não inclua este bloco na resposta)
+==========================================================
+Analise os dados acima e gere cards de insights para o bolão.
+
+REGRAS OBRIGATÓRIAS:
+1. Retorne APENAS um array JSON válido, sem texto antes ou depois, sem bloco de código markdown.
+2. Cada card segue o formato: {"icon":"emoji","title":"título curto","value":"valor/nome destacado","text":"1-2 frases descritivas e interessantes"}
+3. Gere SEMPRE os 5 cards fixos abaixo, nessa ordem:
+   - Líder atual (quem está na frente, por quanto, o que o destaca)
+   - Mais certeiro (melhor aproveitamento geral)
+   - Em alta (quem mais subiu recentemente, com contexto)
+   - Em queda (quem mais caiu recentemente, com empatia — não seja cruel)
+   - Zebra do bolão (jogo que menos pessoas acertaram, contexto)
+4. Depois dos fixos, gere de 3 a 5 cards dinâmicos baseados na fase atual (${fase}):
+   - Fase de grupos: explore padrões de palpites, goleadas esperadas, apostas ousadas
+   - Oitavas/Quartas: quem está melhor posicionado para virar, rivalidades no ranking
+   - Semis/Final: drama final, quem pode virar, quem acertou o campeão
+5. Use emojis relevantes, títulos criativos e textos que despertem curiosidade.
+6. Tom: animado, levemente irreverente, como um comentarista esportivo descontraído.
+7. Não cite nomes completos na descrição — use apenas o apelido/primeiro nome.
+==========================================================`;
+
+    await navigator.clipboard.writeText(data);
+    showToast('✅ Dados + prompt copiados para a área de transferência!','success');
+  } catch(e) { showToast('Erro ao gerar dados: '+e.message,'error'); }
+}
+
+async function saveAIInsights() {
+  const input = document.getElementById('ai-json-input');
+  if (!input) return;
+  const raw = input.value.trim();
+  if (!raw) { showToast('Cole o JSON gerado pela IA antes de salvar.','warning'); return; }
+  let cards;
+  try {
+    cards = JSON.parse(raw);
+    if (!Array.isArray(cards)) throw new Error('A resposta deve ser um array JSON');
+    if (!cards.length) throw new Error('Array vazio');
+    if (!cards[0].title && !cards[0].text) throw new Error('Cards devem ter campos title e text');
+  } catch(e) { showToast('JSON inválido: '+e.message,'error'); return; }
+  try {
+    const FV = firebase.firestore.FieldValue;
+    await db_.collection('config').doc('ai_insights').set({
+      cards,
+      updatedAt: FV.serverTimestamp(),
+      updatedBy: currentUserDoc?.nome || currentUser?.email || 'admin'
+    });
+    _aiInsightsCache = null; // força reload na próxima visita à stats
+    showToast(`✅ ${cards.length} cards salvos com sucesso!`,'success');
+    input.value = '';
+    renderAdminIA(); // atualiza preview
+  } catch(e) { showToast('Erro ao salvar: '+e.message,'error'); }
 }
 
 function switchAdminTab(tab) {
@@ -5016,6 +5277,7 @@ function switchAdminTab(tab) {
     case 'config': renderAdminConfig(); break;
     case 'historico': renderAdminHistorico(); break;
     case 'export': renderAdminExport(); break;
+    case 'ia': renderAdminIA(); break;
   }
 }
 
