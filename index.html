@@ -4149,8 +4149,8 @@ async function renderEstatisticas() {
       analiseJogos[jid].palpites.forEach(p=>{
         const h = parseInt(p.palpite.h)||0;
         const a = parseInt(p.palpite.a)||0;
-        // Heatmap sem direção: 2-1 e 1-2 contam como o mesmo tipo de placar.
-        const key = `${Math.min(h,a)}-${Math.max(h,a)}`;
+        // Heatmap sem direção: 2×1 e 1×2 contam como o mesmo tipo de placar (vencedor primeiro).
+        const key = `${Math.max(h,a)}×${Math.min(h,a)}`;
         placarFreq[key]=(placarFreq[key]||0)+1;
       });
     });
@@ -4277,7 +4277,7 @@ async function renderEstatisticas() {
             const _paw = Math.round(_aw/_tot*100);
             const _avgH = (_gPals.reduce((a,p)=>a+parseInt(p.h||0),0)/_tot).toFixed(1);
             const _avgA = (_gPals.reduce((a,p)=>a+parseInt(p.a||0),0)/_tot).toFixed(1);
-            const _sf={}; _gPals.forEach(p=>{const k=p.h+'-'+p.a;_sf[k]=(_sf[k]||0)+1;});
+            const _sf={}; _gPals.forEach(p=>{ const _ph=parseInt(p.h)||0,_pa=parseInt(p.a)||0; const k=`${Math.max(_ph,_pa)}×${Math.min(_ph,_pa)}`; _sf[k]=(_sf[k]||0)+1; });
             const _top = Object.entries(_sf).sort((a,b)=>b[1]-a[1])[0];
             const _maxPct=Math.max(_phw,_pdr,_paw);
             const _minPct=Math.min(_phw,_pdr,_paw);
@@ -4790,7 +4790,7 @@ async function renderEstatisticas() {
       const pals=Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined);
       if (!pals.length) return null;
       const freq={};
-      pals.forEach(p=>{const k=`${p.h}×${p.a}`;freq[k]=(freq[k]||0)+1;});
+      pals.forEach(p=>{ const _h=parseInt(p.h)||0,_a=parseInt(p.a)||0; const k=`${Math.max(_h,_a)}×${Math.min(_h,_a)}`; freq[k]=(freq[k]||0)+1; });
       const [placar,count]=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0];
       return count>=2?{u,placar,count,total:pals.length}:null;
     }).filter(Boolean).sort((a,b)=>b.count/b.total-a.count/a.total);
@@ -4878,6 +4878,9 @@ async function renderEstatisticas() {
             <div style="font-size:1rem;font-weight:700;color:var(--accent)">${esc(menosEmpates?.apelido||menosEmpates?.nome||'—')}</div>
             <div style="font-size:.78rem;color:var(--text-muted)">${menosEmpates?.empatePct?.toFixed(1)||'0.0'}% de empates</div>
           </div>
+        </div>
+        <div style="margin-top:12px;font-size:0.76rem;color:var(--text-muted);line-height:1.5;background:rgba(255,255,255,.03);border-radius:8px;padding:10px 12px">
+          💡 <b>O que é variância?</b> Mede o quanto os placares apostados por uma pessoa variam em relação à sua própria média de gols. Variância alta = apostas com totais de gols bem diferentes entre si (ex: 0×0 num jogo e 4×3 em outro) — o apostador é imprevisível. Variância baixa = apostas consistentes, sempre em torno do mesmo volume de gols.
         </div>
       </div>`;
     }
