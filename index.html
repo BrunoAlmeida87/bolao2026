@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.2">
+<meta name="app-version" content="v1.10.4">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1099,7 +1099,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.2</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.4</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1371,7 +1371,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.2',
+  app_version:'v1.10.4',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -2161,6 +2161,7 @@ async function updateEliminationTeams() {
     await _applyBracketPhase('semi',    str => _resolveWinnerPlaceholders(str, 'quartas', res), res);
     await _applyBracketPhase('final',   str => _resolveWinnerPlaceholders(str, 'semi',    res), res);
 
+    _scDel('res'); // chaveamento escreveu h_team/a_team — invalida cache para próximas leituras
     isLoadingPage = false;
   } catch(e) {
     console.error('Erro ao atualizar eliminatórias:', e);
@@ -2332,7 +2333,7 @@ function _buildNextGamesHtml(group) {
       </div>
       <div class="ngc-date">${esc(fmtDate)}</div>
       <div class="ngc-countdown" id="ngc-cd-${game.id}">—</div>
-      <div class="ngc-note" id="ngc-note-${game.id}">Os palpites serão bloqueados às 22h do dia anterior à partida</div>
+      <div class="ngc-note" id="ngc-note-${game.id}">Bloqueio: ${_lockDisplayStr(_gameLockInstant(game, res))}</div>
       <div id="ngc-prob-${game.id}" style="display:${isLockedNow&&distribHtml?'block':'none'}">${distribHtml}</div>
     </div>`;
   }).join('');
@@ -2377,16 +2378,34 @@ function _startCountdownTimer() {
       const card = cd.closest('.next-game-card');
       const note = document.getElementById(`ngc-note-${game.id}`);
       const distribWrap = document.getElementById(`ngc-prob-${game.id}`);
+      const resData = _dashResults[game.id] || {};
+      const manualLocked = resData.locked === true;
+      const lockAt    = _gameLockInstant(game, resData);
+      const autoLockAt = _gameAutoLockInstant(game, resData);
+      const diffToLock = lockAt ? (lockAt.getTime() - now) : -1;
+      const lockedByTime = diffToLock <= 0;
+      const lockedSoon   = manualLocked || lockedByTime;
       const diff = start.getTime() - now;
+
+      // Auto-lock: quando 23h do dia anterior passou e o jogo ainda não está travado,
+      // grava locked:true no Firestore uma única vez por sessão.
+      if (!manualLocked && !_autoLockApplied.has(game.id) && autoLockAt && now >= autoLockAt.getTime()) {
+        _applyAutoLocks(_dashResults);
+      }
+
       if (diff > 0) {
-        // Ainda não começou: contagem regressiva.
-        cd.textContent = _fmtDiff(diff);
-        const manualLocked = _dashResults[game.id]?.locked === true;
-        const lockedSoon = manualLocked || diff <= LOCK_LEAD_MS;
+        // Jogo ainda não começou.
+        if (lockedSoon) {
+          // Palpites já encerrados (passou das 22h ou admin travou)
+          cd.textContent = '🔒 Palpites encerrados';
+        } else {
+          // Contagem regressiva até o bloqueio (22h do dia anterior)
+          cd.textContent = _fmtDiff(diffToLock);
+        }
         if (card) { card.classList.toggle('locked-soon', lockedSoon); card.classList.remove('in-progress'); }
         if (note) note.textContent = lockedSoon
           ? '🔒 Palpites BLOQUEADOS para esta partida'
-          : 'Os palpites serão bloqueados às 22h do dia anterior à partida';
+          : `Bloqueio: ${_lockDisplayStr(lockAt)}`;
         if (distribWrap) {
           // Injeta as barras no momento em que a partida bloqueia (caso o dashboard já
           // estivesse aberto antes da trava e o container tenha sido renderizado vazio).
@@ -2396,7 +2415,7 @@ function _startCountdownTimer() {
           if (distribWrap.innerHTML) distribWrap.style.display = lockedSoon ? 'block' : 'none';
         }
       } else {
-        // Já começou e ainda sem resultado: em andamento (até +120min) → aguardando.
+        // Jogo já começou e ainda sem resultado: em andamento (até +120min) → aguardando.
         const sinceStart = now - start.getTime();
         cd.textContent = sinceStart <= MATCH_DURATION_MS
           ? '🟢 Em andamento'
@@ -2430,6 +2449,7 @@ async function renderDashboard() {
     // contador cruzar o limite de bloqueio, mesmo com o dashboard aberto desde antes da trava.
     // (allPals já está em memória no cliente, então pré-computar não expõe nada novo.)
     _dashResults = Object.assign({}, res);
+    _applyAutoLocks(_dashResults); // verifica e grava auto-lock para jogos que já passaram das 23h
     _dashBolaoDistrib = {};
     ALL_GAMES.forEach(g => {
       const gPals = users.map(u => allPals[u.uid]?.[g.id]).filter(p => p && p.h !== undefined && p.a !== undefined);
@@ -2987,11 +3007,16 @@ function showPalpiteClosedReason(gameId) {
   }
   const gameDef = ALL_GAMES.find(g=>g.id===gameId);
   const start = gameDef ? _effectiveStartInstant(gameDef, res) : null;
+  const lockAt = gameDef ? _gameLockInstant(gameDef, res) : null;
+  if (lockAt && Date.now() >= lockAt.getTime()) {
+    showToast(`🔒 Palpites encerrados: bloqueados a partir de ${_lockDisplayStr(lockAt)}.`,'warning');
+    return;
+  }
   if (start) {
     if (Date.now() >= start.getTime()) {
       showToast('⏰ O jogo já começou. Palpites foram encerrados automaticamente.','warning');
     } else {
-      showToast('🔒 Palpites encerrados: falta menos de 1h para o início desta partida.','warning');
+      showToast('🔒 Palpites encerrados automaticamente.','warning');
     }
     return;
   }
@@ -3139,7 +3164,8 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const r = res[game.id]||{};
   const teams = _getResolvedTeamsForGame(game, res);
   const hasResult = r.h_real!==undefined;
-  const isLocked = r.locked===true || hasResult;
+  // Revela palpites quando: resultado lançado, trava manual, ou prazo de 22h passou
+  const isLocked = r.locked===true || hasResult || isPalpiteClosed(game, r);
   const showPal = canReveal || isLocked;
   const pts = calcPontos(pal,r);
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
@@ -3540,15 +3566,61 @@ function _effectiveStartInstant(game, res) {
   return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, parseInt(dm[3]), parseInt(tm[1]) + 3, parseInt(tm[2])));
 }
 
+// Instante de bloqueio dos palpites: 22h Brasília do dia anterior à rodada.
+// Jogos de madrugada (00h–02h59) pertencem à rodada do dia anterior — mesmo cluster.
+// 22:00 Brasília (UTC-3) = 01:00 UTC do dia-calendário da rodada.
+function _gameLockInstant(game, res) {
+  res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
+  const iso  = res.date_override || _gameDateToISO(game?.date);
+  const time = res.time_override || GAME_TIMES[game?.id] || '';
+  const dm = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const tm = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!dm || !tm) return null;
+  let day = parseInt(dm[3]);
+  const hh = parseInt(tm[1]);
+  // Madrugada (00h–02h59): pertence à rodada do dia anterior → mesmo deadline de bloqueio
+  if (hh < 3) day -= 1;
+  // 22:00 Brasília do dia (day-1) = 01:00 UTC do dia (day)
+  return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, day, 1, 0));
+}
+
+// Instante do auto-lock: 23h Brasília do dia anterior à rodada (fallback se admin esquecer).
+// 23:00 Brasília (UTC-3) = 02:00 UTC do dia-calendário da rodada.
+function _gameAutoLockInstant(game, res) {
+  res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
+  const iso  = res.date_override || _gameDateToISO(game?.date);
+  const time = res.time_override || GAME_TIMES[game?.id] || '';
+  const dm = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const tm = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!dm || !tm) return null;
+  let day = parseInt(dm[3]);
+  const hh = parseInt(tm[1]);
+  if (hh < 3) day -= 1;
+  // 23:00 Brasília do dia (day-1) = 02:00 UTC do dia (day)
+  return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, day, 2, 0));
+}
+
+// Formata o instante de bloqueio (UTC) como string legível em horário Brasília.
+function _lockDisplayStr(lockAt) {
+  if (!lockAt) return 'às 22h do dia anterior';
+  // Brasília = UTC-3: subtrai 3h para obter a hora local correta via getUTC*
+  const brt = new Date(lockAt.getTime() - 3 * 3600000);
+  const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const d = brt.getUTCDate();
+  const mon = months[brt.getUTCMonth()];
+  const h = String(brt.getUTCHours()).padStart(2,'0');
+  return `${d} ${mon} às ${h}h (Brasília)`;
+}
+
 // Palpites encerrados? Prioridade: resultado lançado > trava manual >
-// liberação manual (override) > regra automática (1h antes do início).
+// liberação manual (override) > regra automática (22h do dia anterior à rodada).
 function isPalpiteClosed(game, res) {
   res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
   if (res.h_real !== undefined && res.a_real !== undefined) return true;
   if (res.locked === true) return true;
   if (res.unlock_override === true) return false;
-  const start = _effectiveStartInstant(game, res);
-  return start ? (Date.now() >= start.getTime() - LOCK_LEAD_MS) : false;
+  const lockAt = _gameLockInstant(game, res);
+  return lockAt ? (Date.now() >= lockAt.getTime()) : false;
 }
 
 // Variante para salvar: admin editando outro usuário ignora a trava automática
@@ -3559,6 +3631,42 @@ function isPalpiteClosedForSave(game, res, adminEditing) {
   if (res.locked === true) return true;
   if (adminEditing) return false;
   return isPalpiteClosed(game, res);
+}
+
+// Controle de auto-lock: evita disparar a gravação mais de uma vez por sessão.
+const _autoLockApplied = new Set();
+
+// Grava locked:true no Firestore para jogos que passaram das 23h do dia anterior
+// (fallback para quando o admin esquece de bloquear manualmente).
+// Usa _autoLockApplied para nunca tentar o mesmo jogo duas vezes na mesma sessão.
+async function _applyAutoLocks(res) {
+  try {
+    const now = Date.now();
+    const FV = firebase.firestore.FieldValue;
+    const toAutoLock = ALL_GAMES.filter(game => {
+      const r = res[game.id] || {};
+      if (r.locked === true || r.h_real !== undefined || r.unlock_override === true) return false;
+      if (_autoLockApplied.has(game.id)) return false;
+      const autoLockAt = _gameAutoLockInstant(game, r);
+      return autoLockAt && now >= autoLockAt.getTime();
+    });
+    if (!toAutoLock.length) return;
+    // Marca antes do await para evitar duplo disparo caso o timer chame novamente
+    toAutoLock.forEach(g => _autoLockApplied.add(g.id));
+    const batch = db_.batch();
+    toAutoLock.forEach(game => {
+      batch.set(db_.collection('resultados').doc(game.id),
+        { locked: true, updatedAt: FV.serverTimestamp() },
+        { merge: true });
+    });
+    await batch.commit();
+    _scDel('res');
+    _bumpDataVersion();
+  } catch(e) {
+    console.error('_applyAutoLocks:', e);
+    // Reverte para permitir nova tentativa em caso de falha transitória
+    ALL_GAMES.forEach(g => _autoLockApplied.delete(g.id));
+  }
 }
 
 function _uniqueGameDates() {
@@ -3820,12 +3928,9 @@ async function renderEstatisticas() {
   const cont = document.getElementById('estatisticas-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    const champPicks = await loadAllChampionPicks();
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users);
 
     const jogosComResultado = Object.keys(res).filter(id=>_hasFullResult(res[id]));
     const totalJogos = jogosComResultado.length;
@@ -3928,8 +4033,8 @@ async function renderEstatisticas() {
         const _gr = res[game.id] || {};
         const _closed = isPalpiteClosed(game, _gr);
         const _diff = start.getTime() - _nowMs;
-        const _lockAt = start.getTime() - LOCK_LEAD_MS;
-        const _diffToLock = _lockAt - _nowMs;
+        const _lockAtInst = _gameLockInstant(game, _gr);
+        const _diffToLock = _lockAtInst ? (_lockAtInst.getTime() - _nowMs) : -1;
 
         // Status badge
         let _statusHtml;
@@ -3937,7 +4042,7 @@ async function renderEstatisticas() {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado pelo admin</span>';
         } else if (_closed) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Palpites encerrados</span>';
-        } else if (_diffToLock > 0 && _diffToLock <= LOCK_LEAD_MS) {
+        } else if (_diffToLock > 0 && _diffToLock <= 3600000) {
           const _lm = Math.floor(_diffToLock / 60000);
           _statusHtml = '<span style="color:var(--orange);font-weight:700">⚠️ Trava em ' + _lm + 'min</span>';
         } else {
@@ -4498,9 +4603,7 @@ async function renderTabelas() {
   const cont = document.getElementById('tabelas-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const rSnap = await db_.collection('resultados').get();
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
     let html = `<div class="section-title">📊 Tabela de Grupos</div><div class="standings-grid">`;
     Object.keys(GRUPOS_DATA).forEach(grp=>{
       const rows = computeStandings(grp, res);
@@ -4613,9 +4716,7 @@ async function renderChaveamento() {
   const cont = document.getElementById('chaveamento-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const rSnap = await db_.collection('resultados').get();
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
     const isAdmin = currentUserDoc?.role === 'admin';
     const overrides = isAdmin ? await _loadThirdOverrides() : {};
     const state = isAdmin ? _thirdUIState(res, overrides) : null;
@@ -4665,9 +4766,7 @@ async function renderChaveamentoBilateral() {
   const cont = document.getElementById('chaveamento-bilateral-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const rSnap = await db_.collection('resultados').get();
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
 
     const roundOrder = _bracketRoundOrder();
 
@@ -4893,9 +4992,7 @@ async function renderAdminResultados() {
   if (!cont) return;
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const rSnap = await db_.collection('resultados').get();
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
     const thirdOverrides = await _loadThirdOverrides();
     const thirdPanel = _buildThirdPlaceAdminPanel(res, thirdOverrides);
     // Sort all games chronologically by date + time
@@ -5423,6 +5520,7 @@ async function _testeApplyBatch(games, mode) {
     }
   });
   await batch.commit();
+  _scDel('res'); // batch escreveu resultados em massa — invalida cache
 }
 
 async function _testeFinish(msg) {
@@ -5528,15 +5626,13 @@ async function renderAdminUsuarios() {
   if (!cont) return;
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const snap = await db_.collection('usuarios').get();
-    const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    const users = await _fetchUsr();
     const activeUsers = users.filter(u=>u.ativo!==false);
 
-    // Load palpites for all active users
-    const palSnaps = await Promise.all(activeUsers.map(u=>db_.collection('palpites').doc(u.uid).collection('jogos').get()));
+    const {allPals} = await _fetchPals(activeUsers);
     const userPalCounts = {};
-    activeUsers.forEach((u,i)=>{
-      const filled = palSnaps[i].docs.filter(d=>{const p=d.data();return p.h!==undefined&&p.a!==undefined;}).length;
+    activeUsers.forEach(u=>{
+      const filled = Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined).length;
       userPalCounts[u.uid] = filled;
     });
 
@@ -5638,9 +5734,8 @@ async function togglePago(uid, isChecked) {
         badgeEl.textContent = isChecked ? '💚 Pago' : '⏳ Pendente';
       }
     }
-    // Recalcula totais na tela sem recarregar todos os usuários
-    const snap = await db_.collection('usuarios').get();
-    const allUsers = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    // Recalcula totais na tela — _scDel('usr') já foi chamado acima, então _fetchUsr() lê frescos e recacheia
+    const allUsers = await _fetchUsr();
     const newTotal = calcTotalArrecadado(allUsers);
     const newPremios = calcPremios(newTotal);
     const pagosCount = allUsers.filter(u=>u.pago===true && u.ativo!==false).length;
@@ -5729,8 +5824,7 @@ async function renderAdminFinanceiro() {
   if (!cont) return;
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const snap = await db_.collection('usuarios').get();
-    const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    const users = await _fetchUsr();
     const totalArrecadado = calcTotalArrecadado(users);
     const premios = calcPremios(totalArrecadado);
     const pagosCount = users.filter(u=>u.pago===true && u.ativo!==false).length;
@@ -5846,8 +5940,8 @@ async function renderAdminEditPalpites(selectedUid=null) {
   const cont = document.getElementById('admin-palpites-admin');
   if (!cont) return;
   try {
-    const snap = await db_.collection('usuarios').get();
-    const users = snap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const allUsers = await _fetchUsr();
+    const users = allUsers.filter(u=>u.ativo!==false);
     let html = `<div class="form-group"><label>Selecionar Participante</label>
       <select id="edit-pal-select" onchange="adminEditSelected(this.value)"><option value="">— Selecione —</option>`;
     users.forEach(u=>{ html += `<option value="${u.uid}" ${selectedUid===u.uid?'selected':''}>${esc(u.apelido)} (${esc(u.nome)})</option>`; });
@@ -5870,15 +5964,14 @@ async function renderAdminPalpitesInline(uid) {
   if (!area) return;
   area.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [pSnap, rSnap, pDoc] = await Promise.all([
+    const [pSnap, resCache, pDoc] = await Promise.all([
       db_.collection('palpites').doc(uid).collection('jogos').get(),
-      db_.collection('resultados').get(),
+      _fetchRes(),
       db_.collection('palpites').doc(uid).get()
     ]);
     myPalpites = {};
     pSnap.docs.forEach(d=>{ myPalpites[d.id]=d.data(); });
-    resultados = {};
-    rSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
+    resultados = resCache;
     myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
 
     let html = buildChampionPickerCard();
@@ -6215,8 +6308,7 @@ async function renderAdminExport() {
 async function exportExtratoPagamentos() {
   showToast('⏳ Gerando extrato...','');
   try {
-    const snap = await db_.collection('usuarios').get();
-    const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    const users = await _fetchUsr();
     users.sort((a,b)=>(a.pago===b.pago?0:a.pago?-1:1)||(a.apelido||'').localeCompare(b.apelido||''));
     const ativos = users.filter(u=>u.ativo!==false);
     const pagos = ativos.filter(u=>u.pago===true);
@@ -6251,14 +6343,13 @@ async function exportExtratoPagamentos() {
 async function exportBackupJSON() {
   showToast('⏳ Gerando backup completo...','');
   try {
-    const [usersSnap, resSnap, cfgSnap, auditSnap] = await Promise.all([
-      db_.collection('usuarios').get(),
-      db_.collection('resultados').get(),
+    const [users, resData, cfgSnap, auditSnap] = await Promise.all([
+      _fetchUsr(),
+      _fetchRes(),
       db_.collection('config').get(),
       db_.collection('audit').get()
     ]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()}));
-    const resultados = {}; resSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
+    const resultados = resData;
     const cfgData = {}; cfgSnap.docs.forEach(d=>{ cfgData[d.id]=d.data(); });
     const auditData = auditSnap.docs.map(d=>({_id:d.id,...d.data()}));
     const palpites = {};
@@ -6297,11 +6388,10 @@ async function exportBackupJSON() {
 async function exportAllCSV() {
   showToast('⏳ Preparando exportação...','success');
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()}));
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    await Promise.all(users.map(async u=>{ const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); }); }));
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers;
+    const activeForPals = allUsers.filter(u=>u.ativo!==false);
+    const {allPals} = await _fetchPals(activeForPals);
     let csv = 'Participante,Apelido,JogoID,Time_Casa,Palpite_Casa,Palpite_Fora,Time_Fora,Resultado_Casa,Resultado_Fora,Locked,Pontos\n';
     users.filter(u=>u.ativo!==false).forEach(u=>{
       ALL_GAMES.forEach(g=>{
@@ -6319,11 +6409,10 @@ async function exportAllCSV() {
 
 async function exportRankingCSV() {
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const [allUsersR, resR] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsersR.filter(u=>u.ativo!==false);
+    const res = resR;
+    const {allPals} = await _fetchPals(users);
     const ranking = computeRanking(users, res, allPals);
     let csv = 'Posição,Participante,Apelido,Pontos,Exatos,Venc+Saldo,Apenas Venc,Jogos\n';
     ranking.forEach((u,i)=>{ csv+=`${i+1},"${u.nome}","${u.apelido}",${u.pontos},${u.exatos},${u.venc_saldo},${u.apenas_venc},${u.jogos}\n`; });
@@ -6334,10 +6423,9 @@ async function exportRankingCSV() {
 
 async function exportPalpitesCSV() {
   try {
-    const [usersSnap] = await Promise.all([db_.collection('usuarios').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const allPals = {};
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const allUsersP = await _fetchUsr();
+    const users = allUsersP.filter(u=>u.ativo!==false);
+    const {allPals} = await _fetchPals(users);
     const headerCasa = users.map(u=>`"${u.apelido}_Casa"`).join(',');
     const headerFora = users.map(u=>`"${u.apelido}_Fora"`).join(',');
     let csv = `JogoID,Time_Casa,Time_Fora,Data,${headerCasa},${headerFora}\n`;
@@ -6357,12 +6445,10 @@ async function exportPalpitesCSV() {
 async function exportFullExcel() {
   showToast('⏳ Gerando planilha...','');
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    const champPicks = await loadAllChampionPicks();
-    await Promise.all(users.map(async u=>{ const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); }); }));
+    const [allUsersE, resE] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsersE.filter(u=>u.ativo!==false);
+    const res = resE;
+    const {allPals, champPicks} = await _fetchPals(users);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const totalJogosComResultado = Object.keys(res).filter(
       id => res[id].h_real !== undefined && res[id].a_real !== undefined
@@ -6421,12 +6507,10 @@ async function exportFullExcel() {
 async function exportRankingExcel() {
   showToast('⏳ Gerando ranking...','');
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    const champPicks = await loadAllChampionPicks();
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const [allUsersRE, resRE] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsersRE.filter(u=>u.ativo!==false);
+    const res = resRE;
+    const {allPals, champPicks} = await _fetchPals(users);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const data = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','Palpite Campeão','Bônus Campeão']];
     ranking.forEach((u,i)=>{
@@ -6443,11 +6527,9 @@ async function exportRankingExcel() {
 async function exportPalpitesExcel() {
   showToast('⏳ Gerando palpites...','');
   try {
-    const [usersSnap] = await Promise.all([db_.collection('usuarios').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const allPals = {};
-    const champPicks = await loadAllChampionPicks();
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const allUsersPE = await _fetchUsr();
+    const users = allUsersPE.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users);
     const data = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
     // Linha extra com o palpite de campeão por participante (mesma estrutura de colunas).
     const champRow = ['CAMPEAO','-','-','Palpite Campeão'];
@@ -6471,8 +6553,7 @@ async function exportPalpitesExcel() {
 async function exportResultadosExcel() {
   showToast('⏳ Gerando resultados...','');
   try {
-    const resSnap = await db_.collection('resultados').get();
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
     const data = [['JogoID','Time_Casa','Time_Fora','Resultado_Casa','Resultado_Fora','Bloqueado']];
     ALL_GAMES.forEach(g=>{
       const r = res[g.id];
