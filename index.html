@@ -4385,7 +4385,14 @@ async function renderEstatisticas() {
     // ── SEÇÃO: IMPACTO POTENCIAL NO RANKING ───────────────────────────────────
     if (ranking.length >= 2) {
       const _maxPts = CFG.pts_exato || 10;
-      const _nextGames = _statNextGrp.items.map(x => x.game);
+      // Para a simulação usamos apenas jogos futuros (não iniciados), limitados a 6,
+      // evitando explosão combinatória (5^N por par) com muitos jogos sem resultado.
+      const _SIM_MAX = 6;
+      const _nowForSim = Date.now();
+      const _nextGames = _statNextGrp.items
+        .filter(x => x.start.getTime() > _nowForSim)
+        .slice(0, _SIM_MAX)
+        .map(x => x.game);
       // Max pts each user can gain from next group
       const _maxGain = {};
       users.forEach(u => {
