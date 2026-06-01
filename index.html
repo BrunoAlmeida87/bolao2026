@@ -424,6 +424,13 @@ select option{background:var(--mid-blue);color:var(--white)}
 .lock-btn.locked{background:rgba(255,68,68,.15);border-color:var(--red);color:var(--red)}
 .lock-btn.open{background:rgba(76,175,80,.15);border-color:var(--green);color:var(--green)}
 .lock-btn:hover{border-color:var(--gold)}
+.timer-btn{
+  width:30px;height:30px;border-radius:7px;border:1px solid var(--border);
+  background:transparent;cursor:pointer;font-size:0.9rem;transition:all .2s;padding:0;
+}
+.timer-btn.pinned{background:rgba(0,180,255,.15);border-color:#00b4ff;color:#00b4ff}
+.timer-btn.hidden-timer{background:rgba(255,140,0,.15);border-color:var(--orange);color:var(--orange)}
+.timer-btn:hover{border-color:var(--gold)}
 .user-row{
   display:flex;align-items:center;justify-content:space-between;
   padding:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);
@@ -2176,6 +2183,16 @@ function _bolaoDistribBarsHtml(game, bolaoDistrib) {
 
 // Retorna o grupo de partidas que compartilham o próximo horário de início.
 // Jogos simultâneos retornam juntos → múltiplos timers.
+// Intervalo máximo (ms) entre jogos consecutivos para serem considerados a mesma
+// "leva"/rodada. Jogos da mesma rodada ficam ~3h entre si (inclui o de 1h da
+// madrugada, que cola na rodada da véspera); a virada para o dia seguinte tem
+// intervalo noturno bem maior, então quebra o agrupamento aqui.
+const TIMER_CLUSTER_GAP_MS = 8 * 3600000;
+
+// Conjunto de partidas exibidas nos timers do dashboard.
+// Regra automática: agrupa a próxima "leva" de jogos por proximidade (gap ≤ 8h).
+// Override manual (campo timerMode em resultados): 'show' força exibir, 'hide'
+// força ocultar — a flag manual sempre vence a regra automática.
 function _nextGamesGroup() {
   const now = Date.now();
   const upcoming = ALL_GAMES
@@ -2183,8 +2200,26 @@ function _nextGamesGroup() {
     .filter(x => x.start && x.start.getTime() > now)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
   if (!upcoming.length) return { key:'none', start:null, items:[] };
-  const t0 = upcoming[0].start.getTime();
-  return { key:String(t0), start:t0, items: upcoming.filter(x => x.start.getTime() === t0) };
+
+  // Leva automática: começa no próximo jogo e segue enquanto o intervalo até o
+  // jogo seguinte for pequeno (mesma rodada). Para no primeiro "buraco" grande.
+  const wave = new Set([upcoming[0].game.id]);
+  for (let i = 1; i < upcoming.length; i++) {
+    if (upcoming[i].start.getTime() - upcoming[i-1].start.getTime() <= TIMER_CLUSTER_GAP_MS) {
+      wave.add(upcoming[i].game.id);
+    } else break;
+  }
+
+  // Aplica overrides manuais por jogo.
+  const items = upcoming.filter(x => {
+    const mode = (_dashResults[x.game.id] || {}).timerMode;
+    if (mode === 'hide') return false;       // nunca mostra
+    if (mode === 'show') return true;        // sempre mostra (mesmo fora da leva)
+    return wave.has(x.game.id);              // automático: dentro da leva
+  });
+  if (!items.length) return { key:'none', start:null, items:[] };
+
+  return { key: items.map(x => x.game.id).join(','), start: items[0].start.getTime(), items };
 }
 
 function _buildNextGamesHtml(group) {
@@ -2195,6 +2230,8 @@ function _buildNextGamesHtml(group) {
     </div>`;
   }
   const multi = group.items.length > 1;
+  // Todos no mesmo instante? Então é "Partida Simultânea"; senão é uma leva/rodada.
+  const sameInstant = multi && group.items.every(x => x.start.getTime() === group.items[0].start.getTime());
   const cards = group.items.map(({ game }) => {
     const res = _dashResults[game.id] || {};
     const homeFlag = teamFlag(game.h);
@@ -2205,11 +2242,12 @@ function _buildNextGamesHtml(group) {
     const _gKey = Object.keys(GRUPOS_DATA).find(k => GRUPOS_DATA[k].games.some(gm => gm.id === game.id));
     const groupLabel = _gKey ? `Grupo ${_gKey}` : '';
     const isLockedNow = isPalpiteClosed(game, res);
+    const cardLabel = !multi ? 'Próxima Partida' : (sameInstant ? 'Partida Simultânea' : 'Partida');
     // Só embute as barras no HTML inicial se a partida JÁ está bloqueada. Para partidas
     // ainda abertas o container fica vazio e o timer (_tick) injeta ao cruzar a trava.
     const distribHtml = isLockedNow ? _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]) : '';
     return `<div class="next-game-card" data-gid="${game.id}">
-      <div class="ngc-label">⏱️ ${multi ? 'Partida Simultânea' : 'Próxima Partida'}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
+      <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
         <span class="ngc-team">${homeFlag} ${esc(game.h)}</span>
         <span class="ngc-vs">×</span>
@@ -4834,6 +4872,8 @@ async function renderAdminResultados() {
       const r = res[game.id]||{};
       const lockState = r.locked===true ? 'on' : (r.unlock_override===true ? 'off' : 'auto');
       const lockView = _lockBtnView(lockState);
+      const timerMode = r.timerMode === 'show' ? 'show' : (r.timerMode === 'hide' ? 'hide' : 'auto');
+      const timerView = _timerBtnView(timerMode);
       const hasH = r.h_real!==undefined;
       const hasA = r.a_real!==undefined;
       const hasVal = hasH && hasA;
@@ -4888,6 +4928,8 @@ async function renderAdminResultados() {
         <input type="date" id="gd_${game.id}" value="${effISO}" onchange="onScheduleChange('${game.id}')" style="${_inpStyle}">
         <input type="time" id="gt_${game.id}" value="${effTime}" onchange="onScheduleChange('${game.id}')" style="${_inpStyle}">
         ${schedOverridden?`<button class="btn btn-sm" style="padding:3px 8px;font-size:0.7rem" onclick="resetSchedule('${game.id}')" title="Restaurar data/hora padrão">↩︎ Padrão</button><span style="color:var(--orange)">• horário alterado</span>`:''}
+        <button class="timer-btn ${timerMode==='show'?'pinned':timerMode==='hide'?'hidden-timer':''}" title="${timerView.title}" onclick="toggleTimer('${game.id}')" id="timer_${game.id}">${timerView.icon}</button>
+        <span id="timerstate_${game.id}">${_timerModeLabel(timerMode)}</span>
         <span style="margin-left:auto" id="lockstate_${game.id}">${_lockStateLabel(lockState)}</span>
       </div>`;
     });
@@ -5107,6 +5149,60 @@ async function toggleLock(gameId) {
               : next==='off' ? '🟢 Liberado manualmente (ignora regra de 1h)'
               : '⏱️ Trava automática (1h antes do início)';
     showToast(msg, next==='on'?'warning':'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// ── Exibição no timer do dashboard (campo timerMode em resultados) ────────────
+// 'auto' (padrão) = a regra de proximidade decide · 'show' = sempre exibe ·
+// 'hide' = nunca exibe. O botão cicla auto → show → hide → auto.
+function _timerModeLabel(mode) {
+  if (mode === 'show') return '📌 Fixado no timer';
+  if (mode === 'hide') return '🚫 Oculto do timer';
+  return '⏱️ Timer automático';
+}
+function _timerBtnView(mode) {
+  if (mode === 'show') return { icon: '📌', title: 'Fixado: sempre aparece no timer. Clique para ocultar.' };
+  if (mode === 'hide') return { icon: '🚫', title: 'Oculto: nunca aparece no timer. Clique para voltar ao automático.' };
+  return { icon: '📺', title: 'Automático: aparece conforme a proximidade. Clique para fixar.' };
+}
+function _applyTimerButton(gameId, mode) {
+  const btn = document.getElementById(`timer_${gameId}`);
+  if (btn) {
+    const v = _timerBtnView(mode);
+    btn.textContent = v.icon;
+    btn.title = v.title;
+    btn.classList.toggle('pinned', mode === 'show');
+    btn.classList.toggle('hidden-timer', mode === 'hide');
+  }
+  const lbl = document.getElementById(`timerstate_${gameId}`);
+  if (lbl) lbl.textContent = _timerModeLabel(mode);
+}
+
+// Cicla a exibição no timer: automático → fixado → oculto → automático.
+async function toggleTimer(gameId) {
+  try {
+    const snap = await db_.collection('resultados').doc(gameId).get();
+    const cur = snap.exists ? snap.data() : {};
+    const mode = cur.timerMode === 'show' ? 'show' : (cur.timerMode === 'hide' ? 'hide' : 'auto');
+    const next = mode === 'auto' ? 'show' : (mode === 'show' ? 'hide' : 'auto');
+    const FV = firebase.firestore.FieldValue;
+    const patch = { updatedAt: FV.serverTimestamp() };
+    patch.timerMode = (next === 'auto') ? FV.delete() : next;
+    await db_.collection('resultados').doc(gameId).set(patch, { merge: true });
+    _scDel('res');
+    try {
+      await db_.collection('audit').add({
+        type: 'timer_mode', gameId, mode: next,
+        adminUid: currentUser?.uid || null,
+        adminEmail: currentUser?.email || null,
+        at: FV.serverTimestamp()
+      });
+    } catch(_) {}
+    _applyTimerButton(gameId, next);
+    const msg = next === 'show' ? '📌 Fixado no timer da página inicial'
+              : next === 'hide' ? '🚫 Ocultado do timer'
+              : '⏱️ Exibição automática no timer';
+    showToast(msg, 'success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
