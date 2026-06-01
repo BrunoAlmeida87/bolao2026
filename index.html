@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.8">
+<meta name="app-version" content="v1.10.9">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1112,7 +1112,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.8</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.9</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1257,12 +1257,12 @@ const GRUPOS_DATA = {
     {id:'J6',r:3,h:'Argélia',a:'Áustria',date:'Jun 27'},
   ]},
   K:{teams:['Portugal','Colômbia','Rep. Dem. Congo','Uzbequistão'],games:[
-    {id:'K1',r:1,h:'Colômbia',a:'Portugal',date:'Jun 27'},
-    {id:'K2',r:1,h:'Rep. Dem. Congo',a:'Uzbequistão',date:'Jun 27'},
-    {id:'K3',r:2,h:'Portugal',a:'Rep. Dem. Congo',date:'Jun 17'},
-    {id:'K4',r:2,h:'Uzbequistão',a:'Colômbia',date:'Jun 17'},
-    {id:'K5',r:3,h:'Portugal',a:'Uzbequistão',date:'Jun 23'},
-    {id:'K6',r:3,h:'Colômbia',a:'Rep. Dem. Congo',date:'Jun 23'},
+    {id:'K3',r:1,h:'Portugal',a:'Rep. Dem. Congo',date:'Jun 17'},
+    {id:'K4',r:1,h:'Uzbequistão',a:'Colômbia',date:'Jun 17'},
+    {id:'K5',r:2,h:'Portugal',a:'Uzbequistão',date:'Jun 23'},
+    {id:'K6',r:2,h:'Colômbia',a:'Rep. Dem. Congo',date:'Jun 23'},
+    {id:'K1',r:3,h:'Colômbia',a:'Portugal',date:'Jun 27'},
+    {id:'K2',r:3,h:'Rep. Dem. Congo',a:'Uzbequistão',date:'Jun 27'},
   ]},
   L:{teams:['Inglaterra','Croácia','Gana','Panamá'],games:[
     {id:'L1',r:1,h:'Inglaterra',a:'Croácia',date:'Jun 17'},
@@ -1384,7 +1384,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.8',
+  app_version:'v1.10.9',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3920,15 +3920,32 @@ function _calcHeadToHead(users, allPals, res) {
 // ════════════════════════════════════════════
 // ESTATÍSTICAS PAGE
 // ════════════════════════════════════════════
-function _getStatNextGroup(res) {
+function _getStatNextGroupWave(res) {
   const now = Date.now();
-  const upcoming = ALL_GAMES
+  const _resolved = id => { const r = (res||{})[id] || {}; return r.h_real !== undefined && r.a_real !== undefined; };
+  const all = ALL_GAMES
     .map(g => ({ game: g, start: _effectiveStartInstant(g, (res||{})[g.id]) }))
-    .filter(x => x.start && x.start.getTime() > now)
+    .filter(x => x.start)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
-  if (!upcoming.length) return { start: null, items: [] };
-  const t0 = upcoming[0].start.getTime();
-  return { start: t0, items: upcoming.filter(x => x.start.getTime() === t0) };
+  const upcoming = all.filter(x => x.start.getTime() > now);
+  const wave = new Set();
+  if (upcoming.length) {
+    wave.add(upcoming[0].game.id);
+    for (let i = 1; i < upcoming.length; i++) {
+      if (upcoming[i].start.getTime() - upcoming[i-1].start.getTime() <= TIMER_CLUSTER_GAP_MS) {
+        wave.add(upcoming[i].game.id);
+      } else break;
+    }
+  }
+  const items = all.filter(x => {
+    const mode = ((res||{})[x.game.id] || {}).timerMode;
+    if (mode === 'hide') return false;
+    const started = x.start.getTime() <= now;
+    if (started) return !_resolved(x.game.id);
+    if (mode === 'show') return true;
+    return wave.has(x.game.id);
+  });
+  return { items };
 }
 
 // Ranking "Mais Indeciso" — sob demanda. Usa count() agregado (1 leitura por
@@ -4192,7 +4209,7 @@ async function renderEstatisticas() {
     const insights = generateInsights(ranking, userAccStats, analiseJogos, res);
 
     // ── SEÇÃO: PRÓXIMA(S) PARTIDA(S) ──────────────────────────────────────────
-    const _statNextGrp = _getStatNextGroup(res);
+    const _statNextGrp = _getStatNextGroupWave(res);
     const _nowMs = Date.now();
     let _beforeHtml = '';
 
@@ -4360,7 +4377,7 @@ async function renderEstatisticas() {
       }).join('');
 
       _beforeHtml += '<div class="card">'
-        + '<div class="card-title">⚽ ' + (_isPlural ? 'Próximas Partidas (simultâneas)' : 'Próxima Partida') + '</div>'
+        + '<div class="card-title">⚽ Próximas Partidas</div>'
         + '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">' + _gameCards + '</div>'
         + '</div>';
     }
