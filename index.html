@@ -4832,12 +4832,63 @@ async function renderEstatisticas() {
       <div id="jogos-indicisos-result" style="margin-top:12px"></div>
     </div>`;
 
-    // ── Heatmap de placares mais palpitados ──
+    // ── Mapa de calor visual (grade triangular) ──
+    {
+      const _HM = 5;
+      const _hmCells = [];
+      let _hmHasData = false;
+      for (let w = 0; w <= _HM; w++)
+        for (let l = 0; l <= w; l++) {
+          const f = placarFreq[`${w}×${l}`] || 0;
+          if (f > 0) _hmHasData = true;
+          _hmCells.push({ w, l, f });
+        }
+      if (_hmHasData) {
+        const _hmMax = Math.max(..._hmCells.map(c => c.f), 1);
+        const CELL = 46;
+        const LABEL = 22;
+        const GAP = 3;
+        const cols = _HM + 2; // label col + 0..HM
+        let _hmGrid = `<div style="display:inline-grid;grid-template-columns:${LABEL}px ${Array(_HM+1).fill(CELL+'px').join(' ')};gap:${GAP}px">`;
+        // header row
+        _hmGrid += `<div style="font-size:0.58rem;color:var(--text-muted);display:flex;align-items:flex-end;justify-content:flex-end;padding-bottom:2px;padding-right:3px">V\\P</div>`;
+        for (let l = 0; l <= _HM; l++)
+          _hmGrid += `<div style="text-align:center;font-size:0.65rem;font-weight:600;color:var(--text-muted)">${l}</div>`;
+        // data rows
+        for (let w = 0; w <= _HM; w++) {
+          _hmGrid += `<div style="font-size:0.65rem;font-weight:600;color:var(--text-muted);display:flex;align-items:center;justify-content:flex-end;padding-right:4px">${w}</div>`;
+          for (let l = 0; l <= _HM; l++) {
+            if (l > w) {
+              _hmGrid += `<div style="border-radius:7px;background:rgba(255,255,255,0.015)"></div>`;
+            } else {
+              const f = placarFreq[`${w}×${l}`] || 0;
+              const pct = f / _hmMax;
+              const alpha = f > 0 ? (0.12 + pct * 0.78) : 0;
+              const bg = f > 0 ? `rgba(255,165,0,${alpha.toFixed(2)})` : 'rgba(255,255,255,0.04)';
+              const bdr = f > 0 ? `rgba(255,165,0,${Math.min(alpha*1.4,1).toFixed(2)})` : 'var(--border)';
+              const txtCol = pct > 0.55 ? '#fff' : (f > 0 ? 'var(--gold)' : 'rgba(255,255,255,0.15)');
+              const isDraw = w === l;
+              _hmGrid += `<div style="border-radius:7px;background:${bg};border:1px solid ${bdr};height:${CELL}px;display:flex;flex-direction:column;align-items:center;justify-content:center;${isDraw?'box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)':''}" title="${w}×${l}: ${f} palpite(s)">
+                ${f > 0 ? `<div style="font-size:0.7rem;font-weight:800;color:${txtCol};line-height:1.1">${w}×${l}</div><div style="font-size:0.58rem;color:${txtCol};opacity:0.85">${f}×</div>` : `<div style="font-size:0.6rem;color:rgba(255,255,255,0.1)">${w}×${l}</div>`}
+              </div>`;
+            }
+          }
+        }
+        _hmGrid += '</div>';
+        html += `<div class="card">
+          <div class="card-title">🌡️ Mapa de Calor de Palpites</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 14px;line-height:1.5"><b>V</b> = gols do vencedor (linha) · <b>P</b> = gols do perdedor (coluna). Diagonal = empates. Quanto mais dourado, mais apostas naquele placar.</div>
+          <div style="overflow-x:auto;padding-bottom:4px">${_hmGrid}</div>
+        </div>`;
+      }
+    }
+
+    // ── Heatmap de placares mais palpitados (Top 12) ──
     const topPlacares = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1]).slice(0, 12);
     if (topPlacares.length > 0) {
       const maxFreq = topPlacares[0][1] || 1;
       html += `<div class="card">
-        <div class="card-title">🧠 Heatmap de Palpites (Top 12)</div>
+        <div class="card-title">🧠 Ranking de Placares (Top 12)</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px">
           ${topPlacares.map(([placar, qtd])=>`
             <div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:rgba(255,255,255,0.03)">
