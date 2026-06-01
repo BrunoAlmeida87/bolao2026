@@ -4834,7 +4834,12 @@ async function renderEstatisticas() {
 
     // ── Mapa de calor visual (grade triangular) ──
     {
-      const _HM = 5;
+      // Expande a grade para cobrir o maior placar real; cap=8 para não crescer demais
+      // (placares acima do cap ainda aparecem no Top 12 abaixo).
+      const _HM = Math.min(
+        Math.max(5, ...Object.keys(placarFreq).map(k => parseInt(k.split('×')[0]) || 0)),
+        8
+      );
       const _hmCells = [];
       let _hmHasData = false;
       for (let w = 0; w <= _HM; w++)
@@ -4855,6 +4860,15 @@ async function renderEstatisticas() {
         for (let l = 0; l <= _HM; l++)
           _hmGrid += `<div style="text-align:center;font-size:0.65rem;font-weight:600;color:var(--text-muted)">${l}</div>`;
         // data rows
+        // Colorscale "hot" (crimson → orange → gold), padrão de heatmaps de football
+        const _hmColor = p => {
+          if (p <= 0) return { bg:'rgba(255,255,255,0.04)', bdr:'var(--border)', txt:'rgba(255,255,255,0.15)' };
+          let r, g;
+          if (p < 0.5) { const t=p*2; r=Math.round(120+t*135); g=Math.round(20+t*80); }
+          else          { const t=(p-0.5)*2; r=255; g=Math.round(100+t*110); }
+          const col=`rgb(${r},${g},0)`;
+          return { bg:col, bdr:col, txt: p>=0.55 ? 'rgba(0,0,0,0.85)' : '#fff' };
+        };
         for (let w = 0; w <= _HM; w++) {
           _hmGrid += `<div style="font-size:0.65rem;font-weight:600;color:var(--text-muted);display:flex;align-items:center;justify-content:flex-end;padding-right:4px">${w}</div>`;
           for (let l = 0; l <= _HM; l++) {
@@ -4863,22 +4877,27 @@ async function renderEstatisticas() {
             } else {
               const f = placarFreq[`${w}×${l}`] || 0;
               const pct = f / _hmMax;
-              const alpha = f > 0 ? (0.12 + pct * 0.78) : 0;
-              const bg = f > 0 ? `rgba(255,165,0,${alpha.toFixed(2)})` : 'rgba(255,255,255,0.04)';
-              const bdr = f > 0 ? `rgba(255,165,0,${Math.min(alpha*1.4,1).toFixed(2)})` : 'var(--border)';
-              const txtCol = pct > 0.55 ? '#fff' : (f > 0 ? 'var(--gold)' : 'rgba(255,255,255,0.15)');
+              const { bg, bdr, txt } = _hmColor(pct);
               const isDraw = w === l;
-              _hmGrid += `<div style="border-radius:7px;background:${bg};border:1px solid ${bdr};height:${CELL}px;display:flex;flex-direction:column;align-items:center;justify-content:center;${isDraw?'box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)':''}" title="${w}×${l}: ${f} palpite(s)">
-                ${f > 0 ? `<div style="font-size:0.7rem;font-weight:800;color:${txtCol};line-height:1.1">${w}×${l}</div><div style="font-size:0.58rem;color:${txtCol};opacity:0.85">${f}×</div>` : `<div style="font-size:0.6rem;color:rgba(255,255,255,0.1)">${w}×${l}</div>`}
+              _hmGrid += `<div style="border-radius:7px;background:${bg};border:1px solid ${bdr};height:${CELL}px;display:flex;flex-direction:column;align-items:center;justify-content:center;${isDraw?'outline:1px solid rgba(255,255,255,.15);outline-offset:-2px':''}" title="${w}×${l}: ${f} palpite(s)">
+                ${f > 0 ? `<div style="font-size:0.7rem;font-weight:800;color:${txt};line-height:1.1">${w}×${l}</div><div style="font-size:0.58rem;color:${txt};opacity:0.85">${f}×</div>` : `<div style="font-size:0.6rem;color:rgba(255,255,255,0.1)">${w}×${l}</div>`}
               </div>`;
             }
           }
         }
+        // Legenda de cor
+        const _hmLegStops = 20;
+        const _hmLegGrad = Array.from({length:_hmLegStops},(_,i)=>_hmColor((i+0.5)/_hmLegStops).bg).join(',');
         _hmGrid += '</div>';
         html += `<div class="card">
           <div class="card-title">🌡️ Mapa de Calor de Palpites</div>
-          <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 14px;line-height:1.5"><b>V</b> = gols do vencedor (linha) · <b>P</b> = gols do perdedor (coluna). Diagonal = empates. Quanto mais dourado, mais apostas naquele placar.</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 14px;line-height:1.5"><b>V</b> = gols do vencedor (linha) · <b>P</b> = gols do perdedor (coluna). Diagonal = empates.</div>
           <div style="overflow-x:auto;padding-bottom:4px">${_hmGrid}</div>
+          <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:0.68rem;color:var(--text-muted)">Menos apostas</span>
+            <div style="flex:1;height:10px;border-radius:5px;background:linear-gradient(to right,${_hmLegGrad})"></div>
+            <span style="font-size:0.68rem;color:var(--text-muted)">Mais apostas</span>
+          </div>
         </div>`;
       }
     }
