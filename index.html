@@ -1489,6 +1489,58 @@ function refreshPage() {
 function _refreshBtn() {
   return `<button onclick="refreshPage()" title="Atualizar dados" style="float:right;background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:20px;padding:3px 12px;font-size:0.8rem;cursor:pointer;line-height:1;margin-top:2px" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">↻</button>`;
 }
+
+// ── Sinal de atualização em tempo real ───────────────────────────────────────
+// Um único documento (config/version) é observado por todos os clientes. Quando o
+// admin lança/altera um resultado, _bumpDataVersion() incrementa 'rev'; o listener
+// detecta, invalida o cache e re-renderiza as páginas de visualização. Custo: 1
+// documento observado por usuário — barato, e permite TTL de cache longo.
+let _versionUnsub = null;
+let _versionRev = null;
+let _versionInit = false;
+
+function _startVersionListener() {
+  if (_versionUnsub) return; // já ativo
+  try {
+    _versionUnsub = db_.collection('config').doc('version').onSnapshot(snap => {
+      const rev = snap.exists ? (snap.data()?.rev ?? null) : null;
+      // Ignora o primeiro snapshot (estado atual ao abrir) — só reage a mudanças.
+      if (!_versionInit) { _versionInit = true; _versionRev = rev; return; }
+      if (rev === _versionRev) return;
+      _versionRev = rev;
+      _onRemoteDataChange();
+    }, _err => { /* listener falhou (offline/permissão) — segue por TTL/botão */ });
+  } catch(_) { /* best-effort */ }
+}
+
+function _stopVersionListener() {
+  if (_versionUnsub) { try { _versionUnsub(); } catch(_){} _versionUnsub = null; }
+  _versionInit = false; _versionRev = null;
+}
+
+// Atualização vinda de outro cliente (admin lançou/alterou um resultado).
+// Invalida o cache e re-renderiza apenas páginas de visualização — não interrompe
+// quem está preenchendo palpites nem o admin trabalhando.
+function _onRemoteDataChange() {
+  _scDel('res','pals');
+  const viewPages = new Set(['dashboard','estatisticas','ver-palpites','ver-todos']);
+  if (viewPages.has(_currentPage)) {
+    if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
+    navigateTo(_currentPage);
+    showToast('🔄 Dados atualizados (novo resultado)','success');
+  }
+}
+
+// Incrementa a versão dos dados — chamado após o admin gravar/alterar um resultado.
+async function _bumpDataVersion() {
+  try {
+    const FV = firebase.firestore.FieldValue;
+    await db_.collection('config').doc('version').set({
+      rev: FV.increment(1), at: FV.serverTimestamp()
+    }, { merge: true });
+  } catch(_) { /* best-effort: se falhar, usuários ainda atualizam por TTL/botão */ }
+}
+
 let deferredPwaPrompt = null;
 
 // ════════════════════════════════════════════
@@ -1558,6 +1610,7 @@ async function handleAuthState(user) {
       currentUserDoc = { uid: user.uid, ...snap.data() };
       await loadCFG();
       showApp();
+      _startVersionListener();
       _restorePageFromHash();
     } catch(e) {
       showToast('Erro ao carregar dados: '+e.message,'error');
@@ -1565,6 +1618,7 @@ async function handleAuthState(user) {
     }
   } else {
     currentUser = null; currentUserDoc = null;
+    _stopVersionListener();
     showLoading(false); showAuth();
   }
 }
@@ -5107,6 +5161,7 @@ async function saveResultado(gameId) {
     }
     await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
     _scDel('res');
+    _bumpDataVersion(); // sinaliza os outros clientes para atualizarem o ranking
     try {
       await db_.collection('audit').add({
         type: 'resultado_save',
