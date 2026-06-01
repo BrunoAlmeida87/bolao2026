@@ -1438,7 +1438,12 @@ let palpitesEditing = null;
 // Reduz leituras no Firestore guardando resultados, usuários e palpites em
 // memória por TTL. Invalidado automaticamente nas escritas relevantes.
 const _SC = {};
-const _SC_TTL = { res: 3*60000, usr: 5*60000, pals: 3*60000 };
+// TTL do cache em memória (por sessão/navegador). Ranking/palpites só mudam quando
+// o admin lança/altera um resultado ou alguém edita o próprio palpite — eventos que
+// já invalidam o cache localmente via _scDel. Por isso TTLs longos são seguros e
+// reduzem muito as leituras do Firestore em picos de acesso. O botão "Atualizar"
+// força a releitura imediata quando alguém quiser os dados na hora.
+const _SC_TTL = { res: 10*60000, usr: 10*60000, pals: 10*60000 };
 function _scGet(k)        { const e=_SC[k]; return (e&&Date.now()<e.x)?e.v:null; }
 function _scSet(k,v,ttl)  { _SC[k]={v,x:Date.now()+(ttl||180000)}; }
 function _scDel(...keys)  { keys.forEach(k=>delete _SC[k]); }
