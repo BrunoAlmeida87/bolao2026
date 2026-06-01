@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.4">
+<meta name="app-version" content="v1.10.5">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -756,6 +756,9 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ngc-date{font-size:0.78rem;color:var(--text-muted);margin-bottom:8px}
 .ngc-countdown{font-size:1.5rem;font-weight:800;color:#00b4ff;letter-spacing:.04em;font-variant-numeric:tabular-nums}
 .ngc-note{font-size:0.72rem;color:var(--text-muted);margin-top:6px}
+.ngc-mypalpite{font-size:0.78rem;margin-top:8px;padding:5px 10px;border-radius:6px;display:inline-block}
+.ngc-mypalpite-set{color:#5fd16b;background:rgba(76,175,80,.13)}
+.ngc-mypalpite-missing{color:var(--orange);background:rgba(255,152,0,.12);font-weight:600}
 .next-games-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
 .next-games-grid .next-game-card{margin-bottom:0}
 .next-game-card.locked-soon{background:linear-gradient(135deg,rgba(255,68,68,.14),rgba(200,0,0,.07));border-color:rgba(255,68,68,.55)}
@@ -1099,7 +1102,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.4</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.5</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1371,7 +1374,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.4',
+  app_version:'v1.10.5',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -1460,8 +1463,8 @@ async function _fetchUsr() {
   u=snap.docs.map(d=>({uid:d.id,...d.data()}));
   _scSet('usr',u,_SC_TTL.usr); return u;
 }
-async function _fetchPals(users) {
-  let p=_scGet('pals'); if(p) return p;
+async function _fetchPals(users, force) {
+  if (!force) { let p=_scGet('pals'); if(p) return p; }
   const allPals={},champPicks={};
   await Promise.all((users||[]).map(async u=>{
     const [ps,pdoc]=await Promise.all([
@@ -2219,6 +2222,21 @@ function computeStandings(grupKey, resultados) {
 let _dashResults = {};
 // Distribuição do bolão para as próximas partidas (% vit. casa, empate, vit. visitante)
 let _dashBolaoDistrib = {};
+// Palpites do usuário logado — usados nos cards de próximas partidas
+let _dashMyPals = {};
+function _refreshDashMyPalCard(gameId) {
+  const el = document.getElementById(`ngc-mypalpite-${gameId}`);
+  if (!el) return;
+  const myPal = _dashMyPals[gameId];
+  const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
+  if (hasPal) {
+    el.className = 'ngc-mypalpite ngc-mypalpite-set';
+    el.innerHTML = `✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong>`;
+  } else {
+    el.className = 'ngc-mypalpite ngc-mypalpite-missing';
+    el.innerHTML = '⚠️ Você ainda não palpitou!';
+  }
+}
 
 // Renderiza barras de distribuição do bolão para uma partida bloqueada.
 // bolaoDistrib: { phw, pdr, paw } em %.  Retorna '' se não houver dados.
@@ -2324,6 +2342,11 @@ function _buildNextGamesHtml(group) {
     // Só embute as barras no HTML inicial se a partida JÁ está bloqueada. Para partidas
     // ainda abertas o container fica vazio e o timer (_tick) injeta ao cruzar a trava.
     const distribHtml = isLockedNow ? _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]) : '';
+    const myPal = _dashMyPals[game.id];
+    const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
+    const myPalHtml = hasPal
+      ? `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-set">✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong></div>`
+      : `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-missing">⚠️ Você ainda não palpitou!</div>`;
     return `<div class="next-game-card" data-gid="${game.id}">
       <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
@@ -2334,6 +2357,7 @@ function _buildNextGamesHtml(group) {
       <div class="ngc-date">${esc(fmtDate)}</div>
       <div class="ngc-countdown" id="ngc-cd-${game.id}">—</div>
       <div class="ngc-note" id="ngc-note-${game.id}">Bloqueio: ${_lockDisplayStr(_gameLockInstant(game, res))}</div>
+      ${myPalHtml}
       <div id="ngc-prob-${game.id}" style="display:${isLockedNow&&distribHtml?'block':'none'}">${distribHtml}</div>
     </div>`;
   }).join('');
@@ -2449,6 +2473,7 @@ async function renderDashboard() {
     // contador cruzar o limite de bloqueio, mesmo com o dashboard aberto desde antes da trava.
     // (allPals já está em memória no cliente, então pré-computar não expõe nada novo.)
     _dashResults = Object.assign({}, res);
+    _dashMyPals   = allPals[currentUser.uid] || {};
     _applyAutoLocks(_dashResults); // verifica e grava auto-lock para jogos que já passaram das 23h
     _dashBolaoDistrib = {};
     ALL_GAMES.forEach(g => {
@@ -2931,7 +2956,8 @@ async function savePalpite(gameId) {
     try {
       await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).delete();
       // Apagar um palpite é sempre uma mudança de ideia → conta como edição.
-      _logPalpiteHistory(uid, gameId, { action: 'delete', edit: true, adminEdit: !!palpitesEditing && palpitesEditing !== currentUser.uid });
+      const _isAdminDel = !!palpitesEditing && palpitesEditing !== currentUser.uid;
+      _logPalpiteHistory(uid, gameId, { action: 'delete', edit: true, adminEdit: _isAdminDel });
       _palpitesSalvosSet.delete(gameId);
       delete myPalpites[gameId];
       ['filled','saving','saved-ok','save-err','saving'].forEach(c=>{
@@ -2941,6 +2967,7 @@ async function savePalpite(gameId) {
       updatePalProgress();
       updateGroupTabState();
       _scDel('pals');
+      if (!_isAdminDel) { delete _dashMyPals[gameId]; _refreshDashMyPalCard(gameId); }
     } catch(e) { showToast('Erro ao apagar palpite: '+e.message,'error'); }
     return;
   }
@@ -2985,6 +3012,7 @@ async function savePalpite(gameId) {
       } catch(_) {}
     }
     _scDel('pals');
+    if (!isAdminEdit) { _dashMyPals[gameId] = { h: pal.h, a: pal.a }; _refreshDashMyPalCard(gameId); }
     if (hInp) { hInp.classList.remove('saving'); hInp.classList.add('saved-ok'); }
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('saved-ok'); }
     setTimeout(()=>{ if(hInp) hInp.classList.remove('saved-ok'); if(aInp) aInp.classList.remove('saved-ok'); }, 1500);
@@ -2997,7 +3025,7 @@ async function savePalpite(gameId) {
 
 function showPalpiteClosedReason(gameId) {
   const res = resultados[gameId] || {};
-  if (res.locked===true) {
+  if (res.locked===true || res.autoLocked===true) {
     showToast('Este jogo está bloqueado. Não é mais possível alterar palpites.','warning');
     return;
   }
@@ -3474,7 +3502,7 @@ async function renderVerTodos() {
       users.forEach(u=>{
         const pal = allPals[u.uid]?.[g.id];
         const isOwn = u.uid === currentUser.uid;
-        const isGameLocked = r.locked===true || hasResult;
+        const isGameLocked = r.locked===true || r.autoLocked===true || hasResult;
         const canSeePal = isAdminView || isOwn || isGameLocked;
         if (!pal||pal.h===undefined) {
           html += `<td style="color:var(--text-muted)">—</td>`;
@@ -3619,17 +3647,19 @@ function isPalpiteClosed(game, res) {
   if (res.h_real !== undefined && res.a_real !== undefined) return true;
   if (res.locked === true) return true;
   if (res.unlock_override === true) return false;
+  if (res.autoLocked === true) return true;
   const lockAt = _gameLockInstant(game, res);
   return lockAt ? (Date.now() >= lockAt.getTime()) : false;
 }
 
-// Variante para salvar: admin editando outro usuário ignora a trava automática
-// por tempo, mas continua respeitando trava manual e resultado lançado.
+// Variante para salvar: admin editando outro usuário ignora trava automática
+// (por tempo ou autoLocked), mas continua respeitando trava manual e resultado.
 function isPalpiteClosedForSave(game, res, adminEditing) {
   res = res || {};
   if (res.h_real !== undefined) return true;
   if (res.locked === true) return true;
   if (adminEditing) return false;
+  if (res.autoLocked === true) return true;
   return isPalpiteClosed(game, res);
 }
 
@@ -3645,7 +3675,7 @@ async function _applyAutoLocks(res) {
     const FV = firebase.firestore.FieldValue;
     const toAutoLock = ALL_GAMES.filter(game => {
       const r = res[game.id] || {};
-      if (r.locked === true || r.h_real !== undefined || r.unlock_override === true) return false;
+      if (r.locked === true || r.autoLocked === true || r.h_real !== undefined || r.unlock_override === true) return false;
       if (_autoLockApplied.has(game.id)) return false;
       const autoLockAt = _gameAutoLockInstant(game, r);
       return autoLockAt && now >= autoLockAt.getTime();
@@ -3656,7 +3686,7 @@ async function _applyAutoLocks(res) {
     const batch = db_.batch();
     toAutoLock.forEach(game => {
       batch.set(db_.collection('resultados').doc(game.id),
-        { locked: true, updatedAt: FV.serverTimestamp() },
+        { autoLocked: true, updatedAt: FV.serverTimestamp() },
         { merge: true });
     });
     await batch.commit();
@@ -4040,6 +4070,8 @@ async function renderEstatisticas() {
         let _statusHtml;
         if (_gr.locked === true) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado pelo admin</span>';
+        } else if (_gr.autoLocked === true) {
+          _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado automaticamente</span>';
         } else if (_closed) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Palpites encerrados</span>';
         } else if (_diffToLock > 0 && _diffToLock <= 3600000) {
@@ -6391,7 +6423,7 @@ async function exportAllCSV() {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers;
     const activeForPals = allUsers.filter(u=>u.ativo!==false);
-    const {allPals} = await _fetchPals(activeForPals);
+    const {allPals} = await _fetchPals(activeForPals, true);
     let csv = 'Participante,Apelido,JogoID,Time_Casa,Palpite_Casa,Palpite_Fora,Time_Fora,Resultado_Casa,Resultado_Fora,Locked,Pontos\n';
     users.filter(u=>u.ativo!==false).forEach(u=>{
       ALL_GAMES.forEach(g=>{
@@ -6412,7 +6444,7 @@ async function exportRankingCSV() {
     const [allUsersR, resR] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsersR.filter(u=>u.ativo!==false);
     const res = resR;
-    const {allPals} = await _fetchPals(users);
+    const {allPals} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals);
     let csv = 'Posição,Participante,Apelido,Pontos,Exatos,Venc+Saldo,Apenas Venc,Jogos\n';
     ranking.forEach((u,i)=>{ csv+=`${i+1},"${u.nome}","${u.apelido}",${u.pontos},${u.exatos},${u.venc_saldo},${u.apenas_venc},${u.jogos}\n`; });
@@ -6425,7 +6457,7 @@ async function exportPalpitesCSV() {
   try {
     const allUsersP = await _fetchUsr();
     const users = allUsersP.filter(u=>u.ativo!==false);
-    const {allPals} = await _fetchPals(users);
+    const {allPals} = await _fetchPals(users, true);
     const headerCasa = users.map(u=>`"${u.apelido}_Casa"`).join(',');
     const headerFora = users.map(u=>`"${u.apelido}_Fora"`).join(',');
     let csv = `JogoID,Time_Casa,Time_Fora,Data,${headerCasa},${headerFora}\n`;
@@ -6448,7 +6480,7 @@ async function exportFullExcel() {
     const [allUsersE, resE] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsersE.filter(u=>u.ativo!==false);
     const res = resE;
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const totalJogosComResultado = Object.keys(res).filter(
       id => res[id].h_real !== undefined && res[id].a_real !== undefined
@@ -6510,7 +6542,7 @@ async function exportRankingExcel() {
     const [allUsersRE, resRE] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsersRE.filter(u=>u.ativo!==false);
     const res = resRE;
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const data = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','Palpite Campeão','Bônus Campeão']];
     ranking.forEach((u,i)=>{
@@ -6529,7 +6561,7 @@ async function exportPalpitesExcel() {
   try {
     const allUsersPE = await _fetchUsr();
     const users = allUsersPE.filter(u=>u.ativo!==false);
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const data = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
     // Linha extra com o palpite de campeão por participante (mesma estrutura de colunas).
     const champRow = ['CAMPEAO','-','-','Palpite Campeão'];
