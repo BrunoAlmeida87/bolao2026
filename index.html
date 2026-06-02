@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- XLSX é carregado sob demanda (só nas exportações do admin) via ensureXLSX() -->
 <script>
   // Garante que o Firebase esteja disponível antes de qualquer uso
   window.__firebaseReady = new Promise((resolve) => {
@@ -7022,9 +7022,27 @@ async function renderAdminExport() {
     </div>`;
 }
 
+// Carrega a biblioteca XLSX (~900 KB) sob demanda — só quando o admin exporta,
+// em vez de baixá-la no carregamento inicial para todos os usuários. Memoiza a
+// promessa para baixar no máximo uma vez por sessão.
+let _xlsxPromise = null;
+function ensureXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (_xlsxPromise) return _xlsxPromise;
+  _xlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error('XLSX não inicializou'));
+    s.onerror = () => { _xlsxPromise = null; reject(new Error('Falha ao carregar a biblioteca de exportação (XLSX). Verifique sua conexão e tente novamente.')); };
+    document.head.appendChild(s);
+  });
+  return _xlsxPromise;
+}
+
 async function exportExtratoPagamentos() {
   showToast('⏳ Gerando extrato...','');
   try {
+    await ensureXLSX();
     const users = await _fetchUsr();
     users.sort((a,b)=>(a.pago===b.pago?0:a.pago?-1:1)||(a.apelido||'').localeCompare(b.apelido||''));
     const ativos = users.filter(u=>u.ativo!==false);
@@ -7162,6 +7180,7 @@ async function exportPalpitesCSV() {
 async function exportFullExcel() {
   showToast('⏳ Gerando planilha...','');
   try {
+    await ensureXLSX();
     const [allUsersE, resE] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsersE.filter(u=>u.ativo!==false);
     const res = resE;
@@ -7224,6 +7243,7 @@ async function exportFullExcel() {
 async function exportRankingExcel() {
   showToast('⏳ Gerando ranking...','');
   try {
+    await ensureXLSX();
     const [allUsersRE, resRE] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsersRE.filter(u=>u.ativo!==false);
     const res = resRE;
@@ -7244,6 +7264,7 @@ async function exportRankingExcel() {
 async function exportPalpitesExcel() {
   showToast('⏳ Gerando palpites...','');
   try {
+    await ensureXLSX();
     const allUsersPE = await _fetchUsr();
     const users = allUsersPE.filter(u=>u.ativo!==false);
     const {allPals, champPicks} = await _fetchPals(users, true);
@@ -7270,6 +7291,7 @@ async function exportPalpitesExcel() {
 async function exportResultadosExcel() {
   showToast('⏳ Gerando resultados...','');
   try {
+    await ensureXLSX();
     const res = await _fetchRes();
     const data = [['JogoID','Time_Casa','Time_Fora','Resultado_Casa','Resultado_Fora','Bloqueado']];
     ALL_GAMES.forEach(g=>{
