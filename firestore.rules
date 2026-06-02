@@ -1,0 +1,113 @@
+rules_version = '2';
+
+// ════════════════════════════════════════════════════════════════════════════
+// Regras de segurança do Firestore — Bolão 2026
+//
+// Princípio: o app confia muito no cliente (currentUserDoc.role === 'admin') para
+// liberar telas e ações de admin. Essas verificações de UI NÃO protegem os dados —
+// qualquer pessoa com o console do navegador pode chamar o SDK diretamente. Estas
+// regras são a única camada que de fato impede escrita indevida.
+//
+// Modelo de leitura: é um bolão transparente. Todo usuário autenticado lê tudo
+// (ranking, palpites de todos, resultados, config, histórico). A proteção real
+// está nas ESCRITAS.
+//
+// Modelo de escrita:
+//   - resultados / config            → só admin
+//   - audit                          → só admin, e imutável
+//   - usuarios.role/ativo/pago        → só admin (usuário não se autopromove)
+//   - palpites de terceiros          → só admin (cada um edita só o seu)
+//
+// Deploy:  firebase deploy --only firestore:rules
+// (requer Firebase CLI logado no projeto; não há como publicar a partir deste
+//  ambiente sem as credenciais do projeto.)
+// ════════════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Admin = doc usuarios/{uid} do solicitante existe e tem role == 'admin'.
+    // Usado só quando o usuário NÃO é o dono do recurso (o || curto-circuita),
+    // então saves de palpite do próprio usuário não pagam essa leitura extra.
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ── usuarios ──────────────────────────────────────────────────────────────
+    match /usuarios/{uid} {
+      allow read: if isSignedIn();
+
+      // Auto-cadastro: só o próprio uid e nunca já entrando como admin/inativo.
+      allow create: if isOwner(uid)
+        && request.resource.data.role == 'user'
+        && request.resource.data.ativo == true;
+
+      // O próprio pode editar o perfil (ex.: apelido), mas não pode se promover
+      // a admin nem alterar o próprio status/pagamento — isso é só do admin.
+      // .get(campo, default) protege contra updates parciais e campos ausentes.
+      allow update: if isAdmin()
+        || ( isOwner(uid)
+             && request.resource.data.get('role',  'user') == resource.data.get('role',  'user')
+             && request.resource.data.get('ativo', true)   == resource.data.get('ativo', true)
+             && request.resource.data.get('pago',  false)  == resource.data.get('pago',  false) );
+
+      allow delete: if isAdmin();
+    }
+
+    // ── palpites ──────────────────────────────────────────────────────────────
+    match /palpites/{uid} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();   // só na exclusão de usuário pelo admin
+
+      // Placares palpitados, um doc por jogo.
+      match /jogos/{gameId} {
+        allow read: if isSignedIn();
+        allow write: if isOwner(uid) || isAdmin();
+      }
+
+      // Histórico imutável de alterações de palpite.
+      match /historico/{entryId} {
+        allow read: if isSignedIn();
+        allow create: if isOwner(uid) || isAdmin();
+        allow update: if false;        // nunca editar um registro de histórico
+        allow delete: if isAdmin();    // só apagado junto com a exclusão de usuário
+      }
+    }
+
+    // ── resultados (placares oficiais + travas) — só admin escreve ──────────────
+    match /resultados/{gameId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── config (version, geral, bracket_thirds, ai_insights) — só admin escreve ─
+    match /config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── audit — só admin lê/cria, e nunca se edita ou apaga ─────────────────────
+    match /audit/{entryId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ── Negação por padrão para qualquer caminho não mapeado acima ──────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

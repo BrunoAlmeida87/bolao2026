@@ -3680,6 +3680,11 @@ const _autoLockApplied = new Set();
 // (fallback para quando o admin esquece de bloquear manualmente).
 // Usa _autoLockApplied para nunca tentar o mesmo jogo duas vezes na mesma sessão.
 async function _applyAutoLocks(res) {
+  // Só o admin persiste o auto-lock: as Firestore Rules bloqueiam escrita em
+  // 'resultados'/'config' para usuários comuns, então tentar aqui só geraria
+  // permission-denied repetido. O bloqueio por horário continua garantido para
+  // todos client-side em isPalpiteClosed()/isPalpiteClosedForSave().
+  if (currentUserDoc?.role !== 'admin') return;
   try {
     const now = Date.now();
     const FV = firebase.firestore.FieldValue;
@@ -5754,7 +5759,7 @@ async function renderAdminResultados() {
         </div>
         <pre id="mig-orient-log" style="display:none;margin-top:10px;max-height:240px;overflow:auto;font-size:0.72rem;background:rgba(0,0,0,.25);padding:10px;border-radius:8px;white-space:pre-wrap"></pre>
       </div>`;
-    let html = _testPanel + _updateBar + _migOrientPanel + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Palpites travam <b>automaticamente 1h antes</b> do início. Use o botão de trava para alternar: <b>⏱️ Automático → 🔒 Travado → 🟢 Liberado</b> (sobrepõe a regra). Edite a <b>data/hora (Brasília)</b> de cada jogo se o horário mudar.</div>`;
+    let html = (TEST_MODE_ENABLED ? _testPanel : '') + _updateBar + _migOrientPanel + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Palpites travam <b>automaticamente 1h antes</b> do início. Use o botão de trava para alternar: <b>⏱️ Automático → 🔒 Travado → 🟢 Liberado</b> (sobrepõe a regra). Edite a <b>data/hora (Brasília)</b> de cada jogo se o horário mudar.</div>`;
     let lastDate = null;
     let lastPhase = null;
     sortedGames.forEach(game=>{
@@ -6166,11 +6171,18 @@ async function resetSchedule(gameId) {
 // TEST-MODE:START — REMOVER EM PRODUÇÃO
 // Ferramentas de admin para preencher/apagar resultados em massa
 // (procure por "TEST-MODE" para localizar e remover todos os blocos)
+//
+// Interruptor de produção: com TEST_MODE_ENABLED = false o painel de teste não
+// é renderizado e as funções de escrita em massa ficam bloqueadas, mesmo que
+// alguém tente chamá-las pelo console. Para usar em desenvolvimento, mude para
+// true. O ideal continua sendo remover todo o bloco antes do bolão valer.
 // ════════════════════════════════════════════
+const TEST_MODE_ENABLED = false;
 function _isAdmin() { return currentUserDoc?.role === 'admin'; }
 function _randScore() { return Math.floor(Math.random() * 5); } // 0–4
 
 async function _testeApplyBatch(games, mode) {
+  if (!TEST_MODE_ENABLED) { showToast('🔒 Modo de teste desativado em produção', 'error'); return; }
   const FV = firebase.firestore.FieldValue;
   const batch = db_.batch();
   games.forEach(g => {
@@ -6278,6 +6290,7 @@ async function testeClearDay() {
 // eliminatórias. Serve para "destravar" chaves que ficaram com seleções
 // gravadas por fills antigos antes da correção de clear.
 async function testeResetBracket() {
+  if (!TEST_MODE_ENABLED) { showToast('🔒 Modo de teste desativado em produção', 'error'); return; }
   if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
   if (!confirm('Resetar os nomes das seleções em TODAS as fases eliminatórias (oitavas → final)?\nPlacares não serão afetados.')) return;
   try {
@@ -6354,7 +6367,7 @@ async function renderAdminUsuarios() {
             </div>
             <div style="text-align:center;min-width:90px">
               <div id="admin-premio-3" style="font-size:1rem;font-weight:800;color:#CD7F32">🥉 ${formatBRL(premios.terceiro)}</div>
-              <div style="font-size:0.68rem;color:var(--text-muted)">3º (10%)</div>
+              <div style="font-size:0.68rem;color:var(--text-muted)">3º (20%)</div>
             </div>
           </div>
         </div>
@@ -6489,6 +6502,20 @@ function deleteUserClick(uid) {
 async function deleteUser(uid) {
   try {
     showToast('⏳ Excluindo usuário...','');
+
+    // Subcoleções não são apagadas automaticamente quando o doc pai é deletado.
+    // O histórico pode ter centenas de registros, então apagamos em lotes de 450
+    // (abaixo do limite de 500 ops por batch do Firestore) antes do batch principal.
+    const histRef = db_.collection('palpites').doc(uid).collection('historico');
+    let histSnap = await histRef.limit(450).get();
+    while (!histSnap.empty) {
+      const hb = db_.batch();
+      histSnap.docs.forEach(d => hb.delete(d.ref));
+      await hb.commit();
+      if (histSnap.size < 450) break;
+      histSnap = await histRef.limit(450).get();
+    }
+
     const batch = db_.batch();
 
     // Deletar todos os palpites do usuário
