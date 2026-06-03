@@ -17,4 +17,5 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: bolao-copa2026-fce72
-          # sem channelId → cria preview channel com URL temporária
+          # sem channelId → Firebase gera URL temporária única por branch
+          expires: 7d
