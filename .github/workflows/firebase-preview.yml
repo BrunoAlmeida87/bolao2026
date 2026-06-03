@@ -1,0 +1,20 @@
+name: Deploy – Preview Channel
+
+on:
+  push:
+    branches-ignore:
+      - main   # main vai para produção, não para preview
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy para Firebase Hosting Preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: bolao-copa2026-fce72
+          channelId: live   # usa nome do branch automaticamente
