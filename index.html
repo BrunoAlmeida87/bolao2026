@@ -6,6 +6,15 @@
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
 <meta name="app-version" content="v1.10.9">
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FFD700">
+<meta name="description" content="Bolão da Copa do Mundo FIFA 2026 - ICN">
+<!-- PWA: iOS Safari -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bolão ICN">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -7463,6 +7472,15 @@ async function installPwaApp() {
   }
   deferredPwaPrompt = null;
   updatePwaInstallButton();
+}
+
+// Registro do Service Worker (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('[SW] Registrado:', reg.scope))
+      .catch(err => console.warn('[SW] Falha no registro:', err));
+  });
 }
 </script>
 </body>
