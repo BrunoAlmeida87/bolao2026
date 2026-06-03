@@ -11,11 +11,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Gera channelId a partir do nome do branch
+        id: channel
+        run: |
+          ID=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g' | cut -c1-30)
+          echo "id=$ID" >> $GITHUB_OUTPUT
+
       - name: Deploy para Firebase Hosting Preview
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: bolao-copa2026-fce72
-          # sem channelId → Firebase gera URL temporária única por branch
+          channelId: ${{ steps.channel.outputs.id }}
           expires: 7d
