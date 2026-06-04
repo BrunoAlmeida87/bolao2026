@@ -1,5 +1,14 @@
+// Detecta o caminho base automaticamente (funciona em /bolao2026/ e em /)
+const BASE = self.location.href.replace(/sw\.js(\?.*)?$/, '');
+
 const CACHE = 'bolao-icn-v1.10.9';
-const PRECACHE = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
+const PRECACHE = [
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.json',
+  BASE + 'icons/icon-192.png',
+  BASE + 'icons/icon-512.png',
+];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)));
@@ -31,7 +40,7 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE).then(c => c.put(request, clone));
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match(BASE + 'index.html'))
     );
     return;
   }
