@@ -268,6 +268,26 @@ select option{background:var(--mid-blue);color:var(--white)}
 }
 .dashboard-stats-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
 .mini-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),#FFA500);border-radius:3px}
+/* ── Ranking Cards (mobile) ── */
+.ranking-table-wrap{display:block}
+.ranking-cards{display:none}
+.rank-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s}
+.rank-card:active{background:var(--light-blue)}
+.rank-card.is-me{background:rgba(255,215,0,.06);border-color:rgba(255,215,0,.3)}
+.rank-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.rank-card-pos{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:34px}
+.rank-card-name{flex:1;min-width:0}
+.rank-card-name .rk-apelido{font-weight:700;color:var(--gold);font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-card-name .rk-nome{font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-card-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;white-space:nowrap}
+.rank-card-chips{display:flex;gap:5px;flex-wrap:wrap}
+.rank-chip{font-size:0.68rem;font-weight:600;padding:3px 7px;border-radius:6px}
+.rank-chip.exact{background:rgba(0,200,81,.12);color:var(--green)}
+.rank-chip.vsaldo{background:rgba(255,215,0,.1);color:var(--gold)}
+.rank-chip.venc{background:rgba(255,140,0,.1);color:#FFA500}
+.rank-mov-pos{font-size:0.62rem;font-weight:700;color:var(--green);line-height:1}
+.rank-mov-neg{font-size:0.62rem;font-weight:700;color:#ff6b6b;line-height:1}
+.rank-mov-zero{font-size:0.62rem;color:var(--text-muted);line-height:1}
 
 /* ══════════════════════════════════════════
    PALPITES
@@ -662,6 +682,8 @@ body.light-theme .mais-sheet a.active{color:var(--accent)}
   .score-input{width:44px;height:42px;font-size:1rem}
   .result-row{grid-template-columns:1fr 46px 16px 46px 1fr auto;gap:4px}
   .result-input{width:46px;height:42px;font-size:1rem}
+  .ranking-table-wrap{display:none}
+  .ranking-cards{display:block}
   .ranking-table .hide-mobile{display:none}
   .ranking-table th,.ranking-table td{padding:7px 8px;font-size:0.8rem}
   .rank-pos{width:26px;height:26px;font-size:0.75rem}
@@ -2620,7 +2642,7 @@ async function renderDashboard() {
       </div>`;
     }
 
-    html += `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
+    html += `<div class="ranking-table-wrap"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
         <table class="ranking-table" style="min-width:660px">
           <thead><tr>
             <th>#</th><th style="min-width:110px">Participante</th><th>Pontos</th>
@@ -2628,6 +2650,7 @@ async function renderDashboard() {
             <th>Jogos</th><th title="Palpite de Campeão">🏆 Campeão</th><th>%</th><th title="Distância para o líder">Dist.</th>
           </tr></thead><tbody>`;
 
+    let cardsHtml = `<div class="ranking-cards">`;
     ranking.forEach((u,i)=>{
       const pos=i+1;
       const pct = totalJogos>0 ? Math.round(u.jogos/totalJogos*100) : 0;
@@ -2647,6 +2670,8 @@ async function renderDashboard() {
         : (u.campeao
           ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${teamFlag(u.campeao)} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
           : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`);
+
+      // Tabela (desktop) — inalterada
       html += `<tr class="${isMe?'is-me':''}">
         <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}</td>
         <td style="cursor:pointer" onclick="goToUserPalpites('${u.uid}')"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
@@ -2660,9 +2685,28 @@ async function renderDashboard() {
           <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
         <td>${distLider}</td>
       </tr>`;
-    });
 
-    html += `</tbody></table></div>
+      // Card (mobile)
+      const movHtml = delta===null ? '' :
+        delta>0  ? `<span class="rank-mov-pos">↑${delta}</span>` :
+        delta<0  ? `<span class="rank-mov-neg">↓${Math.abs(delta)}</span>` :
+                   `<span class="rank-mov-zero">—</span>`;
+      cardsHtml += `<div class="rank-card${isMe?' is-me':''}" onclick="goToUserPalpites('${u.uid}')">
+        <div class="rank-card-top">
+          <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}</div>
+          <div class="rank-card-name"><div class="rk-apelido">${esc(u.apelido)}</div><div class="rk-nome">${esc(u.nome)}</div></div>
+          <div class="rank-card-right"><span class="pts-badge">${u.pontos} pts</span><div style="font-size:0.72rem;margin-top:3px">${distLider}</div></div>
+        </div>
+        <div class="rank-card-chips">
+          <span class="rank-chip exact">🎯 ${u.exatos} Exatos</span>
+          <span class="rank-chip vsaldo">⚡ ${u.venc_saldo} V+Saldo</span>
+          <span class="rank-chip venc">✓ ${u.apenas_venc} Venc.</span>
+        </div>
+      </div>`;
+    });
+    cardsHtml += `</div>`;
+
+    html += `</tbody></table></div></div>${cardsHtml}
     <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
       ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>`;
     cont.innerHTML = html;
