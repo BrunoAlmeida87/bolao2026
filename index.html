@@ -274,9 +274,9 @@ select option{background:var(--mid-blue);color:var(--white)}
 .rank-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s}
 .rank-card:active{background:var(--light-blue)}
 .rank-card.is-me{background:rgba(255,215,0,.07);border-color:rgba(255,215,0,.4)}
-.rank-card-gold{border-color:rgba(255,215,0,.45);background:linear-gradient(135deg,rgba(255,215,0,.06),var(--card))}
-.rank-card-silver{border-color:rgba(192,192,192,.4);background:linear-gradient(135deg,rgba(192,192,192,.05),var(--card))}
-.rank-card-bronze{border-color:rgba(205,127,50,.4);background:linear-gradient(135deg,rgba(205,127,50,.05),var(--card))}
+.rank-card-gold{border-color:rgba(255,215,0,.6);background:linear-gradient(135deg,rgba(255,215,0,.14) 0%,var(--card) 70%)}
+.rank-card-silver{border-color:rgba(192,192,192,.55);background:linear-gradient(135deg,rgba(192,192,192,.12) 0%,var(--card) 70%)}
+.rank-card-bronze{border-color:rgba(205,127,50,.55);background:linear-gradient(135deg,rgba(205,127,50,.12) 0%,var(--card) 70%)}
 .rank-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .rank-card-pos{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:34px}
 .rank-card-name{flex:1;min-width:0}
@@ -1623,6 +1623,7 @@ async function _bumpDataVersion() {
 
 let deferredPwaPrompt = null;
 let _cachedRanking = [];
+let _cachedPositionDeltas = {};
 
 // ════════════════════════════════════════════
 // DEBUG — captura de erros e flag opcional
@@ -2588,6 +2589,7 @@ async function renderDashboard() {
       // o palpite de campeão é desconsiderado naturalmente (FIN1 some, _getFinalChampion=null).
       computeRanking(users, resPrev, allPals, champPicks).forEach((u,idx)=>{ positionDeltas[u.uid]=idx+1; });
     }
+    _cachedPositionDeltas = positionDeltas;
 
     if (users.length === 0) {
       cont.innerHTML = `<div class="section-title">🏆 ${esc(CFG.nome_bolao)}</div>
@@ -2726,8 +2728,9 @@ async function renderDashboard() {
     <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
       ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>
     <div class="ranking-share-row">
-      <button class="btn-share" onclick="shareMyRankingCard()">📤 Minha posição</button>
-      <button class="btn-share" onclick="shareFullRankingImage()">🏆 Ranking completo</button>
+      <button class="btn-share" onclick="shareMyRankingCard()">📸 Gerar imagem — Minha posição</button>
+      <button class="btn-share" onclick="shareRankingImage(10)">📸 Gerar imagem — Top 10</button>
+      <button class="btn-share" onclick="shareRankingImage(0)">📸 Gerar imagem — Todos</button>
     </div>`;
     cont.innerHTML = html;
     _startCountdownTimer();
@@ -7516,74 +7519,156 @@ function isMobileClient() {
 }
 
 // ════════════════════════════════════════════
-// CANVAS SHARE — Ranking para WhatsApp
+// CANVAS SHARE — Gerar imagem do ranking (alta resolução 2x)
 // ════════════════════════════════════════════
+const _CANVAS_SCALE = 2; // 2x para alta resolução
+
+function _mkCanvas(w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w * _CANVAS_SCALE;
+  canvas.height = h * _CANVAS_SCALE;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(_CANVAS_SCALE, _CANVAS_SCALE);
+  return { canvas, ctx };
+}
+
+function _deltaText(uid) {
+  const prevPos = _cachedPositionDeltas[uid];
+  if (!prevPos) return '';
+  const curPos = _cachedRanking.findIndex(r=>r.uid===uid)+1;
+  const d = prevPos - curPos;
+  return d > 0 ? `↑${d}` : d < 0 ? `↓${Math.abs(d)}` : '=';
+}
+
 async function shareMyRankingCard() {
   if (!_cachedRanking.length) { showToast('Carregue o ranking primeiro','warning'); return; }
   const me = _cachedRanking.find(r=>r.uid===currentUser.uid);
   if (!me) { showToast('Você não está no ranking ainda','warning'); return; }
   const pos = _cachedRanking.indexOf(me)+1;
-  const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':`#${pos}`;
-  const canvas = document.createElement('canvas');
-  canvas.width=600; canvas.height=280;
-  const ctx = canvas.getContext('2d');
+  const medal = pos===1?'1º':pos===2?'2º':pos===3?'3º':`${pos}º`;
+  const posColor = pos===1?'#FFD700':pos===2?'#C0C0C0':pos===3?'#CD7F32':'#FFFFFF';
+  const delta = _deltaText(me.uid);
+  const deltaColor = delta.startsWith('↑')?'#00C851':delta.startsWith('↓')?'#ff6b6b':'#8899AA';
+
+  const W=600, H=300;
+  const {canvas, ctx} = _mkCanvas(W, H);
+
   // fundo
-  ctx.fillStyle='#0A1628'; ctx.fillRect(0,0,600,280);
-  // faixa dourada topo
-  ctx.fillStyle='#FFD700'; ctx.fillRect(0,0,600,6);
-  ctx.fillStyle='rgba(255,215,0,0.06)'; ctx.fillRect(0,6,600,274);
+  ctx.fillStyle='#0A1628'; ctx.fillRect(0,0,W,H);
+  // gradiente lateral dourado (top 1) ou neutro
+  const grad = ctx.createLinearGradient(0,0,W,H);
+  grad.addColorStop(0, pos===1?'rgba(255,215,0,0.10)':pos===2?'rgba(192,192,192,0.08)':pos===3?'rgba(205,127,50,0.08)':'rgba(255,255,255,0.03)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+  // faixa topo
+  ctx.fillStyle=posColor; ctx.fillRect(0,0,W,5);
+
   // título
-  ctx.fillStyle='#FFD700'; ctx.font='bold 18px Arial';
-  ctx.textAlign='center'; ctx.fillText('🏆 Bolão ICN Copa 2026',300,42);
-  // posição
-  ctx.fillStyle='#FFFFFF'; ctx.font='bold 72px Arial';
-  ctx.textAlign='center'; ctx.fillText(medal,300,140);
+  ctx.fillStyle='#FFD700'; ctx.font='bold 16px Arial';
+  ctx.textAlign='center'; ctx.fillText('🏆 Bolão ICN Copa 2026',W/2,34);
+  ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='12px Arial';
+  ctx.fillText(new Date().toLocaleDateString('pt-BR'),W/2,52);
+
+  // posição grande
+  ctx.fillStyle=posColor; ctx.font='bold 80px Arial';
+  ctx.textAlign='center'; ctx.fillText(medal,W/2,150);
+
+  // delta (variação de posição)
+  if (delta) {
+    ctx.fillStyle=deltaColor; ctx.font='bold 18px Arial';
+    ctx.textAlign='center'; ctx.fillText(delta,W/2,175);
+  }
+
   // nome
-  ctx.fillStyle='#FFD700'; ctx.font='bold 24px Arial';
-  ctx.textAlign='center'; ctx.fillText(me.apelido,300,178);
+  ctx.fillStyle='#FFFFFF'; ctx.font='bold 22px Arial';
+  ctx.textAlign='center'; ctx.fillText(me.apelido,W/2,delta?206:200);
+
   // pontos
-  ctx.fillStyle='#FFFFFF'; ctx.font='bold 20px Arial';
-  ctx.textAlign='center'; ctx.fillText(`${me.pontos} pts`,300,210);
+  ctx.fillStyle=posColor; ctx.font='bold 18px Arial';
+  ctx.textAlign='center'; ctx.fillText(`${me.pontos} pts`,W/2,232);
+
   // chips
-  ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='14px Arial';
+  ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='13px Arial';
   ctx.textAlign='center';
-  ctx.fillText(`🎯 ${me.exatos} exatos   ⚡ ${me.venc_saldo} V+S   ✓ ${me.apenas_venc} venc.`,300,240);
-  // rodapé
-  ctx.fillStyle='rgba(255,215,0,0.45)'; ctx.font='12px Arial';
-  ctx.textAlign='center'; ctx.fillText('brunoalmeida87.github.io/bolao2026',300,268);
-  await _downloadOrShareCanvas(canvas, `ranking-${me.apelido.replace(/\s+/g,'_')}.png`, `${medal} ${me.apelido} — ${me.pontos} pts no Bolão ICN Copa 2026! 🏆`);
+  ctx.fillText(`🎯 ${me.exatos} exatos  ·  ⚡ ${me.venc_saldo} V+Saldo  ·  ✓ ${me.apenas_venc} venc.`,W/2,264);
+
+  // borda de separação inferior
+  ctx.strokeStyle='rgba(255,215,0,0.2)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(24,285); ctx.lineTo(W-24,285); ctx.stroke();
+
+  await _downloadOrShareCanvas(canvas,
+    `minha-posicao-bolao.png`,
+    `${medal} ${me.apelido} — ${me.pontos} pts no Bolão ICN Copa 2026! ⚽${delta?' ('+delta+' na última rodada)':''}`);
 }
 
-async function shareFullRankingImage() {
+async function shareRankingImage(limit) {
   if (!_cachedRanking.length) { showToast('Carregue o ranking primeiro','warning'); return; }
-  const top = _cachedRanking.slice(0,10);
-  const rowH = 42, headerH = 80, footerH = 32, pad = 16;
-  const h = headerH + top.length*rowH + footerH + pad*2;
-  const canvas = document.createElement('canvas');
-  canvas.width=600; canvas.height=h;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle='#0A1628'; ctx.fillRect(0,0,600,h);
-  ctx.fillStyle='#FFD700'; ctx.fillRect(0,0,600,6);
+  const list = limit > 0 ? _cachedRanking.slice(0, limit) : _cachedRanking;
+  const label = limit > 0 ? `Top ${list.length}` : 'Ranking Completo';
+  const filename = limit > 0 ? `ranking-top${list.length}.png` : 'ranking-completo.png';
+
+  const ROW_H=44, HEADER_H=76, PAD=12;
+  const W=600, H=HEADER_H + list.length*ROW_H + PAD*2;
+  const {canvas, ctx} = _mkCanvas(W, H);
+
+  // fundo
+  ctx.fillStyle='#0A1628'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#FFD700'; ctx.fillRect(0,0,W,5);
+
   // título
   ctx.fillStyle='#FFD700'; ctx.font='bold 18px Arial';
-  ctx.textAlign='center'; ctx.fillText('🏆 Ranking — Bolão ICN Copa 2026',300,42);
+  ctx.textAlign='center'; ctx.fillText(`🏆 ${label} — Bolão ICN Copa 2026`,W/2,38);
   ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font='13px Arial';
-  ctx.fillText(`Top ${top.length} · ${new Date().toLocaleDateString('pt-BR')}`,300,64);
+  ctx.fillText(new Date().toLocaleDateString('pt-BR'),W/2,58);
+
+  // header de colunas
+  ctx.fillStyle='rgba(255,255,255,0.15)';
+  ctx.fillRect(0, HEADER_H-2, W, 1);
+
   // linhas
-  top.forEach((u,i)=>{
-    const y = headerH + i*rowH + pad;
+  list.forEach((u,i)=>{
     const pos = i+1;
-    if (i%2===0) { ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect(0,y-4,600,rowH); }
-    const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':`${pos}.`;
-    ctx.fillStyle=pos<=3?'#FFD700':'#FFFFFF'; ctx.font=`bold ${pos<=3?'16':'15'}px Arial`;
-    ctx.textAlign='left'; ctx.fillText(`${medal} ${u.apelido}`, 20, y+22);
-    ctx.fillStyle='#FFD700'; ctx.font='bold 15px Arial';
-    ctx.textAlign='right'; ctx.fillText(`${u.pontos} pts`, 580, y+22);
+    const rowY = HEADER_H + i*ROW_H + PAD;
+    // zebra
+    if (i%2===0) { ctx.fillStyle='rgba(255,255,255,0.025)'; ctx.fillRect(0,rowY-4,W,ROW_H); }
+    // destaque top 3
+    if (pos<=3) {
+      const tintColor = pos===1?'rgba(255,215,0,0.07)':pos===2?'rgba(192,192,192,0.06)':'rgba(205,127,50,0.06)';
+      ctx.fillStyle=tintColor; ctx.fillRect(0,rowY-4,W,ROW_H);
+    }
+
+    // posição
+    const posColor = pos===1?'#FFD700':pos===2?'#C0C0C0':pos===3?'#CD7F32':'rgba(255,255,255,0.5)';
+    ctx.fillStyle=posColor; ctx.font=`bold ${pos<=3?'15':'14'}px Arial`;
+    ctx.textAlign='left'; ctx.fillText(`${pos}.`,18,rowY+26);
+
+    // nome
+    ctx.fillStyle=pos<=3?'#FFFFFF':'rgba(255,255,255,0.85)';
+    ctx.font=`${pos<=3?'bold ':''}14px Arial`;
+    ctx.textAlign='left'; ctx.fillText(u.apelido.length>24?u.apelido.slice(0,22)+'…':u.apelido,46,rowY+26);
+
+    // delta
+    const prevPos = _cachedPositionDeltas[u.uid];
+    if (prevPos) {
+      const d = prevPos - pos;
+      const dTxt = d>0?`↑${d}`:d<0?`↓${Math.abs(d)}`:'=';
+      const dColor = d>0?'#00C851':d<0?'#ff6b6b':'#8899AA';
+      ctx.fillStyle=dColor; ctx.font='bold 11px Arial';
+      ctx.textAlign='center'; ctx.fillText(dTxt,310,rowY+27);
+    }
+
+    // pts
+    ctx.fillStyle=posColor; ctx.font='bold 14px Arial';
+    ctx.textAlign='right'; ctx.fillText(`${u.pontos} pts`,W-18,rowY+26);
+
+    // chips pequenos
+    ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='11px Arial';
+    ctx.textAlign='right';
+    ctx.fillText(`🎯${u.exatos} ⚡${u.venc_saldo} ✓${u.apenas_venc}`,W-18,rowY+40);
   });
-  // rodapé
-  ctx.fillStyle='rgba(255,215,0,0.45)'; ctx.font='12px Arial';
-  ctx.textAlign='center'; ctx.fillText('brunoalmeida87.github.io/bolao2026', 300, h-10);
-  await _downloadOrShareCanvas(canvas, 'ranking-completo.png', `🏆 Ranking Bolão ICN Copa 2026!\n\n${top.slice(0,5).map((u,i)=>`${i+1}. ${u.apelido} – ${u.pontos} pts`).join('\n')}`);
+
+  const shareText = `🏆 ${label} Bolão ICN Copa 2026\n\n`+list.slice(0,5).map((u,i)=>`${i+1}. ${u.apelido} – ${u.pontos} pts`).join('\n');
+  await _downloadOrShareCanvas(canvas, filename, shareText);
 }
 
 async function _downloadOrShareCanvas(canvas, filename, text) {
@@ -7594,7 +7679,7 @@ async function _downloadOrShareCanvas(canvas, filename, text) {
       await navigator.share({files:[file], text});
     } else {
       _fallbackDownload(blob, filename);
-      showToast('Imagem salva! Compartilhe pelo WhatsApp manualmente.','info');
+      showToast('Imagem gerada! Compartilhe pelo WhatsApp manualmente.','info');
     }
   } catch(e) {
     if (e.name!=='AbortError') showToast('Erro ao gerar imagem','error');
