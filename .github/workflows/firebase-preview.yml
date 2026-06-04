@@ -1,0 +1,27 @@
+name: Deploy – Preview Channel
+
+on:
+  push:
+    branches-ignore:
+      - main   # main vai para produção, não para preview
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gera channelId a partir do nome do branch
+        id: channel
+        run: |
+          ID=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g' | cut -c1-30)
+          echo "id=$ID" >> $GITHUB_OUTPUT
+
+      - name: Deploy para Firebase Hosting Preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: bolao-copa2026-fce72
+          channelId: ${{ steps.channel.outputs.id }}
+          expires: 7d

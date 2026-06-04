@@ -5,12 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.10.2">
+<meta name="app-version" content="v1.10.9">
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A1628">
+<meta name="description" content="Bolão da Copa do Mundo FIFA 2026 - ICN">
+<!-- PWA: iOS Safari -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bolão ICN">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <!-- Firebase 9 Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- XLSX é carregado sob demanda (só nas exportações do admin) via ensureXLSX() -->
 <script>
   // Garante que o Firebase esteja disponível antes de qualquer uso
   window.__firebaseReady = new Promise((resolve) => {
@@ -756,6 +765,9 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ngc-date{font-size:0.78rem;color:var(--text-muted);margin-bottom:8px}
 .ngc-countdown{font-size:1.5rem;font-weight:800;color:#00b4ff;letter-spacing:.04em;font-variant-numeric:tabular-nums}
 .ngc-note{font-size:0.72rem;color:var(--text-muted);margin-top:6px}
+.ngc-mypalpite{font-size:0.78rem;margin-top:8px;padding:5px 10px;border-radius:6px;display:inline-block}
+.ngc-mypalpite-set{color:#5fd16b;background:rgba(76,175,80,.13)}
+.ngc-mypalpite-missing{color:var(--orange);background:rgba(255,152,0,.12);font-weight:600}
 .next-games-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
 .next-games-grid .next-game-card{margin-bottom:0}
 .next-game-card.locked-soon{background:linear-gradient(135deg,rgba(255,68,68,.14),rgba(200,0,0,.07));border-color:rgba(255,68,68,.55)}
@@ -767,6 +779,16 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .next-game-card.in-progress .ngc-countdown{color:#5fd16b;font-size:1.15rem}
 .next-game-card.in-progress .ngc-note{color:#8fd99a;font-weight:700}
 .prize-pool-item{text-align:center;min-width:90px}
+.bump-chart-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.bump-chart-wrap svg text{font-family:inherit}
+.ai-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px}
+.ai-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.ai-card-icon{font-size:1.7rem;line-height:1}
+.ai-card-title{font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.ai-card-value{font-size:1.15rem;font-weight:800;color:var(--gold);line-height:1.2}
+.ai-card-text{font-size:0.8rem;color:var(--text-muted);line-height:1.45}
+.ai-updated{font-size:0.72rem;color:var(--text-muted);margin-top:10px;text-align:right}
+.light-theme .ai-card{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.09)}
 .prize-pool-item .ppi-val{font-size:1.2rem;font-weight:800;color:var(--gold)}
 .prize-pool-item .ppi-lbl{font-size:0.7rem;color:var(--text-muted);margin-top:2px}
 /* Paid checkbox in admin users */
@@ -1099,7 +1121,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.10.2</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.10.9</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
         📲 Instalar app
       </button>
@@ -1244,12 +1266,12 @@ const GRUPOS_DATA = {
     {id:'J6',r:3,h:'Argélia',a:'Áustria',date:'Jun 27'},
   ]},
   K:{teams:['Portugal','Colômbia','Rep. Dem. Congo','Uzbequistão'],games:[
-    {id:'K1',r:1,h:'Colômbia',a:'Portugal',date:'Jun 27'},
-    {id:'K2',r:1,h:'Rep. Dem. Congo',a:'Uzbequistão',date:'Jun 27'},
-    {id:'K3',r:2,h:'Portugal',a:'Rep. Dem. Congo',date:'Jun 17'},
-    {id:'K4',r:2,h:'Uzbequistão',a:'Colômbia',date:'Jun 17'},
-    {id:'K5',r:3,h:'Portugal',a:'Uzbequistão',date:'Jun 23'},
-    {id:'K6',r:3,h:'Colômbia',a:'Rep. Dem. Congo',date:'Jun 23'},
+    {id:'K3',r:1,h:'Portugal',a:'Rep. Dem. Congo',date:'Jun 17'},
+    {id:'K4',r:1,h:'Uzbequistão',a:'Colômbia',date:'Jun 17'},
+    {id:'K5',r:2,h:'Portugal',a:'Uzbequistão',date:'Jun 23'},
+    {id:'K6',r:2,h:'Colômbia',a:'Rep. Dem. Congo',date:'Jun 23'},
+    {id:'K1',r:3,h:'Colômbia',a:'Portugal',date:'Jun 27'},
+    {id:'K2',r:3,h:'Rep. Dem. Congo',a:'Uzbequistão',date:'Jun 27'},
   ]},
   L:{teams:['Inglaterra','Croácia','Gana','Panamá'],games:[
     {id:'L1',r:1,h:'Inglaterra',a:'Croácia',date:'Jun 17'},
@@ -1371,7 +1393,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.10.2',
+  app_version:'v1.10.9',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -1460,8 +1482,8 @@ async function _fetchUsr() {
   u=snap.docs.map(d=>({uid:d.id,...d.data()}));
   _scSet('usr',u,_SC_TTL.usr); return u;
 }
-async function _fetchPals(users) {
-  let p=_scGet('pals'); if(p) return p;
+async function _fetchPals(users, force) {
+  if (!force) { let p=_scGet('pals'); if(p) return p; }
   const allPals={},champPicks={};
   await Promise.all((users||[]).map(async u=>{
     const [ps,pdoc]=await Promise.all([
@@ -2161,6 +2183,7 @@ async function updateEliminationTeams() {
     await _applyBracketPhase('semi',    str => _resolveWinnerPlaceholders(str, 'quartas', res), res);
     await _applyBracketPhase('final',   str => _resolveWinnerPlaceholders(str, 'semi',    res), res);
 
+    _scDel('res'); // chaveamento escreveu h_team/a_team — invalida cache para próximas leituras
     isLoadingPage = false;
   } catch(e) {
     console.error('Erro ao atualizar eliminatórias:', e);
@@ -2218,6 +2241,21 @@ function computeStandings(grupKey, resultados) {
 let _dashResults = {};
 // Distribuição do bolão para as próximas partidas (% vit. casa, empate, vit. visitante)
 let _dashBolaoDistrib = {};
+// Palpites do usuário logado — usados nos cards de próximas partidas
+let _dashMyPals = {};
+function _refreshDashMyPalCard(gameId) {
+  const el = document.getElementById(`ngc-mypalpite-${gameId}`);
+  if (!el) return;
+  const myPal = _dashMyPals[gameId];
+  const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
+  if (hasPal) {
+    el.className = 'ngc-mypalpite ngc-mypalpite-set';
+    el.innerHTML = `✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong>`;
+  } else {
+    el.className = 'ngc-mypalpite ngc-mypalpite-missing';
+    el.innerHTML = '⚠️ Você ainda não palpitou!';
+  }
+}
 
 // Renderiza barras de distribuição do bolão para uma partida bloqueada.
 // bolaoDistrib: { phw, pdr, paw } em %.  Retorna '' se não houver dados.
@@ -2323,6 +2361,11 @@ function _buildNextGamesHtml(group) {
     // Só embute as barras no HTML inicial se a partida JÁ está bloqueada. Para partidas
     // ainda abertas o container fica vazio e o timer (_tick) injeta ao cruzar a trava.
     const distribHtml = isLockedNow ? _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]) : '';
+    const myPal = _dashMyPals[game.id];
+    const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
+    const myPalHtml = hasPal
+      ? `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-set">✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong></div>`
+      : `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-missing">⚠️ Você ainda não palpitou!</div>`;
     return `<div class="next-game-card" data-gid="${game.id}">
       <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
@@ -2332,7 +2375,8 @@ function _buildNextGamesHtml(group) {
       </div>
       <div class="ngc-date">${esc(fmtDate)}</div>
       <div class="ngc-countdown" id="ngc-cd-${game.id}">—</div>
-      <div class="ngc-note" id="ngc-note-${game.id}">Os palpites serão bloqueados às 22h do dia anterior à partida</div>
+      <div class="ngc-note" id="ngc-note-${game.id}">Bloqueio: ${_lockDisplayStr(_gameLockInstant(game, res))}</div>
+      ${myPalHtml}
       <div id="ngc-prob-${game.id}" style="display:${isLockedNow&&distribHtml?'block':'none'}">${distribHtml}</div>
     </div>`;
   }).join('');
@@ -2377,16 +2421,34 @@ function _startCountdownTimer() {
       const card = cd.closest('.next-game-card');
       const note = document.getElementById(`ngc-note-${game.id}`);
       const distribWrap = document.getElementById(`ngc-prob-${game.id}`);
+      const resData = _dashResults[game.id] || {};
+      const manualLocked = resData.locked === true;
+      const lockAt    = _gameLockInstant(game, resData);
+      const autoLockAt = _gameAutoLockInstant(game, resData);
+      const diffToLock = lockAt ? (lockAt.getTime() - now) : -1;
+      const lockedByTime = diffToLock <= 0;
+      const lockedSoon   = manualLocked || lockedByTime;
       const diff = start.getTime() - now;
+
+      // Auto-lock: quando 23h do dia anterior passou e o jogo ainda não está travado,
+      // grava locked:true no Firestore uma única vez por sessão.
+      if (!manualLocked && !_autoLockApplied.has(game.id) && autoLockAt && now >= autoLockAt.getTime()) {
+        _applyAutoLocks(_dashResults);
+      }
+
       if (diff > 0) {
-        // Ainda não começou: contagem regressiva.
-        cd.textContent = _fmtDiff(diff);
-        const manualLocked = _dashResults[game.id]?.locked === true;
-        const lockedSoon = manualLocked || diff <= LOCK_LEAD_MS;
+        // Jogo ainda não começou.
+        if (lockedSoon) {
+          // Palpites já encerrados (passou das 22h ou admin travou)
+          cd.textContent = '🔒 Palpites encerrados';
+        } else {
+          // Contagem regressiva até o bloqueio (22h do dia anterior)
+          cd.textContent = _fmtDiff(diffToLock);
+        }
         if (card) { card.classList.toggle('locked-soon', lockedSoon); card.classList.remove('in-progress'); }
         if (note) note.textContent = lockedSoon
           ? '🔒 Palpites BLOQUEADOS para esta partida'
-          : 'Os palpites serão bloqueados às 22h do dia anterior à partida';
+          : `Bloqueio: ${_lockDisplayStr(lockAt)}`;
         if (distribWrap) {
           // Injeta as barras no momento em que a partida bloqueia (caso o dashboard já
           // estivesse aberto antes da trava e o container tenha sido renderizado vazio).
@@ -2396,7 +2458,7 @@ function _startCountdownTimer() {
           if (distribWrap.innerHTML) distribWrap.style.display = lockedSoon ? 'block' : 'none';
         }
       } else {
-        // Já começou e ainda sem resultado: em andamento (até +120min) → aguardando.
+        // Jogo já começou e ainda sem resultado: em andamento (até +120min) → aguardando.
         const sinceStart = now - start.getTime();
         cd.textContent = sinceStart <= MATCH_DURATION_MS
           ? '🟢 Em andamento'
@@ -2430,6 +2492,8 @@ async function renderDashboard() {
     // contador cruzar o limite de bloqueio, mesmo com o dashboard aberto desde antes da trava.
     // (allPals já está em memória no cliente, então pré-computar não expõe nada novo.)
     _dashResults = Object.assign({}, res);
+    _dashMyPals   = allPals[currentUser.uid] || {};
+    _applyAutoLocks(_dashResults); // verifica e grava auto-lock para jogos que já passaram das 23h
     _dashBolaoDistrib = {};
     ALL_GAMES.forEach(g => {
       const gPals = users.map(u => allPals[u.uid]?.[g.id]).filter(p => p && p.h !== undefined && p.a !== undefined);
@@ -2911,7 +2975,8 @@ async function savePalpite(gameId) {
     try {
       await db_.collection('palpites').doc(uid).collection('jogos').doc(gameId).delete();
       // Apagar um palpite é sempre uma mudança de ideia → conta como edição.
-      _logPalpiteHistory(uid, gameId, { action: 'delete', edit: true, adminEdit: !!palpitesEditing && palpitesEditing !== currentUser.uid });
+      const _isAdminDel = !!palpitesEditing && palpitesEditing !== currentUser.uid;
+      _logPalpiteHistory(uid, gameId, { action: 'delete', edit: true, adminEdit: _isAdminDel });
       _palpitesSalvosSet.delete(gameId);
       delete myPalpites[gameId];
       ['filled','saving','saved-ok','save-err','saving'].forEach(c=>{
@@ -2921,6 +2986,7 @@ async function savePalpite(gameId) {
       updatePalProgress();
       updateGroupTabState();
       _scDel('pals');
+      if (!_isAdminDel) { delete _dashMyPals[gameId]; _refreshDashMyPalCard(gameId); }
     } catch(e) { showToast('Erro ao apagar palpite: '+e.message,'error'); }
     return;
   }
@@ -2965,6 +3031,7 @@ async function savePalpite(gameId) {
       } catch(_) {}
     }
     _scDel('pals');
+    if (!isAdminEdit) { _dashMyPals[gameId] = { h: pal.h, a: pal.a }; _refreshDashMyPalCard(gameId); }
     if (hInp) { hInp.classList.remove('saving'); hInp.classList.add('saved-ok'); }
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('saved-ok'); }
     setTimeout(()=>{ if(hInp) hInp.classList.remove('saved-ok'); if(aInp) aInp.classList.remove('saved-ok'); }, 1500);
@@ -2977,7 +3044,7 @@ async function savePalpite(gameId) {
 
 function showPalpiteClosedReason(gameId) {
   const res = resultados[gameId] || {};
-  if (res.locked===true) {
+  if (res.locked===true || res.autoLocked===true) {
     showToast('Este jogo está bloqueado. Não é mais possível alterar palpites.','warning');
     return;
   }
@@ -2987,11 +3054,16 @@ function showPalpiteClosedReason(gameId) {
   }
   const gameDef = ALL_GAMES.find(g=>g.id===gameId);
   const start = gameDef ? _effectiveStartInstant(gameDef, res) : null;
+  const lockAt = gameDef ? _gameLockInstant(gameDef, res) : null;
+  if (lockAt && Date.now() >= lockAt.getTime()) {
+    showToast(`🔒 Palpites encerrados: bloqueados a partir de ${_lockDisplayStr(lockAt)}.`,'warning');
+    return;
+  }
   if (start) {
     if (Date.now() >= start.getTime()) {
       showToast('⏰ O jogo já começou. Palpites foram encerrados automaticamente.','warning');
     } else {
-      showToast('🔒 Palpites encerrados: falta menos de 1h para o início desta partida.','warning');
+      showToast('🔒 Palpites encerrados automaticamente.','warning');
     }
     return;
   }
@@ -3139,7 +3211,8 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const r = res[game.id]||{};
   const teams = _getResolvedTeamsForGame(game, res);
   const hasResult = r.h_real!==undefined;
-  const isLocked = r.locked===true || hasResult;
+  // Revela palpites quando: resultado lançado, trava manual, ou prazo de 22h passou
+  const isLocked = r.locked===true || hasResult || isPalpiteClosed(game, r);
   const showPal = canReveal || isLocked;
   const pts = calcPontos(pal,r);
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
@@ -3448,7 +3521,7 @@ async function renderVerTodos() {
       users.forEach(u=>{
         const pal = allPals[u.uid]?.[g.id];
         const isOwn = u.uid === currentUser.uid;
-        const isGameLocked = r.locked===true || hasResult;
+        const isGameLocked = r.locked===true || r.autoLocked===true || hasResult;
         const canSeePal = isAdminView || isOwn || isGameLocked;
         if (!pal||pal.h===undefined) {
           html += `<td style="color:var(--text-muted)">—</td>`;
@@ -3540,25 +3613,114 @@ function _effectiveStartInstant(game, res) {
   return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, parseInt(dm[3]), parseInt(tm[1]) + 3, parseInt(tm[2])));
 }
 
+// Instante de bloqueio dos palpites: 22h Brasília do dia anterior à rodada.
+// Jogos de madrugada (00h–02h59) pertencem à rodada do dia anterior — mesmo cluster.
+// 22:00 Brasília (UTC-3) = 01:00 UTC do dia-calendário da rodada.
+function _gameLockInstant(game, res) {
+  res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
+  const iso  = res.date_override || _gameDateToISO(game?.date);
+  const time = res.time_override || GAME_TIMES[game?.id] || '';
+  const dm = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const tm = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!dm || !tm) return null;
+  let day = parseInt(dm[3]);
+  const hh = parseInt(tm[1]);
+  // Madrugada (00h–02h59): pertence à rodada do dia anterior → mesmo deadline de bloqueio
+  if (hh < 3) day -= 1;
+  // 22:00 Brasília do dia (day-1) = 01:00 UTC do dia (day)
+  return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, day, 1, 0));
+}
+
+// Instante do auto-lock: 23h Brasília do dia anterior à rodada (fallback se admin esquecer).
+// 23:00 Brasília (UTC-3) = 02:00 UTC do dia-calendário da rodada.
+function _gameAutoLockInstant(game, res) {
+  res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
+  const iso  = res.date_override || _gameDateToISO(game?.date);
+  const time = res.time_override || GAME_TIMES[game?.id] || '';
+  const dm = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const tm = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!dm || !tm) return null;
+  let day = parseInt(dm[3]);
+  const hh = parseInt(tm[1]);
+  if (hh < 3) day -= 1;
+  // 23:00 Brasília do dia (day-1) = 02:00 UTC do dia (day)
+  return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, day, 2, 0));
+}
+
+// Formata o instante de bloqueio (UTC) como string legível em horário Brasília.
+function _lockDisplayStr(lockAt) {
+  if (!lockAt) return 'às 22h do dia anterior';
+  // Brasília = UTC-3: subtrai 3h para obter a hora local correta via getUTC*
+  const brt = new Date(lockAt.getTime() - 3 * 3600000);
+  const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const d = brt.getUTCDate();
+  const mon = months[brt.getUTCMonth()];
+  const h = String(brt.getUTCHours()).padStart(2,'0');
+  return `${d} ${mon} às ${h}h (Brasília)`;
+}
+
 // Palpites encerrados? Prioridade: resultado lançado > trava manual >
-// liberação manual (override) > regra automática (1h antes do início).
+// liberação manual (override) > regra automática (22h do dia anterior à rodada).
 function isPalpiteClosed(game, res) {
   res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
   if (res.h_real !== undefined && res.a_real !== undefined) return true;
   if (res.locked === true) return true;
   if (res.unlock_override === true) return false;
-  const start = _effectiveStartInstant(game, res);
-  return start ? (Date.now() >= start.getTime() - LOCK_LEAD_MS) : false;
+  if (res.autoLocked === true) return true;
+  const lockAt = _gameLockInstant(game, res);
+  return lockAt ? (Date.now() >= lockAt.getTime()) : false;
 }
 
-// Variante para salvar: admin editando outro usuário ignora a trava automática
-// por tempo, mas continua respeitando trava manual e resultado lançado.
+// Variante para salvar: admin editando outro usuário ignora trava automática
+// (por tempo ou autoLocked), mas continua respeitando trava manual e resultado.
 function isPalpiteClosedForSave(game, res, adminEditing) {
   res = res || {};
   if (res.h_real !== undefined) return true;
   if (res.locked === true) return true;
   if (adminEditing) return false;
+  if (res.autoLocked === true) return true;
   return isPalpiteClosed(game, res);
+}
+
+// Controle de auto-lock: evita disparar a gravação mais de uma vez por sessão.
+const _autoLockApplied = new Set();
+
+// Grava locked:true no Firestore para jogos que passaram das 23h do dia anterior
+// (fallback para quando o admin esquece de bloquear manualmente).
+// Usa _autoLockApplied para nunca tentar o mesmo jogo duas vezes na mesma sessão.
+async function _applyAutoLocks(res) {
+  // Só o admin persiste o auto-lock: as Firestore Rules bloqueiam escrita em
+  // 'resultados'/'config' para usuários comuns, então tentar aqui só geraria
+  // permission-denied repetido. O bloqueio por horário continua garantido para
+  // todos client-side em isPalpiteClosed()/isPalpiteClosedForSave().
+  if (currentUserDoc?.role !== 'admin') return;
+  try {
+    const now = Date.now();
+    const FV = firebase.firestore.FieldValue;
+    const toAutoLock = ALL_GAMES.filter(game => {
+      const r = res[game.id] || {};
+      if (r.locked === true || r.autoLocked === true || r.h_real !== undefined || r.unlock_override === true) return false;
+      if (_autoLockApplied.has(game.id)) return false;
+      const autoLockAt = _gameAutoLockInstant(game, r);
+      return autoLockAt && now >= autoLockAt.getTime();
+    });
+    if (!toAutoLock.length) return;
+    // Marca antes do await para evitar duplo disparo caso o timer chame novamente
+    toAutoLock.forEach(g => _autoLockApplied.add(g.id));
+    const batch = db_.batch();
+    toAutoLock.forEach(game => {
+      batch.set(db_.collection('resultados').doc(game.id),
+        { autoLocked: true, updatedAt: FV.serverTimestamp() },
+        { merge: true });
+    });
+    await batch.commit();
+    _scDel('res');
+    _bumpDataVersion();
+  } catch(e) {
+    console.error('_applyAutoLocks:', e);
+    // Reverte para permitir nova tentativa em caso de falha transitória
+    ALL_GAMES.forEach(g => _autoLockApplied.delete(g.id));
+  }
 }
 
 function _uniqueGameDates() {
@@ -3606,31 +3768,39 @@ function calcUserAccuracyStats(uid, allPals, res) {
     .filter(g => _hasFullResult(res[g.id]))
     .sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
   const userPals = allPals[uid] || {};
-  let acertos = 0, exatos = 0, totalGolDiff = 0, count = 0, maxStreak = 0, tempStreak = 0;
+  let acertos = 0, exatos = 0, totalGolDiff = 0, count = 0;
+  let maxStreak = 0, tempStreak = 0, maxExactStreak = 0, tempExactStreak = 0;
   for (const g of gamesOrdered) {
     const p = userPals[g.id];
-    if (!p) { tempStreak = 0; continue; }
+    if (!p) { tempStreak = 0; tempExactStreak = 0; continue; }
     count++;
     const pts = calcPontos(p, res[g.id]);
     if (pts >= (CFG.pts_apenas_vencedor || 5)) {
       acertos++; tempStreak++; maxStreak = Math.max(maxStreak, tempStreak);
     } else { tempStreak = 0; }
-    if (pts === CFG.pts_exato) exatos++;
+    if (pts === CFG.pts_exato) {
+      exatos++; tempExactStreak++; maxExactStreak = Math.max(maxExactStreak, tempExactStreak);
+    } else { tempExactStreak = 0; }
     totalGolDiff += Math.abs(parseInt(p.h) - parseInt(res[g.id].h_real)) + Math.abs(parseInt(p.a) - parseInt(res[g.id].a_real));
   }
-  let currentStreak = 0;
+  let currentStreak = 0, currentExactStreak = 0;
   for (let i = gamesOrdered.length - 1; i >= 0; i--) {
     const p = userPals[gamesOrdered[i].id];
     if (!p) break;
     const pts = calcPontos(p, res[gamesOrdered[i].id]);
-    if (pts >= (CFG.pts_apenas_vencedor || 5)) currentStreak++;
-    else break;
+    if (pts >= (CFG.pts_apenas_vencedor || 5)) currentStreak++; else break;
+  }
+  for (let i = gamesOrdered.length - 1; i >= 0; i--) {
+    const p = userPals[gamesOrdered[i].id];
+    if (!p) break;
+    const pts = calcPontos(p, res[gamesOrdered[i].id]);
+    if (pts === CFG.pts_exato) currentExactStreak++; else break;
   }
   return {
     acertoPct: count > 0 ? (acertos / count * 100).toFixed(1) : '-',
     exatoPct: count > 0 ? (exatos / count * 100).toFixed(1) : '-',
     erroMedio: count > 0 ? (totalGolDiff / count).toFixed(1) : '-',
-    currentStreak, maxStreak, count
+    currentStreak, maxStreak, currentExactStreak, maxExactStreak, count
   };
 }
 
@@ -3764,15 +3934,32 @@ function _calcHeadToHead(users, allPals, res) {
 // ════════════════════════════════════════════
 // ESTATÍSTICAS PAGE
 // ════════════════════════════════════════════
-function _getStatNextGroup(res) {
+function _getStatNextGroupWave(res) {
   const now = Date.now();
-  const upcoming = ALL_GAMES
+  const _resolved = id => { const r = (res||{})[id] || {}; return r.h_real !== undefined && r.a_real !== undefined; };
+  const all = ALL_GAMES
     .map(g => ({ game: g, start: _effectiveStartInstant(g, (res||{})[g.id]) }))
-    .filter(x => x.start && x.start.getTime() > now)
+    .filter(x => x.start)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
-  if (!upcoming.length) return { start: null, items: [] };
-  const t0 = upcoming[0].start.getTime();
-  return { start: t0, items: upcoming.filter(x => x.start.getTime() === t0) };
+  const upcoming = all.filter(x => x.start.getTime() > now);
+  const wave = new Set();
+  if (upcoming.length) {
+    wave.add(upcoming[0].game.id);
+    for (let i = 1; i < upcoming.length; i++) {
+      if (upcoming[i].start.getTime() - upcoming[i-1].start.getTime() <= TIMER_CLUSTER_GAP_MS) {
+        wave.add(upcoming[i].game.id);
+      } else break;
+    }
+  }
+  const items = all.filter(x => {
+    const mode = ((res||{})[x.game.id] || {}).timerMode;
+    if (mode === 'hide') return false;
+    const started = x.start.getTime() <= now;
+    if (started) return !_resolved(x.game.id);
+    if (mode === 'show') return true;
+    return wave.has(x.game.id);
+  });
+  return { items };
 }
 
 // Ranking "Mais Indeciso" — sob demanda. Usa count() agregado (1 leitura por
@@ -3816,16 +4003,135 @@ async function calcMaisIndeciso() {
   }
 }
 
+async function calcJogosIndicisos() {
+  const btn = document.getElementById('jogos-indicisos-btn');
+  const out = document.getElementById('jogos-indicisos-result');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Calculando…'; }
+  try {
+    const users = (await _fetchUsr()).filter(u => u.ativo !== false);
+    const res = await _fetchRes();
+    // Agrega re-edições por gameId lendo historico de todos os usuários
+    const gameChanges = {};
+    await Promise.all(users.map(async u => {
+      try {
+        const snap = await db_.collection('palpites').doc(u.uid).collection('historico')
+          .where('edit', '==', true).get();
+        snap.docs.forEach(d => {
+          const gid = d.data().gameId;
+          if (!gid) return;
+          gameChanges[gid] = (gameChanges[gid] || { count: 0, uids: new Set() });
+          gameChanges[gid].count++;
+          gameChanges[gid].uids.add(u.uid);
+        });
+      } catch(_) {}
+    }));
+    const top = Object.entries(gameChanges)
+      .map(([gid, data]) => ({ gid, count: data.count, users: data.uids.size, game: ALL_GAMES.find(g=>g.id===gid) }))
+      .filter(x => x.game)
+      .sort((a,b) => b.count - a.count)
+      .slice(0, 5);
+    if (btn) btn.style.display = 'none';
+    if (!top.length) {
+      out.innerHTML = `<div class="alert alert-info">Nenhuma alteração registrada ainda.</div>`;
+      return;
+    }
+    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+    out.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
+      ${top.map((x,i) => {
+        const r = res[x.gid] || {};
+        const result = r.h_real !== undefined ? `(resultado: ${r.h_real}–${r.a_real})` : '';
+        return `<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 14px">
+          <span style="font-size:1.3rem;min-width:30px">${medals[i]}</span>
+          <span style="flex:1;font-weight:700">${esc(x.game.h)} × ${esc(x.game.a)} <span style="font-size:0.75rem;font-weight:400;color:var(--text-muted)">${result}</span></span>
+          <span style="font-weight:800;color:var(--gold)">${x.count}</span>
+          <span style="font-size:0.78rem;color:var(--text-muted)">${x.count===1?'troca':'trocas'} · ${x.users} pessoa${x.users>1?'s':''}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } catch(e) {
+    out.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = '📊 Calcular'; }
+  }
+}
+
+let _aiInsightsCache = null; // {cards, updatedAt, updatedBy} — carregado uma vez por sessão
+function _fmtAITimestamp(cache) {
+  const d = cache?.updatedAt?.toDate?.() || null;
+  if (!d) return 'Sem data';
+  const str = d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  return `Atualizado em ${str}${cache.updatedBy ? ' · ' + esc(cache.updatedBy) : ''}`;
+}
+
+function _buildBumpChart(users, res, allPals) {
+  if (!users.length) return '';
+  const grR1 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id));
+  const grR2 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id));
+  const grR3 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id));
+  const phases = [
+    { label:'Rodada 1', newIds: grR1 },
+    { label:'Rodada 2', newIds: grR2 },
+    { label:'Rodada 3', newIds: grR3 },
+    ...Object.values(ELIM_DATA).map(d=>({ label: d.label, newIds: d.games.map(g=>g.id) }))
+  ];
+  let cumIds = [];
+  const checkpoints = [];
+  phases.forEach(ph => {
+    const hasNew = ph.newIds.some(id => res[id] && _hasFullResult(res[id]));
+    cumIds = [...cumIds, ...ph.newIds];
+    if (hasNew) checkpoints.push({ label: ph.label, gameIds: [...cumIds] });
+  });
+  if (checkpoints.length < 2) return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem">São necessárias pelo menos 2 rodadas com resultados para exibir o gráfico</div>`;
+  const rankingsAtCp = checkpoints.map(cp => _computeRankingForGameIds(users, res, allPals, cp.gameIds));
+  const finalRanking = rankingsAtCp[rankingsAtCp.length - 1];
+  const n = users.length, numCp = checkpoints.length;
+  const svgW=700, padL=30, padR=130, padT=18, padB=28, rowH=Math.max(18, Math.min(26, Math.floor(420/n)));
+  const svgH = padT + padB + n * rowH;
+  const chartW = svgW - padL - padR;
+  const xFor = i => padL + (numCp<2 ? chartW/2 : (i/(numCp-1))*chartW);
+  const yFor = rank => padT + (rank-1)*rowH + rowH/2;
+  const palette = ['#FFD700','#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA','#34D399','#F87171',
+    '#60A5FA','#FBBF24','#C084FC','#4ADE80','#FB923C','#38BDF8','#E879F9','#86EFAC',
+    '#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4','#BAE6FD','#DDD6FE','#BBF7D0','#FED7AA','#BFDBFE'];
+  const uidColor = {};
+  finalRanking.forEach((u,i) => { uidColor[u.uid] = palette[i % palette.length]; });
+  let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:320px">`;
+  // Grid
+  for (let r=1;r<=n;r++) { const y=yFor(r); svg+=`<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="rgba(255,255,255,.05)" stroke-width="1"/><text x="${padL-4}" y="${y+3.5}" text-anchor="end" font-size="9" fill="rgba(255,255,255,.3)">${r}°</text>`; }
+  checkpoints.forEach((cp,i) => { const x=xFor(i); svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.1)" stroke-width="1" stroke-dasharray="3,4"/><text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.45)">${esc(cp.label)}</text>`; });
+  // Lines per user
+  users.forEach(u => {
+    const color = uidColor[u.uid]||'#888';
+    const isLeader = u.uid === finalRanking[0]?.uid;
+    const positions = rankingsAtCp.map(rk => { const idx=rk.findIndex(r=>r.uid===u.uid); return idx>=0?idx+1:null; });
+    const pts = positions.map((p,i)=>p!==null?{x:xFor(i),y:yFor(p)}:null).filter(Boolean);
+    if (!pts.length) return;
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i=1;i<pts.length;i++) { const cp2=(pts[i-1].x+pts[i].x)/2; d+=` C ${cp2} ${pts[i-1].y},${cp2} ${pts[i].y},${pts[i].x} ${pts[i].y}`; }
+    svg += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${isLeader?3:1.8}" opacity="${isLeader?1:.6}"/>`;
+    pts.forEach(pt => { svg+=`<circle cx="${pt.x}" cy="${pt.y}" r="${isLeader?4:2.8}" fill="${color}" stroke="rgba(0,0,0,.35)" stroke-width="1"/>`; });
+    const last=pts[pts.length-1], finalPos=positions[positions.length-1];
+    const name=esc((u.apelido||u.nome||'').substring(0,12));
+    svg+=`<text x="${svgW-padR+8}" y="${last.y+4}" font-size="${isLeader?12:10}" fill="${color}" font-weight="${isLeader?700:400}" opacity="${isLeader?1:.75}">${finalPos}° ${name}</text>`;
+  });
+  svg += '</svg>';
+  return svg;
+}
+
 async function renderEstatisticas() {
   const cont = document.getElementById('estatisticas-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    const champPicks = await loadAllChampionPicks();
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users);
+
+    // Carrega AI insights (1 leitura, sem cache — admin pode atualizar a qualquer momento)
+    if (!_aiInsightsCache) {
+      try {
+        const aiSnap = await db_.collection('config').doc('ai_insights').get();
+        _aiInsightsCache = aiSnap.exists ? aiSnap.data() : {};
+      } catch(_) { _aiInsightsCache = {}; }
+    }
 
     const jogosComResultado = Object.keys(res).filter(id=>_hasFullResult(res[id]));
     const totalJogos = jogosComResultado.length;
@@ -3857,8 +4163,8 @@ async function renderEstatisticas() {
       analiseJogos[jid].palpites.forEach(p=>{
         const h = parseInt(p.palpite.h)||0;
         const a = parseInt(p.palpite.a)||0;
-        // Heatmap sem direção: 2-1 e 1-2 contam como o mesmo tipo de placar.
-        const key = `${Math.min(h,a)}-${Math.max(h,a)}`;
+        // Heatmap sem direção: 2×1 e 1×2 contam como o mesmo tipo de placar (vencedor primeiro).
+        const key = `${Math.max(h,a)}×${Math.min(h,a)}`;
         placarFreq[key]=(placarFreq[key]||0)+1;
       });
     });
@@ -3917,7 +4223,7 @@ async function renderEstatisticas() {
     const insights = generateInsights(ranking, userAccStats, analiseJogos, res);
 
     // ── SEÇÃO: PRÓXIMA(S) PARTIDA(S) ──────────────────────────────────────────
-    const _statNextGrp = _getStatNextGroup(res);
+    const _statNextGrp = _getStatNextGroupWave(res);
     const _nowMs = Date.now();
     let _beforeHtml = '';
 
@@ -3928,16 +4234,18 @@ async function renderEstatisticas() {
         const _gr = res[game.id] || {};
         const _closed = isPalpiteClosed(game, _gr);
         const _diff = start.getTime() - _nowMs;
-        const _lockAt = start.getTime() - LOCK_LEAD_MS;
-        const _diffToLock = _lockAt - _nowMs;
+        const _lockAtInst = _gameLockInstant(game, _gr);
+        const _diffToLock = _lockAtInst ? (_lockAtInst.getTime() - _nowMs) : -1;
 
         // Status badge
         let _statusHtml;
         if (_gr.locked === true) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado pelo admin</span>';
+        } else if (_gr.autoLocked === true) {
+          _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado automaticamente</span>';
         } else if (_closed) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Palpites encerrados</span>';
-        } else if (_diffToLock > 0 && _diffToLock <= LOCK_LEAD_MS) {
+        } else if (_diffToLock > 0 && _diffToLock <= 3600000) {
           const _lm = Math.floor(_diffToLock / 60000);
           _statusHtml = '<span style="color:var(--orange);font-weight:700">⚠️ Trava em ' + _lm + 'min</span>';
         } else {
@@ -3983,7 +4291,7 @@ async function renderEstatisticas() {
             const _paw = Math.round(_aw/_tot*100);
             const _avgH = (_gPals.reduce((a,p)=>a+parseInt(p.h||0),0)/_tot).toFixed(1);
             const _avgA = (_gPals.reduce((a,p)=>a+parseInt(p.a||0),0)/_tot).toFixed(1);
-            const _sf={}; _gPals.forEach(p=>{const k=p.h+'-'+p.a;_sf[k]=(_sf[k]||0)+1;});
+            const _sf={}; _gPals.forEach(p=>{ const _ph=parseInt(p.h)||0,_pa=parseInt(p.a)||0; const k=`${Math.max(_ph,_pa)}×${Math.min(_ph,_pa)}`; _sf[k]=(_sf[k]||0)+1; });
             const _top = Object.entries(_sf).sort((a,b)=>b[1]-a[1])[0];
             const _maxPct=Math.max(_phw,_pdr,_paw);
             const _minPct=Math.min(_phw,_pdr,_paw);
@@ -4083,7 +4391,7 @@ async function renderEstatisticas() {
       }).join('');
 
       _beforeHtml += '<div class="card">'
-        + '<div class="card-title">⚽ ' + (_isPlural ? 'Próximas Partidas (simultâneas)' : 'Próxima Partida') + '</div>'
+        + '<div class="card-title">⚽ Próximas Partidas</div>'
         + '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">' + _gameCards + '</div>'
         + '</div>';
     }
@@ -4091,7 +4399,14 @@ async function renderEstatisticas() {
     // ── SEÇÃO: IMPACTO POTENCIAL NO RANKING ───────────────────────────────────
     if (ranking.length >= 2) {
       const _maxPts = CFG.pts_exato || 10;
-      const _nextGames = _statNextGrp.items.map(x => x.game);
+      // Para a simulação usamos apenas jogos futuros (não iniciados), limitados a 6,
+      // evitando explosão combinatória (5^N por par) com muitos jogos sem resultado.
+      const _SIM_MAX = 6;
+      const _nowForSim = Date.now();
+      const _nextGames = _statNextGrp.items
+        .filter(x => x.start.getTime() > _nowForSim)
+        .slice(0, _SIM_MAX)
+        .map(x => x.game);
       // Max pts each user can gain from next group
       const _maxGain = {};
       users.forEach(u => {
@@ -4222,6 +4537,33 @@ async function renderEstatisticas() {
         <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
       </div>`;
 
+    // ── Bump Chart: evolução do ranking ──
+    const bumpSvg = _buildBumpChart(users, res, allPals);
+    html += `<div class="card">
+      <div class="card-title">📈 Evolução do Ranking</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Posição de cada participante ao longo das rodadas. Linha dourada = líder atual.</div>
+      <div class="bump-chart-wrap">${bumpSvg}</div>
+    </div>`;
+
+    // ── Análise IA (se o admin já enviou) ──
+    const aiCards = _aiInsightsCache?.cards;
+    if (Array.isArray(aiCards) && aiCards.length > 0) {
+      html += `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+          <div class="card-title" style="margin-bottom:0">🤖 Análise da IA</div>
+          <div id="ai-insights-ts" class="ai-updated" style="margin-top:0;font-size:0.75rem">${_fmtAITimestamp(_aiInsightsCache)}</div>
+        </div>
+        <div class="ai-cards-grid">
+          ${aiCards.map(c=>`<div class="ai-card">
+            <div class="ai-card-icon">${esc(c.icon||'🤖')}</div>
+            <div class="ai-card-title">${esc(c.title||'')}</div>
+            ${c.value?`<div class="ai-card-value">${esc(c.value)}</div>`:''}
+            <div class="ai-card-text">${esc(c.text||'')}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
     // ── Insights automáticos ──
     if (insights.length > 0) {
       html += `<div class="card">
@@ -4273,6 +4615,214 @@ async function renderEstatisticas() {
       </div>`;
     }
 
+    // ── Sequências & Recordes ──
+    if (totalJogos > 0) {
+      const accAll = users.map(u => ({ u, ...calcUserAccuracyStats(u.uid, allPals, res) }));
+
+      // Maior sequência ativa (qualquer acerto)
+      const streakAtivo = accAll.filter(a=>a.currentStreak>0).sort((a,b)=>b.currentStreak-a.currentStreak);
+      // Maior sequência histórica (qualquer acerto)
+      const streakRecord = accAll.filter(a=>a.maxStreak>0).sort((a,b)=>b.maxStreak-a.maxStreak);
+      // Hat-trick: 3+ exatos consecutivos em qualquer momento
+      const hatTricks = accAll.filter(a=>a.maxExactStreak>=3).sort((a,b)=>b.maxExactStreak-a.maxExactStreak);
+      // Sequência de exatos ativa
+      const exactStreakAtivo = accAll.filter(a=>a.currentExactStreak>0).sort((a,b)=>b.currentExactStreak-a.currentExactStreak);
+
+      // Sniper por rodada
+      const rounds = [
+        { label:'Rodada 1', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
+        { label:'Rodada 2', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
+        { label:'Rodada 3', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
+        ...Object.values(ELIM_DATA).map(d=>({ label: d.label, ids: d.games.map(g=>g.id) }))
+      ].map(rd => {
+        const gamesWithRes = rd.ids.filter(id => _hasFullResult(res[id]));
+        if (!gamesWithRes.length) return null;
+        const byExatos = users.map(u => {
+          const ex = gamesWithRes.filter(id => {
+            const p = allPals[u.uid]?.[id]; return p && calcPontos(p, res[id]) === CFG.pts_exato;
+          }).length;
+          return { u, ex };
+        }).sort((a,b) => b.ex-a.ex);
+        const top = byExatos[0];
+        return top.ex > 0 ? { label: rd.label, user: top.u, ex: top.ex, total: gamesWithRes.length } : null;
+      }).filter(Boolean);
+
+      let seqHtml = '';
+
+      // Sequências ativas
+      if (streakAtivo.length) {
+        const top3 = streakAtivo.slice(0,3);
+        seqHtml += `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🔥 Sequência Ativa (acertos consecutivos)</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${top3.map((a,i)=>{
+              const medal = i===0?'🥇':i===1?'🥈':'🥉';
+              const exactNote = a.currentExactStreak>=3 ? ` <span style="color:var(--gold);font-size:0.75rem">🎩 ${a.currentExactStreak} exatos seguidos!</span>` : a.currentExactStreak>0 ? ` <span style="color:var(--text-muted);font-size:0.75rem">(${a.currentExactStreak} exato${a.currentExactStreak>1?'s':''})</span>` : '';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
+                <span style="font-weight:600">${medal} ${esc(a.u.apelido||a.u.nome)}</span>
+                <span style="color:var(--green);font-weight:700">${a.currentStreak} seguido${a.currentStreak>1?'s':''}${exactNote}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }
+
+      // Recordes históricos
+      if (streakRecord.length) {
+        const top3 = streakRecord.slice(0,3);
+        seqHtml += `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">⚡ Maior Sequência Histórica</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${top3.map((a,i)=>{
+              const medal = i===0?'🥇':i===1?'🥈':'🥉';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
+                <span style="font-weight:600">${medal} ${esc(a.u.apelido||a.u.nome)}</span>
+                <span style="color:#60A5FA;font-weight:700">${a.maxStreak} acerto${a.maxStreak>1?'s':''}${a.maxStreak===a.currentStreak&&a.currentStreak>0?' <span style="font-size:0.72rem;color:var(--green)">(ativo!)</span>':''}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }
+
+      // Hat-tricks
+      if (hatTricks.length) {
+        seqHtml += `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎩 Hat-tricks (3+ exatos consecutivos)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${hatTricks.map(a=>{
+              const isActive = a.currentExactStreak >= 3;
+              return `<div style="background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);border-radius:20px;padding:5px 12px;font-size:0.83rem;font-weight:600;color:var(--gold)">
+                🎩 ${esc(a.u.apelido||a.u.nome)} (${a.maxExactStreak}x)${isActive?' 🔥':''}
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">🔥 = sequência ainda ativa</div>
+        </div>`;
+      } else if (totalJogos >= 3) {
+        seqHtml += `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎩 Hat-tricks (3+ exatos consecutivos)</div>
+          <div style="font-size:0.85rem;color:var(--text-muted)">Nenhum hat-trick ainda — quem vai ser o primeiro? 👀</div>
+        </div>`;
+      }
+
+      // Sniper por rodada
+      if (rounds.length) {
+        seqHtml += `<div>
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎯 Sniper da Rodada</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${rounds.map(rd=>`<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
+              <span style="font-size:0.82rem;color:var(--text-muted)">${esc(rd.label)}</span>
+              <span style="font-weight:600">${esc(rd.user.apelido||rd.user.nome)} <span style="color:var(--gold)">${rd.ex}/${rd.total} exato${rd.ex>1?'s':''}</span></span>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+
+      if (seqHtml) {
+        html += `<div class="card">
+          <div class="card-title">🏆 Sequências & Recordes</div>
+          <div style="margin-top:14px">${seqHtml}</div>
+        </div>`;
+      }
+    }
+
+    // ── Perfis de Apostador ──
+    if (users.length > 0) {
+      const profiles = users.map(u => {
+        const pals = Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined);
+        if (!pals.length) return null;
+        const avgGols = pals.reduce((s,p)=>s+parseInt(p.h||0)+parseInt(p.a||0),0)/pals.length;
+        const empPct = Math.round(pals.filter(p=>parseInt(p.h)===parseInt(p.a)).length/pals.length*100);
+        let profile, icon, color;
+        if (avgGols < 1.8)      { profile='Conservador'; icon='🛡️'; color='#60A5FA'; }
+        else if (avgGols < 2.8) { profile='Equilibrado'; icon='⚖️'; color='var(--green)'; }
+        else                    { profile='Ousado';       icon='🚀'; color='var(--orange)'; }
+        return { u, profile, icon, color, avgGols, empPct };
+      }).filter(Boolean);
+      if (profiles.length) {
+        html += `<div class="card">
+          <div class="card-title">🎭 Perfis de Apostador</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Estilo de jogo baseado na média de gols palpitados — não tem a ver com acertos.</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${profiles.map(a=>`<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px;flex-wrap:wrap">
+              <span style="font-weight:600;min-width:80px;flex:1">${esc(a.u.apelido||a.u.nome)}</span>
+              <span style="color:${a.color};font-weight:700;min-width:110px">${a.icon} ${a.profile}</span>
+              <span style="font-size:0.78rem;color:var(--text-muted)">Ø${a.avgGols.toFixed(1)} gols/jogo</span>
+              <span style="font-size:0.78rem;color:var(--text-muted)">${a.empPct}% apostas em empate</span>
+            </div>`).join('')}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:10px">🛡️ Conservador &lt;1.8 gols · ⚖️ Equilibrado 1.8–2.8 · 🚀 Ousado &gt;2.8</div>
+        </div>`;
+      }
+    }
+
+    // ── Consenso & Dissenso + Placar Favorito ──
+    const lockedGamesStats = ALL_GAMES.map(game => {
+      const r = res[game.id]||{};
+      if (!isPalpiteClosed(game, r)) return null;
+      const gPals = users.map(u=>allPals[u.uid]?.[game.id]).filter(p=>p&&p.h!==undefined&&p.a!==undefined);
+      if (gPals.length < Math.max(3, Math.floor(users.length*0.4))) return null;
+      const tot=gPals.length;
+      const hw=gPals.filter(p=>parseInt(p.h)>parseInt(p.a)).length;
+      const dr=gPals.filter(p=>parseInt(p.h)===parseInt(p.a)).length;
+      const aw=gPals.filter(p=>parseInt(p.h)<parseInt(p.a)).length;
+      const maxPct=Math.max(hw,dr,aw)/tot*100;
+      return { game, tot, hw, dr, aw, maxPct, spread: maxPct - Math.min(hw,dr,aw)/tot*100 };
+    }).filter(Boolean);
+
+    if (lockedGamesStats.length >= 2) {
+      const consensual = [...lockedGamesStats].sort((a,b)=>b.maxPct-a.maxPct)[0];
+      const polemico   = [...lockedGamesStats].sort((a,b)=>a.spread-b.spread)[0];
+      const mkDistBar = (g) => {
+        const tot=g.tot, phw=Math.round(g.hw/tot*100), pdr=Math.round(g.dr/tot*100), paw=Math.round(g.aw/tot*100);
+        return `<div style="font-size:0.8rem;font-weight:600;margin-bottom:6px">${esc(g.game.h)} × ${esc(g.game.a)}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:0.72rem;text-align:center">
+            <div><div style="background:rgba(0,196,255,.2);border-radius:4px;padding:3px">${phw}%</div><div style="color:var(--text-muted);margin-top:2px">${esc(g.game.h)}</div></div>
+            <div><div style="background:rgba(255,255,255,.1);border-radius:4px;padding:3px">${pdr}%</div><div style="color:var(--text-muted);margin-top:2px">Empate</div></div>
+            <div><div style="background:rgba(255,100,100,.2);border-radius:4px;padding:3px">${paw}%</div><div style="color:var(--text-muted);margin-top:2px">${esc(g.game.a)}</div></div>
+          </div>`;
+      };
+      html += `<div class="card">
+        <div class="card-title">🗳️ Consenso & Dissenso do Bolão</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+          <div style="background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.2);border-radius:10px;padding:14px">
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green);margin-bottom:10px">🤝 Mais Consensual</div>
+            ${mkDistBar(consensual)}
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">${Math.round(consensual.maxPct)}% apostaram no mesmo resultado</div>
+          </div>
+          <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:10px;padding:14px">
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--red);margin-bottom:10px">💥 Mais Polêmico</div>
+            ${mkDistBar(polemico)}
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">Opiniões divididas — spread de ${Math.round(polemico.spread)}pp</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // Placar favorito por participante
+    const favPlacares = users.map(u=>{
+      const pals=Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined);
+      if (!pals.length) return null;
+      const freq={};
+      pals.forEach(p=>{ const _h=parseInt(p.h)||0,_a=parseInt(p.a)||0; const k=`${Math.max(_h,_a)}×${Math.min(_h,_a)}`; freq[k]=(freq[k]||0)+1; });
+      const [placar,count]=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0];
+      return count>=2?{u,placar,count,total:pals.length}:null;
+    }).filter(Boolean).sort((a,b)=>b.count/b.total-a.count/a.total);
+
+    if (favPlacares.length >= 3) {
+      html += `<div class="card">
+        <div class="card-title">🔁 Placar Favorito</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">O placar que cada um mais aposta — revela o "palpite padrão" de cada participante.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${favPlacares.map(f=>`<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:5px 12px;font-size:0.82rem">
+            <span style="font-weight:600">${esc(f.u.apelido||f.u.nome)}</span>
+            <span style="color:var(--gold);margin-left:6px">${f.placar}</span>
+            <span style="color:var(--text-muted);font-size:0.72rem;margin-left:4px">(${f.count}×)</span>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
     // ── Mais Indeciso (Top 5) — sob demanda (lê o histórico de cada usuário) ──
     html += `<div class="card">
       <div class="card-title">🤔 Mais Indeciso (Top 5)</div>
@@ -4285,12 +4835,93 @@ async function renderEstatisticas() {
       <div id="indeciso-result" style="margin-top:12px"></div>
     </div>`;
 
-    // ── Heatmap de placares mais palpitados ──
+    // ── Jogos que mais geraram mudanças — sob demanda ──
+    html += `<div class="card">
+      <div class="card-title">🔄 Jogos Mais Indicisos do Bolão</div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.5">
+        Quais partidas fizeram o bolão mais mudar de ideia? Conta todas as re-edições de palpite por jogo.
+        Calculado <b>sob demanda</b> — mesma leitura do histórico do "Mais Indeciso".
+      </div>
+      <button class="btn btn-primary btn-sm" id="jogos-indicisos-btn" onclick="calcJogosIndicisos()">📊 Calcular</button>
+      <div id="jogos-indicisos-result" style="margin-top:12px"></div>
+    </div>`;
+
+    // ── Mapa de calor visual (grade triangular) ──
+    {
+      // Expande a grade para cobrir o maior placar real; cap=8 para não crescer demais
+      // (placares acima do cap ainda aparecem no Top 12 abaixo).
+      const _HM = Math.min(
+        Math.max(5, ...Object.keys(placarFreq).map(k => parseInt(k.split('×')[0]) || 0)),
+        8
+      );
+      const _hmCells = [];
+      let _hmHasData = false;
+      for (let w = 0; w <= _HM; w++)
+        for (let l = 0; l <= w; l++) {
+          const f = placarFreq[`${w}×${l}`] || 0;
+          if (f > 0) _hmHasData = true;
+          _hmCells.push({ w, l, f });
+        }
+      if (_hmHasData) {
+        const _hmMax = Math.max(..._hmCells.map(c => c.f), 1);
+        const CELL = 46;
+        const LABEL = 22;
+        const GAP = 3;
+        const cols = _HM + 2; // label col + 0..HM
+        let _hmGrid = `<div style="display:inline-grid;grid-template-columns:${LABEL}px ${Array(_HM+1).fill(CELL+'px').join(' ')};gap:${GAP}px">`;
+        // header row
+        _hmGrid += `<div style="font-size:0.58rem;color:var(--text-muted);display:flex;align-items:flex-end;justify-content:flex-end;padding-bottom:2px;padding-right:3px">V\\P</div>`;
+        for (let l = 0; l <= _HM; l++)
+          _hmGrid += `<div style="text-align:center;font-size:0.65rem;font-weight:600;color:var(--text-muted)">${l}</div>`;
+        // data rows
+        // Colorscale "hot" (crimson → orange → gold), padrão de heatmaps de football
+        const _hmColor = p => {
+          if (p <= 0) return { bg:'rgba(255,255,255,0.04)', bdr:'var(--border)', txt:'rgba(255,255,255,0.15)' };
+          let r, g;
+          if (p < 0.5) { const t=p*2; r=Math.round(120+t*135); g=Math.round(20+t*80); }
+          else          { const t=(p-0.5)*2; r=255; g=Math.round(100+t*110); }
+          const col=`rgb(${r},${g},0)`;
+          return { bg:col, bdr:col, txt: p>=0.55 ? 'rgba(0,0,0,0.85)' : '#fff' };
+        };
+        for (let w = 0; w <= _HM; w++) {
+          _hmGrid += `<div style="font-size:0.65rem;font-weight:600;color:var(--text-muted);display:flex;align-items:center;justify-content:flex-end;padding-right:4px">${w}</div>`;
+          for (let l = 0; l <= _HM; l++) {
+            if (l > w) {
+              _hmGrid += `<div style="border-radius:7px;background:rgba(255,255,255,0.015)"></div>`;
+            } else {
+              const f = placarFreq[`${w}×${l}`] || 0;
+              const pct = f / _hmMax;
+              const { bg, bdr, txt } = _hmColor(pct);
+              const isDraw = w === l;
+              _hmGrid += `<div style="border-radius:7px;background:${bg};border:1px solid ${bdr};height:${CELL}px;display:flex;flex-direction:column;align-items:center;justify-content:center;${isDraw?'outline:1px solid rgba(255,255,255,.15);outline-offset:-2px':''}" title="${w}×${l}: ${f} palpite(s)">
+                ${f > 0 ? `<div style="font-size:0.7rem;font-weight:800;color:${txt};line-height:1.1">${w}×${l}</div><div style="font-size:0.58rem;color:${txt};opacity:0.85">${f}×</div>` : `<div style="font-size:0.6rem;color:rgba(255,255,255,0.1)">${w}×${l}</div>`}
+              </div>`;
+            }
+          }
+        }
+        // Legenda de cor
+        const _hmLegStops = 20;
+        const _hmLegGrad = Array.from({length:_hmLegStops},(_,i)=>_hmColor((i+0.5)/_hmLegStops).bg).join(',');
+        _hmGrid += '</div>';
+        html += `<div class="card">
+          <div class="card-title">🌡️ Mapa de Calor de Palpites</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 14px;line-height:1.5"><b>V</b> = gols do vencedor (linha) · <b>P</b> = gols do perdedor (coluna). Diagonal = empates.</div>
+          <div style="overflow-x:auto;padding-bottom:4px">${_hmGrid}</div>
+          <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:0.68rem;color:var(--text-muted)">Menos apostas</span>
+            <div style="flex:1;height:10px;border-radius:5px;background:linear-gradient(to right,${_hmLegGrad})"></div>
+            <span style="font-size:0.68rem;color:var(--text-muted)">Mais apostas</span>
+          </div>
+        </div>`;
+      }
+    }
+
+    // ── Heatmap de placares mais palpitados (Top 12) ──
     const topPlacares = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1]).slice(0, 12);
     if (topPlacares.length > 0) {
       const maxFreq = topPlacares[0][1] || 1;
       html += `<div class="card">
-        <div class="card-title">🧠 Heatmap de Palpites (Top 12)</div>
+        <div class="card-title">🧠 Ranking de Placares (Top 12)</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px">
           ${topPlacares.map(([placar, qtd])=>`
             <div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:rgba(255,255,255,0.03)">
@@ -4331,6 +4962,9 @@ async function renderEstatisticas() {
             <div style="font-size:1rem;font-weight:700;color:var(--accent)">${esc(menosEmpates?.apelido||menosEmpates?.nome||'—')}</div>
             <div style="font-size:.78rem;color:var(--text-muted)">${menosEmpates?.empatePct?.toFixed(1)||'0.0'}% de empates</div>
           </div>
+        </div>
+        <div style="margin-top:12px;font-size:0.76rem;color:var(--text-muted);line-height:1.5;background:rgba(255,255,255,.03);border-radius:8px;padding:10px 12px">
+          💡 <b>O que é variância?</b> Mede o quanto os placares apostados por uma pessoa variam em relação à sua própria média de gols. Variância alta = apostas com totais de gols bem diferentes entre si (ex: 0×0 num jogo e 4×3 em outro) — o apostador é imprevisível. Variância baixa = apostas consistentes, sempre em torno do mesmo volume de gols.
         </div>
       </div>`;
     }
@@ -4498,9 +5132,7 @@ async function renderTabelas() {
   const cont = document.getElementById('tabelas-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const rSnap = await db_.collection('resultados').get();
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
     let html = `<div class="section-title">📊 Tabela de Grupos</div><div class="standings-grid">`;
     Object.keys(GRUPOS_DATA).forEach(grp=>{
       const rows = computeStandings(grp, res);
@@ -4613,9 +5245,7 @@ async function renderChaveamento() {
   const cont = document.getElementById('chaveamento-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const rSnap = await db_.collection('resultados').get();
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
     const isAdmin = currentUserDoc?.role === 'admin';
     const overrides = isAdmin ? await _loadThirdOverrides() : {};
     const state = isAdmin ? _thirdUIState(res, overrides) : null;
@@ -4665,9 +5295,7 @@ async function renderChaveamentoBilateral() {
   const cont = document.getElementById('chaveamento-bilateral-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const rSnap = await db_.collection('resultados').get();
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
 
     const roundOrder = _bracketRoundOrder();
 
@@ -4861,6 +5489,7 @@ function renderAdmin() {
       <button class="admin-tab" data-tab="config" onclick="switchAdminTab('config')">⚙️ Config</button>
       <button class="admin-tab" data-tab="historico" onclick="switchAdminTab('historico')">📜 Histórico</button>
       <button class="admin-tab" data-tab="export" onclick="switchAdminTab('export')">⬇️ Exportar</button>
+      <button class="admin-tab" data-tab="ia" onclick="switchAdminTab('ia')">🤖 IA</button>
     </div>
     <div id="admin-resultados" class="admin-content active"></div>
     <div id="admin-usuarios" class="admin-content"></div>
@@ -4868,8 +5497,181 @@ function renderAdmin() {
     <div id="admin-palpites-admin" class="admin-content"></div>
     <div id="admin-config" class="admin-content"></div>
     <div id="admin-historico" class="admin-content"></div>
-    <div id="admin-export" class="admin-content"></div>`;
+    <div id="admin-export" class="admin-content"></div>
+    <div id="admin-ia" class="admin-content"></div>`;
   renderAdminResultados();
+}
+
+async function renderAdminIA() {
+  const cont = document.getElementById('admin-ia');
+  if (!cont) return;
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const snap = await db_.collection('config').doc('ai_insights').get();
+    const current = snap.exists ? snap.data() : null;
+    const dateStr = current?.updatedAt?.toDate?.()?.toLocaleString('pt-BR') || '—';
+    const previewCards = Array.isArray(current?.cards) ? current.cards : [];
+    cont.innerHTML = `
+      <div style="margin-top:16px">
+        <div class="card">
+          <div class="card-title">🤖 Análise IA — Painel do Admin</div>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin:8px 0 14px;line-height:1.5">
+            Exporte os dados do bolão, cole no Claude com o prompt gerado, receba um JSON de cards
+            e salve aqui. Os cards aparecerão automaticamente na página de Estatísticas.
+          </p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+            <button class="btn btn-primary" onclick="exportAIData()">📋 Copiar dados + prompt para IA</button>
+          </div>
+          <hr style="border-color:var(--border);margin:16px 0">
+          <div class="card-title" style="margin-bottom:10px">📥 Colar resposta da IA</div>
+          <textarea id="ai-json-input" rows="8" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-family:monospace;font-size:0.82rem;resize:vertical" placeholder='Cole aqui o JSON gerado pela IA.&#10;Exemplo: [{"icon":"🎯","title":"Mais certeiro","value":"João Silva","text":"73% de aproveitamento..."}]'></textarea>
+          <button class="btn btn-primary" style="margin-top:10px" onclick="saveAIInsights()">💾 Salvar análise</button>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-title">📊 Análise atual ${current?`<span style="font-size:0.75rem;font-weight:400;color:var(--text-muted)">— salva em ${dateStr}</span>`:'<span style="font-size:0.75rem;color:var(--text-muted)">(nenhuma ainda)</span>'}</div>
+          ${previewCards.length ? `<div class="ai-cards-grid" style="margin-top:12px">
+            ${previewCards.map(c=>`<div class="ai-card">
+              <div class="ai-card-icon">${esc(c.icon||'🤖')}</div>
+              <div class="ai-card-title">${esc(c.title||'')}</div>
+              ${c.value?`<div class="ai-card-value">${esc(c.value)}</div>`:''}
+              <div class="ai-card-text">${esc(c.text||'')}</div>
+            </div>`).join('')}
+          </div>` : '<p style="color:var(--text-muted);font-size:0.85rem;margin-top:8px">Nenhuma análise salva ainda.</p>'}
+        </div>
+      </div>`;
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
+}
+
+async function exportAIData() {
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const totalJogosRes = Object.keys(res).filter(id=>_hasFullResult(res[id])).length;
+    const today = new Date().toLocaleDateString('pt-BR');
+
+    // Determina fase atual
+    const hasFinal = ELIM_DATA.final.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasSemi = ELIM_DATA.semi.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasQuartas = ELIM_DATA.quartas.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasR16 = ELIM_DATA.r16.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasR32 = ELIM_DATA.r32.games.some(g=>res[g.id]&&_hasFullResult(res[g.id]));
+    const hasG3 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3)).some(gm=>res[gm.id]&&_hasFullResult(res[gm.id]));
+    const hasG2 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2)).some(gm=>res[gm.id]&&_hasFullResult(res[gm.id]));
+    const fase = hasFinal?'Final / 3º lugar':hasSemi?'Semifinais':hasQuartas?'Quartas de Final':hasR16?'Oitavas de Final':hasR32?'Round of 32':hasG3?'Grupos — Rodada 3 concluída':hasG2?'Grupos — Rodada 2 concluída':'Grupos — Rodada 1';
+
+    // Ranking lines
+    const rankingLines = ranking.map((u,i)=>{
+      const acc = calcUserAccuracyStats(u.uid, allPals, res);
+      return `${i+1}. ${u.apelido||u.nome} — ${u.pontos}pts | ${u.exatos} exatos | ${u.jogos} jogos | ${acc.acertoPct}% aproveit.`;
+    }).join('\n');
+
+    // Top 3 jogos mais difíceis
+    const jogosComp = Object.entries(res).filter(([,r])=>_hasFullResult(r)).map(([id,r])=>{
+      const game = ALL_GAMES.find(g=>g.id===id);
+      const pals = users.map(u=>allPals[u.uid]?.[id]).filter(Boolean);
+      const acertos = pals.filter(p=>calcPontos(p,r)>0).length;
+      const pct = pals.length>0?Math.round(acertos/pals.length*100):0;
+      return {id, game, pct, result:`${r.h_real}-${r.a_real}`, label:game?`${game.h} x ${game.a}`:'?'};
+    }).sort((a,b)=>a.pct-b.pct);
+    const maisDificeis = jogosComp.slice(0,3).map(j=>`  • ${j.label} (${j.result}) — ${j.pct}% acertaram`).join('\n');
+    const maisAcertados = jogosComp.slice(-3).reverse().map(j=>`  • ${j.label} (${j.result}) — ${j.pct}% acertaram`).join('\n');
+
+    // Tendência recente (top 3 em alta / em queda)
+    const trendLines = ranking.map(u=>({u, ..._calcRecentTrend(u.uid, allPals, res, 5)}))
+      .filter(t=>t.count>0).sort((a,b)=>b.delta-a.delta);
+    const emAlta = trendLines.slice(0,3).map(t=>`  • ${t.u.apelido||t.u.nome}: Δ${t.delta>=0?'+':''}${t.delta.toFixed(1)}pp`).join('\n');
+    const emQueda = trendLines.slice(-3).reverse().map(t=>`  • ${t.u.apelido||t.u.nome}: Δ${t.delta>=0?'+':''}${t.delta.toFixed(1)}pp`).join('\n');
+
+    const data = `=== BOLÃO COPA 2026 — DADOS PARA ANÁLISE IA ===
+Data: ${today}
+Fase atual: ${fase}
+Participantes: ${users.length}
+Jogos com resultado: ${totalJogosRes} de ${ALL_GAMES.length}
+
+== RANKING ATUAL ==
+${rankingLines}
+
+== JOGOS MAIS DIFÍCEIS (menos acertos) ==
+${maisDificeis||'  (sem dados ainda)'}
+
+== JOGOS MAIS FÁCEIS (mais acertos) ==
+${maisAcertados||'  (sem dados ainda)'}
+
+== EM ALTA (últimos 5 jogos vs geral) ==
+${emAlta||'  (sem dados ainda)'}
+
+== EM QUEDA (últimos 5 jogos vs geral) ==
+${emQueda||'  (sem dados ainda)'}
+
+== SEQUÊNCIAS & HAT-TRICKS ==
+${(()=>{
+  const accAll = users.map(u=>({u,...calcUserAccuracyStats(u.uid,allPals,res)}));
+  const ativo = accAll.filter(a=>a.currentStreak>0).sort((a,b)=>b.currentStreak-a.currentStreak).slice(0,3).map(a=>`  • ${a.u.apelido||a.u.nome}: ${a.currentStreak} acertos seguidos${a.currentExactStreak>=3?' 🎩 HAT-TRICK ATIVO!':''}`).join('\n');
+  const hats = accAll.filter(a=>a.maxExactStreak>=3).sort((a,b)=>b.maxExactStreak-a.maxExactStreak).map(a=>`  • ${a.u.apelido||a.u.nome}: ${a.maxExactStreak} exatos seguidos${a.currentExactStreak>=3?' (ativo!)':''}`).join('\n');
+  const record = accAll.sort((a,b)=>b.maxStreak-a.maxStreak)[0];
+  return [ativo?`Sequências ativas:\n${ativo}`:'',hats?`Hat-tricks (3+ exatos seguidos):\n${hats}`:'Nenhum hat-trick ainda.',record&&record.maxStreak>0?`Maior sequência histórica: ${record.u.apelido||record.u.nome} com ${record.maxStreak} acertos seguidos`:'' ].filter(Boolean).join('\n\n');
+})()}
+
+==========================================================
+INSTRUÇÕES PARA A IA (não inclua este bloco na resposta)
+==========================================================
+Analise os dados acima e gere cards de insights para o bolão.
+
+REGRAS OBRIGATÓRIAS:
+1. Retorne APENAS um array JSON válido, sem texto antes ou depois, sem bloco de código markdown.
+2. Cada card segue o formato: {"icon":"emoji","title":"título curto","value":"valor/nome destacado","text":"1-2 frases descritivas e interessantes"}
+3. Gere SEMPRE os 5 cards fixos abaixo, nessa ordem:
+   - Líder atual (quem está na frente, por quanto, o que o destaca)
+   - Mais certeiro (melhor aproveitamento geral)
+   - Em alta (quem mais subiu recentemente, com contexto)
+   - Em queda (quem mais caiu recentemente, com empatia — não seja cruel)
+   - Zebra do bolão (jogo que menos pessoas acertaram, contexto)
+4. Depois dos fixos, gere de 3 a 5 cards dinâmicos baseados na fase atual (${fase}):
+   - Fase de grupos: explore padrões de palpites, goleadas esperadas, apostas ousadas
+   - Oitavas/Quartas: quem está melhor posicionado para virar, rivalidades no ranking
+   - Semis/Final: drama final, quem pode virar, quem acertou o campeão
+5. Use emojis relevantes, títulos criativos e textos que despertem curiosidade.
+6. Tom: animado, levemente irreverente, como um comentarista esportivo descontraído.
+7. Não cite nomes completos na descrição — use apenas o apelido/primeiro nome.
+==========================================================`;
+
+    await navigator.clipboard.writeText(data);
+    showToast('✅ Dados + prompt copiados para a área de transferência!','success');
+  } catch(e) { showToast('Erro ao gerar dados: '+e.message,'error'); }
+}
+
+async function saveAIInsights() {
+  const input = document.getElementById('ai-json-input');
+  if (!input) return;
+  const raw = input.value.trim();
+  if (!raw) { showToast('Cole o JSON gerado pela IA antes de salvar.','warning'); return; }
+  let cards;
+  try {
+    cards = JSON.parse(raw);
+    if (!Array.isArray(cards)) throw new Error('A resposta deve ser um array JSON');
+    if (!cards.length) throw new Error('Array vazio');
+    if (!cards[0].title && !cards[0].text) throw new Error('Cards devem ter campos title e text');
+  } catch(e) { showToast('JSON inválido: '+e.message,'error'); return; }
+  try {
+    const FV = firebase.firestore.FieldValue;
+    await db_.collection('config').doc('ai_insights').set({
+      cards,
+      updatedAt: FV.serverTimestamp(),
+      updatedBy: currentUserDoc?.nome || currentUser?.email || 'admin'
+    });
+    const updatedBy = currentUserDoc?.nome || currentUser?.email || 'admin';
+    const now = new Date();
+    // Atualiza cache local imediatamente com data aproximada (server timestamp chega async)
+    _aiInsightsCache = { cards, updatedAt: { toDate: () => now }, updatedBy };
+    // Atualiza o timestamp na página de stats se ela estiver visível
+    const tsEl = document.getElementById('ai-insights-ts');
+    if (tsEl) tsEl.textContent = _fmtAITimestamp(_aiInsightsCache);
+    showToast(`✅ ${cards.length} cards salvos com sucesso!`,'success');
+    input.value = '';
+    renderAdminIA(); // atualiza preview
+  } catch(e) { showToast('Erro ao salvar: '+e.message,'error'); }
 }
 
 function switchAdminTab(tab) {
@@ -4885,6 +5687,7 @@ function switchAdminTab(tab) {
     case 'config': renderAdminConfig(); break;
     case 'historico': renderAdminHistorico(); break;
     case 'export': renderAdminExport(); break;
+    case 'ia': renderAdminIA(); break;
   }
 }
 
@@ -4893,9 +5696,7 @@ async function renderAdminResultados() {
   if (!cont) return;
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const rSnap = await db_.collection('resultados').get();
-    const res = {};
-    rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    const res = await _fetchRes();
     const thirdOverrides = await _loadThirdOverrides();
     const thirdPanel = _buildThirdPlaceAdminPanel(res, thirdOverrides);
     // Sort all games chronologically by date + time
@@ -4967,7 +5768,7 @@ async function renderAdminResultados() {
         </div>
         <pre id="mig-orient-log" style="display:none;margin-top:10px;max-height:240px;overflow:auto;font-size:0.72rem;background:rgba(0,0,0,.25);padding:10px;border-radius:8px;white-space:pre-wrap"></pre>
       </div>`;
-    let html = _testPanel + _updateBar + _migOrientPanel + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Palpites travam <b>automaticamente 1h antes</b> do início. Use o botão de trava para alternar: <b>⏱️ Automático → 🔒 Travado → 🟢 Liberado</b> (sobrepõe a regra). Edite a <b>data/hora (Brasília)</b> de cada jogo se o horário mudar.</div>`;
+    let html = (TEST_MODE_ENABLED ? _testPanel : '') + _updateBar + _migOrientPanel + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Palpites travam <b>automaticamente 1h antes</b> do início. Use o botão de trava para alternar: <b>⏱️ Automático → 🔒 Travado → 🟢 Liberado</b> (sobrepõe a regra). Edite a <b>data/hora (Brasília)</b> de cada jogo se o horário mudar.</div>`;
     let lastDate = null;
     let lastPhase = null;
     sortedGames.forEach(game=>{
@@ -5379,11 +6180,18 @@ async function resetSchedule(gameId) {
 // TEST-MODE:START — REMOVER EM PRODUÇÃO
 // Ferramentas de admin para preencher/apagar resultados em massa
 // (procure por "TEST-MODE" para localizar e remover todos os blocos)
+//
+// Interruptor de produção: com TEST_MODE_ENABLED = false o painel de teste não
+// é renderizado e as funções de escrita em massa ficam bloqueadas, mesmo que
+// alguém tente chamá-las pelo console. Para usar em desenvolvimento, mude para
+// true. O ideal continua sendo remover todo o bloco antes do bolão valer.
 // ════════════════════════════════════════════
+const TEST_MODE_ENABLED = false;
 function _isAdmin() { return currentUserDoc?.role === 'admin'; }
 function _randScore() { return Math.floor(Math.random() * 5); } // 0–4
 
 async function _testeApplyBatch(games, mode) {
+  if (!TEST_MODE_ENABLED) { showToast('🔒 Modo de teste desativado em produção', 'error'); return; }
   const FV = firebase.firestore.FieldValue;
   const batch = db_.batch();
   games.forEach(g => {
@@ -5423,6 +6231,7 @@ async function _testeApplyBatch(games, mode) {
     }
   });
   await batch.commit();
+  _scDel('res'); // batch escreveu resultados em massa — invalida cache
 }
 
 async function _testeFinish(msg) {
@@ -5490,6 +6299,7 @@ async function testeClearDay() {
 // eliminatórias. Serve para "destravar" chaves que ficaram com seleções
 // gravadas por fills antigos antes da correção de clear.
 async function testeResetBracket() {
+  if (!TEST_MODE_ENABLED) { showToast('🔒 Modo de teste desativado em produção', 'error'); return; }
   if (!_isAdmin()) { showToast('Ação restrita a admin', 'error'); return; }
   if (!confirm('Resetar os nomes das seleções em TODAS as fases eliminatórias (oitavas → final)?\nPlacares não serão afetados.')) return;
   try {
@@ -5528,15 +6338,13 @@ async function renderAdminUsuarios() {
   if (!cont) return;
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const snap = await db_.collection('usuarios').get();
-    const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    const users = await _fetchUsr();
     const activeUsers = users.filter(u=>u.ativo!==false);
 
-    // Load palpites for all active users
-    const palSnaps = await Promise.all(activeUsers.map(u=>db_.collection('palpites').doc(u.uid).collection('jogos').get()));
+    const {allPals} = await _fetchPals(activeUsers);
     const userPalCounts = {};
-    activeUsers.forEach((u,i)=>{
-      const filled = palSnaps[i].docs.filter(d=>{const p=d.data();return p.h!==undefined&&p.a!==undefined;}).length;
+    activeUsers.forEach(u=>{
+      const filled = Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined).length;
       userPalCounts[u.uid] = filled;
     });
 
@@ -5568,7 +6376,7 @@ async function renderAdminUsuarios() {
             </div>
             <div style="text-align:center;min-width:90px">
               <div id="admin-premio-3" style="font-size:1rem;font-weight:800;color:#CD7F32">🥉 ${formatBRL(premios.terceiro)}</div>
-              <div style="font-size:0.68rem;color:var(--text-muted)">3º (10%)</div>
+              <div style="font-size:0.68rem;color:var(--text-muted)">3º (20%)</div>
             </div>
           </div>
         </div>
@@ -5638,9 +6446,8 @@ async function togglePago(uid, isChecked) {
         badgeEl.textContent = isChecked ? '💚 Pago' : '⏳ Pendente';
       }
     }
-    // Recalcula totais na tela sem recarregar todos os usuários
-    const snap = await db_.collection('usuarios').get();
-    const allUsers = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    // Recalcula totais na tela — _scDel('usr') já foi chamado acima, então _fetchUsr() lê frescos e recacheia
+    const allUsers = await _fetchUsr();
     const newTotal = calcTotalArrecadado(allUsers);
     const newPremios = calcPremios(newTotal);
     const pagosCount = allUsers.filter(u=>u.pago===true && u.ativo!==false).length;
@@ -5704,6 +6511,20 @@ function deleteUserClick(uid) {
 async function deleteUser(uid) {
   try {
     showToast('⏳ Excluindo usuário...','');
+
+    // Subcoleções não são apagadas automaticamente quando o doc pai é deletado.
+    // O histórico pode ter centenas de registros, então apagamos em lotes de 450
+    // (abaixo do limite de 500 ops por batch do Firestore) antes do batch principal.
+    const histRef = db_.collection('palpites').doc(uid).collection('historico');
+    let histSnap = await histRef.limit(450).get();
+    while (!histSnap.empty) {
+      const hb = db_.batch();
+      histSnap.docs.forEach(d => hb.delete(d.ref));
+      await hb.commit();
+      if (histSnap.size < 450) break;
+      histSnap = await histRef.limit(450).get();
+    }
+
     const batch = db_.batch();
 
     // Deletar todos os palpites do usuário
@@ -5729,8 +6550,7 @@ async function renderAdminFinanceiro() {
   if (!cont) return;
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const snap = await db_.collection('usuarios').get();
-    const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    const users = await _fetchUsr();
     const totalArrecadado = calcTotalArrecadado(users);
     const premios = calcPremios(totalArrecadado);
     const pagosCount = users.filter(u=>u.pago===true && u.ativo!==false).length;
@@ -5846,8 +6666,8 @@ async function renderAdminEditPalpites(selectedUid=null) {
   const cont = document.getElementById('admin-palpites-admin');
   if (!cont) return;
   try {
-    const snap = await db_.collection('usuarios').get();
-    const users = snap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
+    const allUsers = await _fetchUsr();
+    const users = allUsers.filter(u=>u.ativo!==false);
     let html = `<div class="form-group"><label>Selecionar Participante</label>
       <select id="edit-pal-select" onchange="adminEditSelected(this.value)"><option value="">— Selecione —</option>`;
     users.forEach(u=>{ html += `<option value="${u.uid}" ${selectedUid===u.uid?'selected':''}>${esc(u.apelido)} (${esc(u.nome)})</option>`; });
@@ -5870,15 +6690,14 @@ async function renderAdminPalpitesInline(uid) {
   if (!area) return;
   area.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
-    const [pSnap, rSnap, pDoc] = await Promise.all([
+    const [pSnap, resCache, pDoc] = await Promise.all([
       db_.collection('palpites').doc(uid).collection('jogos').get(),
-      db_.collection('resultados').get(),
+      _fetchRes(),
       db_.collection('palpites').doc(uid).get()
     ]);
     myPalpites = {};
     pSnap.docs.forEach(d=>{ myPalpites[d.id]=d.data(); });
-    resultados = {};
-    rSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
+    resultados = resCache;
     myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
 
     let html = buildChampionPickerCard();
@@ -6212,11 +7031,28 @@ async function renderAdminExport() {
     </div>`;
 }
 
+// Carrega a biblioteca XLSX (~900 KB) sob demanda — só quando o admin exporta,
+// em vez de baixá-la no carregamento inicial para todos os usuários. Memoiza a
+// promessa para baixar no máximo uma vez por sessão.
+let _xlsxPromise = null;
+function ensureXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (_xlsxPromise) return _xlsxPromise;
+  _xlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error('XLSX não inicializou'));
+    s.onerror = () => { _xlsxPromise = null; reject(new Error('Falha ao carregar a biblioteca de exportação (XLSX). Verifique sua conexão e tente novamente.')); };
+    document.head.appendChild(s);
+  });
+  return _xlsxPromise;
+}
+
 async function exportExtratoPagamentos() {
   showToast('⏳ Gerando extrato...','');
   try {
-    const snap = await db_.collection('usuarios').get();
-    const users = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    await ensureXLSX();
+    const users = await _fetchUsr();
     users.sort((a,b)=>(a.pago===b.pago?0:a.pago?-1:1)||(a.apelido||'').localeCompare(b.apelido||''));
     const ativos = users.filter(u=>u.ativo!==false);
     const pagos = ativos.filter(u=>u.pago===true);
@@ -6251,14 +7087,13 @@ async function exportExtratoPagamentos() {
 async function exportBackupJSON() {
   showToast('⏳ Gerando backup completo...','');
   try {
-    const [usersSnap, resSnap, cfgSnap, auditSnap] = await Promise.all([
-      db_.collection('usuarios').get(),
-      db_.collection('resultados').get(),
+    const [users, resData, cfgSnap, auditSnap] = await Promise.all([
+      _fetchUsr(),
+      _fetchRes(),
       db_.collection('config').get(),
       db_.collection('audit').get()
     ]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()}));
-    const resultados = {}; resSnap.docs.forEach(d=>{ resultados[d.id]=d.data(); });
+    const resultados = resData;
     const cfgData = {}; cfgSnap.docs.forEach(d=>{ cfgData[d.id]=d.data(); });
     const auditData = auditSnap.docs.map(d=>({_id:d.id,...d.data()}));
     const palpites = {};
@@ -6297,11 +7132,10 @@ async function exportBackupJSON() {
 async function exportAllCSV() {
   showToast('⏳ Preparando exportação...','success');
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()}));
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    await Promise.all(users.map(async u=>{ const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); }); }));
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers;
+    const activeForPals = allUsers.filter(u=>u.ativo!==false);
+    const {allPals} = await _fetchPals(activeForPals, true);
     let csv = 'Participante,Apelido,JogoID,Time_Casa,Palpite_Casa,Palpite_Fora,Time_Fora,Resultado_Casa,Resultado_Fora,Locked,Pontos\n';
     users.filter(u=>u.ativo!==false).forEach(u=>{
       ALL_GAMES.forEach(g=>{
@@ -6319,11 +7153,10 @@ async function exportAllCSV() {
 
 async function exportRankingCSV() {
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const [allUsersR, resR] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsersR.filter(u=>u.ativo!==false);
+    const res = resR;
+    const {allPals} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals);
     let csv = 'Posição,Participante,Apelido,Pontos,Exatos,Venc+Saldo,Apenas Venc,Jogos\n';
     ranking.forEach((u,i)=>{ csv+=`${i+1},"${u.nome}","${u.apelido}",${u.pontos},${u.exatos},${u.venc_saldo},${u.apenas_venc},${u.jogos}\n`; });
@@ -6334,10 +7167,9 @@ async function exportRankingCSV() {
 
 async function exportPalpitesCSV() {
   try {
-    const [usersSnap] = await Promise.all([db_.collection('usuarios').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const allPals = {};
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    const allUsersP = await _fetchUsr();
+    const users = allUsersP.filter(u=>u.ativo!==false);
+    const {allPals} = await _fetchPals(users, true);
     const headerCasa = users.map(u=>`"${u.apelido}_Casa"`).join(',');
     const headerFora = users.map(u=>`"${u.apelido}_Fora"`).join(',');
     let csv = `JogoID,Time_Casa,Time_Fora,Data,${headerCasa},${headerFora}\n`;
@@ -6357,12 +7189,11 @@ async function exportPalpitesCSV() {
 async function exportFullExcel() {
   showToast('⏳ Gerando planilha...','');
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    const champPicks = await loadAllChampionPicks();
-    await Promise.all(users.map(async u=>{ const pSnap = await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; pSnap.docs.forEach(p=>{ allPals[u.uid][p.id]=p.data(); }); }));
+    await ensureXLSX();
+    const [allUsersE, resE] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsersE.filter(u=>u.ativo!==false);
+    const res = resE;
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const totalJogosComResultado = Object.keys(res).filter(
       id => res[id].h_real !== undefined && res[id].a_real !== undefined
@@ -6421,12 +7252,11 @@ async function exportFullExcel() {
 async function exportRankingExcel() {
   showToast('⏳ Gerando ranking...','');
   try {
-    const [usersSnap, resSnap] = await Promise.all([db_.collection('usuarios').get(), db_.collection('resultados').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
-    const allPals = {};
-    const champPicks = await loadAllChampionPicks();
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    await ensureXLSX();
+    const [allUsersRE, resRE] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsersRE.filter(u=>u.ativo!==false);
+    const res = resRE;
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const data = [['Posição','Participante','Apelido','Pontos','Exatos','Venc.+Saldo','Apenas Venc.','Jogos','Palpite Campeão','Bônus Campeão']];
     ranking.forEach((u,i)=>{
@@ -6443,11 +7273,10 @@ async function exportRankingExcel() {
 async function exportPalpitesExcel() {
   showToast('⏳ Gerando palpites...','');
   try {
-    const [usersSnap] = await Promise.all([db_.collection('usuarios').get()]);
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.ativo!==false);
-    const allPals = {};
-    const champPicks = await loadAllChampionPicks();
-    await Promise.all(users.map(async u=>{ const ps=await db_.collection('palpites').doc(u.uid).collection('jogos').get(); allPals[u.uid]={}; ps.docs.forEach(p=>{allPals[u.uid][p.id]=p.data();}); }));
+    await ensureXLSX();
+    const allUsersPE = await _fetchUsr();
+    const users = allUsersPE.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users, true);
     const data = [['JogoID','Time_Casa','Time_Fora','Data',...users.map(u=>`${u.apelido}_Casa`),...users.map(u=>`${u.apelido}_Fora`)]];
     // Linha extra com o palpite de campeão por participante (mesma estrutura de colunas).
     const champRow = ['CAMPEAO','-','-','Palpite Campeão'];
@@ -6471,8 +7300,8 @@ async function exportPalpitesExcel() {
 async function exportResultadosExcel() {
   showToast('⏳ Gerando resultados...','');
   try {
-    const resSnap = await db_.collection('resultados').get();
-    const res = {}; resSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
+    await ensureXLSX();
+    const res = await _fetchRes();
     const data = [['JogoID','Time_Casa','Time_Fora','Resultado_Casa','Resultado_Fora','Bloqueado']];
     ALL_GAMES.forEach(g=>{
       const r = res[g.id];
@@ -6643,6 +7472,15 @@ async function installPwaApp() {
   }
   deferredPwaPrompt = null;
   updatePwaInstallButton();
+}
+
+// Registro do Service Worker (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('[SW] Registrado:', reg.scope))
+      .catch(err => console.warn('[SW] Falha no registro:', err));
+  });
 }
 </script>
 </body>

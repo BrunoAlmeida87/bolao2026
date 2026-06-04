@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+    }
+    match /usuarios/{uid} {
+      allow read: if isSignedIn();
+      // Cadastro só do próprio E obrigatoriamente como participante comum.
+      allow create: if isOwner(uid)
+        && request.resource.data.role == 'user'
+        && request.resource.data.ativo == true;
+      // Admin muda tudo; o próprio edita o perfil, mas NÃO pode se promover
+      // a admin nem mexer no próprio status/pagamento.
+      allow update: if isAdmin()
+        || ( isOwner(uid)
+             && request.resource.data.get('role','user')  == resource.data.get('role','user')
+             && request.resource.data.get('ativo',true)   == resource.data.get('ativo',true)
+             && request.resource.data.get('pago',false)   == resource.data.get('pago',false) );
+      allow delete: if isAdmin();
+    }
+    match /palpites/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid) || isAdmin();
+      match /jogos/{gameId} {
+        allow read: if isSignedIn();
+        allow write: if isOwner(uid) || isAdmin();
+      }
+      match /historico/{histId} {
+        allow read: if isSignedIn();   // stats "Mais Indeciso" leem de todos
+        allow create: if isOwner(uid) || isAdmin();
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+    match /resultados/{gameId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /config/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /audit/{doc} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();      // só admin escreve na auditoria
+      allow update, delete: if false;
+    }
+  }
+}
