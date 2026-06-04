@@ -73,9 +73,10 @@ body.light-theme .alert-error{background:rgba(255,68,68,.08);border-color:rgba(2
 }
 .theme-btn:hover{border-color:var(--gold);color:var(--gold)}
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;overflow-x:hidden;max-width:100%}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--dark-blue);
-  color:var(--white);min-height:100vh;overflow-x:hidden}
+  color:var(--white);min-height:100vh;overflow-x:hidden;max-width:100%}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
 
@@ -274,13 +275,16 @@ select option{background:var(--mid-blue);color:var(--white)}
 .rank-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s}
 .rank-card:active{background:var(--light-blue)}
 .rank-card.is-me{background:rgba(255,215,0,.07);border-color:rgba(255,215,0,.4)}
-.rank-card-gold{border-color:rgba(255,215,0,.6);background:linear-gradient(135deg,rgba(255,215,0,.14) 0%,var(--card) 70%)}
-.rank-card-silver{border-color:rgba(192,192,192,.55);background:linear-gradient(135deg,rgba(192,192,192,.12) 0%,var(--card) 70%)}
-.rank-card-bronze{border-color:rgba(205,127,50,.55);background:linear-gradient(135deg,rgba(205,127,50,.12) 0%,var(--card) 70%)}
+.rank-card-gold{border-width:2px;border-color:rgba(255,215,0,.85);background:linear-gradient(135deg,rgba(255,215,0,.18) 0%,var(--card) 65%)}
+.rank-card-silver{border-width:2px;border-color:rgba(210,210,220,.8);background:linear-gradient(135deg,rgba(200,200,215,.18) 0%,var(--card) 65%)}
+.rank-card-bronze{border-width:2px;border-color:rgba(205,127,50,.8);background:linear-gradient(135deg,rgba(205,127,50,.18) 0%,var(--card) 65%)}
 .rank-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .rank-card-pos{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:34px}
 .rank-card-name{flex:1;min-width:0}
 .rank-card-name .rk-apelido{font-weight:700;color:var(--gold);font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-card-gold .rk-apelido{color:#FFD700}
+.rank-card-silver .rk-apelido{color:#D8D8E8}
+.rank-card-bronze .rk-apelido{color:#E09050}
 .rank-card-name .rk-nome{font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rank-card-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;white-space:nowrap}
 .rank-card-chips{display:flex;gap:5px;flex-wrap:wrap}
