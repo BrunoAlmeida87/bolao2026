@@ -150,13 +150,16 @@ a:hover{text-decoration:underline}
 }
 .auth-tab.active{background:var(--gold);color:var(--dark-blue)}
 .auth-footer-actions{margin-top:14px;display:flex;justify-content:center}
-.btn-install-pwa{
-  border:1px dashed var(--border);background:transparent;color:var(--text-muted);
-  font-size:0.74rem;padding:6px 10px;border-radius:999px;cursor:pointer;
-  line-height:1.2;white-space:nowrap;
-}
-.btn-install-pwa:hover{border-color:var(--gold);color:var(--gold)}
-.btn-install-pwa:disabled{opacity:.6;cursor:not-allowed}
+.pwa-card{margin-top:18px;background:linear-gradient(135deg,rgba(255,215,0,.07),rgba(10,22,40,.6));border:1px solid rgba(255,215,0,.35);border-radius:14px;padding:18px 16px;text-align:center}
+.pwa-card-title{font-size:1rem;font-weight:800;color:var(--gold);margin-bottom:4px}
+.pwa-card-desc{font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;line-height:1.4}
+.btn-pwa-install{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:var(--gold);color:var(--dark-blue);font-size:0.95rem;font-weight:800;border:none;border-radius:10px;cursor:pointer;margin-bottom:10px;transition:opacity .2s}
+.btn-pwa-install:disabled{opacity:.45;cursor:not-allowed}
+.pwa-steps{font-size:0.76rem;color:var(--text-muted);line-height:1.9;text-align:left;background:rgba(255,255,255,.04);border-radius:8px;padding:10px 13px;margin-top:6px}
+.pwa-steps em{color:var(--gold);font-style:normal;font-weight:600}
+.btn-install-pwa{display:inline-flex;align-items:center;gap:6px;background:rgba(255,215,0,.13);border:1px solid rgba(255,215,0,.45);color:var(--gold);font-size:0.8rem;font-weight:700;padding:7px 14px;border-radius:999px;cursor:pointer;transition:all .2s}
+.btn-install-pwa:hover{background:rgba(255,215,0,.22)}
+.btn-install-pwa:disabled{opacity:.5;cursor:not-allowed}
 
 /* ══════════════════════════════════════════
    FORM ELEMENTS
@@ -894,10 +897,29 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
         <button class="btn btn-primary btn-full" onclick="doRegister()">Criar Conta →</button>
       </div>
 
-      <div class="auth-footer-actions">
-        <button id="btn-install-pwa" class="btn-install-pwa" hidden onclick="installPwaApp()">
-          📲 Instalar app no celular
-        </button>
+      <div id="pwa-card" class="pwa-card" style="display:none">
+        <div class="pwa-card-title">📲 Instale o app no celular</div>
+        <div class="pwa-card-desc">Acesse direto da tela inicial, sem abrir o browser</div>
+        <!-- Android -->
+        <div id="pwa-android" style="display:none">
+          <button id="btn-install-pwa" class="btn-pwa-install" onclick="installPwaApp()">
+            ⬇️ Instalar agora — é grátis
+          </button>
+          <div class="pwa-steps">
+            Se o botão não funcionar:<br>
+            1. Toque em <em>⋮ Menu</em> no Chrome<br>
+            2. Selecione <em>"Adicionar à tela inicial"</em>
+          </div>
+        </div>
+        <!-- iOS -->
+        <div id="pwa-ios" style="display:none">
+          <div class="pwa-steps">
+            1. Abra este site no <em>Safari</em> 🧭<br>
+            2. Toque no ícone <em>Compartilhar</em> (□↑) na barra inferior<br>
+            3. Selecione <em>"Adicionar à Tela de Início"</em><br>
+            4. Toque em <em>Adicionar</em> no canto superior direito
+          </div>
+        </div>
       </div>
 
     </div>
@@ -1122,7 +1144,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
   <footer class="app-footer">
     <div class="footer-row">
       <span id="app-version">Bolão ICN Copa 2026 • v1.10.9</span>
-      <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="installPwaApp()">
+      <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
     </div>
@@ -7428,24 +7450,50 @@ function showToast(msg, type='') {
 function isMobileClient() {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'');
 }
-
+function isIOS() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent||'');
+}
 function isStandalonePwa() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 }
 
 function updatePwaInstallButton() {
-  const btns = [
-    document.getElementById('btn-install-pwa'),
-    document.getElementById('btn-install-pwa-footer')
-  ].filter(Boolean);
-  if (!btns.length) return;
-  const shouldShow = isMobileClient() && !isStandalonePwa();
-  btns.forEach(btn => {
-    btn.hidden = !shouldShow;
-    btn.style.display = shouldShow ? 'inline-flex' : '';
-    btn.disabled = !deferredPwaPrompt;
-    btn.title = deferredPwaPrompt ? 'Instalar app' : 'Instalação indisponível no momento';
-  });
+  if (!isMobileClient() || isStandalonePwa()) return;
+
+  // Card na tela de login
+  const card = document.getElementById('pwa-card');
+  if (card) {
+    card.style.display = 'block';
+    const androidSec = document.getElementById('pwa-android');
+    const iosSec    = document.getElementById('pwa-ios');
+    if (isIOS()) {
+      if (androidSec) androidSec.style.display = 'none';
+      if (iosSec)    iosSec.style.display = 'block';
+    } else {
+      if (androidSec) androidSec.style.display = 'block';
+      if (iosSec)    iosSec.style.display = 'none';
+      const btn = document.getElementById('btn-install-pwa');
+      if (btn) btn.disabled = !deferredPwaPrompt;
+    }
+  }
+
+  // Botão no footer (usuário logado)
+  const footer = document.getElementById('btn-install-pwa-footer');
+  if (footer) {
+    footer.hidden = false;
+  }
+}
+
+function showPwaInstallInfo() {
+  if (isIOS()) {
+    showToast('No iPhone: Safari → Compartilhar (□↑) → "Adicionar à Tela de Início"', 'info');
+    return;
+  }
+  if (deferredPwaPrompt) {
+    installPwaApp();
+  } else {
+    showToast('Chrome: menu ⋮ → "Adicionar à tela inicial"', 'info');
+  }
 }
 
 window.addEventListener('beforeinstallprompt', (event) => {
