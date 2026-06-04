@@ -1568,7 +1568,7 @@ let _currentVerPalpitesUid = null;
 function refreshPage() {
   if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
   _scDel('res','usr','pals');
-  navigateTo(_currentPage);
+  navigateTo(_currentPage, { history: 'replace' });
 }
 function _refreshBtn() {
   return `<button onclick="refreshPage()" title="Atualizar dados" style="float:right;background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:20px;padding:3px 12px;font-size:0.8rem;cursor:pointer;line-height:1;margin-top:2px" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">↻</button>`;
@@ -1610,7 +1610,7 @@ function _onRemoteDataChange() {
   const viewPages = new Set(['dashboard','estatisticas','ver-palpites','ver-todos']);
   if (viewPages.has(_currentPage)) {
     if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
-    navigateTo(_currentPage);
+    navigateTo(_currentPage, { history: 'replace' });
     showToast('🔄 Dados atualizados (novo resultado)','success');
   }
 }
@@ -1906,14 +1906,15 @@ function showApp() {
 let _pendingPalpitesUid = null;
 
 function goToUserPalpites(uid) {
-  _pendingPalpitesUid = uid;
-  navigateTo('ver-palpites');
+  navigateTo('ver-palpites', { uid: uid });
 }
 
-// Páginas transientes não devem ser gravadas no hash (dependem de contexto externo).
-const _TRANSIENT_PAGES = new Set(['ver-palpites','ver-todos']);
-
-function navigateTo(page) {
+function navigateTo(page, opts) {
+  opts = opts || {};
+  const _prevPage = _currentPage;
+  // uid alvo da tela "ver palpites de um usuário"
+  if (page === 'ver-palpites' && opts.uid !== undefined) _pendingPalpitesUid = opts.uid;
+  const _navUid = (page === 'ver-palpites') ? _pendingPalpitesUid : null;
   _currentPage = page;
   if (_countdownTimer && page !== 'dashboard') { clearInterval(_countdownTimer); _countdownTimer = null; }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1926,8 +1927,17 @@ function navigateTo(page) {
   document.querySelectorAll('#mais-sheet a').forEach(a=>a.classList.toggle('active',a.dataset.page===page));
   const el = document.getElementById('page-'+page);
   if (el) el.classList.add('active');
-  // Persiste a página no hash para sobreviver a reloads
-  if (!_TRANSIENT_PAGES.has(page)) history.replaceState(null,'','#'+page);
+  // ── Histórico do navegador: faz o botão Voltar (Android/celular) voltar para a
+  // tela anterior do app em vez de sair. push = nova entrada (navegação normal);
+  // replace = troca a atual (reload/refresh); none = veio do próprio botão Voltar.
+  let _hmode = opts.history || 'push';
+  // Não empilha entradas idênticas ao reabrir a mesma página (ex.: clicar 2x na aba).
+  if (_hmode === 'push' && page === _prevPage && page !== 'ver-palpites') _hmode = 'replace';
+  if (_hmode !== 'none') {
+    const _state = { page, uid: _navUid };
+    if (_hmode === 'replace') history.replaceState(_state, '', '#' + page);
+    else history.pushState(_state, '', '#' + page);
+  }
   switch(page) {
     case 'dashboard':   renderDashboard(); break;
     case 'palpites':    renderPalpites(); break;
@@ -1950,9 +1960,19 @@ function _restorePageFromHash() {
   const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','admin'];
   const page = valid.includes(hash) ? hash : 'dashboard';
   // admin só restaura se usuário for admin
-  if (page === 'admin' && currentUserDoc?.role !== 'admin') return navigateTo('dashboard');
-  navigateTo(page);
+  if (page === 'admin' && currentUserDoc?.role !== 'admin') return navigateTo('dashboard', { history: 'replace' });
+  navigateTo(page, { history: 'replace' });
 }
+
+// Botão Voltar do navegador/Android: restaura a tela anterior do app (lendo o
+// estado guardado em cada entrada do histórico) em vez de fechar o aplicativo.
+window.addEventListener('popstate', (e) => {
+  if (!currentUser) return;            // ainda na tela de login — não interfere
+  const st = e.state || {};
+  let page = st.page || 'dashboard';
+  if (page === 'admin' && currentUserDoc?.role !== 'admin') page = 'dashboard';
+  navigateTo(page, { history: 'none', uid: st.uid });
+});
 
 // ════════════════════════════════════════════
 // RANKING LOGIC
