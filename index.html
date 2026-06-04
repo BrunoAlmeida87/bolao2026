@@ -273,7 +273,10 @@ select option{background:var(--mid-blue);color:var(--white)}
 .ranking-cards{display:none}
 .rank-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s}
 .rank-card:active{background:var(--light-blue)}
-.rank-card.is-me{background:rgba(255,215,0,.06);border-color:rgba(255,215,0,.3)}
+.rank-card.is-me{background:rgba(255,215,0,.07);border-color:rgba(255,215,0,.4)}
+.rank-card-gold{border-color:rgba(255,215,0,.45);background:linear-gradient(135deg,rgba(255,215,0,.06),var(--card))}
+.rank-card-silver{border-color:rgba(192,192,192,.4);background:linear-gradient(135deg,rgba(192,192,192,.05),var(--card))}
+.rank-card-bronze{border-color:rgba(205,127,50,.4);background:linear-gradient(135deg,rgba(205,127,50,.05),var(--card))}
 .rank-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .rank-card-pos{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:34px}
 .rank-card-name{flex:1;min-width:0}
@@ -282,12 +285,23 @@ select option{background:var(--mid-blue);color:var(--white)}
 .rank-card-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;white-space:nowrap}
 .rank-card-chips{display:flex;gap:5px;flex-wrap:wrap}
 .rank-chip{font-size:0.68rem;font-weight:600;padding:3px 7px;border-radius:6px}
-.rank-chip.exact{background:rgba(0,200,81,.12);color:var(--green)}
-.rank-chip.vsaldo{background:rgba(255,215,0,.1);color:var(--gold)}
-.rank-chip.venc{background:rgba(255,140,0,.1);color:#FFA500}
+.rank-chip.exact{background:rgba(0,200,81,.18);color:#00C851;border:1px solid rgba(0,200,81,.25)}
+.rank-chip.vsaldo{background:rgba(255,215,0,.16);color:#FFD700;border:1px solid rgba(255,215,0,.25)}
+.rank-chip.venc{background:rgba(255,140,0,.16);color:#FFA500;border:1px solid rgba(255,140,0,.25)}
 .rank-mov-pos{font-size:0.62rem;font-weight:700;color:var(--green);line-height:1}
 .rank-mov-neg{font-size:0.62rem;font-weight:700;color:#ff6b6b;line-height:1}
 .rank-mov-zero{font-size:0.62rem;color:var(--text-muted);line-height:1}
+/* ── Share buttons ── */
+.ranking-share-row{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.btn-share{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;border:1px solid rgba(255,215,0,.35);background:rgba(255,215,0,.08);color:var(--gold);font-size:0.78rem;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-share:hover{background:rgba(255,215,0,.18)}
+/* ── Skeleton loading ── */
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.skel{background:linear-gradient(90deg,var(--mid-blue) 25%,var(--light-blue) 50%,var(--mid-blue) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:8px}
+.skel-card{height:82px;margin-bottom:8px;border-radius:12px}
+.skel-stat{height:74px;flex:1;border-radius:12px}
+.skeleton-wrap{padding:4px 0}
+.skeleton-stat-row{display:flex;gap:8px;margin-bottom:12px}
 
 /* ══════════════════════════════════════════
    PALPITES
@@ -1608,6 +1622,7 @@ async function _bumpDataVersion() {
 }
 
 let deferredPwaPrompt = null;
+let _cachedRanking = [];
 
 // ════════════════════════════════════════════
 // DEBUG — captura de erros e flag opcional
@@ -2522,12 +2537,13 @@ function _startCountdownTimer() {
 
 async function renderDashboard() {
   const cont = document.getElementById('dashboard-content');
-  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  cont.innerHTML = `<div class="skeleton-wrap">${Array.from({length:6},()=>`<div class="skel skel-card"></div>`).join('')}</div>`;
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false);
     const {allPals, champPicks} = await _fetchPals(users);
     const ranking = computeRanking(users, res, allPals, champPicks);
+    _cachedRanking = ranking;
     const finalChampion = _getFinalChampion(res);
     const isAdminDash = currentUserDoc?.role === 'admin';
 
@@ -2691,7 +2707,7 @@ async function renderDashboard() {
         delta>0  ? `<span class="rank-mov-pos">↑${delta}</span>` :
         delta<0  ? `<span class="rank-mov-neg">↓${Math.abs(delta)}</span>` :
                    `<span class="rank-mov-zero">—</span>`;
-      cardsHtml += `<div class="rank-card${isMe?' is-me':''}" onclick="goToUserPalpites('${u.uid}')">
+      cardsHtml += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="goToUserPalpites('${u.uid}')">
         <div class="rank-card-top">
           <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}</div>
           <div class="rank-card-name"><div class="rk-apelido">${esc(u.apelido)}</div><div class="rk-nome">${esc(u.nome)}</div></div>
@@ -2708,7 +2724,11 @@ async function renderDashboard() {
 
     html += `</tbody></table></div></div>${cardsHtml}
     <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
-      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>`;
+      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>
+    <div class="ranking-share-row">
+      <button class="btn-share" onclick="shareMyRankingCard()">📤 Minha posição</button>
+      <button class="btn-share" onclick="shareFullRankingImage()">🏆 Ranking completo</button>
+    </div>`;
     cont.innerHTML = html;
     _startCountdownTimer();
   } catch(e) {
@@ -7493,6 +7513,99 @@ function showToast(msg, type='') {
 
 function isMobileClient() {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'');
+}
+
+// ════════════════════════════════════════════
+// CANVAS SHARE — Ranking para WhatsApp
+// ════════════════════════════════════════════
+async function shareMyRankingCard() {
+  if (!_cachedRanking.length) { showToast('Carregue o ranking primeiro','warning'); return; }
+  const me = _cachedRanking.find(r=>r.uid===currentUser.uid);
+  if (!me) { showToast('Você não está no ranking ainda','warning'); return; }
+  const pos = _cachedRanking.indexOf(me)+1;
+  const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':`#${pos}`;
+  const canvas = document.createElement('canvas');
+  canvas.width=600; canvas.height=280;
+  const ctx = canvas.getContext('2d');
+  // fundo
+  ctx.fillStyle='#0A1628'; ctx.fillRect(0,0,600,280);
+  // faixa dourada topo
+  ctx.fillStyle='#FFD700'; ctx.fillRect(0,0,600,6);
+  ctx.fillStyle='rgba(255,215,0,0.06)'; ctx.fillRect(0,6,600,274);
+  // título
+  ctx.fillStyle='#FFD700'; ctx.font='bold 18px Arial';
+  ctx.textAlign='center'; ctx.fillText('🏆 Bolão ICN Copa 2026',300,42);
+  // posição
+  ctx.fillStyle='#FFFFFF'; ctx.font='bold 72px Arial';
+  ctx.textAlign='center'; ctx.fillText(medal,300,140);
+  // nome
+  ctx.fillStyle='#FFD700'; ctx.font='bold 24px Arial';
+  ctx.textAlign='center'; ctx.fillText(me.apelido,300,178);
+  // pontos
+  ctx.fillStyle='#FFFFFF'; ctx.font='bold 20px Arial';
+  ctx.textAlign='center'; ctx.fillText(`${me.pontos} pts`,300,210);
+  // chips
+  ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='14px Arial';
+  ctx.textAlign='center';
+  ctx.fillText(`🎯 ${me.exatos} exatos   ⚡ ${me.venc_saldo} V+S   ✓ ${me.apenas_venc} venc.`,300,240);
+  // rodapé
+  ctx.fillStyle='rgba(255,215,0,0.45)'; ctx.font='12px Arial';
+  ctx.textAlign='center'; ctx.fillText('brunoalmeida87.github.io/bolao2026',300,268);
+  await _downloadOrShareCanvas(canvas, `ranking-${me.apelido.replace(/\s+/g,'_')}.png`, `${medal} ${me.apelido} — ${me.pontos} pts no Bolão ICN Copa 2026! 🏆`);
+}
+
+async function shareFullRankingImage() {
+  if (!_cachedRanking.length) { showToast('Carregue o ranking primeiro','warning'); return; }
+  const top = _cachedRanking.slice(0,10);
+  const rowH = 42, headerH = 80, footerH = 32, pad = 16;
+  const h = headerH + top.length*rowH + footerH + pad*2;
+  const canvas = document.createElement('canvas');
+  canvas.width=600; canvas.height=h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle='#0A1628'; ctx.fillRect(0,0,600,h);
+  ctx.fillStyle='#FFD700'; ctx.fillRect(0,0,600,6);
+  // título
+  ctx.fillStyle='#FFD700'; ctx.font='bold 18px Arial';
+  ctx.textAlign='center'; ctx.fillText('🏆 Ranking — Bolão ICN Copa 2026',300,42);
+  ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font='13px Arial';
+  ctx.fillText(`Top ${top.length} · ${new Date().toLocaleDateString('pt-BR')}`,300,64);
+  // linhas
+  top.forEach((u,i)=>{
+    const y = headerH + i*rowH + pad;
+    const pos = i+1;
+    if (i%2===0) { ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect(0,y-4,600,rowH); }
+    const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':`${pos}.`;
+    ctx.fillStyle=pos<=3?'#FFD700':'#FFFFFF'; ctx.font=`bold ${pos<=3?'16':'15'}px Arial`;
+    ctx.textAlign='left'; ctx.fillText(`${medal} ${u.apelido}`, 20, y+22);
+    ctx.fillStyle='#FFD700'; ctx.font='bold 15px Arial';
+    ctx.textAlign='right'; ctx.fillText(`${u.pontos} pts`, 580, y+22);
+  });
+  // rodapé
+  ctx.fillStyle='rgba(255,215,0,0.45)'; ctx.font='12px Arial';
+  ctx.textAlign='center'; ctx.fillText('brunoalmeida87.github.io/bolao2026', 300, h-10);
+  await _downloadOrShareCanvas(canvas, 'ranking-completo.png', `🏆 Ranking Bolão ICN Copa 2026!\n\n${top.slice(0,5).map((u,i)=>`${i+1}. ${u.apelido} – ${u.pontos} pts`).join('\n')}`);
+}
+
+async function _downloadOrShareCanvas(canvas, filename, text) {
+  try {
+    const blob = await new Promise(res=>canvas.toBlob(res,'image/png'));
+    const file = new File([blob], filename, {type:'image/png'});
+    if (navigator.canShare && navigator.canShare({files:[file]})) {
+      await navigator.share({files:[file], text});
+    } else {
+      _fallbackDownload(blob, filename);
+      showToast('Imagem salva! Compartilhe pelo WhatsApp manualmente.','info');
+    }
+  } catch(e) {
+    if (e.name!=='AbortError') showToast('Erro ao gerar imagem','error');
+  }
+}
+
+function _fallbackDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 function isIOS() {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent||'');
