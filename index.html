@@ -4073,18 +4073,22 @@ async function openUserProfile(uid) {
     const userPals = allPals[uid]||{};
     const palArr   = Object.values(userPals).filter(p=>p&&p.h!==undefined&&p.a!==undefined);
     let totGols=0, empates=0, hwins=0, awins=0;
+    let margin1=0, margin2=0, margin3p=0;
     const scoreFreq={};
     palArr.forEach(p=>{
       const h=parseInt(p.h)||0, a=parseInt(p.a)||0;
       totGols+=h+a;
       if(h===a) empates++; else if(h>a) hwins++; else awins++;
+      const diff=Math.abs(h-a);
+      if(diff===1)margin1++; else if(diff===2)margin2++; else if(diff>=3)margin3p++;
       const k=`${Math.max(h,a)}-${Math.min(h,a)}`; scoreFreq[k]=(scoreFreq[k]||0)+1;
     });
     const nPals   = palArr.length;
     const avgGols = nPals>0?(totGols/nPals).toFixed(1):'-';
     const pctEmp  = nPals>0?Math.round(empates/nPals*100):0;
-    const pctH    = nPals>0?Math.round(hwins/nPals*100):0;
-    const pctA    = nPals>0?Math.round(awins/nPals*100):0;
+    const pctM1   = nPals>0?Math.round(margin1/nPals*100):0;
+    const pctM2   = nPals>0?Math.round(margin2/nPals*100):0;
+    const pctM3   = nPals>0?Math.round(margin3p/nPals*100):0;
     const topScore = Object.entries(scoreFreq).sort((a,b)=>b[1]-a[1])[0];
 
     // 5. Archetype
@@ -4143,6 +4147,65 @@ async function openUserProfile(uid) {
 
     // 9. Evolution chart
     const evChart = _buildUserEvolutionChart(uid, allPals, res);
+
+    // 10. Zebra hunter + solo moments
+    const _isPH = n => !n || /[ºª]|^Venc\.|^Perd\.|^Melhor/.test(n);
+    let zebraAttempts=0, zebraAcertos=0, soloCorrect=0, soloWrong=0;
+    gamesWithRes.forEach(g=>{
+      const p=userPals[g.id]; if(!p||p.h===undefined) return;
+      const allVotes=users.map(u=>allPals[u.uid]?.[g.id]).filter(x=>x&&x.h!==undefined);
+      if(allVotes.length<2) return;
+      const r=res[g.id];
+      const rh=parseInt(r.h_real), ra=parseInt(r.a_real);
+      const realWin=rh>ra?'H':rh<ra?'A':'D';
+      const toWin=v=>{const vh=parseInt(v.h),va=parseInt(v.a);return vh>va?'H':vh<va?'A':'D';};
+      const allWins=allVotes.map(toWin);
+      const myWin=toWin(p);
+      const nCorrect=allWins.filter(w=>w===realWin).length;
+      const n=allWins.length;
+      if((nCorrect/n)<0.3){zebraAttempts++;if(myWin===realWin)zebraAcertos++;}
+      if(myWin===realWin&&nCorrect===1)soloCorrect++;
+      if(myWin!==realWin&&nCorrect===n-1)soloWrong++;
+    });
+
+    // 11. Team bias & accuracy (group stage only — teams are real names there)
+    const teamBias={}, teamAcc={};
+    ALL_GAMES.forEach(g=>{
+      if(_isPH(g.h)||_isPH(g.a)) return;
+      const p=userPals[g.id]; if(!p||p.h===undefined) return;
+      const ph=parseInt(p.h)||0, pa=parseInt(p.a)||0;
+      let pickedTeam=null;
+      if(ph>pa) pickedTeam=g.h;
+      else if(pa>ph) pickedTeam=g.a;
+      if(pickedTeam) teamBias[pickedTeam]=(teamBias[pickedTeam]||0)+1;
+      const r=res[g.id];
+      if(!_hasFullResult(r)) return;
+      const pts=calcPontos(p,r);
+      [g.h,g.a].forEach(team=>{
+        if(!teamAcc[team]) teamAcc[team]={ok:0,total:0};
+        teamAcc[team].total++;
+        if(pts!==null&&pts>0) teamAcc[team].ok++;
+      });
+    });
+    const topBias=Object.entries(teamBias).filter(([,n])=>n>=2).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const teamAccArr=Object.entries(teamAcc).filter(([,v])=>v.total>=2)
+      .map(([t,v])=>({t,pct:Math.round(v.ok/v.total*100),ok:v.ok,total:v.total}))
+      .sort((a,b)=>b.pct-a.pct);
+    const bestTeam=teamAccArr[0]||null;
+    const worstTeam=teamAccArr.length>1?teamAccArr[teamAccArr.length-1]:null;
+
+    // 12. Goal bias
+    let golsApost=0, golsReaisTotal=0, nResolved=0;
+    gamesWithRes.forEach(g=>{
+      const p=userPals[g.id]; if(!p||p.h===undefined) return;
+      golsApost+=(parseInt(p.h)||0)+(parseInt(p.a)||0);
+      const r=res[g.id];
+      golsReaisTotal+=(parseInt(r.h_real)||0)+(parseInt(r.a_real)||0);
+      nResolved++;
+    });
+    const avgGolsApost=nResolved>0?(golsApost/nResolved).toFixed(2):null;
+    const avgGolsReais=nResolved>0?(golsReaisTotal/nResolved).toFixed(2):null;
+    const golBias=avgGolsApost&&avgGolsReais?(parseFloat(avgGolsApost)-parseFloat(avgGolsReais)).toFixed(2):null;
 
     // ── RENDER ────────────────────────────────────
     const isMe = uid===currentUser.uid;
@@ -4253,9 +4316,9 @@ async function openUserProfile(uid) {
         <div style="font-size:0.95rem;font-weight:800;color:var(--gold)">${topScore?topScore[0].replace('-','×'):'—'}<span style="font-size:0.67rem;color:var(--text-muted);font-weight:400"> ${topScore?'('+topScore[1]+'×)':''}</span></div>
       </div>
     </div>
-    <div style="font-size:0.63rem;color:var(--text-muted);margin-bottom:3px">Casa / Empate / Fora</div>
-    <div style="display:flex;border-radius:5px;overflow:hidden;height:7px;margin-bottom:3px;gap:1px">${dBar(pctH,'rgba(0,180,255,.7)')}${dBar(pctEmp,'rgba(255,215,0,.6)')}${dBar(pctA,'rgba(255,100,100,.7)')}</div>
-    <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-muted)"><span>${pctH}% Casa</span><span>${pctEmp}% Empate</span><span>${pctA}% Fora</span></div>
+    <div style="font-size:0.63rem;color:var(--text-muted);margin-bottom:3px">Margem de Gols nas Apostas</div>
+    <div style="display:flex;border-radius:5px;overflow:hidden;height:7px;margin-bottom:3px;gap:1px">${dBar(pctEmp,'rgba(255,215,0,.6)')}${dBar(pctM1,'rgba(100,200,100,.7)')}${dBar(pctM2,'rgba(0,180,255,.7)')}${dBar(pctM3,'rgba(255,100,100,.7)')}</div>
+    <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-muted)"><span>${pctEmp}% Emp</span><span>${pctM1}% +1</span><span>${pctM2}% +2</span><span>${pctM3}% +3</span></div>
   </div>`:''}
   <div class="perfil-section">
     <div class="perfil-section-h">🏆 Palpite de Campeão</div>
@@ -4312,6 +4375,68 @@ async function openUserProfile(uid) {
     <div class="perfil-section-h">⚔️ Confronto Direto vs Participantes</div>
     <div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">${h2hHtml}</div>
     <div style="font-size:0.62rem;color:var(--text-muted);margin-top:5px">W = pontuou mais · E = empatados · D = pontuou menos (por jogo)</div>
+  </div>`:''}
+  ${zebraAttempts>0?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">🦓 Caçador de Zebras</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;text-align:center">
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:7px 4px">
+        <div style="font-size:1.05rem;font-weight:800;color:var(--gold)">${zebraAttempts}</div>
+        <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.3">Apostas em zebra</div>
+      </div>
+      <div style="background:rgba(76,175,80,.07);border:1px solid rgba(76,175,80,.18);border-radius:8px;padding:7px 4px">
+        <div style="font-size:1.05rem;font-weight:800;color:var(--green)">${zebraAcertos}</div>
+        <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.3">Zebras acertadas</div>
+      </div>
+      <div style="background:rgba(255,215,0,.07);border:1px solid rgba(255,215,0,.2);border-radius:8px;padding:7px 4px">
+        <div style="font-size:1.05rem;font-weight:800;color:var(--gold)">${soloCorrect}</div>
+        <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.3">Único a acertar</div>
+      </div>
+      <div style="background:rgba(255,80,80,.07);border:1px solid rgba(255,80,80,.18);border-radius:8px;padding:7px 4px">
+        <div style="font-size:1.05rem;font-weight:800;color:#f77">${soloWrong}</div>
+        <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.3">Único a errar</div>
+      </div>
+    </div>
+    <div style="font-size:0.61rem;color:var(--text-muted);margin-top:5px">Zebra = resultado acertado por menos de 30% dos participantes</div>
+  </div>`:''}
+  ${(topBias.length>0||bestTeam||worstTeam)?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">🏳️ Seleções Favoritas &amp; Eficiência</div>
+    ${topBias.length>0?`<div style="margin-bottom:8px">
+      <div style="font-size:0.61rem;color:var(--text-muted);margin-bottom:4px">Seleções mais apostadas para vencer</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${topBias.map(([t,n])=>`<span style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:6px;padding:2px 7px;font-size:0.72rem">${teamFlag(t)} ${esc(t)} <span style="color:var(--gold);font-weight:700">${n}×</span></span>`).join('')}</div>
+    </div>`:''}
+    ${(bestTeam||worstTeam)?`<div style="display:grid;grid-template-columns:${bestTeam&&worstTeam?'1fr 1fr':'1fr'};gap:6px">
+      ${bestTeam?`<div style="background:rgba(76,175,80,.07);border:1px solid rgba(76,175,80,.18);border-radius:9px;padding:8px 10px">
+        <div style="font-size:0.59rem;color:var(--text-muted);margin-bottom:2px">Melhor acerto por seleção</div>
+        <div style="font-size:0.82rem;font-weight:700">${teamFlag(bestTeam.t)} ${esc(bestTeam.t)}</div>
+        <div style="font-size:0.88rem;font-weight:800;color:var(--green)">${bestTeam.pct}% <span style="font-weight:400;font-size:0.62rem;color:var(--text-muted)">(${bestTeam.ok}/${bestTeam.total})</span></div>
+      </div>`:''}
+      ${worstTeam?`<div style="background:rgba(255,80,80,.07);border:1px solid rgba(255,80,80,.18);border-radius:9px;padding:8px 10px">
+        <div style="font-size:0.59rem;color:var(--text-muted);margin-bottom:2px">Pior acerto por seleção</div>
+        <div style="font-size:0.82rem;font-weight:700">${teamFlag(worstTeam.t)} ${esc(worstTeam.t)}</div>
+        <div style="font-size:0.88rem;font-weight:800;color:#f77">${worstTeam.pct}% <span style="font-weight:400;font-size:0.62rem;color:var(--text-muted)">(${worstTeam.ok}/${worstTeam.total})</span></div>
+      </div>`:''}
+    </div>`:''}
+  </div>`:''}
+  ${golBias!==null?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">⚽ Viés de Gols</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:8px 5px">
+        <div style="font-size:1.05rem;font-weight:800;color:var(--gold)">${avgGolsApost}</div>
+        <div style="font-size:0.58rem;color:var(--text-muted);line-height:1.3">Gols apostados<br>/jogo</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:8px 5px">
+        <div style="font-size:1.05rem;font-weight:800">${avgGolsReais}</div>
+        <div style="font-size:0.58rem;color:var(--text-muted);line-height:1.3">Gols reais<br>/jogo</div>
+      </div>
+      <div style="background:${parseFloat(golBias)>0?'rgba(255,80,80,.07)':parseFloat(golBias)<0?'rgba(0,180,255,.07)':'rgba(76,175,80,.07)'};border:1px solid ${parseFloat(golBias)>0?'rgba(255,80,80,.18)':parseFloat(golBias)<0?'rgba(0,180,255,.18)':'rgba(76,175,80,.18)'};border-radius:9px;padding:8px 5px">
+        <div style="font-size:1.05rem;font-weight:800;color:${parseFloat(golBias)>0?'#f77':parseFloat(golBias)<0?'rgba(0,180,255,1)':'var(--green)'}">${parseFloat(golBias)>0?'+':''}${golBias}</div>
+        <div style="font-size:0.58rem;color:var(--text-muted);line-height:1.3">${parseFloat(golBias)>0.1?'Superestima gols':parseFloat(golBias)<-0.1?'Subestima gols':'Calibrado'}</div>
+      </div>
+    </div>
+    <div style="font-size:0.61rem;color:var(--text-muted);margin-top:5px">Média de gols apostados vs gols reais nos jogos com resultado</div>
   </div>`:''}
 </div>`;
   } catch(e) {
