@@ -738,6 +738,18 @@ body.light-theme .mais-sheet a.active{color:var(--accent)}
     font-size:0.7rem;color:var(--text-muted);margin:0 0 6px;
     opacity:.85;font-weight:600;
   }
+
+  /* ── Retrato: abas Estatísticas / Regras / Todos os Palpites ── */
+  /* Matrix "Todos os Palpites": células densas e nome do jogo quebrando linha */
+  .pal-matrix{font-size:0.7rem}
+  .pal-matrix th,.pal-matrix td{padding:4px 5px !important}
+  .pal-matrix thead th:first-child{min-width:96px !important;max-width:120px;white-space:normal !important}
+  .pal-matrix tbody td:first-child{white-space:normal !important;line-height:1.2}
+  /* Resumo de campeão (aba Todos): 2 colunas no retrato */
+  .champ-summary-grid{grid-template-columns:1fr 1fr !important}
+  /* Tabela de pontuação (Regras): texto quebra e respira melhor */
+  .regras-pts-table td:nth-child(2){font-size:0.78rem;line-height:1.45;white-space:normal}
+  .regras-pts-table td:first-child{white-space:normal;line-height:1.25}
 }
 
 /* Breakpoint intermediário: tablets / celulares grandes / dobráveis (item 8) */
@@ -3415,7 +3427,7 @@ function renderRegras() {
           No ${esc(CFG.nome_bolao)}, você ganha pontos acertando os placares e resultados dos jogos.
           Quanto mais preciso for seu palpite, mais pontos você recebe!
         </p>
-        <table class="ranking-table" style="margin:0">
+        <table class="ranking-table regras-pts-table" style="margin:0">
           <thead><tr><th>Acerto</th><th>Descrição</th><th>Pts</th></tr></thead>
           <tbody>
             <tr>
@@ -3566,7 +3578,7 @@ async function renderVerTodos() {
         <div class="card-header"><span class="card-title">🏆 Palpite Campeão por Participante</span>
           ${finalChampion?`<span class="pts-badge" style="margin-left:auto">Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}</span>`:(champRevealed?'':` <span style="font-size:0.75rem;color:var(--text-muted)">🔒 Visível após bloqueio</span>`)}
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px">
+        <div class="champ-summary-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px">
           ${users.map(u=>{
             const isOwn = u.uid === currentUser.uid;
             const canSeeChamp = champRevealed || isOwn;
@@ -3592,8 +3604,9 @@ async function renderVerTodos() {
       </div>
       ${_ptsLegendHtml()}
       ${champSummary}
-      <div style="overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px">
-      <table class="ranking-table" style="min-width:${160+users.length*80}px;font-size:0.8rem;border-collapse:separate;border-spacing:0">
+      <div class="hscroll-hint">👉 Arraste para o lado para ver todos os participantes</div>
+      <div class="pal-matrix-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px">
+      <table class="ranking-table pal-matrix" style="min-width:${160+users.length*80}px;font-size:0.8rem;border-collapse:separate;border-spacing:0">
         <thead><tr>
           <th style="text-align:left;min-width:140px;position:sticky;left:0;top:0;z-index:3;background:var(--mid-blue)">Jogo</th>
           <th style="min-width:55px;position:sticky;top:0;z-index:2;background:var(--mid-blue)">Data</th>
@@ -4897,7 +4910,7 @@ async function renderEstatisticas() {
       };
       html += `<div class="card">
         <div class="card-title">🗳️ Consenso & Dissenso do Bolão</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+        <div class="stats-pair" style="margin-top:14px">
           <div style="background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.2);border-radius:10px;padding:14px">
             <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green);margin-bottom:10px">🤝 Mais Consensual</div>
             ${mkDistBar(consensual)}
