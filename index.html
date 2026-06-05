@@ -865,6 +865,44 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 /* Header apelido clicável */
 #header-apelido{cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s}
 #header-apelido:hover{border-bottom-color:var(--gold);color:var(--gold)}
+
+/* ══════════════════════════════════════════
+   PERFIL INDIVIDUAL (modal)
+══════════════════════════════════════════ */
+.modal-perfil-box{
+  max-width:680px;max-height:88vh;overflow-y:auto;
+  padding:0;border-radius:18px;
+}
+.modal-perfil-box::-webkit-scrollbar{width:5px}
+.modal-perfil-box::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.perfil-header{
+  background:linear-gradient(135deg,rgba(255,215,0,.1),rgba(26,46,74,.97));
+  border-bottom:1px solid var(--border);padding:16px 18px;
+  position:sticky;top:0;z-index:10;border-radius:18px 18px 0 0;
+}
+.perfil-body{padding:14px 18px 24px}
+.perfil-stat-mini{
+  text-align:center;background:rgba(255,255,255,.04);
+  border:1px solid var(--border);border-radius:10px;padding:10px 6px;
+}
+.perfil-stat-mini .v{font-size:1.25rem;font-weight:800;color:var(--gold)}
+.perfil-stat-mini .l{font-size:0.63rem;color:var(--text-muted);margin-top:2px}
+.perfil-section{margin-bottom:15px}
+.perfil-section-h{
+  font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--text-muted);margin-bottom:7px;
+}
+.perfil-pred-row{
+  display:flex;align-items:center;gap:6px;padding:6px 8px;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);
+  border-radius:7px;font-size:0.79rem;flex-wrap:wrap;
+}
+@media(max-width:820px){
+  .modal-perfil-box{max-height:94vh;max-width:100%;border-radius:14px}
+}
+body.light-theme .perfil-header{background:linear-gradient(135deg,rgba(255,215,0,.08),rgba(240,244,250,.98))}
+body.light-theme .perfil-stat-mini{background:rgba(0,0,0,.03)}
+body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07)}
 </style>
 </head>
 <body>
@@ -1231,6 +1269,13 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
       <button class="btn btn-primary" onclick="salvarApelido()">💾 Salvar</button>
       <button class="btn btn-secondary" onclick="closeApelidoModal()">Cancelar</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL PERFIL INDIVIDUAL -->
+<div id="modal-perfil" class="modal-overlay hidden" onclick="if(event.target===this)closePerfilModal()">
+  <div class="modal-box modal-perfil-box">
+    <div id="perfil-modal-content"></div>
   </div>
 </div>
 
@@ -2716,7 +2761,7 @@ async function renderDashboard() {
       // Tabela (desktop) — inalterada
       html += `<tr class="${isMe?'is-me':''}">
         <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}</td>
-        <td style="cursor:pointer" onclick="goToUserPalpites('${u.uid}')"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
+        <td style="cursor:pointer" onclick="openUserProfile('${u.uid}')" title="Ver perfil e estatísticas"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
         <td><span class="pts-badge">${u.pontos}</span></td>
         <td class="text-green">${u.exatos}</td>
         <td class="text-gold">${u.venc_saldo}</td>
@@ -2733,7 +2778,7 @@ async function renderDashboard() {
         delta>0  ? `<span class="rank-mov-pos">↑${delta}</span>` :
         delta<0  ? `<span class="rank-mov-neg">↓${Math.abs(delta)}</span>` :
                    `<span class="rank-mov-zero">—</span>`;
-      cardsHtml += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="goToUserPalpites('${u.uid}')">
+      cardsHtml += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="openUserProfile('${u.uid}')">
         <div class="rank-card-top">
           <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}</div>
           <div class="rank-card-name"><div class="rk-apelido">${esc(u.apelido)}</div><div class="rk-nome">${esc(u.nome)}</div></div>
@@ -3928,6 +3973,357 @@ function calcAltRankings(users, allPals) {
     }
     return { ...u, empates, mediaGols: totalPals > 0 ? totalGols / totalPals : 0, totalPals };
   });
+}
+
+// ════════════════════════════════════════════
+// PERFIL INDIVIDUAL
+// ════════════════════════════════════════════
+let _perfilEscHandler = null;
+
+function _buildUserEvolutionChart(uid, allPals, res) {
+  const roundDefs = [
+    { label:'Rod.1', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
+    { label:'Rod.2', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
+    { label:'Rod.3', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
+    ...Object.values(ELIM_DATA).map(d=>({ label: (d.label||'').substring(0,6), ids: d.games.map(g=>g.id) }))
+  ];
+  const userPals = allPals[uid] || {};
+  let cumPts = 0;
+  const points = [];
+  for (const rd of roundDefs) {
+    const hasRes = rd.ids.some(id=>_hasFullResult(res[id]));
+    if (!hasRes) continue;
+    let rdPts = 0;
+    rd.ids.forEach(id=>{
+      if (!_hasFullResult(res[id])) return;
+      const p = userPals[id];
+      if (!p || p.h===undefined) return;
+      const pts = calcPontos(p, res[id]);
+      if (pts!==null) { cumPts+=pts; rdPts+=pts; }
+    });
+    points.push({ label: rd.label, cum: cumPts, rdPts });
+  }
+  if (points.length < 2) return '';
+  const svgW=480, padL=28, padR=14, padT=14, padB=22;
+  const chartW=svgW-padL-padR, chartH=80-padT-padB;
+  const maxVal=Math.max(...points.map(p=>p.cum),1);
+  const svgH=80;
+  const xFor = i => padL+(i/(points.length-1))*chartW;
+  const yFor = v => padT+chartH-(v/maxVal)*chartH;
+  let pathD = `M ${xFor(0).toFixed(1)} ${yFor(points[0].cum).toFixed(1)}`;
+  for (let i=1;i<points.length;i++) {
+    const cx=((xFor(i-1)+xFor(i))/2).toFixed(1);
+    pathD+=` C ${cx} ${yFor(points[i-1].cum).toFixed(1)},${cx} ${yFor(points[i].cum).toFixed(1)},${xFor(i).toFixed(1)} ${yFor(points[i].cum).toFixed(1)}`;
+  }
+  const areaD=pathD+` L ${xFor(points.length-1).toFixed(1)} ${svgH-padB} L ${padL} ${svgH-padB} Z`;
+  let svg=`<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:260px;display:block">`;
+  svg+=`<defs><linearGradient id="perf-ev-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD700" stop-opacity=".22"/><stop offset="1" stop-color="#FFD700" stop-opacity="0"/></linearGradient></defs>`;
+  svg+=`<path d="${areaD}" fill="url(#perf-ev-g)"/>`;
+  svg+=`<path d="${pathD}" fill="none" stroke="#FFD700" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  points.forEach((p,i)=>{
+    const x=xFor(i).toFixed(1), y=yFor(p.cum).toFixed(1);
+    svg+=`<circle cx="${x}" cy="${y}" r="3" fill="#FFD700" stroke="rgba(0,0,0,.5)" stroke-width="1"/>`;
+    const tx=Math.max(padL+10,Math.min(svgW-padR-10,parseFloat(x)));
+    svg+=`<text x="${tx.toFixed(1)}" y="${(svgH-4).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.4)">${esc(p.label)}</text>`;
+    if (i===points.length-1||i===0) {
+      svg+=`<text x="${x}" y="${Math.max(padT+8,parseFloat(y)-5).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="#FFD700" font-weight="700">${p.cum}</text>`;
+    }
+  });
+  svg+='</svg>';
+  return svg;
+}
+
+async function openUserProfile(uid) {
+  const overlay = document.getElementById('modal-perfil');
+  const cont = document.getElementById('perfil-modal-content');
+  if (!overlay||!cont) return;
+  overlay.classList.remove('hidden');
+  cont.innerHTML = '<div style="padding:48px 20px;text-align:center"><div class="spinner"></div><div style="margin-top:14px;color:var(--text-muted);font-size:0.85rem">Calculando estatísticas...</div></div>';
+  if (_perfilEscHandler) document.removeEventListener('keydown', _perfilEscHandler);
+  _perfilEscHandler = (e)=>{ if(e.key==='Escape') closePerfilModal(); };
+  document.addEventListener('keydown', _perfilEscHandler);
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users);
+    const user = users.find(u=>u.uid===uid);
+    if (!user) { cont.innerHTML='<div class="alert alert-error" style="margin:20px">Usuário não encontrado.</div>'; return; }
+
+    // 1. Ranking
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const rankPos  = ranking.findIndex(u=>u.uid===uid)+1;
+    const rankEntry = ranking.find(u=>u.uid===uid)||{pontos:0,exatos:0,venc_saldo:0,apenas_venc:0,erros:0,jogos:0,acertou_campeao:false,bonus_campeao:0};
+    const finalChampion = _getFinalChampion(res);
+
+    // 2. Accuracy + trend
+    const acc   = calcUserAccuracyStats(uid, allPals, res);
+    const trend = _calcRecentTrend(uid, allPals, res, 5);
+
+    // 3. Phase breakdown
+    const _phGrpIds  = Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(x=>x.id));
+    const _phElimIds = Object.values(ELIM_DATA).flatMap(d=>d.games.map(x=>x.id));
+    const rankGrp   = _computeRankingForGameIds(users, res, allPals, _phGrpIds);
+    const rankElim  = _computeRankingForGameIds(users, res, allPals, _phElimIds);
+    const grpEntry  = rankGrp.find(u=>u.uid===uid)  || {pontos:0,exatos:0,jogos:0};
+    const elimEntry = rankElim.find(u=>u.uid===uid)  || {pontos:0,exatos:0,jogos:0};
+    const posGrp    = rankGrp.findIndex(u=>u.uid===uid)+1;
+    const posElim   = rankElim.findIndex(u=>u.uid===uid)+1;
+
+    // 4. Betting profile
+    const userPals = allPals[uid]||{};
+    const palArr   = Object.values(userPals).filter(p=>p&&p.h!==undefined&&p.a!==undefined);
+    let totGols=0, empates=0, hwins=0, awins=0;
+    const scoreFreq={};
+    palArr.forEach(p=>{
+      const h=parseInt(p.h)||0, a=parseInt(p.a)||0;
+      totGols+=h+a;
+      if(h===a) empates++; else if(h>a) hwins++; else awins++;
+      const k=`${Math.max(h,a)}-${Math.min(h,a)}`; scoreFreq[k]=(scoreFreq[k]||0)+1;
+    });
+    const nPals   = palArr.length;
+    const avgGols = nPals>0?(totGols/nPals).toFixed(1):'-';
+    const pctEmp  = nPals>0?Math.round(empates/nPals*100):0;
+    const pctH    = nPals>0?Math.round(hwins/nPals*100):0;
+    const pctA    = nPals>0?Math.round(awins/nPals*100):0;
+    const topScore = Object.entries(scoreFreq).sort((a,b)=>b[1]-a[1])[0];
+
+    // 5. Archetype
+    const gAvg=parseFloat(avgGols);
+    let archIcon='⚽', archName='O Equilibrado', archDesc='Apostas balanceadas';
+    if(pctEmp>=35){archIcon='🤝';archName='O Rei dos Empates';archDesc='Adora 0-0 e 1-1';}
+    else if(gAvg<1.8){archIcon='🛡️';archName='O Muralha';archDesc='Defesa acima de tudo';}
+    else if(gAvg<2.4){archIcon='⚖️';archName='O Equilibrado';archDesc='Apostas balanceadas';}
+    else if(gAvg<3.2){archIcon='⚽';archName='O Artilheiro';archDesc='Gosta de muitos gols';}
+    else{archIcon='🚀';archName='O Goleador';archDesc='Apostas em goleadas';}
+
+    // 6. Best/worst predictions
+    const gamesWithRes = ALL_GAMES.filter(g=>_hasFullResult(res[g.id]));
+    const gamePreds = gamesWithRes.map(g=>{
+      const p=userPals[g.id]; if(!p||p.h===undefined) return null;
+      const pts=calcPontos(p,res[g.id]);
+      const ph=parseInt(p.h)||0, pa=parseInt(p.a)||0;
+      const rh=parseInt(res[g.id].h_real), ra=parseInt(res[g.id].a_real);
+      return {g, p, r:res[g.id], pts, miss:Math.abs(ph-rh)+Math.abs(pa-ra)};
+    }).filter(Boolean);
+    const exactPreds = gamePreds.filter(x=>x.pts===CFG.pts_exato).slice(-5).reverse();
+    const worstPreds = gamePreds.filter(x=>x.pts===0).sort((a,b)=>b.miss-a.miss).slice(0,3);
+
+    // 7. Consensus vs divergence
+    let conTotal=0,conAcertos=0,divTotal=0,divAcertos=0;
+    gamesWithRes.forEach(g=>{
+      const p=userPals[g.id]; if(!p||p.h===undefined) return;
+      const votes=users.map(u=>allPals[u.uid]?.[g.id]).filter(x=>x&&x.h!==undefined);
+      if(votes.length<2) return;
+      const vH=votes.filter(x=>parseInt(x.h)>parseInt(x.a)).length;
+      const vD=votes.filter(x=>parseInt(x.h)===parseInt(x.a)).length;
+      const vA=votes.filter(x=>parseInt(x.h)<parseInt(x.a)).length;
+      const maxV=Math.max(vH,vD,vA);
+      const maj=vH===maxV?'H':vD===maxV?'D':'A';
+      const ph=parseInt(p.h), pa=parseInt(p.a);
+      const mine=ph>pa?'H':ph<pa?'A':'D';
+      const pts=calcPontos(p,res[g.id]);
+      if(mine===maj){conTotal++;if(pts!==null&&pts>0)conAcertos++;}
+      else{divTotal++;if(pts!==null&&pts>0)divAcertos++;}
+    });
+    const conPct=conTotal>0?Math.round(conAcertos/conTotal*100):null;
+    const divPct=divTotal>0?Math.round(divAcertos/divTotal*100):null;
+
+    // 8. Head-to-head vs every other player
+    const h2hData = users.filter(u=>u.uid!==uid).map(opp=>{
+      let W=0,L=0,D=0;
+      gamesWithRes.forEach(g=>{
+        const mp=userPals[g.id], op=(allPals[opp.uid]||{})[g.id];
+        if(!mp||!op||mp.h===undefined||op.h===undefined) return;
+        const mPts=calcPontos(mp,res[g.id]), oPts=calcPontos(op,res[g.id]);
+        if(mPts===null||oPts===null) return;
+        if(mPts>oPts)W++;else if(mPts<oPts)L++;else D++;
+      });
+      const T=W+L+D; return T>0?{opp,W,L,D,T}:null;
+    }).filter(Boolean).sort((a,b)=>(b.W/b.T)-(a.W/a.T));
+
+    // 9. Evolution chart
+    const evChart = _buildUserEvolutionChart(uid, allPals, res);
+
+    // ── RENDER ────────────────────────────────────
+    const isMe = uid===currentUser.uid;
+    const champPick = champPicks[uid];
+    const champRevealed = isMe||CFG.campeao_locked===true||!!finalChampion||currentUserDoc?.role==='admin';
+    const champHTML = !champRevealed
+      ? '<span style="color:var(--text-muted)">🔒 Oculto</span>'
+      : (champPick
+        ? `${teamFlag(champPick)} ${esc(champPick)}${rankEntry.acertou_campeao?' ✅ <span style="color:var(--green);font-size:0.78rem">+'+rankEntry.bonus_campeao+' pts</span>':finalChampion?' ❌':''}`
+        : '<span style="color:var(--text-muted)">— sem palpite —</span>');
+
+    const dBar = (n,color) => n>0?`<div style="flex:${n};background:${color};border-radius:3px;min-width:4px"></div>`:'';
+
+    const strkBadge = (n,lbl,color) => n>0
+      ? `<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center;flex:1;min-width:64px"><div style="font-size:1.1rem;font-weight:800;color:${color}">${n}</div><div style="font-size:0.62rem;color:var(--text-muted);margin-top:1px;line-height:1.3">${lbl}</div></div>`
+      : '';
+
+    const predExatosHtml = exactPreds.map(x=>`<div class="perfil-pred-row">
+        <span style="flex:1">${esc(x.g.h)} <b style="color:var(--green)">${parseInt(x.p.h)}-${parseInt(x.p.a)}</b> ${esc(x.g.a)}</span>
+        <span class="rank-chip exact" style="flex-shrink:0">+${CFG.pts_exato}pts</span>
+      </div>`).join('');
+
+    const predErrosHtml = worstPreds.map(x=>`<div class="perfil-pred-row" style="border-color:rgba(255,68,68,.15)">
+        <span style="flex:1">${esc(x.g.h)} × ${esc(x.g.a)}</span>
+        <span style="color:var(--text-muted)">Apostou <b style="color:var(--white)">${parseInt(x.p.h)}-${parseInt(x.p.a)}</b></span>
+        <span style="color:var(--text-muted)">Real <b style="color:var(--white)">${x.r.h_real}-${x.r.a_real}</b></span>
+        <span style="color:var(--red);font-weight:700;font-size:0.72rem">Δ${x.miss}</span>
+      </div>`).join('');
+
+    const h2hHtml = h2hData.map(h=>{
+      const pct=Math.round(h.W/h.T*100);
+      const col=pct>=60?'var(--green)':pct>=40?'var(--gold)':'#ff6b6b';
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;background:rgba(255,255,255,.03);font-size:0.78rem">
+        <span style="flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(h.opp.apelido||h.opp.nome)}</span>
+        <span style="color:var(--green);min-width:20px">${h.W}W</span><span style="color:var(--text-muted);min-width:20px">${h.D}E</span><span style="color:#ff6b6b;min-width:20px">${h.L}D</span>
+        <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;gap:1px;width:46px">${dBar(h.W,'var(--green)')}${dBar(h.D,'rgba(255,215,0,.5)')}${dBar(h.L,'rgba(255,100,100,.7)')}</div>
+        <span style="font-size:0.7rem;color:${col};font-weight:700;min-width:24px;text-align:right">${pct}%</span>
+      </div>`;
+    }).join('');
+
+    const trendHtml = trend.count>0
+      ? `<span style="font-size:0.73rem;color:${trend.delta>=5?'var(--green)':trend.delta<=-5?'var(--red)':'var(--text-muted)'}">${trend.delta>=5?'📈 Em alta':trend.delta<=-5?'📉 Em queda':'➡️ Estável'} (${trend.count} recentes: ${trend.recentPct.toFixed(0)}%)</span>`
+      : '';
+
+    const distToLeader = rankPos>1
+      ? `<span style="font-size:0.72rem;color:var(--text-muted);margin-left:auto">-${ranking[0].pontos-rankEntry.pontos}pts pro líder</span>`
+      : `<span style="font-size:0.72rem;color:var(--gold);margin-left:auto">👑 Líder atual</span>`;
+
+    cont.innerHTML = `
+<div class="perfil-header">
+  <button class="modal-close" onclick="closePerfilModal()" style="position:absolute;top:11px;right:13px">✕</button>
+  <div style="display:flex;align-items:center;gap:10px;padding-right:26px">
+    <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,215,0,.12);border:2px solid rgba(255,215,0,.35);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0">${archIcon}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:1.05rem;font-weight:800;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(user.apelido)}${isMe?` <span style="font-size:0.63rem;background:rgba(255,215,0,.15);color:var(--gold);padding:1px 5px;border-radius:4px">Eu</span>`:''}</div>
+      <div style="font-size:0.73rem;color:var(--text-muted);margin-top:1px">${esc(user.nome)}</div>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;font-style:italic">${archName} · ${archDesc}</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0">
+      <span class="pts-badge" style="font-size:0.92rem">${rankEntry.pontos} pts</span>
+      <div style="font-size:0.73rem;color:var(--text-muted);margin-top:3px">${rankPos?rankPos+'° lugar':'—'}</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap">
+    <button class="btn btn-secondary btn-sm" onclick="goToUserPalpites('${uid}');closePerfilModal()">👁 Ver Palpites</button>
+    ${trendHtml}
+    ${distToLeader}
+  </div>
+</div>
+<div class="perfil-body">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px">
+    <div class="perfil-stat-mini"><div class="v">${rankPos||'—'}°</div><div class="l">Posição</div></div>
+    <div class="perfil-stat-mini"><div class="v">${acc.acertoPct}%</div><div class="l">Acurácia</div></div>
+    <div class="perfil-stat-mini"><div class="v">${acc.exatoPct}%</div><div class="l">% Exatos</div></div>
+    <div class="perfil-stat-mini"><div class="v">${acc.erroMedio==='-'?'—':acc.erroMedio}</div><div class="l">Erro médio</div></div>
+  </div>
+  ${rankEntry.jogos>0?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">📊 Distribuição de Pontos (${rankEntry.jogos} jogos pontuados)</div>
+    <div style="display:flex;border-radius:5px;overflow:hidden;height:8px;margin-bottom:6px;gap:2px">${dBar(rankEntry.exatos,'var(--green)')}${dBar(rankEntry.venc_saldo,'var(--gold)')}${dBar(rankEntry.apenas_venc,'var(--orange)')}${dBar(rankEntry.erros,'rgba(255,255,255,.12)')}</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:0.68rem;text-align:center">
+      <div><span style="color:var(--green);font-weight:800;font-size:0.92rem">${rankEntry.exatos}</span><div style="color:var(--text-muted);margin-top:1px">Exatos</div></div>
+      <div><span style="color:var(--gold);font-weight:800;font-size:0.92rem">${rankEntry.venc_saldo}</span><div style="color:var(--text-muted);margin-top:1px">V+Saldo</div></div>
+      <div><span style="color:var(--orange);font-weight:800;font-size:0.92rem">${rankEntry.apenas_venc}</span><div style="color:var(--text-muted);margin-top:1px">Vencedor</div></div>
+      <div><span style="color:var(--text-muted);font-weight:800;font-size:0.92rem">${rankEntry.erros}</span><div style="color:var(--text-muted);margin-top:1px">Erros</div></div>
+    </div>
+  </div>`:``}
+  ${(acc.maxStreak>0||acc.maxExactStreak>0)?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">🔥 Sequências</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${acc.currentStreak>0?strkBadge(acc.currentStreak,'Acertos<br>seguidos','var(--green)'):''}
+      ${strkBadge(acc.maxStreak,'Recorde<br>acertos','#60A5FA')}
+      ${acc.currentExactStreak>0?strkBadge(acc.currentExactStreak,'Exatos<br>seguidos','var(--gold)'):''}
+      ${acc.maxExactStreak>0?strkBadge(acc.maxExactStreak,'Recorde<br>exatos','var(--gold)'):''}
+    </div>
+  </div>`:''}
+  ${nPals>0?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">🎲 Perfil de Apostas (${nPals} palpites enviados)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px">
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:9px 11px">
+        <div style="font-size:0.63rem;color:var(--text-muted);margin-bottom:3px">Média gols/jogo</div>
+        <div style="font-size:1.1rem;font-weight:800;color:var(--gold)">${avgGols}</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:9px 11px">
+        <div style="font-size:0.63rem;color:var(--text-muted);margin-bottom:3px">Placar favorito</div>
+        <div style="font-size:0.95rem;font-weight:800;color:var(--gold)">${topScore?topScore[0].replace('-','×'):'—'}<span style="font-size:0.67rem;color:var(--text-muted);font-weight:400"> ${topScore?'('+topScore[1]+'×)':''}</span></div>
+      </div>
+    </div>
+    <div style="font-size:0.63rem;color:var(--text-muted);margin-bottom:3px">Casa / Empate / Fora</div>
+    <div style="display:flex;border-radius:5px;overflow:hidden;height:7px;margin-bottom:3px;gap:1px">${dBar(pctH,'rgba(0,180,255,.7)')}${dBar(pctEmp,'rgba(255,215,0,.6)')}${dBar(pctA,'rgba(255,100,100,.7)')}</div>
+    <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-muted)"><span>${pctH}% Casa</span><span>${pctEmp}% Empate</span><span>${pctA}% Fora</span></div>
+  </div>`:''}
+  <div class="perfil-section">
+    <div class="perfil-section-h">🏆 Palpite de Campeão</div>
+    <div style="background:rgba(255,215,0,.07);border:1px solid rgba(255,215,0,.2);border-radius:9px;padding:9px 12px;font-size:0.88rem;font-weight:600">${champHTML}</div>
+  </div>
+  ${(grpEntry.jogos>0||elimEntry.jogos>0)?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">📅 Por Fase</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:9px 11px">
+        <div style="font-size:0.63rem;color:var(--text-muted);margin-bottom:2px">Fase de Grupos</div>
+        <div style="font-size:1rem;font-weight:800;color:var(--gold)">${grpEntry.pontos} pts</div>
+        ${grpEntry.jogos>0?`<div style="font-size:0.66rem;color:var(--text-muted)">${posGrp}° lugar · ${grpEntry.exatos} exato${grpEntry.exatos!==1?'s':''}</div>`:'<div style="font-size:0.66rem;color:var(--text-muted)">—</div>'}
+      </div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:9px 11px">
+        <div style="font-size:0.63rem;color:var(--text-muted);margin-bottom:2px">Eliminatórias</div>
+        <div style="font-size:1rem;font-weight:800;color:var(--gold)">${elimEntry.pontos} pts</div>
+        ${elimEntry.jogos>0?`<div style="font-size:0.66rem;color:var(--text-muted)">${posElim}° lugar · ${elimEntry.exatos} exato${elimEntry.exatos!==1?'s':''}</div>`:'<div style="font-size:0.66rem;color:var(--text-muted)">—</div>'}
+      </div>
+    </div>
+  </div>`:''}
+  ${(conTotal+divTotal>0)?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">🤝 Consenso vs Divergência</div>
+    <div style="display:grid;grid-template-columns:${conTotal>0&&divTotal>0?'1fr 1fr':'1fr'};gap:6px">
+      ${conTotal>0?`<div style="background:rgba(76,175,80,.07);border:1px solid rgba(76,175,80,.18);border-radius:9px;padding:9px 11px;text-align:center">
+        <div style="font-size:1.2rem;font-weight:800;color:var(--green)">${conPct}%</div>
+        <div style="font-size:0.63rem;color:var(--text-muted);margin-top:2px;line-height:1.4">Com a maioria (${conAcertos}/${conTotal})</div>
+      </div>`:''}
+      ${divTotal>0?`<div style="background:rgba(255,140,0,.07);border:1px solid rgba(255,140,0,.18);border-radius:9px;padding:9px 11px;text-align:center">
+        <div style="font-size:1.2rem;font-weight:800;color:var(--orange)">${divPct}%</div>
+        <div style="font-size:0.63rem;color:var(--text-muted);margin-top:2px;line-height:1.4">Contra a maioria (${divAcertos}/${divTotal})</div>
+      </div>`:''}
+    </div>
+    <div style="font-size:0.62rem;color:var(--text-muted);margin-top:5px">Acurácia quando aposta igual vs diferente da maioria do bolão</div>
+  </div>`:''}
+  ${evChart?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">📈 Evolução de Pontos por Rodada</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">${evChart}</div>
+  </div>`:''}
+  ${exactPreds.length>0?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">🎯 Últimos Placares Exatos (${exactPreds.length})</div>
+    <div style="display:flex;flex-direction:column;gap:4px">${predExatosHtml}</div>
+  </div>`:''}
+  ${worstPreds.length>0?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">😬 Maiores Disparates</div>
+    <div style="display:flex;flex-direction:column;gap:4px">${predErrosHtml}</div>
+  </div>`:''}
+  ${h2hData.length>0?`
+  <div class="perfil-section">
+    <div class="perfil-section-h">⚔️ Confronto Direto vs Participantes</div>
+    <div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">${h2hHtml}</div>
+    <div style="font-size:0.62rem;color:var(--text-muted);margin-top:5px">W = pontuou mais · E = empatados · D = pontuou menos (por jogo)</div>
+  </div>`:''}
+</div>`;
+  } catch(e) {
+    const c2=document.getElementById('perfil-modal-content');
+    if(c2) c2.innerHTML=`<div class="alert alert-error" style="margin:20px">Erro ao carregar perfil: ${esc(errMsg(e))}</div>`;
+  }
+}
+
+function closePerfilModal() {
+  const el=document.getElementById('modal-perfil');
+  if(el) el.classList.add('hidden');
+  if(_perfilEscHandler){document.removeEventListener('keydown',_perfilEscHandler);_perfilEscHandler=null;}
 }
 
 function generateInsights(ranking, userAccStats, analiseJogos, res) {
