@@ -4608,8 +4608,7 @@ function _getStatNextGroupWave(res) {
   return { items };
 }
 
-// Ranking "Mais Indeciso" — sob demanda. Usa count() agregado (1 leitura por
-// usuário, independente do nº de registros) para contar as alterações no histórico.
+// Ranking "Mais Indeciso" — sob demanda. Usa get() para contar as alterações no histórico.
 async function calcMaisIndeciso() {
   const btn = document.getElementById('indeciso-btn');
   const out = document.getElementById('indeciso-result');
@@ -4619,11 +4618,9 @@ async function calcMaisIndeciso() {
     const counts = await Promise.all(users.map(async u => {
       let total = 0;
       try {
-        // Conta só re-edições (edit:true), excluindo o 1º preenchimento de cada jogo,
-        // para medir indecisão real e não volume de participação.
-        const agg = await db_.collection('palpites').doc(u.uid).collection('historico')
-          .where('edit', '==', true).count().get();
-        total = agg.data().count;
+        const snap = await db_.collection('palpites').doc(u.uid).collection('historico')
+          .where('edit', '==', true).get();
+        total = snap.size;
       } catch(_) { total = 0; }
       return { user: u, total };
     }));
@@ -4650,21 +4647,18 @@ async function calcMaisIndeciso() {
 }
 
 // ── Ranking de Indecisão ─────────────────────────────────────────────────────
-// Conta as re-edições (edit==true) no histórico de cada participante ativo via
-// count() agregado (1 leitura por usuário, independente do volume de registros) —
-// mesma base do ranking "Mais Indeciso", então as duas métricas batem. Resultado
-// cacheado em memória (TTL curto) e invalidado em refreshPage()/re-edição de palpite.
-// Usa apenas a query simples where('edit','==',true) para nunca exigir índice
-// composto do Firestore. Falhas por usuário caem para 0 sem quebrar o restante.
+// Conta as re-edições (edit==true) do histórico de cada participante ativo.
+// Usa get() com where('edit','==',true) — mais robusto que count() no compat SDK.
+// Cacheado em memória (TTL 5min) e invalidado em refreshPage()/re-edição.
 async function getIndecisionRanking(force) {
   if (!force) { const c = _scGet('indecisao'); if (c) return c; }
   const users = (await _fetchUsr()).filter(u => u.ativo !== false);
   const counts = await Promise.all(users.map(async u => {
     let total = 0;
     try {
-      const agg = await db_.collection('palpites').doc(u.uid).collection('historico')
-        .where('edit', '==', true).count().get();
-      total = agg.data().count || 0;
+      const snap = await db_.collection('palpites').doc(u.uid).collection('historico')
+        .where('edit', '==', true).get();
+      total = snap.size;
     } catch(_) { total = 0; }
     return { uid: u.uid, user: u, total };
   }));
