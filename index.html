@@ -1572,7 +1572,7 @@ const _SC = {};
 // já invalidam o cache localmente via _scDel. Por isso TTLs longos são seguros e
 // reduzem muito as leituras do Firestore em picos de acesso. O botão "Atualizar"
 // força a releitura imediata quando alguém quiser os dados na hora.
-const _SC_TTL = { res: 20*60000, usr: 20*60000, pals: 20*60000 };
+const _SC_TTL = { res: 20*60000, usr: 20*60000, pals: 20*60000, indecisao: 5*60000 };
 function _scGet(k)        { const e=_SC[k]; return (e&&Date.now()<e.x)?e.v:null; }
 function _scSet(k,v,ttl)  { _SC[k]={v,x:Date.now()+(ttl||180000)}; }
 function _scDel(...keys)  { keys.forEach(k=>delete _SC[k]); }
@@ -1612,7 +1612,7 @@ let _currentPage = 'dashboard';
 let _currentVerPalpitesUid = null;
 function refreshPage() {
   if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
-  _scDel('res','usr','pals');
+  _scDel('res','usr','pals','indecisao');
   navigateTo(_currentPage, { history: 'replace' });
 }
 function _refreshBtn() {
@@ -2729,6 +2729,11 @@ async function renderDashboard() {
       </div>`;
     }
 
+    html += `<div style="display:flex;align-items:center;gap:9px;background:rgba(255,215,0,.07);border:1px solid rgba(255,215,0,.22);border-radius:10px;padding:9px 13px;margin-bottom:12px">
+      <span style="font-size:1.15rem;line-height:1">👆</span>
+      <span style="font-size:0.82rem;line-height:1.35"><b style="color:var(--gold)">Novidade:</b> toque no nome de qualquer participante para abrir o <b>perfil com estatísticas individuais</b> — acurácia, evolução, zebras, confrontos diretos e mais.</span>
+    </div>`;
+
     html += `<div class="ranking-table-wrap"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
         <table class="ranking-table" style="min-width:660px">
           <thead><tr>
@@ -3143,7 +3148,7 @@ async function savePalpite(gameId) {
       });
       updatePalProgress();
       updateGroupTabState();
-      _scDel('pals');
+      _scDel('pals','indecisao'); // apagar conta como re-edição → invalida ranking de indecisão
       if (!_isAdminDel) { delete _dashMyPals[gameId]; _refreshDashMyPalCard(gameId); }
     } catch(e) { showToast('Erro ao apagar palpite: '+e.message,'error'); }
     return;
@@ -3189,6 +3194,7 @@ async function savePalpite(gameId) {
       } catch(_) {}
     }
     _scDel('pals');
+    if (_isReedit) _scDel('indecisao'); // re-edição muda a contagem → invalida ranking de indecisão
     if (!isAdminEdit) { _dashMyPals[gameId] = { h: pal.h, a: pal.a }; _refreshDashMyPalCard(gameId); }
     if (hInp) { hInp.classList.remove('saving'); hInp.classList.add('saved-ok'); }
     if (aInp) { aInp.classList.remove('saving'); aInp.classList.add('saved-ok'); }
@@ -4207,6 +4213,11 @@ async function openUserProfile(uid) {
     const avgGolsReais=nResolved>0?(golsReaisTotal/nResolved).toFixed(2):null;
     const golBias=avgGolsApost&&avgGolsReais?(parseFloat(avgGolsApost)-parseFloat(avgGolsReais)).toFixed(2):null;
 
+    // 13. Ranking de indecisão (cacheado; falha silenciosa não quebra o perfil)
+    let indecisao = null;
+    try { indecisao = await getIndecisionRanking(); } catch(_) { indecisao = null; }
+    const indecisaoHtml = _renderIndecisaoCard(indecisao, uid);
+
     // ── RENDER ────────────────────────────────────
     const isMe = uid===currentUser.uid;
     const champPick = champPicks[uid];
@@ -4355,6 +4366,7 @@ async function openUserProfile(uid) {
     </div>
     <div style="font-size:0.62rem;color:var(--text-muted);margin-top:5px">Acurácia quando aposta igual vs diferente da maioria do bolão</div>
   </div>`:''}
+  ${indecisaoHtml}
   ${evChart?`
   <div class="perfil-section">
     <div class="perfil-section-h">📈 Evolução de Pontos por Rodada</div>
@@ -4635,6 +4647,100 @@ async function calcMaisIndeciso() {
     out.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
     if (btn) { btn.disabled = false; btn.textContent = '📊 Calcular ranking'; }
   }
+}
+
+// ── Ranking de Indecisão ─────────────────────────────────────────────────────
+// Conta as re-edições (edit==true) no histórico de cada participante ativo via
+// count() agregado (1 leitura por usuário, independente do volume de registros) —
+// mesma base do ranking "Mais Indeciso", então as duas métricas batem. Resultado
+// cacheado em memória (TTL curto) e invalidado em refreshPage()/re-edição de palpite.
+// Usa apenas a query simples where('edit','==',true) para nunca exigir índice
+// composto do Firestore. Falhas por usuário caem para 0 sem quebrar o restante.
+async function getIndecisionRanking(force) {
+  if (!force) { const c = _scGet('indecisao'); if (c) return c; }
+  const users = (await _fetchUsr()).filter(u => u.ativo !== false);
+  const counts = await Promise.all(users.map(async u => {
+    let total = 0;
+    try {
+      const agg = await db_.collection('palpites').doc(u.uid).collection('historico')
+        .where('edit', '==', true).count().get();
+      total = agg.data().count || 0;
+    } catch(_) { total = 0; }
+    return { uid: u.uid, user: u, total };
+  }));
+  counts.sort((a, b) => b.total - a.total);
+  // Posição com empates compartilhando o mesmo lugar (competition ranking: 1,2,2,4…).
+  let lastTotal = null, lastPos = 0;
+  counts.forEach((c, i) => {
+    if (c.total !== lastTotal) { lastPos = i + 1; lastTotal = c.total; }
+    c.pos = lastPos;
+  });
+  const totalUsers = counts.length;
+  const sum = counts.reduce((s, c) => s + c.total, 0);
+  const avg = totalUsers > 0 ? sum / totalUsers : 0;
+  const byUid = {};
+  counts.forEach(c => { byUid[c.uid] = c; });
+  const result = { counts, byUid, totalUsers, avg, maxTotal: counts.length ? counts[0].total : 0 };
+  _scSet('indecisao', result, _SC_TTL.indecisao);
+  return result;
+}
+
+// Rótulo divertido baseado no nº de alterações já feitas.
+function _indecisaoLabel(n) {
+  if (n <= 0)  return { txt: 'Convicto',        icon: '🗿' };
+  if (n <= 3)  return { txt: 'Ajustes finos',   icon: '🔧' };
+  if (n <= 10) return { txt: 'Analista tático', icon: '📋' };
+  if (n <= 20) return { txt: 'Revisor de VAR',  icon: '📺' };
+  return            { txt: 'Professor Pardal',  icon: '🧪' };
+}
+
+// Bloco visual do card de indecisão, no padrão das demais seções do perfil.
+// Só mostra números agregados (posição/total/média) — nunca quais jogos foram
+// alterados — então é seguro exibir publicamente. Retorna '' (oculta o card)
+// se não houver dados úteis ou em qualquer falha.
+function _renderIndecisaoCard(indecisao, uid) {
+  try {
+    if (!indecisao || !indecisao.counts.length) return '';
+    if (indecisao.maxTotal === 0) return ''; // ninguém alterou ainda → ranking sem sentido
+    const entry = indecisao.byUid[uid];
+    if (!entry) return '';
+    const total = entry.total;
+    const pos = entry.pos;
+    const totalUsers = indecisao.totalUsers;
+    const avgRound = Math.round(indecisao.avg);
+    const diff = total - avgRound;
+    const diffStr = (diff > 0 ? '+' : '') + diff;
+    const diffColor = diff > 0 ? '#f77' : diff < 0 ? 'rgba(0,180,255,1)' : 'var(--green)';
+    const fewer = indecisao.counts.filter(c => c.total < total).length;
+    const pctMoreThan = totalUsers > 0 ? Math.round(fewer / totalUsers * 100) : 0;
+    const lbl = _indecisaoLabel(total);
+    const phrase = total === 0
+      ? 'Ainda não alterou nenhum palpite já salvo'
+      : `Mais indeciso que ${pctMoreThan}% dos participantes`;
+    return `
+  <div class="perfil-section">
+    <div class="perfil-section-h">🧠 Ranking de Indecisão</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:8px 5px">
+        <div style="font-size:1.05rem;font-weight:800;color:var(--gold)">#${pos}</div>
+        <div style="font-size:0.58rem;color:var(--text-muted);line-height:1.3">de ${totalUsers}<br>participantes</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:8px 5px">
+        <div style="font-size:1.05rem;font-weight:800">${total}</div>
+        <div style="font-size:0.58rem;color:var(--text-muted);line-height:1.3">alteraç${total===1?'ão':'ões'}<br>realizada${total===1?'':'s'}</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:8px 5px">
+        <div style="font-size:1.05rem;font-weight:800;color:${diffColor}">${diffStr}</div>
+        <div style="font-size:0.58rem;color:var(--text-muted);line-height:1.3">vs média<br>(${avgRound} do bolão)</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:7px;font-size:0.74rem;color:var(--text-muted)">${phrase}</div>
+    <div style="text-align:center;margin-top:5px">
+      <span style="display:inline-block;background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.25);border-radius:20px;padding:3px 12px;font-size:0.78rem;font-weight:700;color:var(--gold)">${lbl.icon} Perfil: ${lbl.txt}</span>
+    </div>
+    <div style="font-size:0.61rem;color:var(--text-muted);margin-top:7px;text-align:center">Conta apenas reedições de palpites já salvos. O primeiro preenchimento não entra.</div>
+  </div>`;
+  } catch(_) { return ''; }
 }
 
 async function calcJogosIndicisos() {
