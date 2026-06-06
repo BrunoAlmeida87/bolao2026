@@ -4701,12 +4701,12 @@ function _indecisaoLabel(n) {
 function _renderIndecisaoCard(indecisao, uid) {
   try {
     if (!indecisao || !indecisao.counts.length) return '';
-    if (indecisao.maxTotal === 0) return ''; // ninguém alterou ainda → ranking sem sentido
     const entry = indecisao.byUid[uid];
     if (!entry) return '';
     const total = entry.total;
     const pos = entry.pos;
     const totalUsers = indecisao.totalUsers;
+    const allZero = indecisao.maxTotal === 0; // ninguém reeditou ainda → ranking degenerado
     const avgRound = Math.round(indecisao.avg);
     const diff = total - avgRound;
     const diffStr = (diff > 0 ? '+' : '') + diff;
@@ -4714,16 +4714,19 @@ function _renderIndecisaoCard(indecisao, uid) {
     const fewer = indecisao.counts.filter(c => c.total < total).length;
     const pctMoreThan = totalUsers > 0 ? Math.round(fewer / totalUsers * 100) : 0;
     const lbl = _indecisaoLabel(total);
+    // Com todos zerados a posição não significa nada (todos empatados) → "—".
+    const posDisplay = allZero ? '—' : `#${pos}`;
+    const posSub = allZero ? 'sem reedições<br>no bolão ainda' : `de ${totalUsers}<br>participantes`;
     const phrase = total === 0
-      ? 'Ainda não alterou nenhum palpite já salvo'
+      ? (allZero ? 'Ninguém reeditou palpites ainda — todos convictos!' : 'Ainda não alterou nenhum palpite já salvo')
       : `Mais indeciso que ${pctMoreThan}% dos participantes`;
     return `
   <div class="perfil-section">
     <div class="perfil-section-h">🧠 Ranking de Indecisão</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">
       <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:8px 5px">
-        <div style="font-size:1.05rem;font-weight:800;color:var(--gold)">#${pos}</div>
-        <div style="font-size:0.58rem;color:var(--text-muted);line-height:1.3">de ${totalUsers}<br>participantes</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--gold)">${posDisplay}</div>
+        <div style="font-size:0.58rem;color:var(--text-muted);line-height:1.3">${posSub}</div>
       </div>
       <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:8px 5px">
         <div style="font-size:1.05rem;font-weight:800">${total}</div>
