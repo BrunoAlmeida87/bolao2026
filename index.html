@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.11.0">
+<meta name="app-version" content="v1.12.0">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1023,6 +1023,40 @@ body.light-theme .new-res-footer{border-color:rgba(0,0,0,.1)}
 .payment-pix-key{font-size:1.15rem;font-weight:800;color:var(--gold);letter-spacing:.5px;word-break:break-all}
 body.light-theme .payment-pix-box{background:rgba(255,215,0,.05)}
 body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07)}
+
+/* ══════════════════════════════════════════
+   CARDÁPIO & TRANSPORTE
+══════════════════════════════════════════ */
+.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.menu-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column}
+.menu-card.today{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.menu-day{font-size:1rem;font-weight:800;color:var(--white);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.menu-date{font-size:.82rem;font-weight:600;color:var(--text-muted)}
+.menu-today-badge{font-size:.62rem;font-weight:800;background:var(--gold);color:var(--dark-blue);padding:2px 7px;border-radius:20px;letter-spacing:.03em}
+.menu-sub{font-size:.74rem;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 4px;display:flex;align-items:center;gap:5px}
+.menu-mini{font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin:6px 0 2px}
+.menu-list{list-style:none;margin:0 0 2px;padding:0}
+.menu-list li{font-size:.82rem;color:var(--white);padding:1px 0 1px 14px;position:relative;line-height:1.45}
+.menu-list li::before{content:"•";position:absolute;left:2px;color:var(--text-muted)}
+.menu-extra{font-size:.82rem;color:var(--white);margin-top:3px}
+.menu-extra b{color:var(--text-muted);font-weight:700}
+
+.transp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.transp-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px}
+.transp-route{font-size:1.1rem;font-weight:800;color:var(--white);display:flex;align-items:center;gap:7px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.transp-label{font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:8px}
+.transp-next-time{font-size:2.1rem;font-weight:800;color:var(--gold);line-height:1.1}
+.transp-day{font-size:.85rem;font-weight:700;color:var(--text-muted)}
+.transp-count{font-size:1.5rem;font-weight:800;color:var(--white);font-variant-numeric:tabular-nums}
+.transp-status{display:inline-block;margin-top:10px;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:20px}
+.transp-status.op{background:rgba(0,200,81,.16);color:var(--green);border:1px solid rgba(0,200,81,.35)}
+.transp-status.off{background:rgba(255,68,68,.12);color:var(--red);border:1px solid rgba(255,68,68,.3)}
+.transp-list{font-size:.9rem;font-weight:700;color:var(--white);margin-top:3px;line-height:1.6}
+.transp-none{font-size:.85rem;color:var(--text-muted);margin-top:6px;line-height:1.5}
+.transp-sexta{margin-top:12px;font-size:.76rem;color:var(--orange);background:rgba(255,140,0,.1);border:1px solid rgba(255,140,0,.3);border-radius:8px;padding:8px 10px;line-height:1.45}
+@media(max-width:768px){
+  .transp-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -1212,6 +1246,7 @@ body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0
       <button class="nav-btn" data-page="chaveamento" onclick="navigateTo('chaveamento')">🔑 Chaves</button>
       <button class="nav-btn" data-page="chaveamento-bilateral" onclick="navigateTo('chaveamento-bilateral')">🏆 Bilateral</button>
       <button class="nav-btn" data-page="estatisticas" onclick="navigateTo('estatisticas')">📈 Stats</button>
+      <button class="nav-btn" data-page="cardapio" onclick="navigateTo('cardapio')">🍽️ Cardápio</button>
       <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
       <button class="nav-btn" data-page="admin" id="admin-nav" style="display:none" onclick="navigateTo('admin')">⚙️ Admin</button>
     </nav>
@@ -1227,6 +1262,7 @@ body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0
         <a onclick="navigateTo('chaveamento-bilateral');toggleDropdown()">🏆 Chave Bilateral</a>
         <a onclick="navigateTo('regras');toggleDropdown()">📋 Regras</a>
         <a onclick="navigateTo('estatisticas');toggleDropdown()">📈 Estatísticas</a>
+        <a onclick="navigateTo('cardapio');toggleDropdown()">🍽️ Cardápio</a>
         <a onclick="navigateTo('ver-palpites');toggleDropdown()">👁️ Ver Palpites</a>
         <a onclick="navigateTo('ver-todos');toggleDropdown()">📋 Todos os Palpites</a>
         <a onclick="showApelidoModal();toggleDropdown()">✏️ Alterar Apelido</a>
@@ -1258,6 +1294,7 @@ body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0
     <a data-page="chaveamento" onclick="navigateTo('chaveamento');closeMaisSheet()">🔑 Chaveamento</a>
     <a data-page="chaveamento-bilateral" onclick="navigateTo('chaveamento-bilateral');closeMaisSheet()">🏆 Chave Bilateral</a>
     <a data-page="ver-todos" onclick="navigateTo('ver-todos');closeMaisSheet()">📋 Todos os Palpites</a>
+    <a data-page="cardapio" onclick="navigateTo('cardapio');closeMaisSheet()">🍽️ Cardápio</a>
     <a data-page="regras" onclick="navigateTo('regras');closeMaisSheet()">📋 Regras</a>
     <a id="mais-admin" data-page="admin" style="display:none" onclick="navigateTo('admin');closeMaisSheet()">⚙️ Admin</a>
     <div class="mais-divider"></div>
@@ -1330,6 +1367,13 @@ body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0
       </div>
     </div>
 
+    <!-- ── CARDÁPIO E TRANSPORTE ── -->
+    <div id="page-cardapio" class="page">
+      <div class="container" id="cardapio-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
     <!-- ── ADMIN ── -->
     <div id="page-admin" class="page">
       <div class="container" id="admin-content">
@@ -1341,7 +1385,7 @@ body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.11.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -1676,7 +1720,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.11.0',
+  app_version:'v1.12.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -2139,11 +2183,12 @@ function navigateTo(page, opts) {
   const _navUid = (page === 'ver-palpites') ? _pendingPalpitesUid : null;
   _currentPage = page;
   if (_countdownTimer && page !== 'dashboard') { clearInterval(_countdownTimer); _countdownTimer = null; }
+  if (_cardapioTimer && page !== 'cardapio') { clearInterval(_cardapioTimer); _cardapioTimer = null; }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   // Páginas que vivem na folha "Mais" acendem o botão Mais na bottom nav.
-  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','regras','admin']);
+  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','regras','cardapio','admin']);
   const _maisBtn = document.getElementById('mais-bottom-nav');
   if (_maisBtn) _maisBtn.classList.toggle('active', _maisPages.has(page));
   document.querySelectorAll('#mais-sheet a').forEach(a=>a.classList.toggle('active',a.dataset.page===page));
@@ -2170,6 +2215,7 @@ function navigateTo(page, opts) {
     case 'chaveamento-bilateral': renderChaveamentoBilateral(); break;
     case 'regras':      renderRegras(); break;
     case 'estatisticas': renderEstatisticas(); break;
+    case 'cardapio':    renderCardapio(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
   window.scrollTo({top:0,behavior:'smooth'});
@@ -2179,7 +2225,7 @@ function navigateTo(page, opts) {
 
 function _restorePageFromHash() {
   const hash = (location.hash||'').replace('#','').trim();
-  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','admin'];
+  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','cardapio','admin'];
   const page = valid.includes(hash) ? hash : 'dashboard';
   // admin só restaura se usuário for admin
   if (page === 'admin' && currentUserDoc?.role !== 'admin') return navigateTo('dashboard', { history: 'replace' });
@@ -3863,6 +3909,205 @@ function renderRegras() {
     cont.innerHTML = html;
     _renderQRCode('regras-qr-container');
   } catch(e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════
+// CARDÁPIO E TRANSPORTE PAGE
+// ════════════════════════════════════════════
+// Dados de fácil atualização semanal. Para corrigir/editar, basta alterar os
+// arrays abaixo — nenhuma outra parte do sistema depende deles.
+// Observação: o item "Real" na salada de sexta veio assim do cardápio original;
+// mantido como está, é só trocar a string aqui caso precise corrigir.
+const cardapioSemana = [
+  { dia: "Segunda", data: "08/06",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Polenguinho","Maçã"],
+    almoco: { saladas:["Alface crespa","Brócolis","Beterraba ralada"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Creme de milho","Linguiça toscana","Filé de frango à diplomata"],
+      suco:"Goiaba", sobremesa:"Doce de abóbora", fruta:"Melancia" } },
+  { dia: "Terça", data: "09/06",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Queijo prato","Melão"],
+    almoco: { saladas:["Alface americana","Beterraba com maionese de limão","Massinha colorida"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Batata doce selvagem","Bife ao molho de ervilhas","Frango caipira"],
+      suco:"Caju", sobremesa:"Arroz doce", fruta:"Banana" } },
+  { dia: "Quarta", data: "10/06",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Mortadela","Mamão"],
+    almoco: { saladas:["Alface crespa e roxa","Salpicão de repolho","Abóbora assada"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Polenta gratinada","Filé de coxa ao alho","Picadinho à mineira"],
+      suco:"Acerola", sobremesa:"Doce de banana", fruta:"Melancia" } },
+  { dia: "Quinta", data: "11/06",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Presunto","Melancia"],
+    almoco: { saladas:["Alface americana","Beterraba ralada","Batata calabresa"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Tutu e couve à mineira","Carré acebolado","Bife à fazendinha"],
+      suco:"Abacaxi", sobremesa:"Curau com goiabada", fruta:"Banana" } },
+  { dia: "Sexta", data: "12/06",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Blanquet","Mamão"],
+    almoco: { saladas:["Real","Vinagrete","Milho espiga"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Farofa de ovos","Salsichão","Filé de frango ao creme de cebola"],
+      suco:"Maracujá", sobremesa:"Creme de paçoca", fruta:"Laranja" } }
+];
+
+const horariosTransporte = [
+  { origem:"UFEM", destino:"ESC", inicioOperacao:"05/08/2025",
+    manha:["07:30","08:10","08:50","09:30","10:10","10:50","11:30","12:00"],
+    tarde:["13:30","14:10","14:50","15:30","16:10","16:50"],
+    ultimoHorarioSexta:"15:30" },
+  { origem:"ESC", destino:"UFEM", inicioOperacao:"05/08/2025",
+    manha:["07:50","08:30","09:10","09:50","10:30","11:10","11:50"],
+    tarde:["13:50","14:30","15:10","15:50","16:30","17:10"],
+    ultimoHorarioSexta:"15:50" }
+];
+
+let _cardapioTimer = null;
+const _DIAS_SEMANA = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+const _CARDAPIO_DIA_IDX = { 'Segunda':1, 'Terça':2, 'Quarta':3, 'Quinta':4, 'Sexta':5 };
+
+// Data/hora atual no fuso de São Paulo (independente do fuso do dispositivo).
+function _nowSP() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+}
+function formatarHorario(hhmm) { return String(hhmm).replace(':', 'h'); }
+function formatarTempoRestante(ms) {
+  const tot = Math.max(0, Math.floor(ms / 60000));
+  const h = Math.floor(tot / 60), m = tot % 60;
+  return String(h).padStart(2, '0') + 'h ' + String(m).padStart(2, '0') + 'min';
+}
+function _parseHM(refDate, hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const x = new Date(refDate); x.setHours(h, m, 0, 0); return x;
+}
+function _proximoDiaUtil(d) {
+  const x = new Date(d); x.setHours(0, 0, 0, 0);
+  do { x.setDate(x.getDate() + 1); } while (x.getDay() === 0 || x.getDay() === 6);
+  return x;
+}
+function _diaLabelRelativo(from, target) {
+  const a = new Date(from); a.setHours(0, 0, 0, 0);
+  const b = new Date(target); b.setHours(0, 0, 0, 0);
+  const diff = Math.round((b - a) / 86400000);
+  if (diff === 0) return 'hoje';
+  if (diff === 1) return 'amanhã';
+  return _DIAS_SEMANA[b.getDay()];
+}
+// Horários válidos do dia (na sexta, corta após o último horário permitido).
+function _horariosDoDia(rota, d) {
+  let list = [...rota.manha, ...rota.tarde];
+  if (d.getDay() === 5 && rota.ultimoHorarioSexta) {
+    list = list.filter(h => h <= rota.ultimoHorarioSexta); // "HH:MM" zero-padded → ordena como string
+  }
+  return list;
+}
+// Próximo transporte de uma rota a partir de "now".
+function _transpProximo(rota, now) {
+  const dow = now.getDay();
+  const fimDeSemana = (dow === 0 || dow === 6);
+  if (!fimDeSemana) {
+    const futuros = _horariosDoDia(rota, now).filter(h => _parseHM(now, h) > now);
+    if (futuros.length) {
+      return { time: futuros[0], date: _parseHM(now, futuros[0]), hoje: true,
+        diaLabel: 'hoje', status: 'operando', restantesHoje: futuros };
+    }
+  }
+  const prox = _proximoDiaUtil(now);
+  const first = rota.manha[0];
+  return { time: first, date: _parseHM(prox, first), hoje: false,
+    diaLabel: _diaLabelRelativo(now, prox), status: fimDeSemana ? 'fimdesemana' : 'encerrado',
+    restantesHoje: [] };
+}
+function _transpCardDynHtml(rota, now) {
+  const p = _transpProximo(rota, now);
+  let stTxt, stCls;
+  if (p.status === 'operando') { stTxt = 'Em operação'; stCls = 'op'; }
+  else if (p.status === 'fimdesemana') { stTxt = 'Sem operação hoje'; stCls = 'off'; }
+  else { stTxt = 'Encerrado hoje'; stCls = 'off'; }
+
+  const quando = (!p.hoje && p.diaLabel) ? ` <span class="transp-day">(${p.diaLabel})</span>` : '';
+  let html = `<div class="transp-label">Próximo transporte</div>
+    <div class="transp-next-time">${formatarHorario(p.time)}${quando}</div>
+    <div class="transp-label">Faltam</div>
+    <div class="transp-count">${formatarTempoRestante(p.date - now)}</div>
+    <span class="transp-status ${stCls}">${stTxt}</span>`;
+
+  if (p.hoje && p.restantesHoje.length) {
+    html += `<div class="transp-label" style="margin-top:12px">Próximos horários hoje</div>
+      <div class="transp-list">${p.restantesHoje.map(formatarHorario).join(' • ')}</div>`;
+  } else if (!p.hoje) {
+    const msg = (p.status === 'fimdesemana') ? 'Sem operação hoje.' : 'Não há mais transportes hoje.';
+    html += `<div class="transp-none">${msg}<br>Próximo transporte: ${p.diaLabel} às ${formatarHorario(p.time)}</div>`;
+  }
+  if (now.getDay() === 5 && rota.ultimoHorarioSexta && p.hoje) {
+    html += `<div class="transp-sexta">⚠️ Atenção: na sexta-feira, o último horário é ${formatarHorario(rota.ultimoHorarioSexta)}.</div>`;
+  }
+  return html;
+}
+// Atualiza só a parte dinâmica (timers) a cada segundo, sem recriar a página.
+function _updateTransporteTimers() {
+  if (_currentPage !== 'cardapio') {
+    if (_cardapioTimer) { clearInterval(_cardapioTimer); _cardapioTimer = null; }
+    return;
+  }
+  const now = _nowSP();
+  horariosTransporte.forEach(rota => {
+    const box = document.getElementById('transp-dyn-' + rota.origem);
+    if (box) box.innerHTML = _transpCardDynHtml(rota, now);
+  });
+}
+function _menuCardHtml(c, isToday) {
+  const a = c.almoco;
+  const li = arr => arr.map(x => `<li>${esc(x)}</li>`).join('');
+  return `<div class="menu-card${isToday ? ' today' : ''}">
+    <div class="menu-day">${esc(c.dia)} <span class="menu-date">${esc(c.data)}</span>${isToday ? ' <span class="menu-today-badge">Hoje</span>' : ''}</div>
+    <div class="menu-sub">☕ Café da manhã</div>
+    <ul class="menu-list">${li(c.cafe)}</ul>
+    <div class="menu-sub">🍽️ Almoço</div>
+    <div class="menu-mini">Saladas</div><ul class="menu-list">${li(a.saladas)}</ul>
+    <div class="menu-mini">Pratos</div><ul class="menu-list">${li(a.pratos)}</ul>
+    <div class="menu-extra"><b>Suco:</b> ${esc(a.suco)}</div>
+    <div class="menu-extra"><b>Sobremesa:</b> ${esc(a.sobremesa)}</div>
+    <div class="menu-extra"><b>Fruta:</b> ${esc(a.fruta)}</div>
+  </div>`;
+}
+function renderCardapio() {
+  const cont = document.getElementById('cardapio-content');
+  try {
+    const now = _nowSP();
+    const todayCard = cardapioSemana.find(c => _CARDAPIO_DIA_IDX[c.dia] === now.getDay());
+
+    let html = `<div class="section-title">🍽️ Cardápio e Transporte</div>`;
+
+    // 1) Hoje no refeitório
+    html += `<div class="card-title" style="margin-bottom:12px">🍴 Hoje no refeitório</div>`;
+    html += todayCard
+      ? `<div style="margin-bottom:24px">${_menuCardHtml(todayCard, true)}</div>`
+      : `<div class="alert alert-info" style="margin-bottom:24px">Sem refeitório hoje (fim de semana). Confira o cardápio da semana abaixo. 🗓️</div>`;
+
+    // 2) Transporte entre Sites (cards com timer)
+    html += `<div class="card-title" style="margin-bottom:12px">🚌 Transporte entre Sites</div>
+      <div class="transp-grid" style="margin-bottom:24px">`;
+    horariosTransporte.forEach(rota => {
+      html += `<div class="transp-card">
+        <div class="transp-route">🚌 ${esc(rota.origem)} → ${esc(rota.destino)}</div>
+        <div id="transp-dyn-${esc(rota.origem)}"></div>
+      </div>`;
+    });
+    html += `</div>`;
+
+    // 3) Semana completa
+    html += `<div class="card-title" style="margin-bottom:12px">🗓️ Cardápio da semana</div>
+      <div class="menu-grid">`;
+    cardapioSemana.forEach(c => { html += _menuCardHtml(c, _CARDAPIO_DIA_IDX[c.dia] === now.getDay()); });
+    html += `</div>`;
+
+    html += `<p style="font-size:.78rem;color:var(--text-muted);margin-top:18px;text-align:center">* Sujeito a alterações.</p>`;
+
+    cont.innerHTML = html;
+
+    // Timer regressivo dos transportes (atualiza a cada segundo).
+    if (_cardapioTimer) { clearInterval(_cardapioTimer); _cardapioTimer = null; }
+    _updateTransporteTimers();
+    _cardapioTimer = setInterval(_updateTransporteTimers, 1000);
+  } catch (e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
