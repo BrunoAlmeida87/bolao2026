@@ -979,6 +979,43 @@ body.light-theme .h2h-game-row{background:rgba(0,0,0,.015);border-color:rgba(0,0
 body.light-theme .h2h-game-row:hover{background:rgba(0,0,0,.04)}
 body.light-theme .h2h-row-w1{background:rgba(0,200,81,.05)!important}
 body.light-theme .h2h-row-w2{background:rgba(30,144,255,.05)!important}
+
+/* ══════════════════════════════════════════
+   MODAL NOVOS RESULTADOS
+══════════════════════════════════════════ */
+.new-res-box{max-width:600px;max-height:88vh;overflow-y:auto;padding:0;border-radius:18px}
+.new-res-box::-webkit-scrollbar{width:5px}
+.new-res-box::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.new-res-header{background:linear-gradient(135deg,rgba(0,200,81,.1),rgba(26,46,74,.97));border-bottom:1px solid var(--border);padding:16px 20px;position:sticky;top:0;z-index:10;border-radius:18px 18px 0 0}
+.new-res-body{padding:0 0 4px}
+.new-res-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s}
+.new-res-row:hover{background:rgba(255,255,255,.03)}
+.new-res-game{font-size:0.85rem;font-weight:600}
+.new-res-result{font-size:1rem;font-weight:800;color:var(--gold);text-align:center}
+.new-res-pred{font-size:0.78rem;color:var(--text-muted);text-align:right;white-space:nowrap}
+.new-res-pts{font-size:0.75rem;font-weight:700;border-radius:6px;padding:2px 7px;white-space:nowrap;flex-shrink:0}
+.new-res-pts.exact{background:rgba(0,200,81,.2);color:var(--green)}
+.new-res-pts.vsaldo{background:rgba(255,215,0,.2);color:var(--gold)}
+.new-res-pts.venc{background:rgba(30,144,255,.2);color:var(--accent)}
+.new-res-pts.miss{background:rgba(255,68,68,.1);color:var(--red)}
+.new-res-pts.none{background:rgba(255,255,255,.07);color:var(--text-muted)}
+.new-res-footer{padding:14px 18px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+@media(max-width:500px){
+  .new-res-row{grid-template-columns:1fr auto;gap:6px}
+  .new-res-pred{display:none}
+  .new-res-box{max-height:94vh;max-width:100%;border-radius:14px}
+}
+body.light-theme .new-res-header{background:linear-gradient(135deg,rgba(0,200,81,.07),rgba(240,244,250,.98))}
+body.light-theme .new-res-row{border-color:rgba(0,0,0,.06)}
+body.light-theme .new-res-row:hover{background:rgba(0,0,0,.03)}
+body.light-theme .new-res-footer{border-color:rgba(0,0,0,.1)}
+
+/* ══════════════════════════════════════════
+   MODAL PAGAMENTO PENDENTE
+══════════════════════════════════════════ */
+.payment-pix-box{background:rgba(255,215,0,.07);border:2px dashed var(--gold);border-radius:12px;padding:14px 18px;margin:14px 0;display:flex;flex-direction:column;gap:5px}
+.payment-pix-key{font-size:1.15rem;font-weight:800;color:var(--gold);letter-spacing:.5px;word-break:break-all}
+body.light-theme .payment-pix-box{background:rgba(255,215,0,.05)}
 body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07)}
 </style>
 </head>
@@ -1373,6 +1410,41 @@ body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0
   </div>
 </div>
 
+<!-- MODAL NOVOS RESULTADOS -->
+<div id="modal-new-results" class="modal-overlay hidden" onclick="if(event.target===this)closeNewResultsModal()">
+  <div class="modal-box new-res-box">
+    <div class="new-res-header">
+      <button class="modal-close" onclick="closeNewResultsModal()" style="position:absolute;top:11px;right:13px">✕</button>
+      <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px">🆕 Novidades desde sua última visita</div>
+      <div id="new-res-summary" style="font-size:1rem;font-weight:800;color:var(--white)"></div>
+    </div>
+    <div class="new-res-body" id="new-res-list"></div>
+    <div class="new-res-footer">
+      <div id="new-res-total" style="font-size:0.88rem;color:var(--text-muted)"></div>
+      <button class="btn btn-primary" onclick="closeNewResultsModal()">✓ Entendido</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PAGAMENTO PENDENTE -->
+<div id="modal-payment" class="modal-overlay hidden" onclick="if(event.target===this)closePaymentModal()">
+  <div class="modal-box" style="max-width:400px">
+    <button class="modal-close" onclick="closePaymentModal()">✕</button>
+    <div style="font-size:1.4rem;margin-bottom:8px">💰</div>
+    <h3 style="margin-bottom:6px">Pagamento Pendente</h3>
+    <p style="font-size:0.87rem;color:var(--text-muted);line-height:1.5;margin-bottom:4px">Seu pagamento ainda não foi confirmado. Realize o PIX abaixo e aguarde a confirmação do administrador.</p>
+    <div class="payment-pix-box">
+      <span style="font-size:0.72rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Chave Pix · CPF</span>
+      <span class="payment-pix-key" id="payment-pix-key-value"></span>
+      <span style="font-size:0.85rem;color:var(--text-muted)">Valor: <strong id="payment-valor" style="color:var(--gold)"></strong> por participante</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" style="flex:1" onclick="copyPixKeyPayment()">📋 Copiar Chave Pix</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="closePaymentModal()">Lembrar depois</button>
+    </div>
+  </div>
+</div>
+
 <!-- OFFLINE BANNER -->
 <div id="offline-banner" role="alert" style="display:none;position:fixed;bottom:68px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,.96);color:#fff;border:1px solid var(--orange);padding:7px 18px;border-radius:20px;font-size:0.82rem;font-weight:600;z-index:200;white-space:nowrap;pointer-events:none">📵 Sem conexão — exibindo dados em cache</div>
 
@@ -1606,6 +1678,7 @@ let CFG = {
   pts_campeao:50,
   pts_artilheiro:30,
   artilheiro_real:'',
+  chave_pix:'128.712.527-18',
   campeao_locked:false,
   nome_bolao:'Bolão ICN Copa 2026',
   valor_participacao:50,
@@ -2920,7 +2993,7 @@ async function renderDashboard() {
     cont.innerHTML = html;
     _startCountdownTimer();
     _renderEvolutionChart(ranking, allPals, res, champPicks, artilheiroPicks, document.getElementById('evo-chart-container'));
-    _checkAndShowNewResultsToast(res, allPals[currentUser.uid]||{});
+    _showNewResultsModal(res, allPals[currentUser.uid]||{});
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
   }
@@ -8537,29 +8610,118 @@ async function installPwaApp() {
 }
 
 // ════════════════════════════════════════════
-// NOVOS RESULTADOS — toast ao abrir dashboard
+// MODAL NOVOS RESULTADOS
 // ════════════════════════════════════════════
-function _checkAndShowNewResultsToast(res, myPals) {
+function _newResPtsBadge(pts) {
+  if (pts === null || pts === undefined) return `<span class="new-res-pts none">sem palpite</span>`;
+  if (pts === CFG.pts_exato)                    return `<span class="new-res-pts exact">+${pts} Exato</span>`;
+  if (pts === (CFG.pts_vencedor_saldo ?? 7))    return `<span class="new-res-pts vsaldo">+${pts} V+Saldo</span>`;
+  if (pts === (CFG.pts_apenas_vencedor ?? 5))   return `<span class="new-res-pts venc">+${pts} Vencedor</span>`;
+  return `<span class="new-res-pts miss">+0 Erro</span>`;
+}
+
+function _showNewResultsModal(res, myPals) {
   try {
     const key = 'bolao_seen_results_v2';
     const seen = JSON.parse(localStorage.getItem(key)||'{}');
-    const newIds = [];
+
+    // Identifica jogos novos
+    const gameMap = {};
+    ALL_GAMES.forEach(g => { gameMap[g.id] = g; });
+
+    const newGames = [];
     let newPts = 0;
     Object.entries(res).forEach(([id, r]) => {
-      if (r.h_real !== undefined && !seen[id]) {
-        newIds.push(id);
+      if (_hasFullResult(r) && !seen[id]) {
+        const game = gameMap[id];
+        const teams = { h: r.h_team || (game?.h) || id, a: r.a_team || (game?.a) || id };
         const pts = calcPontos(myPals[id], r);
         if (pts !== null) newPts += pts;
+        newGames.push({ id, r, game, teams, pts });
       }
     });
+
+    // Marca tudo como visto
     const updated = {};
-    Object.keys(res).forEach(id => { if (res[id].h_real !== undefined) updated[id] = true; });
+    Object.keys(res).forEach(id => { if (_hasFullResult(res[id])) updated[id] = true; });
     localStorage.setItem(key, JSON.stringify(updated));
-    if (!newIds.length) return;
-    const n = newIds.length;
-    const ptsStr = newPts > 0 ? ` · você fez +${newPts} pts` : '';
-    showToast(`🆕 ${n} novo${n>1?'s':''} resultado${n>1?'s':''} desde sua última visita${ptsStr}`, 'info', 5000);
+
+    if (!newGames.length) {
+      _checkAndShowPaymentReminder();
+      return;
+    }
+
+    // Preenche o modal
+    const n = newGames.length;
+    document.getElementById('new-res-summary').textContent =
+      `${n} novo${n>1?'s':''} resultado${n>1?'s':''}`;
+
+    const listEl = document.getElementById('new-res-list');
+    listEl.innerHTML = newGames.map(({ id, r, teams, pts }) => {
+      const hFlag = teamFlag(teams.h)||'';
+      const aFlag = teamFlag(teams.a)||'';
+      const predStr = myPals[id] && myPals[id].h !== undefined
+        ? `Seu: ${myPals[id].h}–${myPals[id].a}`
+        : '—';
+      return `<div class="new-res-row">
+        <div>
+          <div class="new-res-game">${hFlag} <b>${esc(teams.h.substring(0,16))}</b><span style="color:var(--text-muted);font-weight:400"> × </span><b>${esc(teams.a.substring(0,16))}</b> ${aFlag}</div>
+          <div class="new-res-result">${r.h_real}–${r.a_real}</div>
+        </div>
+        <div class="new-res-pred">${predStr}</div>
+        ${_newResPtsBadge(pts)}
+      </div>`;
+    }).join('');
+
+    const totalEl = document.getElementById('new-res-total');
+    if (newPts > 0) {
+      totalEl.innerHTML = `Total: <b style="color:var(--green)">+${newPts} pts</b> ganhos nestes jogos`;
+    } else {
+      totalEl.textContent = 'Nenhum ponto ganho nestes jogos';
+    }
+
+    document.getElementById('modal-new-results').classList.remove('hidden');
+  } catch(e) {
+    _checkAndShowPaymentReminder();
+  }
+}
+
+function closeNewResultsModal() {
+  const el = document.getElementById('modal-new-results');
+  if (el) el.classList.add('hidden');
+  setTimeout(_checkAndShowPaymentReminder, 400);
+}
+
+// ════════════════════════════════════════════
+// MODAL PAGAMENTO PENDENTE
+// ════════════════════════════════════════════
+function _checkAndShowPaymentReminder() {
+  try {
+    if (currentUserDoc?.role === 'admin') return;
+    if (currentUserDoc?.pago === true) return;
+    const sessKey = 'bolao_payment_shown';
+    if (sessionStorage.getItem(sessKey)) return;
+    sessionStorage.setItem(sessKey, '1');
+
+    const pixKey = CFG.chave_pix || '128.712.527-18';
+    const valor = CFG.valor_participacao || 50;
+    document.getElementById('payment-pix-key-value').textContent = pixKey;
+    document.getElementById('payment-valor').textContent =
+      `R$ ${valor.toFixed ? valor.toFixed(2).replace('.',',') : valor},00`;
+    document.getElementById('modal-payment').classList.remove('hidden');
   } catch(_) {}
+}
+
+function closePaymentModal() {
+  const el = document.getElementById('modal-payment');
+  if (el) el.classList.add('hidden');
+}
+
+function copyPixKeyPayment() {
+  const key = CFG.chave_pix || '128.712.527-18';
+  navigator.clipboard.writeText(key)
+    .then(()=>showToast('Chave Pix copiada! ✓', 'success'))
+    .catch(()=>showToast('Não foi possível copiar — copie manualmente.', 'warning'));
 }
 
 // ════════════════════════════════════════════
