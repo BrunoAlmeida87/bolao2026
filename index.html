@@ -3059,7 +3059,7 @@ async function renderPalpites(editUid=null) {
     const groupKeys = Object.keys(GRUPOS_DATA);
     html += `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;font-weight:600">🔤 Filtrar por grupo <span style="font-weight:400;opacity:.8">(toque para selecionar um ou vários)</span>:</div>`;
     html += `<div class="group-tabs" id="group-tabs">`;
-    groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}')" data-group="${g}">${g}</button>`; });
+    groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}',this)" data-group="${g}">${g}</button>`; });
     html += `</div>`;
     groupKeys.forEach((g,i)=>{
       html += `<div class="pal-group" data-group="${g}" style="${i===0?'':'display:none'}">
@@ -3310,19 +3310,26 @@ function switchPalPhase(key) {
 }
 
 // Grupos com multi-seleção: clicar alterna o grupo; pelo menos um permanece ativo.
-function switchPalGroup(grp) {
-  const tab = document.querySelector(`.group-tab[data-group="${grp}"]`);
+// Escopado ao container do botão clicado para não afetar outro picker (ex.: editor
+// do admin) que possa estar renderizado em outra página ainda presente no DOM.
+function switchPalGroup(grp, el) {
+  const tabsWrap = el ? el.closest('.group-tabs') : document.getElementById('group-tabs');
+  if (!tabsWrap) return;
+  const tab = tabsWrap.querySelector(`.group-tab[data-group="${grp}"]`);
   if (!tab) return;
   tab.classList.toggle('active');
-  if (!document.querySelector('.group-tab.active')) tab.classList.add('active');
-  _applyPalGroupVisibility();
+  if (!tabsWrap.querySelector('.group-tab.active')) tab.classList.add('active');
+  _applyPalGroupVisibility(tabsWrap);
 }
 
-function _applyPalGroupVisibility() {
+function _applyPalGroupVisibility(tabsWrap) {
+  tabsWrap = tabsWrap || document.getElementById('group-tabs');
+  if (!tabsWrap) return;
   const active = new Set(
-    [...document.querySelectorAll('.group-tab.active')].map(t => t.dataset.group)
+    [...tabsWrap.querySelectorAll('.group-tab.active')].map(t => t.dataset.group)
   );
-  document.querySelectorAll('.pal-group').forEach(p =>
+  const scope = tabsWrap.closest('.pal-phase') || document;
+  scope.querySelectorAll('.pal-group').forEach(p =>
     p.style.display = active.has(p.dataset.group) ? 'block' : 'none');
 }
 
@@ -7698,7 +7705,7 @@ async function renderAdminPalpitesInline(uid) {
     html += `</div><div class="pal-phase" data-phase="grupos">`;
     const groupKeys = Object.keys(GRUPOS_DATA);
     html += `<div class="group-tabs">`;
-    groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}')" data-group="${g}">${g}</button>`; });
+    groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}',this)" data-group="${g}">${g}</button>`; });
     html += `</div>`;
     groupKeys.forEach((g,i)=>{
       html += `<div class="pal-group" data-group="${g}" style="${i===0?'':'display:none'}">`;
