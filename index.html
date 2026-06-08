@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.1">
+<meta name="app-version" content="v1.12.2">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1041,6 +1041,18 @@ body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0
 .menu-mini{font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin:9px 0 4px}
 .menu-chips{display:flex;flex-wrap:wrap;gap:5px}
 .menu-chip{font-size:.78rem;color:var(--white);background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:20px;padding:3px 11px;line-height:1.35}
+.menu-chip.cat-prot, .menu-legend-item.cat-prot{background:rgba(255,68,68,.13);border-color:rgba(255,68,68,.42);color:#ff9d9d}
+.menu-chip.cat-carb, .menu-legend-item.cat-carb{background:rgba(255,140,0,.14);border-color:rgba(255,140,0,.42);color:#ffc06b}
+.menu-chip.cat-veg,  .menu-legend-item.cat-veg{background:rgba(0,200,81,.13);border-color:rgba(0,200,81,.42);color:#74e39b}
+.menu-chip.cat-fruta,.menu-legend-item.cat-fruta{background:rgba(186,104,255,.15);border-color:rgba(186,104,255,.45);color:#cda4ff}
+.menu-chip.cat-beb,  .menu-legend-item.cat-beb{background:rgba(30,144,255,.14);border-color:rgba(30,144,255,.42);color:#86c2ff}
+.menu-legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.menu-legend-item{font-size:.72rem;font-weight:700;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text-muted)}
+body.light-theme .menu-chip.cat-prot, body.light-theme .menu-legend-item.cat-prot{color:#c0392b}
+body.light-theme .menu-chip.cat-carb, body.light-theme .menu-legend-item.cat-carb{color:#b5650a}
+body.light-theme .menu-chip.cat-veg,  body.light-theme .menu-legend-item.cat-veg{color:#1f8a4c}
+body.light-theme .menu-chip.cat-fruta,body.light-theme .menu-legend-item.cat-fruta{color:#7d3fb8}
+body.light-theme .menu-chip.cat-beb,  body.light-theme .menu-legend-item.cat-beb{color:#1565c0}
 .menu-extras{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
 .menu-extra-item{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--white);background:rgba(255,255,255,.04);border-radius:8px;padding:5px 10px}
 .menu-extra-item .ico{font-size:.95rem;line-height:1}
@@ -1398,7 +1410,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.1</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.2</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -1733,7 +1745,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.12.1',
+  app_version:'v1.12.2',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -4066,9 +4078,31 @@ function _updateTransporteTimers() {
     if (box) box.innerHTML = _transpCardDynHtml(rota, now);
   });
 }
+// Classificação nutricional dos itens (cor por categoria). Edite as palavras-chave
+// abaixo para corrigir/ajustar — a ordem importa (a 1ª categoria que casar vence).
+const _CAT_INFO = {
+  prot:  { icon:'🥩', label:'Proteína' },
+  carb:  { icon:'🍚', label:'Carboidrato' },
+  veg:   { icon:'🥦', label:'Verdura/Legume' },
+  fruta: { icon:'🍎', label:'Fruta' },
+  beb:   { icon:'🥤', label:'Bebida' }
+};
+const _CATEGORIAS_ALIMENTO = [
+  { cat:'beb',   kw:['achocolatado','cafe','leite','suco','iogurte','vitamina'] },
+  { cat:'fruta', kw:['maca','melao','mamao','melancia','banana','laranja','abacaxi','goiaba','acerola','caju','maracuja','uva','manga','morango','abacate','pera','kiwi','tangerina','mexerica'] },
+  { cat:'carb',  kw:['arroz','pao','batata','polenta','farofa','massinha','massa','macarr','milho','mandioca','tutu','pure','nhoque','cuscuz','pipoca','aipim','inhame'] },
+  { cat:'prot',  kw:['frango','bife','file','carne','linguic','salsich','carre','picadinho','toscana','presunto','mortadela','blanquet','queijo','polengu','ovo','peixe','salpicao','strogon','almondega','hamburg','coxa','diplomata','caipira','fazendinha','acebolado','calabresa','figado'] },
+  { cat:'veg',   kw:['alface','brocolis','beterraba','repolho','abobora','couve','cenoura','tomate','pepino','vinagrete','salada','rucula','agriao','espinafre','chuchu','vagem','ervilha','feijao','grao','lentilha','escarola','acelga','rabanete','quiabo','jilo','berinjela'] }
+];
+function _normTxt(s) { return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+function _catAlimento(nome) {
+  const n = _normTxt(nome);
+  for (const g of _CATEGORIAS_ALIMENTO) { if (g.kw.some(k => n.includes(k))) return g.cat; }
+  return 'outro';
+}
 function _menuCardHtml(c, isToday) {
   const a = c.almoco;
-  const chips = arr => `<div class="menu-chips">${arr.map(x => `<span class="menu-chip">${esc(x)}</span>`).join('')}</div>`;
+  const chips = arr => `<div class="menu-chips">${arr.map(x => `<span class="menu-chip cat-${_catAlimento(x)}">${esc(x)}</span>`).join('')}</div>`;
   const extra = (ico, lbl, val) => `<div class="menu-extra-item"><span class="ico">${ico}</span><span><span class="lbl">${lbl}</span><br>${esc(val)}</span></div>`;
   return `<div class="menu-card${isToday ? ' today' : ''}">
     <div class="menu-card-head">
@@ -4095,6 +4129,11 @@ function renderCardapio() {
     const todayCard = cardapioSemana.find(c => _CARDAPIO_DIA_IDX[c.dia] === now.getDay());
 
     let html = `<div class="section-title">🍽️ Cardápio e Transporte</div>`;
+
+    // Legenda de cores por categoria nutricional
+    const _legOrdem = ['prot', 'carb', 'veg', 'fruta', 'beb'];
+    html += `<div class="menu-legend">${_legOrdem.map(k =>
+      `<span class="menu-legend-item cat-${k}">${_CAT_INFO[k].icon} ${_CAT_INFO[k].label}</span>`).join('')}</div>`;
 
     // 1) Hoje no refeitório
     html += `<div class="card-title" style="margin-bottom:12px">🍴 Hoje no refeitório</div>`;
