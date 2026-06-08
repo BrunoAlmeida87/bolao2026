@@ -311,6 +311,12 @@ select option{background:var(--mid-blue);color:var(--white)}
    PALPITES
 ══════════════════════════════════════════ */
 .phase-tabs,.group-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.date-filter-wrap{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.date-filter-btn{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:0.78rem;font-weight:600;transition:all .2s;white-space:nowrap}
+.date-filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.date-filter-btn:hover:not(.active){border-color:var(--accent);color:var(--accent)}
+body.light-theme .date-filter-btn{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
+body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 .phase-tab{
   padding:7px 16px;border-radius:18px;border:1px solid var(--border);
   background:transparent;color:var(--text-muted);cursor:pointer;font-size:0.82rem;
@@ -3023,12 +3029,29 @@ async function renderPalpites(editUid=null) {
       ...Object.entries(ELIM_DATA).map(([k,v])=>({key:k,label:v.icon+' '+v.label}))
     ];
 
+    // Coleta datas únicas para o filtro
+    const _dateMap = new Map();
+    ALL_GAMES.forEach(game => {
+      const r = resCache[game.id] || {};
+      const iso = r.date_override || _gameDateToISO(game.date);
+      if (iso && !_dateMap.has(iso)) _dateMap.set(iso, _isoToGameDate(iso));
+    });
+    const _sortedDates = [..._dateMap.entries()].sort((a,b) => a[0].localeCompare(b[0]));
+    const _datePills = _sortedDates.map(([iso, label]) =>
+      `<button class="date-filter-btn" data-dateiso="${iso}" onclick="switchPalDate('${iso}')">${label}</button>`
+    ).join('');
+
     let html = `<div class="section-title">⚽ Meus Palpites${_refreshBtn()}</div>${who}
       ${buildChampionPickerCard()}
       ${buildArtilheiroPickerCard()}
       <div id="pal-progress-text" class="progress-text">Calculando...</div>
       <div class="progress-bar"><div class="progress-fill" id="pal-progress-fill" style="width:0%"></div></div>
       ${_ptsLegendHtml()}
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;font-weight:600">📅 Filtrar por data:</div>
+      <div class="date-filter-wrap" id="date-filter-wrap">
+        <button class="date-filter-btn active" data-dateiso="" onclick="switchPalDate('')">Todos</button>
+        ${_datePills}
+      </div>
       <div class="phase-tabs" id="phase-tabs">`;
     phases.forEach((p,i)=>{ html += `<button class="phase-tab ${i===0?'active':''}" onclick="switchPalPhase('${p.key}')" data-phase="${p.key}">${p.label}</button>`; });
     html += `</div><div id="pal-phases">`;
@@ -3101,9 +3124,10 @@ function buildPalRow(game) {
   const flagA = teamFlag(teams.a);
   const time = res.time_override || GAME_TIMES[game.id] || '--:--';
   const displayDate = res.date_override ? _isoToGameDate(res.date_override) : (game.date || '');
+  const effectiveIso = res.date_override || _gameDateToISO(game.date);
   const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
   const idBadge = `<span style="font-size:0.62rem;font-weight:800;background:rgba(255,255,255,.1);color:var(--text-muted);padding:1px 5px;border-radius:5px;letter-spacing:.03em">${esc(game.id)}</span> `;
-  return `<div class="game-row">
+  return `<div class="game-row" data-gameiso="${effectiveIso}">
     <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${idBadge}${displayDate} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" aria-label="Palpite gols - ${esc(teams.h)}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
@@ -3243,6 +3267,14 @@ async function onChampionChange(team) {
     if (sel) sel.value = myChampion || '';
     showToast('Erro ao salvar: '+e.message,'error');
   }
+}
+
+function switchPalDate(iso) {
+  document.querySelectorAll('.date-filter-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.dateiso === iso));
+  document.querySelectorAll('#pal-phases .game-row').forEach(r => {
+    r.style.display = (!iso || r.dataset.gameiso === iso) ? '' : 'none';
+  });
 }
 
 function switchPalPhase(key) {
