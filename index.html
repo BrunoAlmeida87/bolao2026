@@ -3057,6 +3057,7 @@ async function renderPalpites(editUid=null) {
 
     html += `<div class="pal-phase" data-phase="grupos">`;
     const groupKeys = Object.keys(GRUPOS_DATA);
+    html += `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;font-weight:600">🔤 Filtrar por grupo <span style="font-weight:400;opacity:.8">(toque para selecionar um ou vários)</span>:</div>`;
     html += `<div class="group-tabs" id="group-tabs">`;
     groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}')" data-group="${g}">${g}</button>`; });
     html += `</div>`;
@@ -3271,9 +3272,36 @@ async function onChampionChange(team) {
 function switchPalDate(iso) {
   document.querySelectorAll('.date-filter-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.dateiso === iso));
-  document.querySelectorAll('#pal-phases .game-row').forEach(r => {
-    r.style.display = (!iso || r.dataset.gameiso === iso) ? '' : 'none';
-  });
+
+  const phaseTabs = document.getElementById('phase-tabs');
+  const groupTabs = document.getElementById('group-tabs');
+
+  if (iso) {
+    // Modo "filtrar por data": mostra os jogos do dia em qualquer fase/grupo,
+    // sem precisar escolher fase ou grupo manualmente.
+    if (phaseTabs) phaseTabs.style.display = 'none';
+    if (groupTabs) groupTabs.style.display = 'none';
+    document.querySelectorAll('#pal-phases .game-row').forEach(r => {
+      r.style.display = r.dataset.gameiso === iso ? '' : 'none';
+    });
+    // Exibe apenas containers (grupos/fases) que tenham pelo menos um jogo do dia.
+    document.querySelectorAll('#pal-phases .pal-group').forEach(g => {
+      g.style.display = g.querySelector(`.game-row[data-gameiso="${iso}"]`) ? 'block' : 'none';
+    });
+    document.querySelectorAll('#pal-phases .pal-phase').forEach(p => {
+      p.style.display = p.querySelector(`.game-row[data-gameiso="${iso}"]`) ? 'block' : 'none';
+    });
+  } else {
+    // Modo "Todos": volta para a navegação normal por fase/grupo.
+    if (phaseTabs) phaseTabs.style.display = '';
+    if (groupTabs) groupTabs.style.display = '';
+    document.querySelectorAll('#pal-phases .game-row').forEach(r => { r.style.display = ''; });
+    const activePhase = document.querySelector('.phase-tab.active');
+    const key = activePhase ? activePhase.dataset.phase : 'grupos';
+    document.querySelectorAll('#pal-phases .pal-phase').forEach(p =>
+      p.style.display = p.dataset.phase === key ? 'block' : 'none');
+    _applyPalGroupVisibility();
+  }
 }
 
 function switchPalPhase(key) {
@@ -3281,9 +3309,21 @@ function switchPalPhase(key) {
   document.querySelectorAll('.pal-phase').forEach(p=>p.style.display=p.dataset.phase===key?'block':'none');
 }
 
+// Grupos com multi-seleção: clicar alterna o grupo; pelo menos um permanece ativo.
 function switchPalGroup(grp) {
-  document.querySelectorAll('.group-tab').forEach(t=>t.classList.toggle('active',t.dataset.group===grp));
-  document.querySelectorAll('.pal-group').forEach(p=>p.style.display=p.dataset.group===grp?'block':'none');
+  const tab = document.querySelector(`.group-tab[data-group="${grp}"]`);
+  if (!tab) return;
+  tab.classList.toggle('active');
+  if (!document.querySelector('.group-tab.active')) tab.classList.add('active');
+  _applyPalGroupVisibility();
+}
+
+function _applyPalGroupVisibility() {
+  const active = new Set(
+    [...document.querySelectorAll('.group-tab.active')].map(t => t.dataset.group)
+  );
+  document.querySelectorAll('.pal-group').forEach(p =>
+    p.style.display = active.has(p.dataset.group) ? 'block' : 'none');
 }
 
 let _bigScoreWarned = {};
