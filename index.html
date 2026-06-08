@@ -1445,6 +1445,7 @@ body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0
   </div>
 </div>
 
+
 <!-- OFFLINE BANNER -->
 <div id="offline-banner" role="alert" style="display:none;position:fixed;bottom:68px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,.96);color:#fff;border:1px solid var(--orange);padding:7px 18px;border-radius:20px;font-size:0.82rem;font-weight:600;z-index:200;white-space:nowrap;pointer-events:none">📵 Sem conexão — exibindo dados em cache</div>
 
@@ -1676,8 +1677,6 @@ let CFG = {
   pts_apenas_vencedor:5,
   pts_bonus_classificacao:3,
   pts_campeao:50,
-  pts_artilheiro:30,
-  artilheiro_real:'',
   chave_pix:'128.712.527-18',
   campeao_locked:false,
   nome_bolao:'Bolão ICN Copa 2026',
@@ -1732,7 +1731,6 @@ let myPalpites   = {};
 let _palpitesSalvosSet = new Set();
 let resultados   = {};
 let myChampion   = null;
-let myArtilheiro = null;
 let palpitesEditing = null;
 
 // ─── SESSION CACHE ────────────────────────────────────────────────────────────
@@ -1763,7 +1761,7 @@ async function _fetchUsr() {
 }
 async function _fetchPals(users, force) {
   if (!force) { let p=_scGet('pals'); if(p) return p; }
-  const allPals={},champPicks={},artilheiroPicks={};
+  const allPals={},champPicks={};
   await Promise.all((users||[]).map(async u=>{
     const [ps,pdoc]=await Promise.all([
       db_.collection('palpites').doc(u.uid).collection('jogos').get(),
@@ -1773,9 +1771,8 @@ async function _fetchPals(users, force) {
     ps.docs.forEach(d=>{allPals[u.uid][d.id]=d.data();});
     const pdata=pdoc.exists?pdoc.data():{};
     champPicks[u.uid]=pdata?.campeao||null;
-    artilheiroPicks[u.uid]=pdata?.artilheiro||null;
   }));
-  const data={allPals,champPicks,artilheiroPicks};
+  const data={allPals,champPicks};
   _scSet('pals',data,_SC_TTL.pals); return data;
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2249,14 +2246,12 @@ async function loadChampionPick(uid) {
   } catch(_) { return null; }
 }
 
-function computeRanking(users, resultados, allPalpites, championPicks={}, artilheiroPicks={}) {
+function computeRanking(users, resultados, allPalpites, championPicks={}) {
   const jogosComResultado = Object.keys(resultados).filter(id=>
     resultados[id].h_real!==undefined && resultados[id].a_real!==undefined
   );
   const champion = _getFinalChampion(resultados);
   const ptsCampeao = CFG.pts_campeao ?? 0;
-  const artilheiroReal = (CFG.artilheiro_real || '').trim().toLowerCase();
-  const ptsArtilheiro = artilheiroReal ? (CFG.pts_artilheiro ?? 0) : 0;
   return users
     .filter(u=>u.ativo!==false)
     .map(u=>{
@@ -2277,11 +2272,7 @@ function computeRanking(users, resultados, allPalpites, championPicks={}, artilh
       const acertouCampeao = !!(champion && userChampion && userChampion===champion);
       const bonusCampeao = acertouCampeao ? ptsCampeao : 0;
       pontos += bonusCampeao;
-      const userArtilheiro = (artilheiroPicks[u.uid] || '').trim().toLowerCase();
-      const acertouArtilheiro = !!(artilheiroReal && userArtilheiro && userArtilheiro===artilheiroReal);
-      const bonusArtilheiro = acertouArtilheiro ? ptsArtilheiro : 0;
-      pontos += bonusArtilheiro;
-      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros, campeao: userChampion, bonus_campeao: bonusCampeao, acertou_campeao: acertouCampeao, artilheiro: artilheiroPicks[u.uid]||null, bonus_artilheiro: bonusArtilheiro, acertou_artilheiro: acertouArtilheiro };
+      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros, campeao: userChampion, bonus_campeao: bonusCampeao, acertou_campeao: acertouCampeao };
     })
     .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
 }
@@ -2791,8 +2782,8 @@ async function renderDashboard() {
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false);
-    const {allPals, champPicks, artilheiroPicks} = await _fetchPals(users);
-    const ranking = computeRanking(users, res, allPals, champPicks, artilheiroPicks);
+    const {allPals, champPicks} = await _fetchPals(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
     _cachedRanking = ranking;
     const finalChampion = _getFinalChampion(res);
     const isAdminDash = currentUserDoc?.role === 'admin';
@@ -2992,7 +2983,7 @@ async function renderDashboard() {
     <div id="evo-chart-container"></div>`;
     cont.innerHTML = html;
     _startCountdownTimer();
-    _renderEvolutionChart(ranking, allPals, res, champPicks, artilheiroPicks, document.getElementById('evo-chart-container'));
+    _renderEvolutionChart(ranking, allPals, res, champPicks, document.getElementById('evo-chart-container'));
     _showNewResultsModal(res, allPals[currentUser.uid]||{});
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
@@ -3018,7 +3009,7 @@ async function renderPalpites(editUid=null) {
     _palpitesSalvosSet = new Set(pSnap.docs.map(d=>d.id));
     resultados = resCache;
     myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
-    myArtilheiro = pDoc.exists ? (pDoc.data()?.artilheiro || null) : null;
+
 
     let who = '';
     if (editUid && editUid!==currentUser.uid) {
@@ -7721,10 +7712,6 @@ async function renderAdminConfig() {
       </div>
       <div class="form-row">
         <div class="form-group"><label>Palpite Campeão</label><input type="number" id="cfg-pts-campeao" value="${CFG.pts_campeao ?? 50}" min="0" max="200" title="Pontuação por acertar a seleção campeã"></div>
-        <div class="form-group"><label>Palpite Artilheiro (pts)</label><input type="number" id="cfg-pts-artilheiro" value="${CFG.pts_artilheiro ?? 30}" min="0" max="200" title="Pontuação por acertar o artilheiro"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group" style="flex:1"><label>⚽ Artilheiro Real <span style="font-size:0.7rem;color:var(--text-muted)">(nome exato do jogador)</span></label><input type="text" id="cfg-artilheiro-real" value="${esc(CFG.artilheiro_real||'')}" placeholder="Ex: Mbappé" maxlength="80" title="Nome do artilheiro real — quando preenchido, pontua automaticamente quem acertou"></div>
       </div>
 
       <div class="alert alert-info" style="margin-top:16px">
@@ -7786,8 +7773,6 @@ async function saveCFGAdmin() {
   const ptsApenasVenc = parseInt(document.getElementById('cfg-pts-apenas-venc').value)||5;
   const ptsBonusClass = parseInt(document.getElementById('cfg-pts-bonus-class').value)||3;
   const ptsCampeao = parseInt(document.getElementById('cfg-pts-campeao').value)||50;
-  const ptsArtilheiro = parseInt(document.getElementById('cfg-pts-artilheiro').value)||30;
-  const artilheiroReal = (document.getElementById('cfg-artilheiro-real').value||'').trim();
 
   if (!nome) { showToast('Informe o nome do bolão','warning'); return; }
   try {
@@ -7797,9 +7782,7 @@ async function saveCFGAdmin() {
       pts_vencedor_saldo:ptsVencSaldo,
       pts_apenas_vencedor:ptsApenasVenc,
       pts_bonus_classificacao:ptsBonusClass,
-      pts_campeao:ptsCampeao,
-      pts_artilheiro:ptsArtilheiro,
-      artilheiro_real:artilheiroReal
+      pts_campeao:ptsCampeao
     };
     await db_.collection('config').doc('geral').set(cfg, {merge:true});
     CFG = { ...CFG, ...cfg };
@@ -8169,7 +8152,6 @@ async function exportFullExcel() {
     cfgData.push(['Apenas Vencedor', CFG.pts_apenas_vencedor]);
     cfgData.push(['Bônus Classificação', CFG.pts_bonus_classificacao]);
     cfgData.push(['Palpite Campeão', CFG.pts_campeao]);
-    cfgData.push(['Palpite Artilheiro', CFG.pts_artilheiro]);
     cfgData.push(['Palpite Campeão Bloqueado?', CFG.campeao_locked?'SIM':'NÃO']);
     cfgData.push(['Seleção Campeã (FIN1)', finalChampion || '(não decidida)']);
 
@@ -8727,7 +8709,7 @@ function copyPixKeyPayment() {
 // ════════════════════════════════════════════
 // GRÁFICO DE EVOLUÇÃO DE PONTOS
 // ════════════════════════════════════════════
-function _renderEvolutionChart(ranking, allPals, res, champPicks, artilheiroPicks, container) {
+function _renderEvolutionChart(ranking, allPals, res, champPicks, container) {
   if (!container || !ranking.length) return;
   const roundDefs = [
     { id:'G1', label:'1ª Rod.', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
@@ -8745,8 +8727,6 @@ function _renderEvolutionChart(ranking, allPals, res, champPicks, artilheiroPick
 
   const champion = _getFinalChampion(res);
   const ptsCampeao = CFG.pts_campeao ?? 0;
-  const artilheiroReal = (CFG.artilheiro_real||'').trim().toLowerCase();
-  const ptsArtilheiro = artilheiroReal ? (CFG.pts_artilheiro ?? 0) : 0;
   const finalRoundIdx = activeRounds.findIndex(rd => rd.id === 'final');
 
   const userSeries = ranking.map(u => {
@@ -8761,7 +8741,6 @@ function _renderEvolutionChart(ranking, allPals, res, champPicks, artilheiroPick
       });
       if (idx === finalRoundIdx && champion) {
         if ((champPicks[u.uid]||null) === champion) cum += ptsCampeao;
-        if (artilheiroReal && (artilheiroPicks[u.uid]||'').trim().toLowerCase() === artilheiroReal) cum += ptsArtilheiro;
       }
       points.push(cum);
     });
@@ -8820,60 +8799,6 @@ function _renderEvolutionChart(ranking, allPals, res, champPicks, artilheiroPick
     </svg>
     <div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:6px">${legendHtml}</div>
   </div>`;
-}
-
-// ════════════════════════════════════════════
-// ARTILHEIRO — palpite do artilheiro
-// ════════════════════════════════════════════
-function buildArtilheiroPickerCard() {
-  const isAdmin = currentUserDoc?.role === 'admin';
-  const artilheiroReal = (CFG.artilheiro_real||'').trim();
-  const decided = !!artilheiroReal;
-  const locked = CFG.campeao_locked === true;
-  const canEdit = isAdmin ? true : (!locked && !decided);
-  const ptsArt = CFG.pts_artilheiro ?? 30;
-
-  if (!ptsArt) return '';
-
-  let status = '';
-  if (decided) {
-    const acertou = myArtilheiro && myArtilheiro.trim().toLowerCase() === artilheiroReal.toLowerCase();
-    if (acertou) {
-      status = `<div class="alert alert-success" style="margin-top:8px">🎉 Você acertou! <b>${esc(artilheiroReal)}</b> é o artilheiro — bônus de <b>+${ptsArt} pts</b>.</div>`;
-    } else if (myArtilheiro) {
-      status = `<div class="alert alert-warning" style="margin-top:8px">O artilheiro foi <b>${esc(artilheiroReal)}</b>. Seu palpite (<i>${esc(myArtilheiro)}</i>) não pontuou.</div>`;
-    } else {
-      status = `<div class="alert alert-warning" style="margin-top:8px">O artilheiro foi <b>${esc(artilheiroReal)}</b>. Você não fez palpite.</div>`;
-    }
-  } else if (locked) {
-    status = `<div class="alert alert-warning" style="margin-top:8px">🔒 Palpite de artilheiro bloqueado.</div>`;
-  } else {
-    status = `<div class="text-muted" style="font-size:0.8rem;margin-top:6px">Vale <b>+${ptsArt} pts</b> se você acertar o artilheiro da Copa. Salva automaticamente.</div>`;
-  }
-
-  return `<div class="card" style="margin-bottom:16px">
-    <div class="card-title" style="margin-bottom:10px">⚽ Palpite do Artilheiro</div>
-    <div class="${canEdit?'':'champion-locked-wrap'}">
-      <input type="text" id="artilheiro-input" value="${esc(myArtilheiro||'')}" placeholder="Nome do artilheiro (ex: Mbappé)" maxlength="80" ${canEdit?'':'readonly'} style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--mid-blue);color:var(--white);font-size:0.92rem" oninput="clearTimeout(_artilheiroDebounce);_artilheiroDebounce=setTimeout(()=>saveArtilheiroChange(this.value),800)">
-      ${canEdit?'':`<div class="champion-lock-badge">🔒 Bloqueado — não é mais possível alterar</div>`}
-    </div>
-    ${status}
-  </div>`;
-}
-
-let _artilheiroDebounce = null;
-
-async function saveArtilheiroChange(val) {
-  const uid = palpitesEditing || currentUser.uid;
-  const trimmed = val.trim();
-  try {
-    await db_.collection('palpites').doc(uid).set({ artilheiro: trimmed || null }, { merge: true });
-    myArtilheiro = trimmed || null;
-    const inp = document.getElementById('artilheiro-input');
-    if (inp) { inp.style.borderColor='var(--green)'; setTimeout(()=>{ inp.style.borderColor=''; },1500); }
-  } catch(e) {
-    showToast('Erro ao salvar artilheiro: '+errMsg(e), 'error');
-  }
 }
 
 // ════════════════════════════════════════════
