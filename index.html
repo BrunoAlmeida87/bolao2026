@@ -3059,7 +3059,7 @@ async function renderPalpites(editUid=null) {
     const groupKeys = Object.keys(GRUPOS_DATA);
     html += `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;font-weight:600">🔤 Filtrar por grupo <span style="font-weight:400;opacity:.8">(toque para selecionar um ou vários)</span>:</div>`;
     html += `<div class="group-tabs" id="group-tabs">`;
-    groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}')" data-group="${g}">${g}</button>`; });
+    groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}',this)" data-group="${g}">${g}</button>`; });
     html += `</div>`;
     groupKeys.forEach((g,i)=>{
       html += `<div class="pal-group" data-group="${g}" style="${i===0?'':'display:none'}">
@@ -3280,16 +3280,33 @@ function switchPalDate(iso) {
     // Modo "filtrar por data": mostra os jogos do dia em qualquer fase/grupo,
     // sem precisar escolher fase ou grupo manualmente.
     if (phaseTabs) phaseTabs.style.display = 'none';
-    if (groupTabs) groupTabs.style.display = 'none';
     document.querySelectorAll('#pal-phases .game-row').forEach(r => {
       r.style.display = r.dataset.gameiso === iso ? '' : 'none';
     });
-    // Exibe apenas containers (grupos/fases) que tenham pelo menos um jogo do dia.
+    // Exibe apenas os containers (grupos/fases) que tenham jogo do dia e marca a
+    // fase correspondente como ativa (para a navegação ficar coerente ao limpar).
+    let matchPhase = null;
+    document.querySelectorAll('#pal-phases .pal-phase').forEach(p => {
+      const has = p.querySelector(`.game-row[data-gameiso="${iso}"]`);
+      p.style.display = has ? 'block' : 'none';
+      if (has && !matchPhase) matchPhase = p.dataset.phase;
+    });
+    if (matchPhase && phaseTabs) {
+      phaseTabs.querySelectorAll('.phase-tab').forEach(t =>
+        t.classList.toggle('active', t.dataset.phase === matchPhase));
+    }
+    // Mantém as abas de grupo visíveis e auto-seleciona os grupos com jogo no dia,
+    // deixando a seleção à vista (e ainda permitindo refinar clicando nelas).
+    if (groupTabs) {
+      groupTabs.style.display = '';
+      groupTabs.querySelectorAll('.group-tab').forEach(t => {
+        const grpEl = document.querySelector(`#pal-phases .pal-group[data-group="${t.dataset.group}"]`);
+        const has = grpEl && grpEl.querySelector(`.game-row[data-gameiso="${iso}"]`);
+        t.classList.toggle('active', !!has);
+      });
+    }
     document.querySelectorAll('#pal-phases .pal-group').forEach(g => {
       g.style.display = g.querySelector(`.game-row[data-gameiso="${iso}"]`) ? 'block' : 'none';
-    });
-    document.querySelectorAll('#pal-phases .pal-phase').forEach(p => {
-      p.style.display = p.querySelector(`.game-row[data-gameiso="${iso}"]`) ? 'block' : 'none';
     });
   } else {
     // Modo "Todos": volta para a navegação normal por fase/grupo.
@@ -3310,19 +3327,26 @@ function switchPalPhase(key) {
 }
 
 // Grupos com multi-seleção: clicar alterna o grupo; pelo menos um permanece ativo.
-function switchPalGroup(grp) {
-  const tab = document.querySelector(`.group-tab[data-group="${grp}"]`);
+// Escopado ao container do botão clicado para não afetar outro picker (ex.: editor
+// do admin) que possa estar renderizado em outra página ainda presente no DOM.
+function switchPalGroup(grp, el) {
+  const tabsWrap = el ? el.closest('.group-tabs') : document.getElementById('group-tabs');
+  if (!tabsWrap) return;
+  const tab = tabsWrap.querySelector(`.group-tab[data-group="${grp}"]`);
   if (!tab) return;
   tab.classList.toggle('active');
-  if (!document.querySelector('.group-tab.active')) tab.classList.add('active');
-  _applyPalGroupVisibility();
+  if (!tabsWrap.querySelector('.group-tab.active')) tab.classList.add('active');
+  _applyPalGroupVisibility(tabsWrap);
 }
 
-function _applyPalGroupVisibility() {
+function _applyPalGroupVisibility(tabsWrap) {
+  tabsWrap = tabsWrap || document.getElementById('group-tabs');
+  if (!tabsWrap) return;
   const active = new Set(
-    [...document.querySelectorAll('.group-tab.active')].map(t => t.dataset.group)
+    [...tabsWrap.querySelectorAll('.group-tab.active')].map(t => t.dataset.group)
   );
-  document.querySelectorAll('.pal-group').forEach(p =>
+  const scope = tabsWrap.closest('.pal-phase') || document;
+  scope.querySelectorAll('.pal-group').forEach(p =>
     p.style.display = active.has(p.dataset.group) ? 'block' : 'none');
 }
 
@@ -7698,7 +7722,7 @@ async function renderAdminPalpitesInline(uid) {
     html += `</div><div class="pal-phase" data-phase="grupos">`;
     const groupKeys = Object.keys(GRUPOS_DATA);
     html += `<div class="group-tabs">`;
-    groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}')" data-group="${g}">${g}</button>`; });
+    groupKeys.forEach((g,i)=>{ html += `<button class="group-tab ${i===0?'active':''}" onclick="switchPalGroup('${g}',this)" data-group="${g}">${g}</button>`; });
     html += `</div>`;
     groupKeys.forEach((g,i)=>{
       html += `<div class="pal-group" data-group="${g}" style="${i===0?'':'display:none'}">`;
