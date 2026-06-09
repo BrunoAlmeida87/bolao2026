@@ -1817,10 +1817,39 @@ const _SC = {};
 // já invalidam o cache localmente via _scDel. Por isso TTLs longos são seguros e
 // reduzem muito as leituras do Firestore em picos de acesso. O botão "Atualizar"
 // força a releitura imediata quando alguém quiser os dados na hora.
-const _SC_TTL = { res: 20*60000, usr: 20*60000, pals: 20*60000, indecisao: 5*60000 };
-function _scGet(k)        { const e=_SC[k]; return (e&&Date.now()<e.x)?e.v:null; }
-function _scSet(k,v,ttl)  { _SC[k]={v,x:Date.now()+(ttl||180000)}; }
-function _scDel(...keys)  { keys.forEach(k=>delete _SC[k]); }
+// 'usr' (nome/pago/role) muda muito raramente, então usa TTL bem mais longo (2h).
+const _SC_TTL = { res: 20*60000, usr: 120*60000, pals: 20*60000, indecisao: 5*60000 };
+// Persistência em sessionStorage: o cache em memória some num F5; espelhar no
+// sessionStorage (que sobrevive a recarregar a página na mesma aba, mas é limpo ao
+// fechá-la) evita reler tudo do Firestore a cada recarregamento. Os dados cacheados
+// (res/usr/pals/indecisao) são serializáveis por JSON e nenhum trecho lê métodos de
+// Timestamp deles, então o round-trip é seguro. _SC_PFX inclui versão de schema —
+// se a forma dos dados cacheados mudar, basta incrementar para invalidar o antigo.
+const _SC_PFX = '_sc_v1_';
+function _scGet(k) {
+  const e = _SC[k];
+  if (e && Date.now() < e.x) return e.v;
+  try {
+    const raw = sessionStorage.getItem(_SC_PFX + k);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && Date.now() < p.x) { _SC[k] = p; return p.v; }
+      sessionStorage.removeItem(_SC_PFX + k);
+    }
+  } catch(_) {}
+  return null;
+}
+function _scSet(k, v, ttl) {
+  const e = { v, x: Date.now() + (ttl || 180000) };
+  _SC[k] = e;
+  try { sessionStorage.setItem(_SC_PFX + k, JSON.stringify(e)); } catch(_) {}
+}
+function _scDel(...keys) {
+  keys.forEach(k => {
+    delete _SC[k];
+    try { sessionStorage.removeItem(_SC_PFX + k); } catch(_) {}
+  });
+}
 
 // ── Rastreador de leituras Firebase ──────────────────────────────────────────
 // Acumula contagem em memória e faz flush para _usage_stats/{data} a cada 60s.
@@ -1920,10 +1949,13 @@ function _stopVersionListener() {
 }
 
 // Atualização vinda de outro cliente (admin lançou/alterou um resultado).
-// Invalida o cache e re-renderiza apenas páginas de visualização — não interrompe
-// quem está preenchendo palpites nem o admin trabalhando.
+// Invalida apenas o cache de resultados e re-renderiza páginas de visualização —
+// não interrompe quem está preenchendo palpites nem o admin trabalhando.
+// 'pals' NÃO é invalidado aqui de propósito: um resultado não altera os palpites de
+// ninguém, então reler todos os palpites (a maior fonte de leituras) seria desperdício.
+// Os palpites só mudam por edição do próprio usuário, que já invalida 'pals' localmente.
 function _onRemoteDataChange() {
-  _scDel('res','pals');
+  _scDel('res');
   const viewPages = new Set(['dashboard','estatisticas','ver-palpites','ver-todos']);
   if (viewPages.has(_currentPage)) {
     if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
