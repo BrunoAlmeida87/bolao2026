@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.2">
+<meta name="app-version" content="v1.12.3">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1436,7 +1436,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.2</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.3</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -9726,6 +9726,18 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
       .then(reg => console.log('[SW] Registrado:', reg.scope))
       .catch(err => console.warn('[SW] Falha no registro:', err));
+  });
+  // Quando um novo Service Worker assume o controle (após bump de versão do
+  // cache), recarrega a página UMA vez para aplicar o HTML/CSS novo no PWA —
+  // sem isso o app instalado continua mostrando a versão antiga em cache.
+  // Só recarrega em ATUALIZAÇÃO (já havia um SW controlando); na primeiríssima
+  // visita não há controller, então o claim inicial não dispara reload.
+  const _hadController = !!navigator.serviceWorker.controller;
+  let _swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!_hadController || _swReloaded) return;   // ignora 1ª instalação e loop
+    _swReloaded = true;
+    window.location.reload();
   });
 }
 </script>
