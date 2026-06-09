@@ -50,5 +50,13 @@ service cloud.firestore {
       allow create: if isAdmin();      // só admin escreve na auditoria
       allow update, delete: if false;
     }
+    match /_usage_stats/{date} {
+      allow read: if isAdmin();
+      // Cada usuário só pode criar/atualizar o próprio campo (keyed by UID).
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([request.auth.uid]);
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([request.auth.uid]);
+    }
   }
 }
