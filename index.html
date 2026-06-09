@@ -6954,9 +6954,9 @@ async function renderAdminUso() {
                     ${visibleDays.map(d => {
                       const v = stats[d]?.[u.uid]||0;
                       const pct = v/maxVal;
-                      const bg = v ? \`rgba(255,191,0,\${(0.1+pct*0.55).toFixed(2)})\` : 'transparent';
+                      const bg = v ? `rgba(255,191,0,${(0.1+pct*0.55).toFixed(2)})` : 'transparent';
                       const color = pct>0.6 ? '#000' : 'inherit';
-                      return \`<td style="text-align:center;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);background:\${bg};color:\${color};font-variant-numeric:tabular-nums">\${v||'—'}</td>\`;
+                      return `<td style="text-align:center;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);background:${bg};color:${color};font-variant-numeric:tabular-nums">${v||'—'}</td>`;
                     }).join('')}
                     <td style="text-align:center;padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-weight:600;color:${total?'var(--gold)':'var(--text-muted)'}">${total||'—'}</td>
                   </tr>`;
