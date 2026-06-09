@@ -1974,6 +1974,51 @@ async function _bumpDataVersion() {
   } catch(_) { /* best-effort: se falhar, usuários ainda atualizam por TTL/botão */ }
 }
 
+// Lê cache/ranking_atual e verifica se ainda é válido para a versão atual dos dados.
+// Retorna o objeto do cache se válido, null caso contrário.
+async function _tryRankingCache() {
+  if (_versionRev === null) return null;
+  try {
+    const snap = await db_.collection('cache').doc('ranking_atual').get();
+    _rTracker.add(1);
+    if (!snap.exists) return null;
+    const data = snap.data();
+    if (data.rev !== _versionRev) return null;
+    return data;
+  } catch(_) { return null; }
+}
+
+// Grava cache/ranking_atual com o ranking pré-calculado e a revisão atual.
+// Chamado pelo admin após salvar resultado — permite que outros usuários
+// carreguem o dashboard com ~50 leituras em vez de ~1500.
+async function _writeRankingCache() {
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const {allPals, champPicks} = await _fetchPals(users);
+    // Lê rev DEPOIS do bump para garantir que o cache aponte para a versão nova
+    const vSnap = await db_.collection('config').doc('version').get();
+    _rTracker.add(1);
+    const rev = vSnap.exists ? (vSnap.data()?.rev ?? null) : null;
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const deltas = _computePositionDeltas(users, res, allPals, champPicks);
+    const rows = ranking.map((u, i) => ({
+      pos: i+1, uid: u.uid,
+      nome: u.nome || '', apelido: u.apelido || '',
+      pontos: u.pontos || 0, exatos: u.exatos || 0,
+      venc_saldo: u.venc_saldo || 0, apenas_venc: u.apenas_venc || 0,
+      jogos: u.jogos || 0, erros: u.erros || 0,
+      bonus_campeao: u.bonus_campeao || 0,
+      acertou_campeao: u.acertou_campeao || false,
+      campeao: u.campeao || null
+    }));
+    await db_.collection('cache').doc('ranking_atual').set({
+      rev, rows, deltas,
+      at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(e) { console.warn('[bolao] _writeRankingCache:', e.message); }
+}
+
 let deferredPwaPrompt = null;
 let _cachedRanking = [];
 let _cachedPositionDeltas = {};
@@ -2412,6 +2457,28 @@ function computeRanking(users, resultados, allPalpites, championPicks={}) {
       return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros, campeao: userChampion, bonus_campeao: bonusCampeao, acertou_campeao: acertouCampeao };
     })
     .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
+}
+
+// Retorna mapa uid→posição_anterior (usada para setas ↑↓ no ranking).
+// Extrai a lógica duplicada entre renderDashboard e _writeRankingCache.
+function _computePositionDeltas(users, res, allPals, champPicks) {
+  const rdefs = [
+    { gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
+    { gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
+    { gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
+    ...Object.keys(ELIM_DATA).map(ph=>({ gameIds: ELIM_DATA[ph].games.map(g=>g.id) }))
+  ];
+  const gwr = new Set(Object.keys(res).filter(id=>_hasFullResult(res[id])));
+  let latestIdx = -1;
+  rdefs.forEach((rd,i)=>{ if(rd.gameIds.some(id=>gwr.has(id))) latestIdx=i; });
+  const deltas = {};
+  if (latestIdx > 0) {
+    const latestIds = new Set(rdefs[latestIdx].gameIds);
+    const resPrev = {};
+    Object.entries(res).forEach(([id,d])=>{ if(!latestIds.has(id)) resPrev[id]=d; });
+    computeRanking(users, resPrev, allPals, champPicks).forEach((u,i)=>{ deltas[u.uid]=i+1; });
+  }
+  return deltas;
 }
 
 // ════════════════════════════════════════════
@@ -2919,54 +2986,62 @@ async function renderDashboard() {
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false);
-    const {allPals, champPicks} = await _fetchPals(users);
-    const ranking = computeRanking(users, res, allPals, champPicks);
+
+    // ── Ranking cache path ────────────────────────────────────────────────────
+    // Se palpites NÃO estão no cache de sessão, tenta usar cache/ranking_atual
+    // (pré-calculado pelo admin ao salvar resultado) → ~50 leituras em vez de ~1500.
+    // Quando pals já está em cache de sessão (0 leituras de pals), usa caminho normal.
+    let ranking, allPals, champPicks, positionDeltas = {};
+    const _palsInCache = !!_scGet('pals');
+    const _rankCache = !_palsInCache ? await _tryRankingCache() : null;
+
+    if (_rankCache) {
+      // Cache hit: ranking pré-calculado — busca só os palpites do usuário atual
+      ranking = _rankCache.rows || [];
+      positionDeltas = _rankCache.deltas || {};
+      const [_myPSnap, _myPDoc] = await Promise.all([
+        db_.collection('palpites').doc(currentUser.uid).collection('jogos').get(),
+        db_.collection('palpites').doc(currentUser.uid).get()
+      ]);
+      _rTracker.add((_myPSnap.size || 1) + 1);
+      _dashMyPals = {};
+      _myPSnap.docs.forEach(d => { _dashMyPals[d.id] = d.data(); });
+      allPals = null;   // não disponível: distrib bars e gráfico de evolução ficam inativos
+      champPicks = {};
+    } else {
+      // Cache miss ou pals já em sessão: busca completa (caminho original)
+      const palsData = await _fetchPals(users);
+      allPals = palsData.allPals;
+      champPicks = palsData.champPicks;
+      ranking = computeRanking(users, res, allPals, champPicks);
+      _dashMyPals = allPals[currentUser.uid] || {};
+      positionDeltas = _computePositionDeltas(users, res, allPals, champPicks);
+    }
+
     _cachedRanking = ranking;
+    _cachedPositionDeltas = positionDeltas;
     const finalChampion = _getFinalChampion(res);
     const isAdminDash = currentUserDoc?.role === 'admin';
 
-    // Pré-computa distribuição do bolão para TODAS as partidas (exibida no timer só após o bloqueio).
-    // Calcula independente do estado de trava para que o timer possa injetar as barras quando o
-    // contador cruzar o limite de bloqueio, mesmo com o dashboard aberto desde antes da trava.
-    // (allPals já está em memória no cliente, então pré-computar não expõe nada novo.)
     _dashResults = Object.assign({}, res);
-    _dashMyPals   = allPals[currentUser.uid] || {};
     _applyAutoLocks(_dashResults); // verifica e grava auto-lock para jogos que já passaram das 23h
     _dashBolaoDistrib = {};
-    ALL_GAMES.forEach(g => {
-      const gPals = users.map(u => allPals[u.uid]?.[g.id]).filter(p => p && p.h !== undefined && p.a !== undefined);
-      if (!gPals.length) return;
-      const tot = gPals.length;
-      const hw = gPals.filter(p => parseInt(p.h) > parseInt(p.a)).length;
-      const dr = gPals.filter(p => parseInt(p.h) === parseInt(p.a)).length;
-      const aw = gPals.filter(p => parseInt(p.h) < parseInt(p.a)).length;
-      _dashBolaoDistrib[g.id] = { phw: Math.round(hw/tot*100), pdr: Math.round(dr/tot*100), paw: Math.round(aw/tot*100) };
-    });
+    if (allPals) {
+      // Distribuição do bolão só disponível quando allPals carregado (caminho completo)
+      ALL_GAMES.forEach(g => {
+        const gPals = users.map(u => allPals[u.uid]?.[g.id]).filter(p => p && p.h !== undefined && p.a !== undefined);
+        if (!gPals.length) return;
+        const tot = gPals.length;
+        const hw = gPals.filter(p => parseInt(p.h) > parseInt(p.a)).length;
+        const dr = gPals.filter(p => parseInt(p.h) === parseInt(p.a)).length;
+        const aw = gPals.filter(p => parseInt(p.h) < parseInt(p.a)).length;
+        _dashBolaoDistrib[g.id] = { phw: Math.round(hw/tot*100), pdr: Math.round(dr/tot*100), paw: Math.round(aw/tot*100) };
+      });
+    }
     const champRevealed = isAdminDash || CFG.campeao_locked === true || !!finalChampion;
     const maxPts = ranking[0]?.pontos||1;
     const totalJogos = Object.keys(res).filter(id=>_hasFullResult(res[id])).length;
     const myRank = ranking.findIndex(r=>r.uid===currentUser.uid)+1;
-
-    // Calcular variação de posição por rodada
-    const roundDefs = [
-      { id:'G1', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
-      { id:'G2', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
-      { id:'G3', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
-      ...Object.keys(ELIM_DATA).map(ph=>({ id:ph, gameIds: ELIM_DATA[ph].games.map(g=>g.id) }))
-    ];
-    const gamesWithRes = new Set(Object.keys(res).filter(id=>_hasFullResult(res[id])));
-    let latestRoundIdx = -1;
-    roundDefs.forEach((rd,idx)=>{ if(rd.gameIds.some(id=>gamesWithRes.has(id))) latestRoundIdx=idx; });
-    const positionDeltas = {};
-    if (latestRoundIdx > 0) {
-      const latestIds = new Set(roundDefs[latestRoundIdx].gameIds);
-      const resPrev = {};
-      Object.entries(res).forEach(([id,data])=>{ if(!latestIds.has(id)) resPrev[id]=data; });
-      // Bônus de campeão só conta na rodada que decide a final; se removemos os jogos da rodada atual,
-      // o palpite de campeão é desconsiderado naturalmente (FIN1 some, _getFinalChampion=null).
-      computeRanking(users, resPrev, allPals, champPicks).forEach((u,idx)=>{ positionDeltas[u.uid]=idx+1; });
-    }
-    _cachedPositionDeltas = positionDeltas;
 
     if (users.length === 0) {
       cont.innerHTML = `<div class="section-title">🏆 ${esc(CFG.nome_bolao)}</div>
@@ -3120,8 +3195,9 @@ async function renderDashboard() {
     <div id="evo-chart-container"></div>`;
     cont.innerHTML = html;
     _startCountdownTimer();
-    _renderEvolutionChart(ranking, allPals, res, champPicks, document.getElementById('evo-chart-container'));
-    _showNewResultsModal(res, allPals[currentUser.uid]||{});
+    // Gráfico de evolução só renderiza quando allPals disponível (caminho completo)
+    if (allPals) _renderEvolutionChart(ranking, allPals, res, champPicks, document.getElementById('evo-chart-container'));
+    _showNewResultsModal(res, _dashMyPals);
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
   }
@@ -4520,7 +4596,8 @@ async function _applyAutoLocks(res) {
     });
     await batch.commit();
     _scDel('res');
-    _bumpDataVersion();
+    await _bumpDataVersion();
+    _writeRankingCache(); // mantém cache válido após auto-lock (rev muda, ranking não)
   } catch(e) {
     console.error('_applyAutoLocks:', e);
     // Reverte para permitir nova tentativa em caso de falha transitória
@@ -7437,7 +7514,8 @@ async function saveResultado(gameId) {
     }
     await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
     _scDel('res');
-    _bumpDataVersion(); // sinaliza os outros clientes para atualizarem o ranking
+    await _bumpDataVersion(); // sinaliza os outros clientes para atualizarem o ranking
+    _writeRankingCache();     // grava ranking pré-calculado (best effort, async)
     try {
       await db_.collection('audit').add({
         type: 'resultado_save',

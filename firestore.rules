@@ -45,6 +45,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+    match /cache/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
     match /audit/{doc} {
       allow read: if isAdmin();
       allow create: if isAdmin();      // só admin escreve na auditoria
