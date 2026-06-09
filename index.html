@@ -6911,7 +6911,8 @@ async function renderAdminUso() {
     const stats = {};
     statsDocs.forEach((snap, i) => { stats[days[i]] = snap.exists ? snap.data() : {}; });
 
-    const visibleDays = days.slice(0, 7);
+    // Janela dos últimos 7 dias em ordem cronológica (mais antigo → hoje)
+    const visibleDays = days.slice(0, 7).reverse();
 
     const sorted = [...users].sort((a,b) => {
       const ta = visibleDays.reduce((s,d)=>s+(stats[d]?.[a.uid]||0),0);
@@ -6939,7 +6940,8 @@ async function renderAdminUso() {
                   ${visibleDays.map(d => {
                     const dt = new Date(d+'T12:00:00');
                     const wd = dt.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','');
-                    const md = d.slice(5).replace('-','/');
+                    const [, _mo, _da] = d.split('-');
+                    const md = `${_da}/${_mo}`;
                     const isToday = d===_spDay(0);
                     return `<th style="text-align:center;padding:8px 6px;border-bottom:1px solid var(--border);min-width:56px${isToday?';color:var(--gold)':''}">${wd}<br><span style="font-weight:400;font-size:0.72rem">${md}</span></th>`;
                   }).join('')}
