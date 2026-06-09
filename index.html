@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.5">
+<meta name="app-version" content="v1.12.6">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1457,7 +1457,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.5</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.6</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2156,6 +2156,11 @@ async function handleAuthState(user) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  // Pull-to-refresh e F5 fazem um reload; limpar o sessionStorage garante dados frescos,
+  // assim como o botão manual ↻ já fazia via refreshPage().
+  if (performance?.getEntriesByType?.('navigation')?.[0]?.type === 'reload') {
+    _scDel('res','usr','pals','indecisao');
+  }
   updatePwaInstallButton();
   // Timeout de segurança: se o loading não sumir em 20s, força auth e avisa
   const loadingFallback = setTimeout(() => {
