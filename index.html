@@ -1822,15 +1822,40 @@ function _scGet(k)        { const e=_SC[k]; return (e&&Date.now()<e.x)?e.v:null;
 function _scSet(k,v,ttl)  { _SC[k]={v,x:Date.now()+(ttl||180000)}; }
 function _scDel(...keys)  { keys.forEach(k=>delete _SC[k]); }
 
+// ── Rastreador de leituras Firebase ──────────────────────────────────────────
+// Acumula contagem em memória e faz flush para _usage_stats/{data} a cada 60s.
+const _rTracker = {
+  _pending: 0,
+  _timer: null,
+  add(n=1) {
+    this._pending += n;
+    if (!this._timer) this._timer = setTimeout(()=>{ this._timer=null; this._flush(); }, 60000);
+  },
+  async _flush() {
+    const uid = (typeof auth_!=='undefined') ? auth_?.currentUser?.uid : null;
+    if (!uid || this._pending===0) return;
+    const n=this._pending; this._pending=0;
+    const today = new Date().toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'});
+    try {
+      await db_.collection('_usage_stats').doc(today).set(
+        {[uid]: firebase.firestore.FieldValue.increment(n)}, {merge:true}
+      );
+    } catch(e) { this._pending+=n; }
+  }
+};
+window.addEventListener('beforeunload', ()=>_rTracker._flush());
+
 async function _fetchRes() {
   let r=_scGet('res'); if(r) return r;
   const snap=await db_.collection('resultados').get();
+  _rTracker.add(snap.size||1);
   r={}; snap.docs.forEach(d=>{r[d.id]=d.data();});
   _scSet('res',r,_SC_TTL.res); return r;
 }
 async function _fetchUsr() {
   let u=_scGet('usr'); if(u) return u;
   const snap=await db_.collection('usuarios').get();
+  _rTracker.add(snap.size||1);
   u=snap.docs.map(d=>({uid:d.id,...d.data()}));
   _scSet('usr',u,_SC_TTL.usr); return u;
 }
@@ -1842,6 +1867,7 @@ async function _fetchPals(users, force) {
       db_.collection('palpites').doc(u.uid).collection('jogos').get(),
       db_.collection('palpites').doc(u.uid).get()
     ]);
+    _rTracker.add((ps.size||1)+1);
     allPals[u.uid]={};
     ps.docs.forEach(d=>{allPals[u.uid][d.id]=d.data();});
     const pdata=pdoc.exists?pdoc.data():{};
@@ -1980,6 +2006,7 @@ async function handleAuthState(user) {
     currentUser = user;
     try {
       const snap = await db_.collection('usuarios').doc(user.uid).get();
+      _rTracker.add(1);
       if (!snap.exists) {
         showLoading(false); showToast('Dados não encontrados. Tente novamente.','error');
         auth_.signOut(); return;
@@ -2164,6 +2191,7 @@ async function showForgotPwd() {
 async function loadCFG() {
   try {
     const snap = await db_.collection('config').doc('geral').get();
+    _rTracker.add(1);
     if (snap.exists) CFG = { ...CFG, ...snap.data() };
     document.getElementById('bolao-nome').textContent = CFG.nome_bolao;
     const appVersion = document.getElementById('app-version');
@@ -6809,6 +6837,7 @@ function renderAdmin() {
       <button class="admin-tab" data-tab="historico" onclick="switchAdminTab('historico')">📜 Histórico</button>
       <button class="admin-tab" data-tab="export" onclick="switchAdminTab('export')">⬇️ Exportar</button>
       <button class="admin-tab" data-tab="ia" onclick="switchAdminTab('ia')">🤖 IA</button>
+      <button class="admin-tab" data-tab="uso" onclick="switchAdminTab('uso')">📊 Uso</button>
     </div>
     <div id="admin-resultados" class="admin-content active"></div>
     <div id="admin-usuarios" class="admin-content"></div>
@@ -6817,7 +6846,8 @@ function renderAdmin() {
     <div id="admin-config" class="admin-content"></div>
     <div id="admin-historico" class="admin-content"></div>
     <div id="admin-export" class="admin-content"></div>
-    <div id="admin-ia" class="admin-content"></div>`;
+    <div id="admin-ia" class="admin-content"></div>
+    <div id="admin-uso" class="admin-content"></div>`;
   renderAdminResultados();
 }
 
@@ -6856,6 +6886,97 @@ async function renderAdminIA() {
               <div class="ai-card-text">${esc(c.text||'')}</div>
             </div>`).join('')}
           </div>` : '<p style="color:var(--text-muted);font-size:0.85rem;margin-top:8px">Nenhuma análise salva ainda.</p>'}
+        </div>
+      </div>`;
+  } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
+}
+
+async function renderAdminUso() {
+  const cont = document.getElementById('admin-uso');
+  if (!cont) return;
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    function _spDay(offset) {
+      const d = new Date();
+      d.setDate(d.getDate() - offset);
+      return d.toLocaleDateString('sv-SE', {timeZone:'America/Sao_Paulo'});
+    }
+    const days = Array.from({length:14}, (_,i) => _spDay(i));
+
+    const [statsDocs, users] = await Promise.all([
+      Promise.all(days.map(d => db_.collection('_usage_stats').doc(d).get())),
+      _fetchUsr()
+    ]);
+
+    const stats = {};
+    statsDocs.forEach((snap, i) => { stats[days[i]] = snap.exists ? snap.data() : {}; });
+
+    const visibleDays = days.slice(0, 7);
+
+    const sorted = [...users].sort((a,b) => {
+      const ta = visibleDays.reduce((s,d)=>s+(stats[d]?.[a.uid]||0),0);
+      const tb = visibleDays.reduce((s,d)=>s+(stats[d]?.[b.uid]||0),0);
+      return tb-ta;
+    });
+
+    const maxVal = Math.max(1, ...sorted.flatMap(u => visibleDays.map(d => stats[d]?.[u.uid]||0)));
+    const grandTotal = sorted.reduce((s,u)=>s+visibleDays.reduce((t,d)=>t+(stats[d]?.[u.uid]||0),0),0);
+
+    cont.innerHTML = `
+      <div style="margin-top:16px">
+        <div class="card">
+          <div class="card-title">📊 Leituras Firebase por Usuário — últimos 7 dias</div>
+          <p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 14px;line-height:1.5">
+            Documentos lidos no Firestore por usuário. Leituras em cache não são contadas.
+            O plano Spark oferece 50.000 leituras/dia gratuitas.
+            Total no período: <strong style="color:var(--gold)">${grandTotal}</strong> leituras.
+          </p>
+          <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+            <table style="width:100%;border-collapse:collapse;font-size:0.82rem;min-width:420px">
+              <thead>
+                <tr style="background:rgba(255,255,255,.04)">
+                  <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)">Usuário</th>
+                  ${visibleDays.map(d => {
+                    const dt = new Date(d+'T12:00:00');
+                    const wd = dt.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','');
+                    const md = d.slice(5).replace('-','/');
+                    const isToday = d===_spDay(0);
+                    return `<th style="text-align:center;padding:8px 6px;border-bottom:1px solid var(--border);min-width:56px${isToday?';color:var(--gold)':''}">${wd}<br><span style="font-weight:400;font-size:0.72rem">${md}</span></th>`;
+                  }).join('')}
+                  <th style="text-align:center;padding:8px 8px;border-bottom:1px solid var(--border);color:var(--gold)">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sorted.map(u => {
+                  const total = visibleDays.reduce((s,d)=>s+(stats[d]?.[u.uid]||0),0);
+                  return `<tr>
+                    <td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap">${esc(u.apelido||u.nome||u.uid.slice(0,8))}</td>
+                    ${visibleDays.map(d => {
+                      const v = stats[d]?.[u.uid]||0;
+                      const pct = v/maxVal;
+                      const bg = v ? \`rgba(255,191,0,\${(0.1+pct*0.55).toFixed(2)})\` : 'transparent';
+                      const color = pct>0.6 ? '#000' : 'inherit';
+                      return \`<td style="text-align:center;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);background:\${bg};color:\${color};font-variant-numeric:tabular-nums">\${v||'—'}</td>\`;
+                    }).join('')}
+                    <td style="text-align:center;padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-weight:600;color:${total?'var(--gold)':'var(--text-muted)'}">${total||'—'}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+              <tfoot>
+                <tr style="background:rgba(255,255,255,.04)">
+                  <td style="padding:7px 10px;font-weight:600">Total/dia</td>
+                  ${visibleDays.map(d => {
+                    const t = sorted.reduce((s,u)=>s+(stats[d]?.[u.uid]||0),0);
+                    return `<td style="text-align:center;padding:7px 6px;font-weight:600;color:var(--text-muted)">${t||'—'}</td>`;
+                  }).join('')}
+                  <td style="text-align:center;padding:7px 8px;font-weight:700;color:var(--gold)">${grandTotal}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p style="font-size:0.73rem;color:var(--text-muted);margin-top:12px">
+            💡 Leituras sincronizadas a cada ~60s. Dados podem aparecer no dia seguinte se o usuário fechar o app antes da sincronização.
+          </p>
         </div>
       </div>`;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
@@ -7007,6 +7128,7 @@ function switchAdminTab(tab) {
     case 'historico': renderAdminHistorico(); break;
     case 'export': renderAdminExport(); break;
     case 'ia': renderAdminIA(); break;
+    case 'uso': renderAdminUso(); break;
   }
 }
 
@@ -8926,10 +9048,19 @@ function isStandalonePwa() {
 }
 
 function updatePwaInstallButton() {
-  if (!isMobileClient() || isStandalonePwa()) return;
+  const standalone = isStandalonePwa();
+  const mobile = isMobileClient();
 
-  // Card na tela de login
+  // Nunca mostra se já usa como PWA instalado ou se está no desktop/computador
+  const footer = document.getElementById('btn-install-pwa-footer');
   const card = document.getElementById('pwa-card');
+  if (standalone || !mobile) {
+    if (footer) footer.hidden = true;
+    if (card) card.style.display = 'none';
+    return;
+  }
+
+  // Card na tela de login (mobile browser)
   if (card) {
     card.style.display = 'block';
     const androidSec = document.getElementById('pwa-android');
@@ -8945,10 +9076,9 @@ function updatePwaInstallButton() {
     }
   }
 
-  // Botão no footer (usuário logado)
-  const footer = document.getElementById('btn-install-pwa-footer');
+  // Botão no footer: mostra se há prompt disponível (Android) ou se é iOS (exibe instrução)
   if (footer) {
-    footer.hidden = false;
+    footer.hidden = !(deferredPwaPrompt || isIOS());
   }
 }
 
