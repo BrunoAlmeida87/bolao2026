@@ -745,6 +745,32 @@ body.light-theme .mais-sheet a.active{color:var(--accent)}
     font-size:0.7rem;color:var(--text-muted);margin:0 0 6px;
     opacity:.85;font-weight:600;
   }
+  /* ── PAINEL ADMIN (mobile) ───────────────────────────────────────────── */
+  /* Abas: barra horizontal rolável em vez de estourar a largura da tela. */
+  .admin-tabs{
+    gap:4px;margin-bottom:16px;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+    flex-wrap:nowrap;scrollbar-width:none;
+  }
+  .admin-tabs::-webkit-scrollbar{display:none}
+  .admin-tab{
+    flex:0 0 auto;white-space:nowrap;
+    padding:9px 12px;font-size:0.8rem;min-height:40px;
+  }
+  /* Conteúdo das abas nunca ultrapassa a largura disponível.
+     'clip' (não 'hidden') evita criar contexto de rolagem — preserva o
+     position:sticky da barra de atualização na aba Resultados. */
+  .admin-content{max-width:100%;overflow-x:clip}
+  .admin-content .card{overflow-wrap:break-word}
+  /* Tabelas largas (Uso, etc.) rolam dentro do próprio wrapper. */
+  .admin-content table{max-width:100%}
+  .admin-content pre{max-width:100%;overflow-x:auto}
+  /* Botão de propagação ocupa a largura toda para virar alvo de toque fácil. */
+  .admin-content .card .btn-primary{min-height:42px}
+  /* Cards de prêmio: 3 colunas ficam apertadas — passa a 1 por linha. */
+  .admin-content .prize-card{padding:12px 8px}
+  /* Cabeçalho do jogo nas linhas de resultado não empurra os inputs. */
+  .admin-phase-header{font-size:0.88rem;padding:9px 12px}
 }
 
 /* Breakpoint intermediário: tablets / celulares grandes / dobráveis (item 8) */
