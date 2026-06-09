@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.4">
+<meta name="app-version" content="v1.12.5">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1457,7 +1457,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.4</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.5</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2042,7 +2042,11 @@ async function _writeRankingCache() {
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u => u.ativo !== false);
-    const {allPals, champPicks} = await _fetchPals(users);
+    // force=true: lê palpites frescos do Firestore. Sem isso, se o cache de
+    // sessão do admin estiver desatualizado (TTL 20min) e alguém tiver mudado
+    // um palpite/campeão nesse intervalo, o cache compartilhado seria publicado
+    // com dados velhos e todos os clientes em cache-hit veriam pontos errados.
+    const {allPals, champPicks} = await _fetchPals(users, true);
     // Lê rev DEPOIS do bump para garantir que o cache aponte para a versão nova
     const vSnap = await db_.collection('config').doc('version').get();
     _rTracker.add(1);
@@ -3040,7 +3044,19 @@ async function renderDashboard() {
     // Quando pals já está em cache de sessão (0 leituras de pals), usa caminho normal.
     let ranking, allPals, champPicks, positionDeltas = {};
     const _palsInCache = !!_scGet('pals');
-    const _rankCache = !_palsInCache ? await _tryRankingCache() : null;
+    let _rankCache = !_palsInCache ? await _tryRankingCache() : null;
+
+    // O cache é versionado apenas pelo 'rev' de resultados. Mudanças que NÃO
+    // alteram esse rev — novo cadastro, desativação de usuário ou renomeação de
+    // apelido/nome — deixariam o cache inconsistente (ex.: usuário recém-criado
+    // sumindo do ranking). Se o conjunto de participantes divergir da lista
+    // atual, descarta o cache e recalcula do zero.
+    if (_rankCache) {
+      const _sig = x => `${x.uid}:${x.apelido||''}:${x.nome||''}`;
+      const cachedSig = new Set((_rankCache.rows||[]).map(_sig));
+      const sameUsers = cachedSig.size === users.length && users.every(u => cachedSig.has(_sig(u)));
+      if (!sameUsers) _rankCache = null;
+    }
 
     if (_rankCache) {
       // Cache hit: ranking pré-calculado — busca só os palpites do usuário atual
@@ -8473,6 +8489,12 @@ async function saveCFGAdmin() {
     await db_.collection('config').doc('geral').set(cfg, {merge:true});
     CFG = { ...CFG, ...cfg };
     document.getElementById('bolao-nome').textContent = nome;
+    // A pontuação afeta o ranking, mas não passa pelo fluxo de resultados.
+    // Bump da versão (invalida o cache atual nos clientes) + reescrita do
+    // cache já com a nova pontuação, evitando standings calculados com
+    // valores antigos até o próximo resultado.
+    await _bumpDataVersion();
+    _writeRankingCache();
     showToast('✅ Configurações salvas!','success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
