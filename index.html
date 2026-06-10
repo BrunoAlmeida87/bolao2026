@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.9">
+<meta name="app-version" content="v1.12.10">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1316,7 +1316,8 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
         <li><strong style="color:var(--white)">Apenas o Vencedor</strong> → pontuação básica</li>
         <li><strong style="color:var(--white)">Palpite de Campeão</strong> → bônus especial ao acertar o campeão</li>
         <li>Palpites são bloqueados pelo admin pouco antes de cada jogo</li>
-        <li>Desempate: exatos → vencedor+saldo → vencedor</li>
+        <li>Desempate: exatos → vencedor+saldo → vencedor → acertou o campeão</li>
+        <li>Empate total persiste? O prêmio das posições é dividido igualmente</li>
       </ul>
     </div>
 
@@ -1488,7 +1489,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.9</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.10</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2583,7 +2584,9 @@ function computeRanking(users, resultados, allPalpites, championPicks={}) {
       pontos += bonusCampeao;
       return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros, campeao: userChampion, bonus_campeao: bonusCampeao, acertou_campeao: acertouCampeao };
     })
-    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
+    // Desempate: pontos → exatos → venc+saldo → vencedor → acertou o campeão.
+    // Persistindo o empate em todos os critérios, o prêmio é dividido (ver Regras).
+    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc||((b.acertou_campeao?1:0)-(a.acertou_campeao?1:0)));
 }
 
 // Retorna mapa uid→posição_anterior (usada para setas ↑↓ no ranking).
@@ -4159,7 +4162,13 @@ function renderRegras() {
           <li><strong style="color:var(--white)">Mais placares exatos</strong></li>
           <li><strong style="color:var(--white)">Mais acertos de vencedor + saldo</strong></li>
           <li><strong style="color:var(--white)">Mais acertos de apenas vencedor</strong></li>
+          <li><strong style="color:var(--white)">Acertou o palpite de campeão</strong></li>
         </ol>
+        <p class="text-muted" style="font-size:0.85rem;margin-top:12px;line-height:1.7">
+          🤝 Se mesmo assim o empate persistir em <strong style="color:var(--white)">todos</strong> os critérios,
+          o valor das posições empatadas é <strong style="color:var(--white)">somado e dividido igualmente</strong>
+          entre os participantes empatados.
+        </p>
       </div>
 
       <div class="card">

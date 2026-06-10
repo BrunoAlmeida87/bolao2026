@@ -297,6 +297,9 @@ function calcPontos(palpite, resultado) {
 2. Número de placares exatos (DESC)
 3. Número de acertos com vencedor+saldo (DESC)
 4. Número de acertos com apenas vencedor (DESC)
+5. Acertou o palpite de campeão (quem acertou fica à frente)
+
+> Se o empate persistir em **todos** os critérios, o valor das posições empatadas é somado e **dividido igualmente** entre os participantes empatados.
 
 ---
 
