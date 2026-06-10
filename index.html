@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.11">
+<meta name="app-version" content="v1.12.12">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1496,7 +1496,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.11</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.12</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -8671,6 +8671,25 @@ function renderAdminHistorico() {
         <span id="hist-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
       </div>
       <div id="hist-result"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">🕵️ Verificação de Integridade</span></div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
+        Compara o <b>updateTime real do servidor</b> de cada palpite (carimbo do Firestore,
+        impossível de falsificar pelo navegador) com o <b>prazo regulamentar</b> do jogo
+        (22h de Brasília da véspera, considerando date/time override). Detecta gravações
+        feitas <b>por fora do app</b> (ex.: console do navegador), mesmo sem registro no histórico.
+        Jogos liberados manualmente (override) são ignorados. Custo: ~1 leitura por participante
+        (jogo único) ou ~1 leitura por palpite existente (todos os jogos).
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" onclick="integLoadGames()">🎮 Carregar jogos bloqueados</button>
+        <select id="integ-game-select" style="display:none;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--white);border:1px solid var(--border);font-size:0.85rem;min-width:220px"></select>
+        <button id="integ-run-game" class="btn btn-primary btn-sm" style="display:none" onclick="integRun('game')">🔍 Verificar este jogo</button>
+        <button id="integ-run-all" class="btn btn-primary btn-sm" style="display:none" onclick="integRun('all')">🌐 Verificar todos os bloqueados</button>
+        <span id="integ-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
+      </div>
+      <div id="integ-result"></div>
     </div>`;
 }
 
@@ -8766,6 +8785,207 @@ async function histApagarHistorico() {
     if (out) out.innerHTML = `<div class="alert alert-info">Histórico de <b>${esc(uname)}</b> apagado com sucesso (${total} registros).</div>`;
   } catch(e) {
     if (status) status.textContent = 'Erro: ' + errMsg(e);
+  }
+}
+
+// ════════════════════════════════════════════
+// VERIFICAÇÃO DE INTEGRIDADE (Admin → Histórico)
+// ════════════════════════════════════════════
+// O SDK web não expõe o updateTime dos documentos, mas a API REST do Firestore
+// expõe — e esse carimbo é mantido pelo SERVIDOR, impossível de falsificar pelo
+// cliente. Comparando-o com o prazo regulamentar do jogo, detectamos palpites
+// gravados após o bloqueio (ex.: direto pelo console), mesmo sem registro no
+// histórico do app.
+const _INTEG_GRACE_MS = 2 * 60000; // tolerância p/ relógio do dispositivo no onblur
+
+async function _fsRestGet(path) {
+  const token = await auth_.currentUser.getIdToken();
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/${path}`;
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('Firestore REST: HTTP ' + r.status);
+  return r.json();
+}
+async function _fsRestListJogos(uid) {
+  let docs = [], pageToken = '';
+  do {
+    const q = `palpites/${uid}/jogos?pageSize=300` + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '');
+    const j = await _fsRestGet(q);
+    if (j && j.documents) docs = docs.concat(j.documents);
+    pageToken = (j && j.nextPageToken) || '';
+  } while (pageToken);
+  return docs;
+}
+function _fsVal(f) {
+  if (!f) return undefined;
+  if ('integerValue' in f) return parseInt(f.integerValue);
+  if ('doubleValue' in f) return f.doubleValue;
+  if ('stringValue' in f) return f.stringValue;
+  if ('booleanValue' in f) return f.booleanValue;
+  return undefined;
+}
+function _fmtBRT(d) {
+  return d ? d.toLocaleString('pt-BR', { timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+}
+function _fmtAtraso(ms) {
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `+${m}min`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `+${h}h ${String(m % 60).padStart(2,'0')}min`;
+  return `+${Math.floor(h / 24)}d ${h % 24}h`;
+}
+// Jogos auditáveis: fechados para palpite e sem liberação manual (override).
+function _integClosedGames(res) {
+  return ALL_GAMES
+    .filter(g => (res[g.id]?.unlock_override !== true) && isPalpiteClosed(g, res[g.id] || {}) && _gameLockInstant(g, res[g.id] || {}))
+    .sort((a,b) => _parseGameDate(a.date) - _parseGameDate(b.date));
+}
+
+async function integLoadGames() {
+  const sel = document.getElementById('integ-game-select');
+  const status = document.getElementById('integ-status');
+  if (status) status.textContent = 'Carregando jogos…';
+  try {
+    const res = await _fetchRes();
+    const closed = _integClosedGames(res);
+    if (!closed.length) { if (status) status.textContent = 'Nenhum jogo bloqueado até agora.'; return; }
+    sel.innerHTML = closed.map(g =>
+      `<option value="${esc(g.id)}">${esc(g.id)} — ${esc(g.h)} × ${esc(g.a)} (${esc(g.date||'')})</option>`).join('');
+    sel.style.display = '';
+    document.getElementById('integ-run-game').style.display = '';
+    document.getElementById('integ-run-all').style.display = '';
+    if (status) status.textContent = `${closed.length} jogo(s) bloqueado(s) disponíveis.`;
+  } catch(e) { if (status) status.textContent = 'Erro: ' + errMsg(e); }
+}
+
+async function integRun(mode) {
+  const out = document.getElementById('integ-result');
+  const status = document.getElementById('integ-status');
+  const btns = ['integ-run-game','integ-run-all'].map(id => document.getElementById(id));
+  btns.forEach(b => { if (b) b.disabled = true; });
+  if (status) status.textContent = 'Verificando… (consultando carimbos do servidor)';
+  if (out) out.innerHTML = '';
+  try {
+    const [users0, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = users0.filter(u => u.ativo !== false);
+    const gamesById = {}; ALL_GAMES.forEach(g => { gamesById[g.id] = g; });
+
+    let games;
+    if (mode === 'game') {
+      const gid = document.getElementById('integ-game-select')?.value;
+      games = gid && gamesById[gid] ? [gamesById[gid]] : [];
+    } else {
+      games = _integClosedGames(res);
+    }
+    if (!games.length) { if (status) status.textContent = 'Nenhum jogo para verificar.'; return; }
+    const gameSet = new Set(games.map(g => g.id));
+
+    // Coleta {usuário, jogo, doc REST} — doc traz updateTime/createTime do servidor.
+    const entries = [];
+    if (mode === 'game') {
+      const gid = games[0].id;
+      await Promise.all(users.map(async u => {
+        const d = await _fsRestGet(`palpites/${u.uid}/jogos/${gid}`);
+        _rTracker.add(1);
+        if (d) entries.push({ u, gid, doc: d });
+      }));
+    } else {
+      await Promise.all(users.map(async u => {
+        const docs = await _fsRestListJogos(u.uid);
+        _rTracker.add(docs.length || 1);
+        docs.forEach(d => {
+          const gid = d.name.split('/').pop();
+          if (gameSet.has(gid)) entries.push({ u, gid, doc: d });
+        });
+      }));
+    }
+
+    // Avalia: updateTime do servidor vs prazo do jogo.
+    let checked = 0;
+    const flags = [];
+    entries.forEach(({ u, gid, doc }) => {
+      const game = gamesById[gid];
+      const r = res[gid] || {};
+      const deadline = _gameLockInstant(game, r);
+      if (!deadline) return;
+      checked++;
+      const ut = new Date(doc.updateTime);
+      const diff = ut.getTime() - deadline.getTime();
+      if (diff <= 0) return; // gravado dentro do prazo — limpo
+      flags.push({
+        u, game, gid, ut, deadline, diff,
+        created: doc.createTime ? new Date(doc.createTime) : null,
+        adminEdited: !!(doc.fields && doc.fields.editedByAdmin),
+        h: _fsVal(doc.fields?.h), a: _fsVal(doc.fields?.a)
+      });
+    });
+
+    // Cruza com o histórico do app: gravação legítima deixa registro com o
+    // mesmo placar próximo do mesmo horário; console não deixa.
+    await Promise.all(flags.map(async f => {
+      try {
+        const snap = await db_.collection('palpites').doc(f.u.uid).collection('historico')
+          .where('gameId','==',f.gid).get();
+        _rTracker.add(snap.size || 1);
+        const logs = snap.docs.map(d => d.data())
+          .filter(x => x.at && x.at.toDate)
+          .sort((a,b) => b.at.toMillis() - a.at.toMillis());
+        f.hasLogs = logs.length > 0;
+        const last = logs[0] || null;
+        f.lastLogAt = last ? last.at.toDate() : null;
+        f.logMatch = !!(last && last.action === 'set'
+          && parseInt(last.h) === parseInt(f.h) && parseInt(last.a) === parseInt(f.a)
+          && Math.abs(last.at.toMillis() - f.ut.getTime()) < 5 * 60000);
+      } catch(_) { f.hasLogs = null; f.logMatch = null; }
+    }));
+
+    // Render
+    const totalLabel = mode === 'game'
+      ? `jogo ${esc(games[0].id)} (${esc(games[0].h)} × ${esc(games[0].a)})`
+      : `${games.length} jogo(s) bloqueado(s)`;
+    if (!flags.length) {
+      if (out) out.innerHTML = `<div class="alert alert-info" style="border-color:rgba(0,200,81,.4)">✅ <b>Tudo limpo.</b> ${checked} palpite(s) verificados em ${totalLabel} — nenhuma gravação após o prazo.</div>`;
+      if (status) status.textContent = `${checked} palpites verificados.`;
+      return;
+    }
+    flags.sort((a,b) => b.diff - a.diff);
+    const rows = flags.map(f => {
+      let origem, cor;
+      if (f.adminEdited)        { origem = 'ℹ️ Edição de admin (registrada no audit)'; cor = 'var(--accent)'; }
+      else if (f.hasLogs === false) { origem = '🚨 Fora do app — nenhum registro no histórico'; cor = 'var(--red)'; }
+      else if (f.logMatch === false){ origem = '🚨 Fora do app — gravação final sem registro correspondente'; cor = 'var(--red)'; }
+      else if (f.logMatch === true) { origem = '⚠️ Via app, mas após o prazo (relógio do aparelho?)'; cor = 'var(--orange)'; }
+      else                      { origem = '❓ Histórico inacessível — verificar manualmente'; cor = 'var(--orange)'; }
+      const sev = f.diff <= _INTEG_GRACE_MS ? '⚠️' : '🚩';
+      return `<tr>
+        <td style="font-weight:600">${sev} ${esc(f.u.apelido || f.u.nome || f.u.uid)}</td>
+        <td style="white-space:nowrap">${esc(f.gid)} · ${esc(f.game.h.split(' ')[0])} × ${esc(f.game.a.split(' ')[0])}</td>
+        <td style="text-align:center">${f.h ?? '?'}–${f.a ?? '?'}</td>
+        <td style="white-space:nowrap">${_fmtBRT(f.deadline)}</td>
+        <td style="white-space:nowrap;font-weight:600">${_fmtBRT(f.ut)}</td>
+        <td style="white-space:nowrap;color:${cor};font-weight:700">${_fmtAtraso(f.diff)}</td>
+        <td style="font-size:0.78rem;color:${cor}">${origem}</td>
+      </tr>`;
+    }).join('');
+    if (out) out.innerHTML = `
+      <div class="alert alert-error" style="margin-bottom:10px">🚩 <b>${flags.length}</b> gravação(ões) após o prazo em ${checked} palpite(s) verificados (${totalLabel}).</div>
+      <div style="overflow:auto;border:1px solid var(--border);border-radius:8px">
+      <table class="ranking-table" style="font-size:0.8rem;min-width:760px">
+        <thead><tr><th style="text-align:left">Participante</th><th style="text-align:left">Jogo</th><th>Palpite</th><th>Prazo (BRT)</th><th>Gravado em (BRT)</th><th>Atraso</th><th style="text-align:left">Origem provável</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;line-height:1.5">
+        ⚠️ dentro de 2min do prazo pode ser relógio atrasado no onblur (tolerância) ·
+        O carimbo "Gravado em" é o <b>updateTime do servidor Firestore</b> da última escrita —
+        se você (admin) editar o palpite depois, o carimbo anterior é sobrescrito; rode a
+        verificação <b>antes</b> de corrigir qualquer palpite.
+      </div>`;
+    if (status) status.textContent = `${checked} palpites verificados — ${flags.length} alerta(s).`;
+  } catch(e) {
+    if (status) status.textContent = 'Erro: ' + errMsg(e);
+    if (out) out.innerHTML = `<div class="alert alert-error">Erro na verificação: ${esc(errMsg(e))}</div>`;
+  } finally {
+    btns.forEach(b => { if (b) b.disabled = false; });
   }
 }
 
