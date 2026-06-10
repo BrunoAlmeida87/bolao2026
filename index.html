@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.8">
+<meta name="app-version" content="v1.12.9">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1488,7 +1488,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.8</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.9</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -7768,6 +7768,11 @@ async function toggleLock(gameId) {
     if (next==='auto') { patch.locked = FV.delete();   patch.unlock_override = FV.delete(); }
     await db_.collection('resultados').doc(gameId).set(patch, {merge:true});
     _scDel('res');
+    // Bloquear um jogo o torna visível para todos em "Ver Todos". Reescreve o
+    // snapshot (com palpites frescos) e avisa os outros clientes, para que a
+    // visualização liberada mostre os palpites atuais — e não os do último cache.
+    await _bumpDataVersion();
+    _writeRankingCache();
     try {
       await db_.collection('audit').add({
         type: 'lock_state', gameId, state: next,
@@ -8614,6 +8619,11 @@ async function massLock(phase, lock) {
     const batch = db_.batch();
     games.forEach(g=>{ batch.set(db_.collection('resultados').doc(g.id),{locked:lock},{merge:true}); });
     await batch.commit();
+    _scDel('res');
+    // Reescreve o snapshot com palpites frescos e sinaliza os clientes — assim a
+    // visualização liberada pelo bloqueio mostra os palpites atuais.
+    await _bumpDataVersion();
+    _writeRankingCache();
     showToast(`✅ ${games.length} jogos ${lock?'bloqueados':'desbloqueados'}!`,'success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
