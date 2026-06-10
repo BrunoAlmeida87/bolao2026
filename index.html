@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.7">
+<meta name="app-version" content="v1.12.8">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1488,7 +1488,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.7</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.8</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -1983,6 +1983,39 @@ async function _fetchPals(users, force) {
   const data={allPals,champPicks};
   _scSet('pals',data,_SC_TTL.pals); return data;
 }
+// Versão econômica para páginas só-leitura (Ver Todos, Estatísticas, Perfil, H2H).
+// Ordem de preferência:
+//  1) cache de sessão 'pals' (0 leituras) — dado mais fresco quando presente;
+//  2) snapshot embutido em cache/ranking_atual (1 leitura) — pré-calculado pelo
+//     admin ao lançar resultado, com os palpites de todos os participantes;
+//  3) busca completa _fetchPals (~N×104 leituras) — só quando não há snapshot
+//     válido OU ele não cobre todos os participantes atuais.
+// O snapshot só é aceito se o 'rev' bate com a versão atual (validado em
+// _tryRankingCache) e se contém TODOS os uids pedidos — caso contrário cai no
+// fallback, garantindo que nenhum participante novo apareça sem palpites.
+async function _fetchPalsCached(users) {
+  const cached = _scGet('pals'); if (cached) return cached;
+  try {
+    const rc = await _tryRankingCache();
+    const snap = rc && rc.pals;
+    if (snap && snap.allPals && (users||[]).every(u => snap.allPals[u.uid] !== undefined)) {
+      // Clona para não mutar o objeto do cache de ranking em memória.
+      const allPals = {}; Object.keys(snap.allPals).forEach(uid => { allPals[uid] = snap.allPals[uid] || {}; });
+      const champPicks = Object.assign({}, snap.champPicks || {});
+      // Sobrepõe os dados ao vivo do próprio usuário (o snapshot pode ser de um
+      // lançamento anterior; o usuário deve sempre ver os próprios palpites atuais).
+      const uid = currentUser?.uid;
+      if (uid) {
+        if (_dashMyPals && Object.keys(_dashMyPals).length) allPals[uid] = Object.assign({}, _dashMyPals);
+        if (typeof myChampion !== 'undefined' && myChampion != null) champPicks[uid] = myChampion;
+      }
+      const data = { allPals, champPicks };
+      _scSet('pals', data, _SC_TTL.pals); // popula sessão → próximas páginas: 0 leituras
+      return data;
+    }
+  } catch(_) { /* qualquer falha → fallback seguro */ }
+  return _fetchPals(users);
+}
 // ─────────────────────────────────────────────────────────────────────────────
 let saveDebounce = {};
 let isLoadingPage = false;
@@ -2094,8 +2127,15 @@ async function _writeRankingCache() {
       acertou_campeao: u.acertou_campeao || false,
       campeao: u.campeao || null
     }));
+    // Persiste também o detalhe dos palpites (allPals/champPicks) já carregado
+    // acima. Isso permite que as páginas pesadas (Ver Todos, Estatísticas, Perfil,
+    // H2H) leiam 1 documento em vez de re-buscar ~N×104 docs de palpites.
+    // Limite do Firestore: 1 MiB/doc. ~140 KB para 30 participantes, ~235 KB para
+    // 50 — com folga. Acima de 80 participantes o snapshot é omitido (fallback
+    // para a busca completa) para não arriscar estourar o limite do documento.
+    const palsSnapshot = users.length <= 80 ? { allPals, champPicks } : null;
     await db_.collection('cache').doc('ranking_atual').set({
-      rev, rows, deltas,
+      rev, rows, deltas, pals: palsSnapshot,
       at: firebase.firestore.FieldValue.serverTimestamp()
     });
   } catch(e) { console.warn('[bolao] _writeRankingCache:', e.message); }
@@ -3107,6 +3147,18 @@ async function renderDashboard() {
       _myPSnap.docs.forEach(d => { _dashMyPals[d.id] = d.data(); });
       allPals = null;   // não disponível: distrib bars e gráfico de evolução ficam inativos
       champPicks = {};
+      // Aquece o cache de sessão 'pals' com o snapshot já contido no documento de
+      // ranking (0 leituras extras), com os palpites do usuário atual sobrepostos
+      // ao vivo. Assim, navegar para Ver Todos/Estatísticas/Perfil/H2H em seguida
+      // não gera nenhuma leitura adicional de palpites.
+      if (_rankCache.pals && _rankCache.pals.allPals && !_scGet('pals')) {
+        const sAll = {}; Object.keys(_rankCache.pals.allPals).forEach(k => { sAll[k] = _rankCache.pals.allPals[k] || {}; });
+        sAll[currentUser.uid] = Object.assign({}, _dashMyPals);
+        const sChamp = Object.assign({}, _rankCache.pals.champPicks || {});
+        const _myChamp = _myPDoc.exists ? (_myPDoc.data()?.campeao ?? null) : null;
+        if (_myChamp != null) sChamp[currentUser.uid] = _myChamp;
+        _scSet('pals', { allPals: sAll, champPicks: sChamp }, _SC_TTL.pals);
+      }
     } else {
       // Cache miss ou pals já em sessão: busca completa (caminho original)
       const palsData = await _fetchPals(users);
@@ -4434,7 +4486,7 @@ async function renderVerTodos() {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false)
       .sort((a,b)=>a.apelido.localeCompare(b.apelido));
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPalsCached(users);
     const finalChampion = _getFinalChampion(res);
     const isAdminView = currentUserDoc?.role === 'admin';
     const champRevealed = isAdminView || CFG.campeao_locked === true || !!finalChampion;
@@ -4886,7 +4938,7 @@ async function openUserProfile(uid) {
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false);
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPalsCached(users);
     const user = users.find(u=>u.uid===uid);
     if (!user) { cont.innerHTML='<div class="alert alert-error" style="margin:20px">Usuário não encontrado.</div>'; return; }
 
@@ -5696,7 +5748,7 @@ async function renderEstatisticas() {
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false);
-    const {allPals, champPicks} = await _fetchPals(users);
+    const {allPals, champPicks} = await _fetchPalsCached(users);
 
     // Carrega AI insights (1 leitura, sem cache — admin pode atualizar a qualquer momento)
     if (!_aiInsightsCache) {
@@ -9610,7 +9662,7 @@ async function openH2HPicker(uid1) {
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u => u.ativo !== false);
-    const { allPals, champPicks } = await _fetchPals(users);
+    const { allPals, champPicks } = await _fetchPalsCached(users);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const others = ranking.filter(u => u.uid !== uid1);
 
@@ -9650,7 +9702,7 @@ async function openH2H(uid1, uid2) {
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u => u.ativo !== false);
-    const { allPals, champPicks } = await _fetchPals(users);
+    const { allPals, champPicks } = await _fetchPalsCached(users);
     _renderH2HContent(uid1, uid2, users, allPals, res, champPicks, cont);
   } catch (e) {
     cont.innerHTML = `<div class="alert alert-error" style="margin:20px">Erro: ${esc(errMsg(e))}</div>`;
