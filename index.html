@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.10">
+<meta name="app-version" content="v1.12.11">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -211,6 +211,13 @@ select option{background:var(--mid-blue);color:var(--white)}
 }
 .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .card-title{font-size:1.05rem;color:var(--gold);font-weight:700;display:flex;align-items:center;gap:8px}
+.stat-share-btn{
+  position:absolute;top:8px;right:8px;z-index:2;
+  background:none;border:1px solid var(--border);border-radius:8px;
+  font-size:0.85rem;line-height:1;padding:4px 7px;cursor:pointer;
+  opacity:.5;transition:opacity .15s,border-color .15s;
+}
+.stat-share-btn:hover{opacity:1;border-color:var(--gold)}
 .section-title{
   font-size:1.1rem;font-weight:800;color:var(--white);
   margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid var(--border);
@@ -1489,7 +1496,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.10</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.11</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -5637,9 +5644,9 @@ function _renderIndecisaoCard(indecisao, uid) {
   } catch(_) { return ''; }
 }
 
-async function calcJogosIndicisos() {
-  const btn = document.getElementById('jogos-indicisos-btn');
-  const out = document.getElementById('jogos-indicisos-result');
+async function calcJogosIndecisos() {
+  const btn = document.getElementById('jogos-indecisos-btn');
+  const out = document.getElementById('jogos-indecisos-result');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Calculando…'; }
   try {
     const users = (await _fetchUsr()).filter(u => u.ativo !== false);
@@ -5901,9 +5908,14 @@ async function renderEstatisticas() {
         }
 
         // Participation
-        const _withPal = users.filter(u => { const p=allPals[u.uid]?.[game.id]; return p&&p.h!==undefined&&p.a!==undefined; }).length;
-        const _pending = users.length - _withPal;
+        const _pendingUsers = users.filter(u => { const p=allPals[u.uid]?.[game.id]; return !(p&&p.h!==undefined&&p.a!==undefined); });
+        const _pending = _pendingUsers.length;
+        const _withPal = users.length - _pending;
         const _pct = users.length > 0 ? Math.round(_withPal / users.length * 100) : 0;
+        // Com 5 pendentes ou menos, mostra quem ainda não palpitou (apelidos).
+        const _pendingNamesHtml = (_pending > 0 && _pending <= 5)
+          ? '<div style="margin-top:8px;font-size:0.74rem;color:var(--orange);line-height:1.5">⏳ Falta(m) palpitar: <b>' + _pendingUsers.map(u=>esc(u.apelido||u.nome||'?')).join('</b>, <b>') + '</b></div>'
+          : '';
 
         // Labels
         const _gKey = Object.keys(GRUPOS_DATA).find(k => GRUPOS_DATA[k].games.some(gm => gm.id === game.id));
@@ -6020,6 +6032,7 @@ async function renderEstatisticas() {
           + '<div style="font-size:0.65rem;color:var(--text-muted)">Participação</div>'
           + '</div>'
           + '</div>'
+          + _pendingNamesHtml
           + _postLock
           + '</div>';
       }).join('');
@@ -6471,13 +6484,13 @@ async function renderEstatisticas() {
 
     // ── Jogos que mais geraram mudanças — sob demanda ──
     html += `<div class="card">
-      <div class="card-title">🔄 Jogos Mais Indicisos do Bolão</div>
+      <div class="card-title">🔄 Jogos Mais Indecisos do Bolão</div>
       <div style="font-size:0.82rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.5">
         Quais partidas fizeram o bolão mais mudar de ideia? Conta todas as re-edições de palpite por jogo.
         Calculado <b>sob demanda</b> — mesma leitura do histórico do "Mais Indeciso".
       </div>
-      <button class="btn btn-primary btn-sm" id="jogos-indicisos-btn" onclick="calcJogosIndicisos()">📊 Calcular</button>
-      <div id="jogos-indicisos-result" style="margin-top:12px"></div>
+      <button class="btn btn-primary btn-sm" id="jogos-indecisos-btn" onclick="calcJogosIndecisos()">📊 Calcular</button>
+      <div id="jogos-indecisos-result" style="margin-top:12px"></div>
     </div>`;
 
     // ── Mapa de calor visual (grade triangular) ──
@@ -6754,6 +6767,7 @@ async function renderEstatisticas() {
     }
 
     cont.innerHTML = html;
+    _addStatShareButtons(cont); // botão 📸 de compartilhar imagem em cada card
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
@@ -9351,6 +9365,58 @@ function _fallbackDownload(blob, filename) {
   const a = document.createElement('a');
   a.href=url; a.download=filename; a.click();
   setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+
+// ── Compartilhar cards de estatística como imagem ────────────────────────────
+// html2canvas carregado por demanda do CDN (mesmo padrão do SheetJS): só quem
+// clica em 📸 baixa a biblioteca (~45 KB gzip).
+let _h2cPromise = null;
+function _loadHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve();
+  if (_h2cPromise) return _h2cPromise;
+  _h2cPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = resolve;
+    s.onerror = () => { _h2cPromise = null; reject(new Error('Falha ao carregar o gerador de imagem. Verifique sua conexão.')); };
+    document.head.appendChild(s);
+  });
+  return _h2cPromise;
+}
+
+async function shareStatCard(btn) {
+  const card = btn.closest('.card');
+  if (!card) return;
+  const prevTxt = btn.textContent;
+  try {
+    btn.disabled = true; btn.textContent = '⏳';
+    await _loadHtml2Canvas();
+    btn.style.visibility = 'hidden'; // não aparece na imagem capturada
+    const bg = getComputedStyle(document.body).backgroundColor || '#0A1628';
+    const canvas = await html2canvas(card, { scale: 2, backgroundColor: bg, useCORS: true });
+    const title = (card.querySelector('.card-title')?.textContent || 'Estatística').trim();
+    await _downloadOrShareCanvas(canvas, 'bolao-estatistica.png', `📊 ${title} — ${CFG.nome_bolao || 'Bolão ICN Copa 2026'}`);
+  } catch(e) {
+    showToast('Erro ao gerar imagem: ' + (e.message || e), 'error');
+  } finally {
+    btn.style.visibility = ''; btn.disabled = false; btn.textContent = prevTxt;
+  }
+}
+
+// Injeta o botão 📸 em todos os .card de um container (página de Estatísticas).
+function _addStatShareButtons(cont) {
+  if (!cont) return;
+  cont.querySelectorAll('.card').forEach(card => {
+    if (card.querySelector('.stat-share-btn')) return;
+    if (!card.style.position) card.style.position = 'relative';
+    const b = document.createElement('button');
+    b.className = 'stat-share-btn';
+    b.type = 'button';
+    b.title = 'Compartilhar este card como imagem';
+    b.textContent = '📸';
+    b.onclick = () => shareStatCard(b);
+    card.appendChild(b);
+  });
 }
 function isIOS() {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent||'');
