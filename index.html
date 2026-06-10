@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.6">
+<meta name="app-version" content="v1.12.7">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -234,6 +234,37 @@ select option{background:var(--mid-blue);color:var(--white)}
 }
 .stat-card .val{font-size:1.8rem;font-weight:800;color:var(--gold)}
 .stat-card .lbl{font-size:0.72rem;color:var(--text-muted);margin-top:2px}
+
+/* ══════════════════════════════════════════
+   DASHBOARD KPI CARDS
+══════════════════════════════════════════ */
+.dash-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+.dash-kpi{
+  background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:14px;padding:16px 10px 14px;text-align:center;
+  position:relative;overflow:hidden;
+}
+.dash-kpi::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;
+}
+.dash-kpi.kpi-pos::after{background:var(--accent)}
+.dash-kpi.kpi-pts::after{background:var(--gold)}
+.dash-kpi.kpi-games::after{background:var(--green)}
+.dash-kpi.kpi-gap::after{background:var(--orange)}
+.dash-kpi.kpi-gap.kpi-leader::after{background:var(--gold)}
+.dash-kpi-icon{font-size:1.15rem;line-height:1;margin-bottom:6px}
+.dash-kpi-val{font-size:1.85rem;font-weight:800;line-height:1.1}
+.dash-kpi-sub{font-size:0.67rem;color:var(--text-muted);margin-top:5px;line-height:1.3}
+.kpi-delta{display:inline-block;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:20px;margin-top:6px}
+.kpi-delta.up{background:rgba(0,200,100,.15);color:var(--green)}
+.kpi-delta.dn{background:rgba(255,100,100,.15);color:#ff6b6b}
+.dash-kpi-bar{height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-top:8px}
+.dash-kpi-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--green),#00e676)}
+@media(max-width:820px){
+  .dash-kpi-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .dash-kpi-val{font-size:1.5rem}
+  .dash-kpi{padding:14px 8px 12px}
+}
 
 /* ══════════════════════════════════════════
    RANKING TABLE
@@ -1457,7 +1488,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.6</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.7</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -3110,6 +3141,20 @@ async function renderDashboard() {
     const maxPts = ranking[0]?.pontos||1;
     const totalJogos = Object.keys(res).filter(id=>_hasFullResult(res[id])).length;
     const myRank = ranking.findIndex(r=>r.uid===currentUser.uid)+1;
+    const _myUser = ranking.find(r=>r.uid===currentUser.uid);
+    const _myPontos = _myUser?.pontos ?? 0;
+    const _myExatos = _myUser?.exatos ?? 0;
+    const _leaderPontos = ranking[0]?.pontos ?? 0;
+    const _kpiGap = _leaderPontos - _myPontos;
+    const _kpiIsLeader = myRank === 1 && ranking.length > 0;
+    const _kpiPct = ALL_GAMES.length > 0 ? Math.round(totalJogos/ALL_GAMES.length*100) : 0;
+    const _kpiPrevPos = positionDeltas[currentUser.uid];
+    const _kpiDelta = (_kpiPrevPos && myRank > 0) ? (_kpiPrevPos - myRank) : 0;
+    const _kpiDeltaHtml = _kpiDelta > 0
+      ? `<div><span class="kpi-delta up">▲${_kpiDelta}</span></div>`
+      : _kpiDelta < 0
+        ? `<div><span class="kpi-delta dn">▼${Math.abs(_kpiDelta)}</span></div>`
+        : '';
 
     if (users.length === 0) {
       cont.innerHTML = `<div class="section-title">🏆 ${esc(CFG.nome_bolao)}</div>
@@ -3153,24 +3198,28 @@ async function renderDashboard() {
         </div>
       </div>
 
-      <div style="background:linear-gradient(135deg,rgba(255,215,0,.1),rgba(255,215,0,.05));border:2px solid var(--gold);border-radius:12px;padding:20px;margin-bottom:24px">
-        <div class="dashboard-stats-grid">
-          <div style="text-align:center">
-            <div style="font-size:2rem;font-weight:800;color:var(--gold)">${ranking.length}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Participantes</div>
-          </div>
-          <div style="text-align:center">
-            <div style="font-size:2rem;font-weight:800;color:var(--green)">${totalJogos}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Com Resultado</div>
-          </div>
-          <div style="text-align:center">
-            <div style="font-size:2rem;font-weight:800;color:var(--accent)">${ALL_GAMES.length}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Total de Jogos</div>
-          </div>
-          <div style="text-align:center">
-            <div style="font-size:2rem;font-weight:800;color:var(--orange)">${myRank||'—'}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Sua Posição</div>
-          </div>
+      <div class="dash-kpi-grid">
+        <div class="dash-kpi kpi-pos">
+          <div class="dash-kpi-icon">🎯</div>
+          <div class="dash-kpi-val" style="color:var(--accent)">${myRank > 0 ? myRank+'º' : '—'}</div>
+          <div class="dash-kpi-sub">de ${ranking.length} jogador${ranking.length!==1?'es':''}</div>
+          ${_kpiDeltaHtml}
+        </div>
+        <div class="dash-kpi kpi-pts">
+          <div class="dash-kpi-icon">⭐</div>
+          <div class="dash-kpi-val" style="color:var(--gold)">${_myPontos}</div>
+          <div class="dash-kpi-sub">${_myExatos} exato${_myExatos!==1?'s':''}</div>
+        </div>
+        <div class="dash-kpi kpi-games">
+          <div class="dash-kpi-icon">⚽</div>
+          <div class="dash-kpi-val" style="color:var(--green)">${totalJogos}<span style="font-size:1rem;font-weight:600;color:var(--text-muted);opacity:.6">/${ALL_GAMES.length}</span></div>
+          <div class="dash-kpi-sub">jogos com resultado</div>
+          <div class="dash-kpi-bar"><div class="dash-kpi-bar-fill" style="width:${_kpiPct}%"></div></div>
+        </div>
+        <div class="dash-kpi kpi-gap${_kpiIsLeader?' kpi-leader':''}">
+          <div class="dash-kpi-icon">${_kpiIsLeader?'🏆':'📈'}</div>
+          <div class="dash-kpi-val" style="color:${_kpiIsLeader?'var(--gold)':'var(--orange)'}${_kpiIsLeader?';font-size:1.35rem':''}">${_kpiIsLeader?'Líder!':(_kpiGap>0?'-'+_kpiGap+' pts':'0 pts')}</div>
+          <div class="dash-kpi-sub">${_kpiIsLeader?'você está na frente':'pts para o 1º'}</div>
         </div>
       </div>`;
 
