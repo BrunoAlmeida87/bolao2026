@@ -7051,6 +7051,7 @@ async function onAdminThirdOverrideChange(slotKey, teamName) {
 
 function renderAdmin() {
   if (currentUserDoc?.role!=='admin') return;
+  _scDel('usr');
   const cont = document.getElementById('admin-content');
   cont.innerHTML = `
     <div class="section-title">⚙️ Painel do Administrador</div>
