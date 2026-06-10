@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.12">
+<meta name="app-version" content="v1.12.13">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1496,7 +1496,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.12</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.13</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -6040,6 +6040,27 @@ async function renderEstatisticas() {
       _beforeHtml += '<div class="card">'
         + '<div class="card-title">⚽ Próximas Partidas</div>'
         + '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">' + _gameCards + '</div>'
+        + '</div>';
+    }
+
+    // ── CARD TEMPORÁRIO: quem ainda não escolheu o campeão ───────────────────
+    // Some sozinho quando: todos escolheram, OU o palpite de campeão foi
+    // bloqueado pelo admin, OU a campeã já foi definida.
+    const _semCampeao = users.filter(u => !champPicks[u.uid]);
+    if (_semCampeao.length > 0 && CFG.campeao_locked !== true && !_getFinalChampion(res)) {
+      _beforeHtml += '<div class="card" style="border-color:rgba(255,140,0,.45);background:rgba(255,140,0,.05)">'
+        + '<div class="card-title">🏆 Falta escolher o Campeão!</div>'
+        + '<div style="font-size:0.82rem;color:var(--text-muted);margin:8px 0 12px">'
+        + _semCampeao.length + ' participante(s) ainda não escolheram o palpite de campeão. '
+        + 'A escolha é feita no topo da página <b>Palpites</b> — corre antes do admin bloquear! ⏳'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px">'
+        + _semCampeao.map(u =>
+            '<div style="padding:8px 10px;border:1px solid rgba(255,140,0,.3);border-radius:8px;background:rgba(255,255,255,.03)">'
+            + '<div style="font-size:0.9rem;font-weight:700;color:var(--orange)">' + esc(u.apelido || '—') + '</div>'
+            + '<div style="font-size:0.75rem;color:var(--text-muted)">' + esc(u.nome || '—') + '</div>'
+            + '</div>').join('')
+        + '</div>'
         + '</div>';
     }
 
