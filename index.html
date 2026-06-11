@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.17">
+<meta name="app-version" content="v1.12.18">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1514,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.17</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.18</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -5996,7 +5996,8 @@ async function renderEstatisticas() {
         _statPending[game.id] = {
           users: _pendingUsers.map(u => ({ a: u.apelido || '', n: u.nome || '' })),
           title: game.h + ' × ' + game.a,
-          when: (_dateStr ? _dateStr + ' às ' : '') + _time
+          when: (_dateStr ? _dateStr + ' às ' : '') + _time,
+          lockMs: (() => { const li = _gameLockInstant(game, _gr); return li ? li.getTime() : null; })()
         };
         const _pendingPanelHtml = _pending > 0
           ? '<div id="stat-pending-' + game.id + '" style="display:' + (_pending <= 5 ? 'block' : 'none') + ';margin-top:8px;background:rgba(255,140,0,.07);border:1px solid rgba(255,140,0,.25);border-radius:8px;padding:8px 10px;text-align:left">'
@@ -9765,6 +9766,21 @@ function _addStatShareButtons(cont) {
 
 // Lista de pendentes por jogo (preenchida ao renderizar Estatísticas).
 const _statPending = {};
+// Frase do prazo de bloqueio (22h da véspera) relativa a hoje/amanhã (fuso BR).
+function _lockRelativePhrase(lockMs) {
+  if (!lockMs) return '';
+  if (Date.now() >= lockMs) return '🔒 Palpites já encerrados para esta partida';
+  const brt = new Date(lockMs - 3 * 3600000); // Brasília = UTC-3
+  const h = String(brt.getUTCHours()).padStart(2, '0');
+  const lockDay = `${brt.getUTCFullYear()}-${String(brt.getUTCMonth()+1).padStart(2,'0')}-${String(brt.getUTCDate()).padStart(2,'0')}`;
+  const todaySP = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  const tmrSP = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  let quando;
+  if (lockDay === todaySP) quando = `hoje às ${h}h`;
+  else if (lockDay === tmrSP) quando = `amanhã às ${h}h`;
+  else { const M = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; quando = `${brt.getUTCDate()} ${M[brt.getUTCMonth()]} às ${h}h`; }
+  return `⏰ Os palpites serão bloqueados ${quando} (horário de Brasília)`;
+}
 function statTogglePending(gid) {
   const el = document.getElementById('stat-pending-' + gid);
   if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
@@ -9773,7 +9789,8 @@ async function statSharePending(gid) {
   const d = _statPending[gid];
   if (!d || !d.users.length) { showToast('Ninguém pendente nesta partida.', 'info'); return; }
   const linhas = d.users.map(u => '• ' + u.a + (u.n ? ' (' + u.n + ')' : '')).join('\n');
-  const txt = `⏳ *Falta palpitar* — ${d.title}\n${d.when ? d.when + '\n' : ''}\n${linhas}\n\nNão esqueçam de palpitar no Bolão ICN! ⚽`;
+  const prazo = _lockRelativePhrase(d.lockMs);
+  const txt = `⏳ *Falta palpitar* — ${d.title}\n${d.when ? d.when + '\n' : ''}${prazo ? prazo + '\n' : ''}\n${linhas}\n\nNão esqueçam de palpitar no Bolão ICN! ⚽`;
   try {
     if (navigator.share) {
       await navigator.share({ text: txt });
