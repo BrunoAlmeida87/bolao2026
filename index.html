@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.13">
+<meta name="app-version" content="v1.12.14">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -782,6 +782,17 @@ body.light-theme .mais-sheet a.active{color:var(--accent)}
   .champ-stat-bar-wrap{width:80px}
   .stats-pair{grid-template-columns:1fr}
   .card{padding:14px;border-radius:12px;margin-bottom:14px}
+  /* Cards de partida do dashboard mais compactos no mobile */
+  .next-game-card{padding:10px 12px;margin-bottom:10px}
+  .next-games-grid{gap:8px;margin-bottom:12px}
+  .ngc-label{font-size:0.62rem;margin-bottom:4px}
+  .ngc-team{font-size:0.88rem}
+  .ngc-teams{gap:8px;margin-bottom:3px}
+  .ngc-date{font-size:0.7rem;margin-bottom:4px}
+  .ngc-countdown{font-size:1.1rem}
+  .ngc-note{font-size:0.66rem;margin-top:4px}
+  .ngc-mypalpite{font-size:0.72rem;margin-top:5px;padding:4px 8px}
+  .ngc-actions{margin-top:6px}
   .stat-card .val{font-size:1.5rem}
   .section-title{font-size:0.95rem;margin-bottom:14px}
   .card-title{font-size:0.92rem}
@@ -903,6 +914,13 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ngc-mypalpite{font-size:0.78rem;margin-top:8px;padding:5px 10px;border-radius:6px;display:inline-block}
 .ngc-mypalpite-set{color:#5fd16b;background:rgba(76,175,80,.13)}
 .ngc-mypalpite-missing{color:var(--orange);background:rgba(255,152,0,.12);font-weight:600}
+.ngc-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
+.ngc-mini-btn{
+  background:none;border:1px solid var(--border);border-radius:8px;color:var(--text-muted);
+  font-size:0.72rem;line-height:1;padding:4px 8px;cursor:pointer;
+  transition:color .15s,border-color .15s;
+}
+.ngc-mini-btn:hover{color:var(--gold);border-color:var(--gold)}
 .next-games-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
 .next-games-grid .next-game-card{margin-bottom:0}
 .next-game-card.locked-soon{background:linear-gradient(135deg,rgba(255,68,68,.14),rgba(200,0,0,.07));border-color:rgba(255,68,68,.55)}
@@ -1496,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.13</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.14</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2898,28 +2916,23 @@ function _refreshDashMyPalCard(gameId) {
   }
 }
 
-// Renderiza barras de distribuição do bolão para uma partida bloqueada.
+// Renderiza a distribuição do bolão para uma partida bloqueada como UMA barra
+// horizontal segmentada: casa (dourado) | empate (azul) | visitante (vermelho).
 // bolaoDistrib: { phw, pdr, paw } em %.  Retorna '' se não houver dados.
 function _bolaoDistribBarsHtml(game, bolaoDistrib) {
   if (!bolaoDistrib) return '';
   const { phw, pdr, paw } = bolaoDistrib;
-  const nameH = esc(game.h), nameA = esc(game.a);
-  const bar = (pct, col) =>
-    `<div style="background:rgba(255,255,255,.1);border-radius:3px;height:7px;flex:1">
-      <div style="height:7px;border-radius:3px;background:${col};width:${pct}%;transition:width .4s"></div>
-    </div>`;
-  const row = (label, pct, col) =>
-    `<div style="display:flex;align-items:center;gap:6px;font-size:0.7rem;margin-bottom:5px">
-      <span style="min-width:80px;text-align:right;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</span>
-      ${bar(pct, col)}
-      <span style="min-width:34px;text-align:right;font-weight:700">${pct}%</span>
-    </div>`;
-  return `<div style="margin-top:10px;border-top:1px solid rgba(255,255,255,.1);padding-top:10px">
-    <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Palpites do Bolão ICN</div>
-    ${row(nameH, phw, 'var(--gold)')}
-    ${row('Empate', pdr, 'var(--accent)')}
-    ${row(nameA, paw, '#ff8a8a')}
-    <div style="font-size:0.61rem;color:var(--text-muted);margin-top:4px;opacity:.75">% dos palpites enviados por resultado — visível após o bloqueio</div>
+  const nH = esc((game.h || '').split(' ')[0]), nA = esc((game.a || '').split(' ')[0]);
+  const seg = (pct, col) => pct > 0 ? `<div style="width:${pct}%;background:${col}"></div>` : '';
+  return `<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,.1);padding-top:8px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:0.68rem;margin-bottom:4px">
+      <span style="color:var(--gold);font-weight:700;white-space:nowrap">${teamFlag(game.h)} ${nH} ${phw}%</span>
+      <span style="color:var(--accent);font-weight:600;white-space:nowrap">Empate ${pdr}%</span>
+      <span style="color:#ff8a8a;font-weight:700;white-space:nowrap">${paw}% ${nA} ${teamFlag(game.a)}</span>
+    </div>
+    <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.08)" title="Palpites do bolão: ${nH} ${phw}% · Empate ${pdr}% · ${nA} ${paw}%">
+      ${seg(phw,'var(--gold)')}${seg(pdr,'var(--accent)')}${seg(paw,'#ff8a8a')}
+    </div>
   </div>`;
 }
 
@@ -3007,7 +3020,7 @@ function _buildNextGamesHtml(group) {
     const myPalHtml = hasPal
       ? `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-set">✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong></div>`
       : `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-missing">⚠️ Você ainda não palpitou!</div>`;
-    return `<div class="next-game-card" data-gid="${game.id}">
+    return `<div class="next-game-card" data-gid="${game.id}" data-share-card>
       <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
         <span class="ngc-team">${homeFlag} ${esc(game.h)}</span>
@@ -3019,6 +3032,10 @@ function _buildNextGamesHtml(group) {
       <div class="ngc-note" id="ngc-note-${game.id}">Bloqueio: ${_lockDisplayStr(_gameLockInstant(game, res))}</div>
       ${myPalHtml}
       <div id="ngc-prob-${game.id}" style="display:${isLockedNow&&distribHtml?'block':'none'}">${distribHtml}</div>
+      <div class="ngc-actions no-capture">
+        <button type="button" class="ngc-mini-btn" title="Compartilhar este card como imagem" onclick="shareStatCard(this)">📸</button>
+        <button type="button" class="ngc-mini-btn" onclick="goToGameStats('${game.id}')">Ver mais →</button>
+      </div>
     </div>`;
   }).join('');
   return multi ? `<div class="next-games-grid">${cards}</div>` : cards;
@@ -3087,9 +3104,12 @@ function _startCountdownTimer() {
           cd.textContent = _fmtDiff(diffToLock);
         }
         if (card) { card.classList.toggle('locked-soon', lockedSoon); card.classList.remove('in-progress'); }
-        if (note) note.textContent = lockedSoon
-          ? '🔒 Palpites BLOQUEADOS para esta partida'
-          : `Bloqueio: ${_lockDisplayStr(lockAt)}`;
+        // Bloqueado: o countdown já mostra "🔒 Palpites encerrados" — esconde a
+        // nota para não duplicar o aviso (e reduzir a altura do card).
+        if (note) {
+          note.style.display = lockedSoon ? 'none' : '';
+          if (!lockedSoon) note.textContent = `Bloqueio: ${_lockDisplayStr(lockAt)}`;
+        }
         if (distribWrap) {
           // Injeta as barras no momento em que a partida bloqueia (caso o dashboard já
           // estivesse aberto antes da trava e o container tenha sido renderizado vazio).
@@ -3105,7 +3125,7 @@ function _startCountdownTimer() {
           ? '🟢 Em andamento'
           : '⏳ Aguardando oficialização do resultado';
         if (card) { card.classList.remove('locked-soon'); card.classList.add('in-progress'); }
-        if (note) note.textContent = '🔒 Palpites encerrados';
+        if (note) { note.style.display = ''; note.textContent = '🔒 Palpites encerrados'; }
         if (distribWrap) {
           if (!distribWrap.innerHTML) distribWrap.innerHTML = _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]);
           if (distribWrap.innerHTML) distribWrap.style.display = 'block';
@@ -4299,7 +4319,7 @@ const horariosTransporte = [
     ultimoHorarioSexta:"15:30" },
   { origem:"ESC", destino:"UFEM", inicioOperacao:"05/08/2025",
     manha:["07:50","08:30","09:10","09:50","10:30","11:10","11:50"],
-    tarde:["13:50","14:30","15:10","15:50","16:30","17:10"],
+    tarde:["13:50","14:30","15:10","15:50","16:30","17:00","17:10"],
     ultimoHorarioSexta:"15:50" }
 ];
 
@@ -4495,6 +4515,19 @@ function renderCardapio() {
 // ════════════════════════════════════════════
 // VER TODOS OS PALPITES PAGE
 // ════════════════════════════════════════════
+// Filtro multiseleção de participantes. null = todos (padrão).
+let _vtSelUids = null;
+function vtSetAllChecks(on) {
+  document.querySelectorAll('.vt-user-chk').forEach(c => { c.checked = on; });
+}
+function vtApplyFilter() {
+  const all = [...document.querySelectorAll('.vt-user-chk')];
+  const checked = all.filter(c => c.checked).map(c => c.value);
+  if (!checked.length) { showToast('Selecione ao menos 1 participante.', 'warning'); return; }
+  _vtSelUids = checked.length === all.length ? null : new Set(checked);
+  renderVerTodos();
+}
+
 async function renderVerTodos() {
   const cont = document.getElementById('ver-todos-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
@@ -4513,14 +4546,32 @@ async function renderVerTodos() {
       ...Object.entries(ELIM_DATA).map(([,v])=>({ label:`${v.icon} ${v.label}`, ids: new Set(v.games.map(g=>g.id)) }))
     ];
 
-    // Resumo dos palpites de campeão por participante.
-    const champSummary = `
-      <div class="card" style="margin-bottom:16px;border:2px solid var(--gold);background:rgba(255,215,0,.05)">
-        <div class="card-header"><span class="card-title">🏆 Palpite Campeão por Participante</span>
-          ${finalChampion?`<span class="pts-badge" style="margin-left:auto">Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}</span>`:(champRevealed?'':` <span style="font-size:0.75rem;color:var(--text-muted)">🔒 Visível após bloqueio</span>`)}
+    // Filtro multiseleção de participantes (estado em _vtSelUids; null = todos).
+    // Se a seleção ficou vazia/inválida (ex.: participante desativado), volta a todos.
+    let shown = _vtSelUids ? users.filter(u => _vtSelUids.has(u.uid)) : users;
+    if (!shown.length) { _vtSelUids = null; shown = users; }
+    const filterBox = `
+      <details class="card" ${_vtSelUids?'open':''} style="padding:12px 14px;margin-bottom:12px">
+        <summary style="cursor:pointer;font-weight:700;color:var(--gold);font-size:0.9rem">👥 Filtrar participantes — exibindo ${shown.length} de ${users.length}</summary>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+          ${users.map(u=>`<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:16px;font-size:0.78rem;cursor:pointer;background:rgba(255,255,255,.03)">
+            <input type="checkbox" class="vt-user-chk" value="${esc(u.uid)}" ${(!_vtSelUids||_vtSelUids.has(u.uid))?'checked':''}> ${esc(u.apelido)}</label>`).join('')}
         </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+          <button class="btn btn-secondary btn-sm" onclick="vtSetAllChecks(true)">Marcar todos</button>
+          <button class="btn btn-secondary btn-sm" onclick="vtSetAllChecks(false)">Desmarcar todos</button>
+          <button class="btn btn-primary btn-sm" onclick="vtApplyFilter()">✅ Aplicar filtro</button>
+        </div>
+      </details>`;
+
+    // Resumo dos palpites de campeão por participante (recolhível).
+    const champSummary = `
+      <details class="card" style="margin-bottom:12px;border:2px solid var(--gold);background:rgba(255,215,0,.05);padding:12px 14px">
+        <summary style="cursor:pointer;font-weight:700;color:var(--gold);font-size:0.95rem">🏆 Palpite Campeão por Participante
+          ${finalChampion?`<span class="pts-badge" style="margin-left:8px">Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}</span>`:(champRevealed?'':` <span style="font-size:0.72rem;color:var(--text-muted);font-weight:400">🔒 Visível após bloqueio</span>`)}
+        </summary>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px">
-          ${users.map(u=>{
+          ${shown.map(u=>{
             const isOwn = u.uid === currentUser.uid;
             const canSeeChamp = champRevealed || isOwn;
             const t = canSeeChamp ? champPicks[u.uid] : null;
@@ -4536,22 +4587,13 @@ async function renderVerTodos() {
             </div>`;
           }).join('')}
         </div>
-      </div>`;
+      </details>`;
 
-    let html = `<div class="section-title">📋 Todos os Palpites${_refreshBtn()}</div>
-      <div class="back-bar" style="margin-bottom:10px">
-        <span></span>
-        <button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="navigateTo('ver-palpites')">👁️ Por Pessoa</button>
-      </div>
-      ${_ptsLegendHtml()}
-      ${champSummary}
-      <div style="overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px">
-      <table class="ranking-table" style="min-width:${160+users.length*80}px;font-size:0.8rem;border-collapse:separate;border-spacing:0">
-        <thead><tr>
+    // Cabeçalho de colunas (compartilhado por todas as tabelas de fase).
+    const theadHtml = `<thead><tr>
           <th style="text-align:left;min-width:140px;position:sticky;left:0;top:0;z-index:3;background:var(--mid-blue)">Jogo</th>
-          <th style="min-width:55px;position:sticky;top:0;z-index:2;background:var(--mid-blue)">Data</th>
-          <th style="min-width:60px;position:sticky;top:0;z-index:2;background:var(--mid-blue)">Result.</th>
-          ${users.map(u=>{
+          <th style="min-width:55px;position:sticky;top:0;z-index:2;background:var(--mid-blue)">Result.</th>
+          ${shown.map(u=>{
             const isOwn = u.uid === currentUser.uid;
             const canSeeChamp = champRevealed || isOwn;
             const t = canSeeChamp ? champPicks[u.uid] : null;
@@ -4563,53 +4605,69 @@ async function renderVerTodos() {
               : `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">🏆 🔒</div>`;
             return `<th style="min-width:80px;cursor:pointer;color:var(--gold);vertical-align:top;position:sticky;top:0;z-index:2;background:var(--mid-blue)" onclick="goToUserPalpites('${u.uid}')" title="Ver palpites de ${esc(u.apelido)}">${esc(u.apelido)}${champCell}</th>`;
           }).join('')}
-        </tr></thead>
-        <tbody>`;
+        </tr></thead>`;
 
-    let lastPhase = -1;
-    gamesOrdered.forEach(g=>{
-      const phaseIdx = phaseGroups.findIndex(p=>p.ids.has(g.id));
-      if (phaseIdx !== lastPhase) {
-        lastPhase = phaseIdx;
-        if (phaseIdx !== -1)
-          html += `<tr><td colspan="${3+users.length}" style="background:rgba(255,215,0,.07);color:var(--gold);font-weight:700;font-size:0.75rem;padding:7px 10px;text-align:left;position:sticky;left:0">${phaseGroups[phaseIdx].label}</td></tr>`;
-      }
+    const rowHtml = g => {
       const r = res[g.id]||{};
       const hasResult = r.h_real!==undefined;
       const resultStr = hasResult?`${r.h_real}-${r.a_real}`:'—';
-      const flagH = teamFlag(g.h);
-      const flagA = teamFlag(g.a);
       const short = t => t.split(' ')[0];
-      html += `<tr>
-        <td style="text-align:left;white-space:nowrap;position:sticky;left:0;z-index:1;background:var(--card)">${flagH} ${esc(short(g.h))} × ${flagA} ${esc(short(g.a))}</td>
-        <td style="color:var(--text-muted);font-size:0.73rem;white-space:nowrap">${r.date_override?_isoToGameDate(r.date_override):(g.date||'—')}${r.time_override?' '+r.time_override:''}</td>
+      const dateStr = `${r.date_override?_isoToGameDate(r.date_override):(g.date||'—')}${r.time_override?' '+r.time_override:''}`;
+      let row = `<tr>
+        <td style="text-align:left;white-space:nowrap;position:sticky;left:0;z-index:1;background:var(--card)">
+          <div>${teamFlag(g.h)} ${esc(short(g.h))} × ${teamFlag(g.a)} ${esc(short(g.a))}</div>
+          <div style="font-size:0.62rem;color:var(--text-muted);margin-top:1px">${esc(dateStr)}</div>
+        </td>
         <td style="font-weight:600;color:${hasResult?'var(--green)':'var(--text-muted)'};white-space:nowrap">${resultStr}</td>`;
-      users.forEach(u=>{
+      shown.forEach(u=>{
         const pal = allPals[u.uid]?.[g.id];
         const isOwn = u.uid === currentUser.uid;
         const isGameLocked = r.locked===true || r.autoLocked===true || hasResult;
         const canSeePal = isAdminView || isOwn || isGameLocked;
-        if (!pal||pal.h===undefined) {
-          html += `<td style="color:var(--text-muted)">—</td>`;
-          return;
-        }
-        if (!canSeePal) {
-          html += `<td style="color:var(--text-muted);font-size:0.72rem">🔒</td>`;
-          return;
-        }
+        if (!pal||pal.h===undefined) { row += `<td style="color:var(--text-muted)">—</td>`; return; }
+        if (!canSeePal) { row += `<td style="color:var(--text-muted);font-size:0.72rem">🔒</td>`; return; }
         const pts = calcPontos(pal, r);
         const palStr = `${pal.h}-${pal.a}`;
         const _ps = _ptsBadgeStyle(pts);
         const cellBg = _ps ? `background:${_ps.bg};` : '';
         const cellCol = _ps ? `color:${_ps.color};` : '';
         const ptsLine = _ps && pts!==null ? `<div style="font-size:0.65rem;margin-top:1px;opacity:0.85">${pts>0?'+'+pts+'pts':'0pts'}</div>` : '';
-        html += `<td style="${cellBg}${cellCol}font-weight:600;vertical-align:middle"><div>${palStr}</div>${ptsLine}</td>`;
+        row += `<td style="${cellBg}${cellCol}font-weight:600;vertical-align:middle"><div>${palStr}</div>${ptsLine}</td>`;
       });
-      html += `</tr>`;
-    });
+      return row + `</tr>`;
+    };
 
-    html += `</tbody></table></div>`;
-    cont.innerHTML = html;
+    // Uma seção recolhível por fase. Abre por padrão a fase "atual" (a primeira
+    // que ainda tem jogo sem resultado); se a Copa acabou, abre a última.
+    const phases = phaseGroups.map(p => ({
+      ...p,
+      games: gamesOrdered.filter(g => p.ids.has(g.id))
+    })).filter(p => p.games.length);
+    let openIdx = phases.findIndex(p => p.games.some(g => (res[g.id]||{}).h_real === undefined));
+    if (openIdx === -1) openIdx = phases.length - 1;
+
+    const phaseSections = phases.map((p, i) => {
+      const done = p.games.filter(g => (res[g.id]||{}).h_real !== undefined).length;
+      return `<details class="vt-phase" ${i===openIdx?'open':''} style="margin-bottom:10px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+        <summary style="padding:10px 12px;background:rgba(255,215,0,.07);color:var(--gold);font-weight:700;font-size:0.82rem;cursor:pointer">${p.label} <span style="font-weight:400;color:var(--text-muted)">· ${p.games.length} jogos · ${done} c/ resultado</span></summary>
+        <div style="overflow:auto;-webkit-overflow-scrolling:touch">
+        <table class="ranking-table" style="min-width:${140+60+shown.length*80}px;font-size:0.8rem;border-collapse:separate;border-spacing:0">
+          ${theadHtml}
+          <tbody>${p.games.map(rowHtml).join('')}</tbody>
+        </table>
+        </div>
+      </details>`;
+    }).join('');
+
+    cont.innerHTML = `<div class="section-title">📋 Todos os Palpites${_refreshBtn()}</div>
+      <div class="back-bar" style="margin-bottom:10px">
+        <span></span>
+        <button class="btn" style="padding:6px 12px;font-size:0.8rem" onclick="navigateTo('ver-palpites')">👁️ Por Pessoa</button>
+      </div>
+      ${_ptsLegendHtml()}
+      ${filterBox}
+      ${champSummary}
+      ${phaseSections}`;
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
@@ -5938,7 +5996,7 @@ async function renderEstatisticas() {
             const _avgH = (_gPals.reduce((a,p)=>a+parseInt(p.h||0),0)/_tot).toFixed(1);
             const _avgA = (_gPals.reduce((a,p)=>a+parseInt(p.a||0),0)/_tot).toFixed(1);
             const _sf={}; _gPals.forEach(p=>{ const _ph=parseInt(p.h)||0,_pa=parseInt(p.a)||0; const k=`${Math.max(_ph,_pa)}×${Math.min(_ph,_pa)}`; _sf[k]=(_sf[k]||0)+1; });
-            const _top = Object.entries(_sf).sort((a,b)=>b[1]-a[1])[0];
+            const _top3 = Object.entries(_sf).sort((a,b)=>b[1]-a[1]).slice(0,3);
             const _maxPct=Math.max(_phw,_pdr,_paw);
             const _minPct=Math.min(_phw,_pdr,_paw);
             const _favLbl = _phw===_maxPct ? esc(game.h) : (_paw===_maxPct ? esc(game.a) : 'Empate');
@@ -5960,7 +6018,7 @@ async function renderEstatisticas() {
             }).join('');
             const _zebraCard = _minPct <= 25
               ? '<div style="background:rgba(255,100,100,.08);border:1px solid rgba(255,100,100,.2);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
-                + '<div style="font-size:0.68rem;color:#ff9a9a">🦓 Zebra interna</div>'
+                + '<div style="font-size:0.68rem;color:#ff9a9a">🦓 Zebra</div>'
                 + '<div style="font-size:0.92rem;font-weight:700;color:#ff7a7a">' + _zebLbl + ' (' + _minPct + '%)</div>'
                 + '</div>'
               : '';
@@ -5989,8 +6047,10 @@ async function renderEstatisticas() {
               + '<div style="font-size:0.92rem;font-weight:700;color:var(--gold)">' + _avgH + ' × ' + _avgA + '</div>'
               + '</div>'
               + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
-              + '<div style="font-size:0.68rem;color:var(--text-muted)">🎯 Placar mais escolhido</div>'
-              + '<div style="font-size:0.92rem;font-weight:700;color:var(--green)">' + _top[0] + ' <span style="font-size:0.7rem;font-weight:400">(' + _top[1] + 'x)</span></div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">🎯 Top 3 placares apostados</div>'
+              + '<div style="font-size:0.88rem;font-weight:700;color:var(--green)">'
+              + _top3.map((t,i) => (i===0?'':' · ') + '<span style="opacity:' + (i===0?'1':i===1?'.8':'.6') + '">' + t[0] + ' <span style="font-size:0.68rem;font-weight:400">(' + t[1] + 'x)</span></span>').join('')
+              + '</div>'
               + '</div>'
               + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
               + '<div style="font-size:0.68rem;color:var(--text-muted)">📣 Favorito do bolão</div>'
@@ -6006,7 +6066,7 @@ async function renderEstatisticas() {
           }
         }
 
-        return '<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;flex:1;min-width:260px">'
+        return '<div id="stat-game-' + game.id + '" data-share-card style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;flex:1;min-width:260px">'
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:10px">'
           + '<div>'
           + (_groupLbl ? '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">' + esc(_groupLbl) + '</div>' : '')
@@ -6034,10 +6094,13 @@ async function renderEstatisticas() {
           + '</div>'
           + _pendingNamesHtml
           + _postLock
+          + '<div class="no-capture" style="text-align:right;margin-top:10px">'
+          + '<button type="button" class="ngc-mini-btn" title="Compartilhar esta partida como imagem" onclick="shareStatCard(this)">📸 Compartilhar</button>'
+          + '</div>'
           + '</div>';
       }).join('');
 
-      _beforeHtml += '<div class="card">'
+      _beforeHtml += '<div class="card" data-no-share>'
         + '<div class="card-title">⚽ Próximas Partidas</div>'
         + '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">' + _gameCards + '</div>'
         + '</div>';
@@ -6789,6 +6852,7 @@ async function renderEstatisticas() {
 
     cont.innerHTML = html;
     _addStatShareButtons(cont); // botão 📸 de compartilhar imagem em cada card
+    _applyPendingStatsScroll(); // "Ver mais" do dashboard rola até a partida
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
@@ -9625,29 +9689,41 @@ function _loadHtml2Canvas() {
   return _h2cPromise;
 }
 
+// Compartilha o card individual mais próximo do botão. Sub-cards (partidas
+// dentro de um card maior) são marcados com [data-share-card] e têm prioridade
+// sobre o .card externo — assim a imagem sai só da partida, não do bloco todo.
 async function shareStatCard(btn) {
-  const card = btn.closest('.card');
+  const card = btn.closest('[data-share-card]') || btn.closest('.card');
   if (!card) return;
   const prevTxt = btn.textContent;
+  // Esconde da foto os controles de UI (botões 📸/Ver mais e o próprio btn).
+  const hidden = [...card.querySelectorAll('.no-capture, .stat-share-btn')];
+  if (!hidden.includes(btn)) hidden.push(btn);
   try {
     btn.disabled = true; btn.textContent = '⏳';
     await _loadHtml2Canvas();
-    btn.style.visibility = 'hidden'; // não aparece na imagem capturada
+    hidden.forEach(el => { el.dataset._vis = el.style.visibility; el.style.visibility = 'hidden'; });
     const bg = getComputedStyle(document.body).backgroundColor || '#0A1628';
     const canvas = await html2canvas(card, { scale: 2, backgroundColor: bg, useCORS: true });
-    const title = (card.querySelector('.card-title')?.textContent || 'Estatística').trim();
+    const title = (card.querySelector('.card-title')?.textContent
+      || card.querySelector('.ngc-teams')?.textContent
+      || 'Estatística').trim().replace(/\s+/g, ' ');
     await _downloadOrShareCanvas(canvas, 'bolao-estatistica.png', `📊 ${title} — ${CFG.nome_bolao || 'Bolão ICN Copa 2026'}`);
   } catch(e) {
     showToast('Erro ao gerar imagem: ' + (e.message || e), 'error');
   } finally {
-    btn.style.visibility = ''; btn.disabled = false; btn.textContent = prevTxt;
+    hidden.forEach(el => { el.style.visibility = el.dataset._vis || ''; delete el.dataset._vis; });
+    btn.disabled = false; btn.textContent = prevTxt;
   }
 }
 
 // Injeta o botão 📸 em todos os .card de um container (página de Estatísticas).
+// Cards com [data-no-share] são pulados (ex.: "Próximas Partidas", que tem
+// botões individuais por partida — capturar o bloco inteiro sairia poluído).
 function _addStatShareButtons(cont) {
   if (!cont) return;
   cont.querySelectorAll('.card').forEach(card => {
+    if (card.hasAttribute('data-no-share')) return;
     if (card.querySelector('.stat-share-btn')) return;
     if (!card.style.position) card.style.position = 'relative';
     const b = document.createElement('button');
@@ -9658,6 +9734,24 @@ function _addStatShareButtons(cont) {
     b.onclick = () => shareStatCard(b);
     card.appendChild(b);
   });
+}
+
+// "Ver mais" no card de partida do dashboard → abre Estatísticas e rola até o
+// detalhamento daquela partida (âncora stat-game-{id}).
+let _pendingStatsScrollGid = null;
+function goToGameStats(gid) {
+  _pendingStatsScrollGid = gid;
+  navigateTo('estatisticas');
+}
+function _applyPendingStatsScroll() {
+  if (!_pendingStatsScrollGid) return;
+  const el = document.getElementById('stat-game-' + _pendingStatsScrollGid);
+  _pendingStatsScrollGid = null;
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  el.style.transition = 'box-shadow .3s';
+  el.style.boxShadow = '0 0 0 2px var(--gold)';
+  setTimeout(() => { el.style.boxShadow = ''; }, 2500);
 }
 function isIOS() {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent||'');
