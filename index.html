@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.15">
+<meta name="app-version" content="v1.12.16">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1514,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.15</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.16</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2902,6 +2902,17 @@ let _dashResults = {};
 let _dashBolaoDistrib = {};
 // Palpites do usuário logado — usados nos cards de próximas partidas
 let _dashMyPals = {};
+// Conteúdo do aviso "ainda não palpitou" + link pequeno que leva direto ao jogo
+// na tela de Palpites. Só mostra o link se o jogo ainda estiver aberto.
+function _missingPalInner(gameId) {
+  const r = _dashResults[gameId] || resultados[gameId] || {};
+  const game = ALL_GAMES.find(g => g.id === gameId);
+  const closed = game ? isPalpiteClosed(game, r) : false;
+  const link = closed ? '' :
+    `<div style="margin-top:3px"><a onclick="goToPalpiteGame('${gameId}')" style="font-size:0.66rem;color:var(--gold);text-decoration:underline;cursor:pointer">👉 clique aqui para palpitar</a></div>`;
+  return `⚠️ Você ainda não palpitou!${link}`;
+}
+
 function _refreshDashMyPalCard(gameId) {
   const el = document.getElementById(`ngc-mypalpite-${gameId}`);
   if (!el) return;
@@ -2912,7 +2923,7 @@ function _refreshDashMyPalCard(gameId) {
     el.innerHTML = `✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong>`;
   } else {
     el.className = 'ngc-mypalpite ngc-mypalpite-missing';
-    el.innerHTML = '⚠️ Você ainda não palpitou!';
+    el.innerHTML = _missingPalInner(gameId);
   }
 }
 
@@ -3019,7 +3030,7 @@ function _buildNextGamesHtml(group) {
     const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
     const myPalHtml = hasPal
       ? `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-set">✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong></div>`
-      : `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-missing">⚠️ Você ainda não palpitou!</div>`;
+      : `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-missing">${_missingPalInner(game.id)}</div>`;
     return `<div class="next-game-card" data-gid="${game.id}">
       <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
@@ -3488,6 +3499,7 @@ async function renderPalpites(editUid=null) {
     cont.innerHTML = html;
     updatePalProgress();
     updateGroupTabState();
+    _applyPendingPalpiteScroll(); // deep-link "clique aqui" do dashboard
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
@@ -9743,6 +9755,50 @@ let _pendingStatsScrollGid = null;
 function goToGameStats(gid) {
   _pendingStatsScrollGid = gid;
   navigateTo('estatisticas');
+}
+
+// Deep-link do dashboard para um jogo específico na tela de Palpites.
+let _pendingPalpiteGid = null;
+function goToPalpiteGame(gid) {
+  _pendingPalpiteGid = gid;
+  navigateTo('palpites');
+}
+// Em qual aba (fase) e grupo o jogo aparece na página de Palpites.
+function _palPhaseOfGame(gid) {
+  for (const g of Object.keys(GRUPOS_DATA))
+    if (GRUPOS_DATA[g].games.some(x => x.id === gid)) return { phase: 'grupos', group: g };
+  for (const k of Object.keys(ELIM_DATA))
+    if (ELIM_DATA[k].games.some(x => x.id === gid)) return { phase: k, group: null };
+  return null;
+}
+function _applyPendingPalpiteScroll() {
+  if (!_pendingPalpiteGid) return;
+  const gid = _pendingPalpiteGid;
+  _pendingPalpiteGid = null;
+  const info = _palPhaseOfGame(gid);
+  if (!info) return;
+  // Abre a aba da fase certa; se for grupos, isola o grupo do jogo.
+  switchPalPhase(info.phase);
+  if (info.phase === 'grupos' && info.group) {
+    const tabsWrap = document.getElementById('group-tabs');
+    if (tabsWrap) {
+      tabsWrap.querySelectorAll('.group-tab').forEach(t => t.classList.toggle('active', t.dataset.group === info.group));
+      _applyPalGroupVisibility(tabsWrap);
+    }
+  }
+  // Rola até a linha do jogo, destaca e foca o primeiro campo de placar.
+  setTimeout(() => {
+    const input = document.getElementById('ph_' + gid);
+    const row = input ? input.closest('.game-row') : null;
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.style.transition = 'box-shadow .3s, background .3s';
+      row.style.boxShadow = '0 0 0 2px var(--gold)';
+      row.style.borderRadius = '10px';
+      setTimeout(() => { row.style.boxShadow = ''; }, 2600);
+    }
+    if (input && !input.disabled) setTimeout(() => input.focus({ preventScroll: true }), 450);
+  }, 60);
 }
 function _applyPendingStatsScroll() {
   if (!_pendingStatsScrollGid) return;
