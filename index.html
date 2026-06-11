@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.14">
+<meta name="app-version" content="v1.12.15">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1514,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.14</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.15</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -3020,7 +3020,7 @@ function _buildNextGamesHtml(group) {
     const myPalHtml = hasPal
       ? `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-set">✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong></div>`
       : `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-missing">⚠️ Você ainda não palpitou!</div>`;
-    return `<div class="next-game-card" data-gid="${game.id}" data-share-card>
+    return `<div class="next-game-card" data-gid="${game.id}">
       <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
         <span class="ngc-team">${homeFlag} ${esc(game.h)}</span>
@@ -3033,7 +3033,6 @@ function _buildNextGamesHtml(group) {
       ${myPalHtml}
       <div id="ngc-prob-${game.id}" style="display:${isLockedNow&&distribHtml?'block':'none'}">${distribHtml}</div>
       <div class="ngc-actions no-capture">
-        <button type="button" class="ngc-mini-btn" title="Compartilhar este card como imagem" onclick="shareStatCard(this)">📸</button>
         <button type="button" class="ngc-mini-btn" onclick="goToGameStats('${game.id}')">Ver mais →</button>
       </div>
     </div>`;
@@ -3175,18 +3174,20 @@ async function renderDashboard() {
       _rTracker.add((_myPSnap.size || 1) + 1);
       _dashMyPals = {};
       _myPSnap.docs.forEach(d => { _dashMyPals[d.id] = d.data(); });
-      allPals = null;   // não disponível: distrib bars e gráfico de evolução ficam inativos
+      allPals = null;   // sem snapshot no doc: distrib bars/gráfico ficam inativos
       champPicks = {};
-      // Aquece o cache de sessão 'pals' com o snapshot já contido no documento de
-      // ranking (0 leituras extras), com os palpites do usuário atual sobrepostos
-      // ao vivo. Assim, navegar para Ver Todos/Estatísticas/Perfil/H2H em seguida
-      // não gera nenhuma leitura adicional de palpites.
+      // O documento de ranking traz também o snapshot dos palpites de todos
+      // (0 leituras extras). Usa para: (a) habilitar a barra de distribuição e
+      // o gráfico de evolução neste mesmo render; (b) aquecer o cache de sessão
+      // 'pals', zerando as leituras de Ver Todos/Estatísticas/Perfil/H2H.
       if (_rankCache.pals && _rankCache.pals.allPals && !_scGet('pals')) {
         const sAll = {}; Object.keys(_rankCache.pals.allPals).forEach(k => { sAll[k] = _rankCache.pals.allPals[k] || {}; });
         sAll[currentUser.uid] = Object.assign({}, _dashMyPals);
         const sChamp = Object.assign({}, _rankCache.pals.champPicks || {});
         const _myChamp = _myPDoc.exists ? (_myPDoc.data()?.campeao ?? null) : null;
         if (_myChamp != null) sChamp[currentUser.uid] = _myChamp;
+        allPals = sAll;
+        champPicks = sChamp;
         _scSet('pals', { allPals: sAll, champPicks: sChamp }, _SC_TTL.pals);
       }
     } else {
