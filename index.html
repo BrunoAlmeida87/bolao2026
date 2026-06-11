@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.18">
+<meta name="app-version" content="v1.12.19">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -925,7 +925,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .next-games-grid .next-game-card{margin-bottom:0}
 .next-game-card.locked-soon{background:linear-gradient(135deg,rgba(255,68,68,.14),rgba(200,0,0,.07));border-color:rgba(255,68,68,.55)}
 .next-game-card.locked-soon .ngc-label{color:rgba(255,90,90,.95)}
-.next-game-card.locked-soon .ngc-countdown{color:#ff5a5a}
+.next-game-card.locked-soon .ngc-countdown{color:#ff5a5a;font-size:1rem}
 .next-game-card.locked-soon .ngc-note{color:#ff7a7a;font-weight:700}
 .next-game-card.in-progress{background:linear-gradient(135deg,rgba(76,175,80,.14),rgba(40,140,60,.06));border-color:rgba(76,175,80,.5)}
 .next-game-card.in-progress .ngc-label{color:rgba(120,210,130,.95)}
@@ -1514,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.18</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.19</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -3132,7 +3132,7 @@ function _startCountdownTimer() {
         // Jogo já começou e ainda sem resultado: em andamento (até +120min) → aguardando.
         const sinceStart = now - start.getTime();
         cd.textContent = sinceStart <= MATCH_DURATION_MS
-          ? '🟢 Em andamento'
+          ? '⚽ Em andamento'
           : '⏳ Aguardando oficialização do resultado';
         if (card) { card.classList.remove('locked-soon'); card.classList.add('in-progress'); }
         if (note) { note.style.display = ''; note.textContent = '🔒 Palpites encerrados'; }
@@ -3337,8 +3337,17 @@ async function renderDashboard() {
           </tr></thead><tbody>`;
 
     let cardsHtml = `<div class="ranking-cards">`;
+    // Posição com empate: quem empata em TODOS os critérios do ranking (pontos,
+    // exatos, V+saldo, vencedor, acertou campeão) recebe a MESMA posição; a
+    // próxima posição pula (ex.: 1, 1, 3). O ranking já vem ordenado.
+    const _rankFullyTied = (a,b) => a.pontos===b.pontos && a.exatos===b.exatos
+      && a.venc_saldo===b.venc_saldo && a.apenas_venc===b.apenas_venc
+      && (!!a.acertou_campeao === !!b.acertou_campeao);
+    const _posArr = ranking.map((u,i) => (i>0 && _rankFullyTied(ranking[i-1], u)) ? null : i+1);
+    for (let i=1;i<_posArr.length;i++) if (_posArr[i]===null) _posArr[i]=_posArr[i-1];
     ranking.forEach((u,i)=>{
-      const pos=i+1;
+      const _isTiedPos = (i>0 && _posArr[i]===_posArr[i-1]) || (i<_posArr.length-1 && _posArr[i+1]===_posArr[i]);
+      const pos=_posArr[i];
       const pct = totalJogos>0 ? Math.round(u.jogos/totalJogos*100) : 0;
       const posClass = pos===1?'gold':pos===2?'silver':pos===3?'bronze':'';
       const isMe = u.uid===currentUser.uid;
@@ -3350,9 +3359,7 @@ async function renderDashboard() {
         `<span style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
       const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
       const isOwnRow = u.uid === currentUser.uid;
-      const tiedAbove = i > 0 && ranking[i-1].pontos === u.pontos;
-      const tiedBelow = i < ranking.length-1 && ranking[i+1].pontos === u.pontos;
-      const tiedMark = (tiedAbove || tiedBelow) ? `<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1;cursor:help" title="Empate técnico: mesmo total — desempate por exatos">=pts</span>` : '';
+      const tiedMark = _isTiedPos ? `<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1;cursor:help" title="Empate total: mesma posição (empatados em todos os critérios)">=</span>` : '';
       const canSeeChampRow = champRevealed || isOwnRow;
       const champCell = !canSeeChampRow
         ? `<span style="color:var(--text-muted);font-size:0.78rem">🔒</span>`
@@ -5967,7 +5974,7 @@ async function renderEstatisticas() {
         // Countdown (static)
         let _cdStr;
         if (_diff <= 0) {
-          _cdStr = '🟢 Em andamento';
+          _cdStr = '⚽ Em andamento';
         } else {
           const _d = Math.floor(_diff / 86400000);
           const _h = Math.floor((_diff % 86400000) / 3600000);
@@ -6378,14 +6385,29 @@ async function renderEstatisticas() {
     if (totalJogos > 0) {
       const accAll = users.map(u => ({ u, ...calcUserAccuracyStats(u.uid, allPals, res) }));
 
-      // Maior sequência ativa (qualquer acerto)
-      const streakAtivo = accAll.filter(a=>a.currentStreak>0).sort((a,b)=>b.currentStreak-a.currentStreak);
-      // Maior sequência histórica (qualquer acerto)
-      const streakRecord = accAll.filter(a=>a.maxStreak>0).sort((a,b)=>b.maxStreak-a.maxStreak);
-      // Hat-trick: 3+ exatos consecutivos em qualquer momento
-      const hatTricks = accAll.filter(a=>a.maxExactStreak>=3).sort((a,b)=>b.maxExactStreak-a.maxExactStreak);
-      // Sequência de exatos ativa
-      const exactStreakAtivo = accAll.filter(a=>a.currentExactStreak>0).sort((a,b)=>b.currentExactStreak-a.currentExactStreak);
+      // Lista de recorde de sequência (genérica). maxKey = maior sequência;
+      // curKey = sequência ativa atual (para marcar "ativo!"). Mostra todos os
+      // participantes com sequência >= min (vários, não só o líder).
+      const _streakList = (title, arr, maxKey, curKey, color, uniSing, uniPlur, hat) => {
+        if (!arr.length) return '';
+        return `<div style="margin-bottom:16px">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">${title}</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${arr.slice(0,10).map((a,i)=>{
+              const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="color:var(--text-muted)">${i+1}.</span>`;
+              const v=a[maxKey], active=v>0 && v===a[curKey], hatM=(hat&&v>=3)?' 🎩':'';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
+                <span style="font-weight:600">${medal} ${esc(a.u.apelido||a.u.nome)}${hatM}</span>
+                <span style="color:${color};font-weight:700">${v} ${v>1?uniPlur:uniSing}${active?' <span style="font-size:0.72rem;color:var(--green)">(ativo!)</span>':''}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      };
+      // Pontos seguidos = jogos consecutivos pontuando (placar exato, V+saldo OU
+      // só vencedor). Exatos seguidos = somente placar cravado consecutivo.
+      const pontosSeq = accAll.filter(a=>a.maxStreak>=2).sort((a,b)=>b.maxStreak-a.maxStreak||b.currentStreak-a.currentStreak);
+      const exatosSeq = accAll.filter(a=>a.maxExactStreak>=2).sort((a,b)=>b.maxExactStreak-a.maxExactStreak||b.currentExactStreak-a.currentExactStreak);
 
       // Sniper por rodada
       const rounds = [
@@ -6408,61 +6430,13 @@ async function renderEstatisticas() {
 
       let seqHtml = '';
 
-      // Sequências ativas
-      if (streakAtivo.length) {
-        const top3 = streakAtivo.slice(0,3);
-        seqHtml += `<div style="margin-bottom:16px">
-          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🔥 Sequência Ativa (acertos consecutivos)</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            ${top3.map((a,i)=>{
-              const medal = i===0?'🥇':i===1?'🥈':'🥉';
-              const exactNote = a.currentExactStreak>=3 ? ` <span style="color:var(--gold);font-size:0.75rem">🎩 ${a.currentExactStreak} exatos seguidos!</span>` : a.currentExactStreak>0 ? ` <span style="color:var(--text-muted);font-size:0.75rem">(${a.currentExactStreak} exato${a.currentExactStreak>1?'s':''})</span>` : '';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
-                <span style="font-weight:600">${medal} ${esc(a.u.apelido||a.u.nome)}</span>
-                <span style="color:var(--green);font-weight:700">${a.currentStreak} seguido${a.currentStreak>1?'s':''}${exactNote}</span>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>`;
-      }
+      // ⚽ Maior sequência de PONTOS seguidos (jogos consecutivos pontuando).
+      seqHtml += _streakList('⚽ Maior Sequência de Pontos (jogos seguidos pontuando)', pontosSeq, 'maxStreak', 'currentStreak', '#60A5FA', 'jogo', 'jogos', false)
+        || `<div style="margin-bottom:16px"><div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">⚽ Maior Sequência de Pontos</div><div style="font-size:0.85rem;color:var(--text-muted)">Ninguém emendou 2 jogos pontuando ainda.</div></div>`;
 
-      // Recordes históricos
-      if (streakRecord.length) {
-        const top3 = streakRecord.slice(0,3);
-        seqHtml += `<div style="margin-bottom:16px">
-          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">⚡ Maior Sequência Histórica</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            ${top3.map((a,i)=>{
-              const medal = i===0?'🥇':i===1?'🥈':'🥉';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
-                <span style="font-weight:600">${medal} ${esc(a.u.apelido||a.u.nome)}</span>
-                <span style="color:#60A5FA;font-weight:700">${a.maxStreak} acerto${a.maxStreak>1?'s':''}${a.maxStreak===a.currentStreak&&a.currentStreak>0?' <span style="font-size:0.72rem;color:var(--green)">(ativo!)</span>':''}</span>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>`;
-      }
-
-      // Hat-tricks
-      if (hatTricks.length) {
-        seqHtml += `<div style="margin-bottom:16px">
-          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎩 Hat-tricks (3+ exatos consecutivos)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">
-            ${hatTricks.map(a=>{
-              const isActive = a.currentExactStreak >= 3;
-              return `<div style="background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);border-radius:20px;padding:5px 12px;font-size:0.83rem;font-weight:600;color:var(--gold)">
-                🎩 ${esc(a.u.apelido||a.u.nome)} (${a.maxExactStreak}x)${isActive?' 🔥':''}
-              </div>`;
-            }).join('')}
-          </div>
-          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">🔥 = sequência ainda ativa</div>
-        </div>`;
-      } else if (totalJogos >= 3) {
-        seqHtml += `<div style="margin-bottom:16px">
-          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎩 Hat-tricks (3+ exatos consecutivos)</div>
-          <div style="font-size:0.85rem;color:var(--text-muted)">Nenhum hat-trick ainda — quem vai ser o primeiro? 👀</div>
-        </div>`;
-      }
+      // 🎯 Maior sequência de PLACARES EXATOS seguidos (só placar cravado).
+      seqHtml += _streakList('🎯 Maior Sequência de Placares Exatos (cravados seguidos)', exatosSeq, 'maxExactStreak', 'currentExactStreak', 'var(--gold)', 'exato', 'exatos', true)
+        || `<div style="margin-bottom:16px"><div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎯 Maior Sequência de Placares Exatos</div><div style="font-size:0.85rem;color:var(--text-muted)">Ninguém cravou 2 placares exatos seguidos ainda — quem vai ser o primeiro? 👀</div></div>`;
 
       // Sniper por rodada
       if (rounds.length) {
