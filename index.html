@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.19">
+<meta name="app-version" content="v1.12.20">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1514,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.19</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.20</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -3345,7 +3345,18 @@ async function renderDashboard() {
       && (!!a.acertou_campeao === !!b.acertou_campeao);
     const _posArr = ranking.map((u,i) => (i>0 && _rankFullyTied(ranking[i-1], u)) ? null : i+1);
     for (let i=1;i<_posArr.length;i++) if (_posArr[i]===null) _posArr[i]=_posArr[i-1];
+    // 🔻 Zona de rebaixamento (alusão ao Brasileirão): marca os 4 últimos
+    // colocados. Só faz sentido com gente suficiente e jogos lançados — exige
+    // >=8 participantes para os 4 últimos serem minoria clara.
+    const _relegStart = (totalJogos > 0 && ranking.length >= 8) ? ranking.length - 4 : -1;
     ranking.forEach((u,i)=>{
+      const _inReleg = _relegStart >= 0 && i >= _relegStart;
+      const _relegRow = _inReleg ? ' style="background:rgba(255,68,68,.07)"' : '';
+      // Faixa divisória antes do 1º rebaixado (tabela e cards).
+      if (_inReleg && i === _relegStart) {
+        html += `<tr><td colspan="10" style="background:rgba(255,68,68,.14);color:#ff6b6b;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 12px;text-align:center">🔻 Zona de Rebaixamento</td></tr>`;
+        cardsHtml += `<div style="background:rgba(255,68,68,.14);color:#ff6b6b;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 12px;text-align:center;border-radius:8px;margin:6px 0 8px">🔻 Zona de Rebaixamento</div>`;
+      }
       const _isTiedPos = (i>0 && _posArr[i]===_posArr[i-1]) || (i<_posArr.length-1 && _posArr[i+1]===_posArr[i]);
       const pos=_posArr[i];
       const pct = totalJogos>0 ? Math.round(u.jogos/totalJogos*100) : 0;
@@ -3367,9 +3378,9 @@ async function renderDashboard() {
           ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${teamFlag(u.campeao)} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
           : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`);
 
-      // Tabela (desktop) — inalterada
-      html += `<tr class="${isMe?'is-me':''}">
-        <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}${tiedMark}</td>
+      // Tabela (desktop)
+      html += `<tr class="${isMe?'is-me':''}"${_relegRow}>
+        <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}${tiedMark}${_inReleg?'<span style="display:block;font-size:0.62rem;line-height:1" title="Zona de rebaixamento">🔻</span>':''}</td>
         <td style="cursor:pointer" onclick="openUserProfile('${u.uid}')" title="Ver perfil e estatísticas"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
         <td><span class="pts-badge">${u.pontos}</span></td>
         <td class="text-green">${u.exatos}</td>
@@ -3387,9 +3398,9 @@ async function renderDashboard() {
         delta>0  ? `<span class="rank-mov-pos">↑${delta}</span>` :
         delta<0  ? `<span class="rank-mov-neg">↓${Math.abs(delta)}</span>` :
                    `<span class="rank-mov-zero">—</span>`;
-      cardsHtml += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="openUserProfile('${u.uid}')">
+      cardsHtml += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="openUserProfile('${u.uid}')"${_inReleg?' style="border-color:rgba(255,68,68,.45);background:rgba(255,68,68,.06)"':''}>
         <div class="rank-card-top">
-          <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}</div>
+          <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}${_inReleg?'<span style="font-size:0.7rem" title="Zona de rebaixamento">🔻</span>':''}</div>
           <div class="rank-card-name"><div class="rk-apelido">${esc(u.apelido)}</div><div class="rk-nome">${esc(u.nome)}</div></div>
           <div class="rank-card-right"><span class="pts-badge">${u.pontos} pts</span><div style="font-size:0.72rem;margin-top:3px">${distLider}</div></div>
         </div>
