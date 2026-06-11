@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.16">
+<meta name="app-version" content="v1.12.17">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1514,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.16</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.17</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -5983,16 +5983,30 @@ async function renderEstatisticas() {
         const _pending = _pendingUsers.length;
         const _withPal = users.length - _pending;
         const _pct = users.length > 0 ? Math.round(_withPal / users.length * 100) : 0;
-        // Com 5 pendentes ou menos, mostra quem ainda não palpitou (apelidos).
-        const _pendingNamesHtml = (_pending > 0 && _pending <= 5)
-          ? '<div style="margin-top:8px;font-size:0.74rem;color:var(--orange);line-height:1.5">⏳ Falta(m) palpitar: <b>' + _pendingUsers.map(u=>esc(u.apelido||u.nome||'?')).join('</b>, <b>') + '</b></div>'
-          : '';
 
         // Labels
         const _gKey = Object.keys(GRUPOS_DATA).find(k => GRUPOS_DATA[k].games.some(gm => gm.id === game.id));
         const _groupLbl = _gKey ? 'Grupo ' + _gKey : '';
         const _time = _gr.time_override || GAME_TIMES[game.id] || '--:--';
         const _dateStr = _gr.date_override ? _isoToGameDate(_gr.date_override) : (game.date || '');
+
+        // Painel "quem falta palpitar": abre/fecha ao clicar no chip Pendente(s).
+        // Aberto por padrão com 5 ou menos pendentes; com botão de compartilhar
+        // a lista (share nativo no celular / copiar no desktop).
+        _statPending[game.id] = {
+          users: _pendingUsers.map(u => ({ a: u.apelido || '', n: u.nome || '' })),
+          title: game.h + ' × ' + game.a,
+          when: (_dateStr ? _dateStr + ' às ' : '') + _time
+        };
+        const _pendingPanelHtml = _pending > 0
+          ? '<div id="stat-pending-' + game.id + '" style="display:' + (_pending <= 5 ? 'block' : 'none') + ';margin-top:8px;background:rgba(255,140,0,.07);border:1px solid rgba(255,140,0,.25);border-radius:8px;padding:8px 10px;text-align:left">'
+            + '<div style="font-size:0.72rem;font-weight:700;color:var(--orange);margin-bottom:5px">⏳ Falta(m) palpitar (' + _pending + '):</div>'
+            + '<div style="font-size:0.76rem;line-height:1.6">'
+            + _pendingUsers.map(u => '<b style="color:var(--orange)">' + esc(u.apelido || '?') + '</b>' + (u.nome ? ' <span style="color:var(--text-muted);font-size:0.68rem">(' + esc(u.nome) + ')</span>' : '')).join(', ')
+            + '</div>'
+            + '<div class="no-capture" style="text-align:right;margin-top:6px"><button type="button" class="ngc-mini-btn" onclick="statSharePending(\'' + game.id + '\')">📤 Compartilhar lista</button></div>'
+            + '</div>'
+          : '';
 
         // Post-lock stats
         let _postLock = '';
@@ -6097,7 +6111,7 @@ async function renderEstatisticas() {
           + '<div style="font-size:0.65rem;color:var(--text-muted)">Palpites enviados</div>'
           + '</div>'
           + (_pending > 0
-            ? '<div style="background:rgba(255,140,0,.1);border:1px solid rgba(255,140,0,.25);border-radius:8px;padding:5px 10px;text-align:center"><div style="font-size:0.95rem;font-weight:700;color:var(--orange)">' + _pending + '</div><div style="font-size:0.65rem;color:var(--text-muted)">Pendente(s)</div></div>'
+            ? '<div onclick="statTogglePending(\'' + game.id + '\')" title="Clique para ver/ocultar quem falta" style="cursor:pointer;background:rgba(255,140,0,.1);border:1px solid rgba(255,140,0,.25);border-radius:8px;padding:5px 10px;text-align:center"><div style="font-size:0.95rem;font-weight:700;color:var(--orange)">' + _pending + '</div><div style="font-size:0.65rem;color:var(--text-muted)">Pendente(s) 👁️</div></div>'
             : '<div style="background:rgba(76,175,80,.1);border:1px solid rgba(76,175,80,.25);border-radius:8px;padding:5px 10px;text-align:center"><div style="font-size:0.95rem;font-weight:700;color:var(--green)">✅ 100%</div><div style="font-size:0.65rem;color:var(--text-muted)">Todos enviaram</div></div>'
           )
           + '<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:5px 10px;text-align:center">'
@@ -6105,7 +6119,7 @@ async function renderEstatisticas() {
           + '<div style="font-size:0.65rem;color:var(--text-muted)">Participação</div>'
           + '</div>'
           + '</div>'
-          + _pendingNamesHtml
+          + _pendingPanelHtml
           + _postLock
           + '<div class="no-capture" style="text-align:right;margin-top:10px">'
           + '<button type="button" class="ngc-mini-btn" title="Compartilhar esta partida como imagem" onclick="shareStatCard(this)">📸 Compartilhar</button>'
@@ -9747,6 +9761,31 @@ function _addStatShareButtons(cont) {
     b.onclick = () => shareStatCard(b);
     card.appendChild(b);
   });
+}
+
+// Lista de pendentes por jogo (preenchida ao renderizar Estatísticas).
+const _statPending = {};
+function statTogglePending(gid) {
+  const el = document.getElementById('stat-pending-' + gid);
+  if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+}
+async function statSharePending(gid) {
+  const d = _statPending[gid];
+  if (!d || !d.users.length) { showToast('Ninguém pendente nesta partida.', 'info'); return; }
+  const linhas = d.users.map(u => '• ' + u.a + (u.n ? ' (' + u.n + ')' : '')).join('\n');
+  const txt = `⏳ *Falta palpitar* — ${d.title}\n${d.when ? d.when + '\n' : ''}\n${linhas}\n\nNão esqueçam de palpitar no Bolão ICN! ⚽`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ text: txt });
+    } else {
+      await navigator.clipboard.writeText(txt);
+      showToast('Lista copiada! Cole no WhatsApp.', 'success');
+    }
+  } catch(e) {
+    if (e.name === 'AbortError') return;
+    try { await navigator.clipboard.writeText(txt); showToast('Lista copiada! Cole no WhatsApp.', 'success'); }
+    catch(_) { showToast('Não foi possível compartilhar.', 'error'); }
+  }
 }
 
 // "Ver mais" no card de partida do dashboard → abre Estatísticas e rola até o
