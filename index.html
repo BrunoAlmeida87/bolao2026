@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.21">
+<meta name="app-version" content="v1.12.22">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1514,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.21</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.22</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -9529,14 +9529,26 @@ function isMobileClient() {
 // ════════════════════════════════════════════
 // CANVAS SHARE — Gerar imagem do ranking (alta resolução 2x)
 // ════════════════════════════════════════════
-const _CANVAS_SCALE = 2; // 2x para alta resolução
+const _CANVAS_SCALE = 3; // alvo: 3x (altíssima resolução)
 
-function _mkCanvas(w, h) {
+// Cria o canvas mirando _CANVAS_SCALE, mas reduz o fator se as dimensões finais
+// passarem dos limites seguros de canvas — assim listas longas (ex.: 57 jogadores)
+// saem nítidas SEM truncar (iOS/Android cortam canvas muito altos). O ctx é
+// escalado pelo fator real aplicado, então o desenho em coordenadas lógicas
+// (w×h) preenche o canvas inteiro independente do fator.
+function _mkCanvas(w, h, desiredScale) {
+  const MAX_DIM = 4096;               // limite seguro por lado (inclusive iOS antigo)
+  const MAX_AREA = 16 * 1024 * 1024;  // 16 M px — seguro inclusive em iOS antigo
+  let scale = desiredScale || _CANVAS_SCALE;
+  scale = Math.min(scale, MAX_DIM / Math.max(w, h));
+  scale = Math.min(scale, Math.sqrt(MAX_AREA / (w * h)));
+  scale = Math.max(1, scale);         // nunca abaixo de 1×
   const canvas = document.createElement('canvas');
-  canvas.width = w * _CANVAS_SCALE;
-  canvas.height = h * _CANVAS_SCALE;
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
   const ctx = canvas.getContext('2d');
-  ctx.scale(_CANVAS_SCALE, _CANVAS_SCALE);
+  // Mapeia coordenadas lógicas → pixels reais (usa a razão exata pós-arredondamento).
+  ctx.scale(canvas.width / w, canvas.height / h);
   return { canvas, ctx };
 }
 
@@ -9615,8 +9627,14 @@ async function shareRankingImage(limit) {
   const label = limit > 0 ? `Top ${list.length}` : 'Ranking Completo';
   const filename = limit > 0 ? `ranking-top${list.length}.png` : 'ranking-completo.png';
 
-  const ROW_H=44, HEADER_H=76, PAD=12;
-  const W=600, H=HEADER_H + list.length*ROW_H + PAD*2;
+  const ROW_H=44, HEADER_H=76, PAD=12, COL_W=600, COL_GAP=20;
+  // Multi-coluna para listas longas: mantém a ALTURA baixa (cada coluna recebe
+  // parte dos jogadores), evitando canvas altos demais que truncam em celulares
+  // — e permitindo alta resolução (3×) sem estourar os limites do canvas.
+  const cols = list.length<=24 ? 1 : list.length<=60 ? 2 : 3;
+  const rowsPerCol = Math.ceil(list.length / cols);
+  const W = COL_W*cols + COL_GAP*(cols-1);
+  const H = HEADER_H + rowsPerCol*ROW_H + PAD*2;
   const {canvas, ctx} = _mkCanvas(W, H);
 
   // fundo
@@ -9629,31 +9647,34 @@ async function shareRankingImage(limit) {
   ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font='13px Arial';
   ctx.fillText(new Date().toLocaleDateString('pt-BR'),W/2,58);
 
-  // header de colunas
+  // separador do header
   ctx.fillStyle='rgba(255,255,255,0.15)';
   ctx.fillRect(0, HEADER_H-2, W, 1);
 
-  // linhas
+  // linhas (distribuídas em colunas: coluna c, linha r)
   list.forEach((u,i)=>{
     const pos = i+1;
-    const rowY = HEADER_H + i*ROW_H + PAD;
+    const c = Math.floor(i / rowsPerCol);
+    const r = i % rowsPerCol;
+    const colX = c*(COL_W+COL_GAP);
+    const rowY = HEADER_H + r*ROW_H + PAD;
     // zebra
-    if (i%2===0) { ctx.fillStyle='rgba(255,255,255,0.025)'; ctx.fillRect(0,rowY-4,W,ROW_H); }
+    if (r%2===0) { ctx.fillStyle='rgba(255,255,255,0.025)'; ctx.fillRect(colX,rowY-4,COL_W,ROW_H); }
     // destaque top 3
     if (pos<=3) {
       const tintColor = pos===1?'rgba(255,215,0,0.07)':pos===2?'rgba(192,192,192,0.06)':'rgba(205,127,50,0.06)';
-      ctx.fillStyle=tintColor; ctx.fillRect(0,rowY-4,W,ROW_H);
+      ctx.fillStyle=tintColor; ctx.fillRect(colX,rowY-4,COL_W,ROW_H);
     }
 
     // posição
     const posColor = pos===1?'#FFD700':pos===2?'#C0C0C0':pos===3?'#CD7F32':'rgba(255,255,255,0.5)';
     ctx.fillStyle=posColor; ctx.font=`bold ${pos<=3?'15':'14'}px Arial`;
-    ctx.textAlign='left'; ctx.fillText(`${pos}.`,18,rowY+26);
+    ctx.textAlign='left'; ctx.fillText(`${pos}.`,colX+18,rowY+26);
 
     // nome
     ctx.fillStyle=pos<=3?'#FFFFFF':'rgba(255,255,255,0.85)';
     ctx.font=`${pos<=3?'bold ':''}14px Arial`;
-    ctx.textAlign='left'; ctx.fillText(u.apelido.length>24?u.apelido.slice(0,22)+'…':u.apelido,46,rowY+26);
+    ctx.textAlign='left'; ctx.fillText(u.apelido.length>24?u.apelido.slice(0,22)+'…':u.apelido,colX+46,rowY+26);
 
     // delta
     const prevPos = _cachedPositionDeltas[u.uid];
@@ -9662,17 +9683,17 @@ async function shareRankingImage(limit) {
       const dTxt = d>0?`↑${d}`:d<0?`↓${Math.abs(d)}`:'=';
       const dColor = d>0?'#00C851':d<0?'#ff6b6b':'#8899AA';
       ctx.fillStyle=dColor; ctx.font='bold 11px Arial';
-      ctx.textAlign='center'; ctx.fillText(dTxt,310,rowY+27);
+      ctx.textAlign='center'; ctx.fillText(dTxt,colX+310,rowY+27);
     }
 
     // pts
     ctx.fillStyle=posColor; ctx.font='bold 14px Arial';
-    ctx.textAlign='right'; ctx.fillText(`${u.pontos} pts`,W-18,rowY+26);
+    ctx.textAlign='right'; ctx.fillText(`${u.pontos} pts`,colX+COL_W-18,rowY+26);
 
     // chips pequenos
     ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='11px Arial';
     ctx.textAlign='right';
-    ctx.fillText(`🎯${u.exatos} ⚡${u.venc_saldo} ✓${u.apenas_venc}`,W-18,rowY+40);
+    ctx.fillText(`🎯${u.exatos} ⚡${u.venc_saldo} ✓${u.apenas_venc}`,colX+COL_W-18,rowY+40);
   });
 
   const shareText = `🏆 ${label} Bolão ICN Copa 2026\n\n`+list.slice(0,5).map((u,i)=>`${i+1}. ${u.apelido} – ${u.pontos} pts`).join('\n');
