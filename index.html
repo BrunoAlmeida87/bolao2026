@@ -288,6 +288,14 @@ select option{background:var(--mid-blue);color:var(--white)}
 }
 .ranking-table tr:hover td{background:rgba(255,255,255,.03)}
 .ranking-table tr.is-me td{background:rgba(255,215,0,.06)}
+/* ── Ver Todos os Palpites: rolagem com cabeçalho congelado (estilo Excel) ── */
+.vt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;max-height:72vh;position:relative}
+.vt-scroll-top{overflow-x:auto;overflow-y:hidden;height:14px}
+.vt-scroll-top > div{height:1px}
+.vt-scroll::-webkit-scrollbar,.vt-scroll-top::-webkit-scrollbar{height:12px;width:12px}
+.vt-scroll::-webkit-scrollbar-track,.vt-scroll-top::-webkit-scrollbar-track{background:rgba(255,255,255,.04)}
+.vt-scroll::-webkit-scrollbar-thumb,.vt-scroll-top::-webkit-scrollbar-thumb{background:rgba(255,215,0,.35);border-radius:6px}
+.vt-scroll::-webkit-scrollbar-thumb:hover,.vt-scroll-top::-webkit-scrollbar-thumb:hover{background:rgba(255,215,0,.55)}
 .rank-pos{
   width:32px;height:32px;border-radius:50%;
   display:inline-flex;align-items:center;justify-content:center;
@@ -4795,10 +4803,12 @@ async function renderVerTodos() {
 
     const phaseSections = phases.map((p, i) => {
       const done = p.games.filter(g => (res[g.id]||{}).h_real !== undefined).length;
+      const tableMinW = 140 + 60 + shown.length*80;
       return `<details class="vt-phase" ${i===openIdx?'open':''} style="margin-bottom:10px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
         <summary style="padding:10px 12px;background:rgba(255,215,0,.07);color:var(--gold);font-weight:700;font-size:0.82rem;cursor:pointer">${p.label} <span style="font-weight:400;color:var(--text-muted)">· ${p.games.length} jogos · ${done} c/ resultado</span></summary>
-        <div style="overflow:auto;-webkit-overflow-scrolling:touch">
-        <table class="ranking-table" style="min-width:${140+60+shown.length*80}px;font-size:0.8rem;border-collapse:separate;border-spacing:0">
+        <div class="vt-scroll-top"><div style="width:${tableMinW}px"></div></div>
+        <div class="vt-scroll">
+        <table class="ranking-table" style="min-width:${tableMinW}px;font-size:0.8rem;border-collapse:separate;border-spacing:0">
           ${theadHtml}
           <tbody>${p.games.map(rowHtml).join('')}</tbody>
         </table>
@@ -4815,9 +4825,30 @@ async function renderVerTodos() {
       ${filterBox}
       ${champSummary}
       ${phaseSections}`;
+    _vtWireScrollbars();
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
+}
+
+// Liga a barra de rolagem horizontal superior (logo abaixo dos nomes) à rolagem
+// da tabela em "Ver Todos os Palpites", mantendo as duas sincronizadas. Assim dá
+// pra rolar horizontalmente sem precisar descer até o fim da tabela. A largura do
+// trilho da barra superior acompanha a largura real da tabela (recalculada quando
+// a seção <details> abre, já que conteúdo oculto reporta largura 0).
+function _vtWireScrollbars() {
+  document.querySelectorAll('#ver-todos-content .vt-phase').forEach(det => {
+    const top = det.querySelector('.vt-scroll-top');
+    const main = det.querySelector('.vt-scroll');
+    if (!top || !main) return;
+    const inner = top.firstElementChild;
+    const fit = () => { if (main.scrollWidth > 0) inner.style.width = main.scrollWidth + 'px'; };
+    fit();
+    det.addEventListener('toggle', () => { if (det.open) requestAnimationFrame(fit); });
+    let syncing = false;
+    top.addEventListener('scroll', () => { if (syncing) return; syncing = true; main.scrollLeft = top.scrollLeft; syncing = false; });
+    main.addEventListener('scroll', () => { if (syncing) return; syncing = true; top.scrollLeft = main.scrollLeft; syncing = false; });
+  });
 }
 
 // ════════════════════════════════════════════
