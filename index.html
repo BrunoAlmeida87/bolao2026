@@ -6158,18 +6158,27 @@ async function renderEstatisticas() {
           _statusHtml = '<span style="color:var(--green);font-weight:700">✅ Aberto</span>';
         }
 
-        // Countdown (static)
-        let _cdStr;
-        if (_diff <= 0) {
-          _cdStr = '⚽ Em andamento';
-        } else {
-          const _d = Math.floor(_diff / 86400000);
-          const _h = Math.floor((_diff % 86400000) / 3600000);
-          const _m = Math.floor((_diff % 3600000) / 60000);
+        // Countdown (estático). Enquanto os palpites estão ABERTOS, conta o tempo
+        // que falta para o BLOQUEIO (travamento) dos palpites; depois disso, conta
+        // para o início do jogo (ou "Em andamento").
+        const _fmtDur = ms => {
+          const _d = Math.floor(ms / 86400000);
+          const _h = Math.floor((ms % 86400000) / 3600000);
+          const _m = Math.floor((ms % 3600000) / 60000);
           const _parts = [];
           if (_d > 0) _parts.push(_d + 'd');
           _parts.push(_h + 'h ' + _m + 'min');
-          _cdStr = _parts.join(' ');
+          return _parts.join(' ');
+        };
+        let _cdHtml;
+        if (!_closed && _diffToLock > 0) {
+          _cdHtml = '<div style="font-size:0.78rem;color:var(--orange);margin-top:3px">🔒 ' + _fmtDur(_diffToLock) + '</div>'
+                  + '<div style="font-size:0.62rem;color:var(--text-muted)">para travar os palpites</div>';
+        } else if (_diff <= 0) {
+          _cdHtml = '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">⏱ ⚽ Em andamento</div>';
+        } else {
+          _cdHtml = '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">⏱ ' + _fmtDur(_diff) + '</div>'
+                  + '<div style="font-size:0.62rem;color:var(--text-muted)">para o início</div>';
         }
 
         // Participation
@@ -6327,7 +6336,7 @@ async function renderEstatisticas() {
           + '</div>'
           + '<div style="text-align:right">'
           + _statusHtml
-          + '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">⏱ ' + _cdStr + '</div>'
+          + _cdHtml
           + '</div>'
           + '</div>'
           + '<div style="display:flex;gap:7px;flex-wrap:wrap">'
