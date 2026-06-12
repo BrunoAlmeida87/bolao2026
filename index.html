@@ -1644,6 +1644,21 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   </div>
 </div>
 
+<!-- MODAL PALPITES PENDENTES (próximos jogos com timer ativo) -->
+<div id="modal-pending-pal" class="modal-overlay hidden" onclick="if(event.target===this)closePendingPalModal()">
+  <div class="modal-box" style="max-width:440px">
+    <button class="modal-close" onclick="closePendingPalModal()">✕</button>
+    <div style="font-size:2rem;margin-bottom:4px">⏳</div>
+    <h3 style="margin:0 0 6px;color:var(--orange)">Palpites pendentes!</h3>
+    <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.5;margin:0 0 12px">Você ainda não palpitou em <b id="pending-pal-count" style="color:var(--white)"></b> dos próximos jogos. Corra antes que trave! ⏱️</p>
+    <div id="pending-pal-list" style="text-align:left;display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <button class="btn btn-primary" onclick="goToPalpitesFromPending()">⚽ Palpitar agora</button>
+      <button class="btn btn-secondary" onclick="closePendingPalModal()">Depois</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PAGAMENTO PENDENTE -->
 <div id="modal-payment" class="modal-overlay hidden" onclick="if(event.target===this)closePaymentModal()">
   <div class="modal-box" style="max-width:400px">
@@ -2510,6 +2525,9 @@ function goToUserPalpites(uid) {
 function navigateTo(page, opts) {
   opts = opts || {};
   const _prevPage = _currentPage;
+  // Ao SAIR da página principal, rearma o lembrete de palpites pendentes para
+  // reaparecer na próxima entrada no dashboard.
+  if (_prevPage === 'dashboard' && page !== 'dashboard') _pendingAlertShown = false;
   // uid alvo da tela "ver palpites de um usuário"
   if (page === 'ver-palpites' && opts.uid !== undefined) _pendingPalpitesUid = opts.uid;
   const _navUid = (page === 'ver-palpites') ? _pendingPalpitesUid : null;
@@ -3520,7 +3538,8 @@ async function renderDashboard() {
     // Gráfico de evolução só renderiza quando allPals disponível (caminho completo)
     if (allPals) _renderEvolutionChart(ranking, allPals, res, champPicks, document.getElementById('evo-chart-container'));
     _showNewResultsModal(res, _dashMyPals);
-    setTimeout(_maybeShowSimuladorIntro, 700); // pop-up de novidade (1x por navegador)
+    setTimeout(_maybeShowPendingPalpitesAlert, 450); // lembrete de palpites pendentes (a cada entrada)
+    setTimeout(_maybeShowSimuladorIntro, 900);       // pop-up de novidade (1x por navegador)
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
   }
@@ -10628,6 +10647,61 @@ function closeSimuladorIntro() {
 function openSimuladorFromIntro() {
   closeSimuladorIntro();
   navigateTo('simulador');
+}
+
+// Alerta de palpites pendentes: aparece sempre que o usuário ENTRA na página
+// principal e há jogos com timer ativo (palpite ainda aberto) sem palpite dele.
+// _pendingAlertShown evita repetir o pop-up em re-renders da mesma visita; é
+// zerado ao sair do dashboard (em navigateTo), então re-aparece a cada entrada.
+let _pendingAlertShown = false;
+function _fmtRemaining(ms) {
+  if (ms <= 0) return 'instantes';
+  const d = Math.floor(ms / 86400000), h = Math.floor((ms % 86400000) / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  const parts = [];
+  if (d > 0) parts.push(d + 'd');
+  if (d > 0 || h > 0) parts.push(h + 'h');
+  parts.push(m + 'min');
+  return parts.join(' ');
+}
+function _maybeShowPendingPalpitesAlert() {
+  try {
+    if (_pendingAlertShown) return;
+    if (document.querySelector('.modal-overlay:not(.hidden)')) return; // não empilha sobre outro modal
+    const grp = _nextGamesGroup();
+    const now = Date.now();
+    // Jogos da leva com timer ativo, palpite AINDA ABERTO e sem palpite do usuário.
+    const pend = (grp.items || []).filter(({ game }) => {
+      const r = _dashResults[game.id] || {};
+      if (isPalpiteClosed(game, r)) return false;
+      const p = _dashMyPals[game.id];
+      return !(p && p.h !== undefined && p.a !== undefined);
+    });
+    if (!pend.length) return;
+    const listEl = document.getElementById('pending-pal-list');
+    const cntEl = document.getElementById('pending-pal-count');
+    if (!listEl || !cntEl) return;
+    cntEl.textContent = pend.length + ' jogo' + (pend.length > 1 ? 's' : '');
+    listEl.innerHTML = pend.map(({ game }) => {
+      const r = _dashResults[game.id] || {};
+      const teams = _getResolvedTeamsForGame(game, _dashResults);
+      const lockAt = _gameLockInstant(game, r);
+      const rem = lockAt ? _fmtRemaining(lockAt.getTime() - now) : '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:rgba(255,140,0,.08);border:1px solid rgba(255,140,0,.25);border-radius:8px;padding:7px 10px">
+        <span style="font-size:0.84rem;font-weight:600">${teamFlag(teams.h)} ${esc((teams.h||'').split(' ')[0])} × ${teamFlag(teams.a)} ${esc((teams.a||'').split(' ')[0])}</span>
+        ${rem ? `<span style="font-size:0.74rem;color:var(--orange);font-weight:700;white-space:nowrap">⏱ trava em ${rem}</span>` : ''}
+      </div>`;
+    }).join('');
+    document.getElementById('modal-pending-pal').classList.remove('hidden');
+    _pendingAlertShown = true;
+  } catch(_) {}
+}
+function closePendingPalModal() {
+  const el = document.getElementById('modal-pending-pal');
+  if (el) el.classList.add('hidden');
+}
+function goToPalpitesFromPending() {
+  closePendingPalModal();
+  navigateTo('palpites');
 }
 
 // ════════════════════════════════════════════
