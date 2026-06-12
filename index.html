@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.23">
+<meta name="app-version" content="v1.12.24">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1514,7 +1514,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.23</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.12.24</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -1992,6 +1992,10 @@ async function _fetchUsr() {
   u=snap.docs.map(d=>({uid:d.id,...d.data()}));
   _scSet('usr',u,_SC_TTL.usr); return u;
 }
+// Quando true, a próxima leitura de palpites ignora cache de sessão E snapshot,
+// buscando tudo ao vivo do Firestore. Acionado pelo botão ↻ e pelo pull-to-refresh
+// (ações explícitas do usuário). É consumido na primeira busca completa.
+let _forcePalsFresh = false;
 async function _fetchPals(users, force) {
   if (!force) { let p=_scGet('pals'); if(p) return p; }
   const allPals={},champPicks={};
@@ -2007,6 +2011,7 @@ async function _fetchPals(users, force) {
     champPicks[u.uid]=pdata?.campeao||null;
   }));
   const data={allPals,champPicks};
+  _forcePalsFresh = false; // qualquer busca completa consome o pedido de atualização
   _scSet('pals',data,_SC_TTL.pals); return data;
 }
 // Versão econômica para páginas só-leitura (Ver Todos, Estatísticas, Perfil, H2H).
@@ -2020,6 +2025,9 @@ async function _fetchPals(users, force) {
 // _tryRankingCache) e se contém TODOS os uids pedidos — caso contrário cai no
 // fallback, garantindo que nenhum participante novo apareça sem palpites.
 async function _fetchPalsCached(users) {
+  // Atualização forçada (botão ↻ / pull-to-refresh): busca todos ao vivo,
+  // ignorando o snapshot congelado — corrige "pendentes" desatualizados.
+  if (_forcePalsFresh) return _fetchPals(users, true);
   const cached = _scGet('pals'); if (cached) return cached;
   try {
     const rc = await _tryRankingCache();
@@ -2051,6 +2059,7 @@ let _currentVerPalpitesUid = null;
 function refreshPage() {
   if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
   _scDel('res','usr','pals','indecisao');
+  _forcePalsFresh = true; // força palpites ao vivo (não usa snapshot congelado)
   navigateTo(_currentPage, { history: 'replace' });
 }
 function _refreshBtn() {
@@ -2257,6 +2266,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // assim como o botão manual ↻ já fazia via refreshPage().
   if (performance?.getEntriesByType?.('navigation')?.[0]?.type === 'reload') {
     _scDel('res','usr','pals','indecisao');
+    _forcePalsFresh = true; // pull-to-refresh/F5 também força palpites ao vivo
   }
   updatePwaInstallButton();
   // Timeout de segurança: se o loading não sumir em 20s, força auth e avisa
@@ -3191,7 +3201,7 @@ async function renderDashboard() {
       // (0 leituras extras). Usa para: (a) habilitar a barra de distribuição e
       // o gráfico de evolução neste mesmo render; (b) aquecer o cache de sessão
       // 'pals', zerando as leituras de Ver Todos/Estatísticas/Perfil/H2H.
-      if (_rankCache.pals && _rankCache.pals.allPals && !_scGet('pals')) {
+      if (_rankCache.pals && _rankCache.pals.allPals && !_scGet('pals') && !_forcePalsFresh) {
         const sAll = {}; Object.keys(_rankCache.pals.allPals).forEach(k => { sAll[k] = _rankCache.pals.allPals[k] || {}; });
         sAll[currentUser.uid] = Object.assign({}, _dashMyPals);
         const sChamp = Object.assign({}, _rankCache.pals.champPicks || {});
