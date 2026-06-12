@@ -1623,6 +1623,27 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   </div>
 </div>
 
+<!-- MODAL NOVIDADE: SIMULADOR -->
+<div id="modal-simulador-intro" class="modal-overlay hidden" onclick="if(event.target===this)closeSimuladorIntro()">
+  <div class="modal-box" style="max-width:440px">
+    <button class="modal-close" onclick="closeSimuladorIntro()">✕</button>
+    <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">🆕 Novidade</div>
+    <div style="font-size:2rem;margin-bottom:4px">🔮</div>
+    <h3 style="margin:0 0 6px;color:var(--gold)">Simulador de Resultados</h3>
+    <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.55;margin:0 0 14px">Teste cenários <b>"e se?"</b> e veja como o ranking ficaria — sem alterar nada oficial.</p>
+    <div style="text-align:left;display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>1️⃣</span><span style="font-size:0.85rem;line-height:1.45">Abra a aba <b>🔮 Simulador</b> (no menu).</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>2️⃣</span><span style="font-size:0.85rem;line-height:1.45">Digite placares para os próximos jogos (os que já estão com <b>palpite travado</b> ou <b>em andamento</b>).</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>3️⃣</span><span style="font-size:0.85rem;line-height:1.45">O <b>ranking simulado</b> atualiza na hora, com setas <b>↑↓</b> mostrando quem sobe e desce.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>🔒</span><span style="font-size:0.85rem;line-height:1.45">É tudo <b>só no seu aparelho</b>: não muda os resultados oficiais nem aparece para outras pessoas.</span></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <button class="btn btn-primary" onclick="openSimuladorFromIntro()">🔮 Abrir Simulador</button>
+      <button class="btn btn-secondary" onclick="closeSimuladorIntro()">Entendi</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PAGAMENTO PENDENTE -->
 <div id="modal-payment" class="modal-overlay hidden" onclick="if(event.target===this)closePaymentModal()">
   <div class="modal-box" style="max-width:400px">
@@ -3499,6 +3520,7 @@ async function renderDashboard() {
     // Gráfico de evolução só renderiza quando allPals disponível (caminho completo)
     if (allPals) _renderEvolutionChart(ranking, allPals, res, champPicks, document.getElementById('evo-chart-container'));
     _showNewResultsModal(res, _dashMyPals);
+    setTimeout(_maybeShowSimuladorIntro, 700); // pop-up de novidade (1x por navegador)
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
   }
@@ -10578,6 +10600,29 @@ function closeNewResultsModal() {
   const el = document.getElementById('modal-new-results');
   if (el) el.classList.add('hidden');
   setTimeout(_checkAndShowPaymentReminder, 400);
+}
+
+// Pop-up de novidade do Simulador: mostrado uma única vez por navegador (flag em
+// localStorage). Não empilha sobre outro modal aberto — se houver, tenta de novo
+// numa próxima visita ao dashboard, garantindo que apareça pelo menos uma vez.
+function _maybeShowSimuladorIntro() {
+  try {
+    const key = 'bolao_seen_simulador_v1';
+    if (localStorage.getItem(key)) return;
+    if (document.querySelector('.modal-overlay:not(.hidden)')) return; // outro modal aberto
+    const el = document.getElementById('modal-simulador-intro');
+    if (!el) return;
+    localStorage.setItem(key, '1');
+    el.classList.remove('hidden');
+  } catch(_) {}
+}
+function closeSimuladorIntro() {
+  const el = document.getElementById('modal-simulador-intro');
+  if (el) el.classList.add('hidden');
+}
+function openSimuladorFromIntro() {
+  closeSimuladorIntro();
+  navigateTo('simulador');
 }
 
 // ════════════════════════════════════════════
