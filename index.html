@@ -9825,10 +9825,15 @@ async function shareRankingImage(limit) {
     ctx.fillStyle=posColor; ctx.font=`bold ${pos<=3?'15':'14'}px Arial`;
     ctx.textAlign='left'; ctx.fillText(`${pos}º`,colX+18,rowY+26);
 
-    // nome
+    // apelido
     ctx.fillStyle=pos<=3?'#FFFFFF':'rgba(255,255,255,0.85)';
     ctx.font=`${pos<=3?'bold ':''}14px Arial`;
-    ctx.textAlign='left'; ctx.fillText(u.apelido.length>24?u.apelido.slice(0,22)+'…':u.apelido,colX+46,rowY+26);
+    ctx.textAlign='left'; ctx.fillText(u.apelido.length>24?u.apelido.slice(0,22)+'…':u.apelido,colX+46,rowY+22);
+    // nome completo embaixo do apelido
+    if (u.nome) {
+      ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.font='11px Arial';
+      ctx.textAlign='left'; ctx.fillText(u.nome.length>30?u.nome.slice(0,28)+'…':u.nome,colX+46,rowY+38);
+    }
 
     // delta
     const prevPos = _cachedPositionDeltas[u.uid];
