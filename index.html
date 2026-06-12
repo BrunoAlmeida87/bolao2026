@@ -6288,6 +6288,36 @@ async function renderEstatisticas() {
           }
         }
 
+        // Grid (2 colunas) com o palpite de cada participante — só após o jogo
+        // travar (palpites já são públicos pelas regras). Duas colunas para não
+        // virar uma lista gigante com ~57 participantes. Se o resultado já saiu,
+        // mostra também os pontos de cada um.
+        let _palpitesGrid = '';
+        if (_closed) {
+          const _hasRes = _gr.h_real !== undefined && _gr.a_real !== undefined;
+          const _palRows = users
+            .map(u => ({ u, p: allPals[u.uid]?.[game.id] }))
+            .filter(x => x.p && x.p.h !== undefined && x.p.a !== undefined)
+            .sort((a, b) => (a.u.apelido || '').localeCompare(b.u.apelido || ''));
+          if (_palRows.length) {
+            _palpitesGrid = '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:12px">'
+              + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Palpite de cada participante (' + _palRows.length + ')</div>'
+              + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px">'
+              + _palRows.map(({ u, p }) => {
+                  const _pts = _hasRes ? calcPontos(p, _gr) : null;
+                  const _ps = (_hasRes && _pts !== null) ? _ptsBadgeStyle(_pts) : null;
+                  const _scoreCol = _ps ? _ps.color : 'var(--gold)';
+                  const _ptsTag = (_hasRes && _pts !== null) ? ' <span style="font-size:0.62rem;color:' + (_ps ? _ps.color : 'var(--text-muted)') + '">(' + (_pts > 0 ? '+' + _pts : '0') + ')</span>' : '';
+                  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;background:rgba(255,255,255,.03);border-radius:6px;padding:4px 8px;min-width:0">'
+                    + '<span style="font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(u.apelido || '') + (u.nome ? ' — ' + esc(u.nome) : '') + '">' + esc(u.apelido || '—') + '</span>'
+                    + '<span style="font-size:0.82rem;font-weight:700;color:' + _scoreCol + ';white-space:nowrap">' + p.h + '×' + p.a + _ptsTag + '</span>'
+                    + '</div>';
+                }).join('')
+              + '</div>'
+              + '</div>';
+          }
+        }
+
         return '<div id="stat-game-' + game.id + '" data-share-card style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;flex:1;min-width:260px">'
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:10px">'
           + '<div>'
@@ -6316,6 +6346,7 @@ async function renderEstatisticas() {
           + '</div>'
           + _pendingPanelHtml
           + _postLock
+          + _palpitesGrid
           + '<div class="no-capture" style="text-align:right;margin-top:10px">'
           + '<button type="button" class="ngc-mini-btn" title="Compartilhar esta partida como imagem" onclick="shareStatCard(this)">📸 Compartilhar</button>'
           + '</div>'
