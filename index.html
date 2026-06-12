@@ -2923,6 +2923,30 @@ function _missingPalInner(gameId) {
   return `⚠️ Você ainda não palpitou!${link}`;
 }
 
+// Banner do dashboard: avisa que o usuário ainda não completou a rodada de grupos
+// atual (por data) e leva direto à tela de palpites filtrada por aquela rodada.
+// Só aparece se houver jogos da rodada AINDA ABERTOS e SEM palpite do usuário —
+// caso contrário não há o que "finalizar". A rodada citada (primeira/segunda/
+// terceira) muda sozinha conforme o calendário (_currentGroupRound).
+function _roundReminderBanner() {
+  const r = _currentGroupRound();
+  if (!r) return ''; // fase de grupos encerrada — sem lembrete
+  const missing = ALL_GAMES.filter(g => {
+    if (g.r !== r) return false;
+    const res = _dashResults[g.id] || resultados[g.id] || {};
+    if (isPalpiteClosed(g, res)) return false; // já encerrado: não dá pra finalizar
+    const p = _dashMyPals[g.id];
+    return !(p && p.h !== undefined && p.a !== undefined);
+  });
+  if (!missing.length) return '';
+  const ord = r === 1 ? 'primeira' : r === 2 ? 'segunda' : 'terceira';
+  return `<div onclick="goToPalpiteRound(${r})" role="button" tabindex="0"
+      style="display:flex;align-items:center;gap:10px;background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.35);border-radius:12px;padding:11px 14px;margin-bottom:12px;cursor:pointer">
+      <span style="font-size:1.25rem;line-height:1">📝</span>
+      <span style="font-size:0.86rem;line-height:1.4">Você ainda não completou toda a <b>${ord} rodada</b>. <span style="color:var(--accent);font-weight:700;text-decoration:underline">Clique aqui para finalizar!</span></span>
+    </div>`;
+}
+
 function _refreshDashMyPalCard(gameId) {
   const el = document.getElementById(`ngc-mypalpite-${gameId}`);
   if (!el) return;
@@ -3279,6 +3303,7 @@ async function renderDashboard() {
     let html = `
       <div class="section-title">🏆 ${esc(CFG.nome_bolao)}${_refreshBtn()}</div>
 
+      ${_roundReminderBanner()}
       <div style="font-size:0.95rem;font-weight:700;color:var(--text-muted);margin:4px 0 10px">Jogos da próxima rodada:</div>
       <div id="next-games-wrap"></div>
 
@@ -3439,6 +3464,7 @@ async function renderDashboard() {
       ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>
     <div class="ranking-share-row">
       <button class="btn-share" onclick="shareMyRankingCard()">📸 Gerar imagem — Minha posição</button>
+      <button class="btn-share" onclick="shareTop5RelegImage()">📸 Gerar imagem — Top 5 + Rebaixamento</button>
       <button class="btn-share" onclick="shareRankingImage(10)">📸 Gerar imagem — Top 10</button>
       <button class="btn-share" onclick="shareRankingImage(0)">📸 Gerar imagem — Todos</button>
     </div>
@@ -3508,6 +3534,13 @@ async function renderPalpites(editUid=null) {
         <button class="date-filter-btn active" data-dateiso="" onclick="switchPalDate('')">Todos</button>
         ${_datePills}
       </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;font-weight:600">🔢 Filtrar por rodada <span style="font-weight:400;opacity:.8">(fase de grupos)</span>:</div>
+      <div class="date-filter-wrap" id="round-filter-wrap">
+        <button class="date-filter-btn round-filter-btn active" data-round="" onclick="switchPalRound('')">Todas</button>
+        <button class="date-filter-btn round-filter-btn" data-round="1" onclick="switchPalRound('1')">1ª rodada</button>
+        <button class="date-filter-btn round-filter-btn" data-round="2" onclick="switchPalRound('2')">2ª rodada</button>
+        <button class="date-filter-btn round-filter-btn" data-round="3" onclick="switchPalRound('3')">3ª rodada</button>
+      </div>
       <div class="phase-tabs" id="phase-tabs">`;
     phases.forEach((p,i)=>{ html += `<button class="phase-tab ${i===0?'active':''}" onclick="switchPalPhase('${p.key}')" data-phase="${p.key}">${p.label}</button>`; });
     html += `</div><div id="pal-phases">`;
@@ -3539,6 +3572,7 @@ async function renderPalpites(editUid=null) {
     updatePalProgress();
     updateGroupTabState();
     _applyPendingPalpiteScroll(); // deep-link "clique aqui" do dashboard
+    _applyPendingPalpiteRound();  // deep-link do lembrete de rodada do dashboard
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
@@ -3585,7 +3619,7 @@ function buildPalRow(game) {
   const effectiveIso = res.date_override || _gameDateToISO(game.date);
   const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
   const idBadge = `<span style="font-size:0.62rem;font-weight:800;background:rgba(255,255,255,.1);color:var(--text-muted);padding:1px 5px;border-radius:5px;letter-spacing:.03em">${esc(game.id)}</span> `;
-  return `<div class="game-row" data-gameiso="${effectiveIso}">
+  return `<div class="game-row" data-gameiso="${effectiveIso}" data-round="${game.r||''}">
     <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${idBadge}${displayDate} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" aria-label="Palpite gols - ${esc(teams.h)}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
@@ -3728,8 +3762,9 @@ async function onChampionChange(team) {
 }
 
 function switchPalDate(iso) {
-  document.querySelectorAll('.date-filter-btn').forEach(b =>
+  document.querySelectorAll('.date-filter-btn:not(.round-filter-btn)').forEach(b =>
     b.classList.toggle('active', b.dataset.dateiso === iso));
+  _setRoundFilterActive(''); // sai do filtro por rodada (modos exclusivos)
 
   const phaseTabs = document.getElementById('phase-tabs');
   const groupTabs = document.getElementById('group-tabs');
@@ -3782,6 +3817,10 @@ function switchPalDate(iso) {
 function switchPalPhase(key) {
   document.querySelectorAll('.phase-tab').forEach(t=>t.classList.toggle('active',t.dataset.phase===key));
   document.querySelectorAll('.pal-phase').forEach(p=>p.style.display=p.dataset.phase===key?'block':'none');
+  // Sai de um eventual filtro por rodada: restaura a visibilidade das partidas.
+  document.querySelectorAll('#pal-phases .game-row').forEach(r => { r.style.display = ''; });
+  _setRoundFilterActive('');
+  _applyPalGroupVisibility();
 }
 
 // Grupos com multi-seleção: clicar alterna o grupo; pelo menos um permanece ativo.
@@ -3794,6 +3833,11 @@ function switchPalGroup(grp, el) {
   if (!tab) return;
   tab.classList.toggle('active');
   if (!tabsWrap.querySelector('.group-tab.active')) tab.classList.add('active');
+  // Sai de um eventual filtro por rodada: restaura as partidas antes de aplicar
+  // a visibilidade por grupo (senão linhas escondidas pela rodada ficariam ocultas).
+  const scope = tabsWrap.closest('.pal-phase') || document;
+  scope.querySelectorAll('.game-row').forEach(r => { r.style.display = ''; });
+  _setRoundFilterActive('');
   _applyPalGroupVisibility(tabsWrap);
 }
 
@@ -3806,6 +3850,57 @@ function _applyPalGroupVisibility(tabsWrap) {
   const scope = tabsWrap.closest('.pal-phase') || document;
   scope.querySelectorAll('.pal-group').forEach(p =>
     p.style.display = active.has(p.dataset.group) ? 'block' : 'none');
+}
+
+// Marca cosmeticamente o botão ativo do filtro por rodada (sem refiltrar).
+// Usado pelos outros filtros (data/fase/grupo) para indicar que saíram do modo
+// "rodada" — os filtros de rodada e de data são mutuamente exclusivos.
+function _setRoundFilterActive(val) {
+  document.querySelectorAll('.round-filter-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.round === val));
+}
+function _setDateFilterActive(iso) {
+  document.querySelectorAll('.date-filter-btn:not(.round-filter-btn)').forEach(b =>
+    b.classList.toggle('active', b.dataset.dateiso === iso));
+}
+
+// Filtro por rodada da fase de grupos. Como rodadas só existem nos grupos, ao
+// selecionar uma rodada o filtro força a fase "grupos", reativa todos os grupos
+// e exibe apenas as partidas (game-row) cuja rodada bate. "Todas" volta ao modo
+// normal de navegação por fase/grupo.
+function switchPalRound(r) {
+  _setRoundFilterActive(r);
+  _setDateFilterActive(''); // sai do filtro por data (modos exclusivos)
+  const phaseTabs = document.getElementById('phase-tabs');
+  const groupTabs = document.getElementById('group-tabs');
+
+  if (r) {
+    if (phaseTabs) phaseTabs.style.display = '';
+    // Vai para a fase de grupos e a marca como ativa.
+    document.querySelectorAll('.phase-tab').forEach(t => t.classList.toggle('active', t.dataset.phase === 'grupos'));
+    document.querySelectorAll('#pal-phases .pal-phase').forEach(p =>
+      p.style.display = p.dataset.phase === 'grupos' ? 'block' : 'none');
+    // Reativa todos os grupos e mostra seus containers.
+    if (groupTabs) {
+      groupTabs.style.display = '';
+      groupTabs.querySelectorAll('.group-tab').forEach(t => t.classList.add('active'));
+    }
+    document.querySelectorAll('#pal-phases .pal-group').forEach(g => g.style.display = 'block');
+    // Mostra só as partidas da rodada escolhida.
+    document.querySelectorAll('#pal-phases .pal-phase[data-phase="grupos"] .game-row').forEach(row => {
+      row.style.display = row.dataset.round === r ? '' : 'none';
+    });
+  } else {
+    // "Todas": restaura visibilidade e volta à navegação normal por fase/grupo.
+    document.querySelectorAll('#pal-phases .game-row').forEach(row => { row.style.display = ''; });
+    if (phaseTabs) phaseTabs.style.display = '';
+    if (groupTabs) groupTabs.style.display = '';
+    const activePhase = document.querySelector('.phase-tab.active');
+    const key = activePhase ? activePhase.dataset.phase : 'grupos';
+    document.querySelectorAll('#pal-phases .pal-phase').forEach(p =>
+      p.style.display = p.dataset.phase === key ? 'block' : 'none');
+    _applyPalGroupVisibility();
+  }
 }
 
 let _bigScoreWarned = {};
@@ -4774,6 +4869,35 @@ function _isoToGameDate(iso) {
   const m = (iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return iso||'';
   return `${_MONTH_ABBR[parseInt(m[2])-1]} ${parseInt(m[3])}`;
+}
+
+// ── Rodada de grupos "atual" por data (Brasília) ──
+// A fase de grupos tem 3 rodadas (campo `r` em GRUPOS_DATA). A rodada atual é a
+// primeira cujo último dia de jogos ainda não passou. Usada para a frase do
+// dashboard ("você ainda não completou a Xª rodada") e para o deep-link do filtro
+// por rodada na tela de palpites. Retorna 1, 2, 3 ou null (grupos encerrados).
+function _todayBrasiliaISO() {
+  const brt = new Date(Date.now() - 3 * 3600000); // Brasília = UTC-3
+  return `${brt.getUTCFullYear()}-${String(brt.getUTCMonth()+1).padStart(2,'0')}-${String(brt.getUTCDate()).padStart(2,'0')}`;
+}
+function _groupRoundLastISO(r) {
+  // Última data (ISO) dos jogos de grupos da rodada r, considerando overrides do admin.
+  let max = '';
+  Object.values(GRUPOS_DATA).forEach(g => g.games.forEach(gm => {
+    if (gm.r !== r) return;
+    const res = (typeof resultados !== 'undefined' && resultados[gm.id]) || _dashResults[gm.id] || {};
+    const iso = res.date_override || _gameDateToISO(gm.date);
+    if (iso && iso > max) max = iso;
+  }));
+  return max;
+}
+function _currentGroupRound() {
+  const todayISO = _todayBrasiliaISO();
+  for (const r of [1, 2, 3]) {
+    const last = _groupRoundLastISO(r);
+    if (last && todayISO <= last) return r;
+  }
+  return null; // fase de grupos encerrada
 }
 
 // Instante de início considerando override de data/hora salvo em resultados.
@@ -9736,6 +9860,97 @@ async function shareRankingImage(limit) {
   await _downloadOrShareCanvas(canvas, filename, shareText);
 }
 
+// "Extração" do ranking: imagem compacta com os 5 primeiros (por classificação
+// DENSA — empatados em pontos dividem o mesmo nível) e a zona de rebaixamento
+// (os 4 últimos colocados). Pensada para compartilhar um resumo no WhatsApp.
+async function shareTop5RelegImage() {
+  if (!_cachedRanking.length) { showToast('Carregue o ranking primeiro','warning'); return; }
+  const ranking = _cachedRanking;
+  const positions = _rankPositionsTieAware(ranking); // posição tradicional (com empate)
+
+  // Classificação densa: 1,1,1,2,2,3... — pega todos com nível denso <= 5.
+  const dense = []; let lvl = 0, lastPts = null;
+  ranking.forEach((u,i) => { if (u.pontos !== lastPts) { lvl++; lastPts = u.pontos; } dense[i] = lvl; });
+  const topIdx = ranking.map((_,i)=>i).filter(i => dense[i] <= 5);
+
+  // Zona de rebaixamento: 4 últimos, só com gente suficiente e sem sobrepor o topo.
+  const relegIdx = (ranking.length >= 8 && ranking.length >= topIdx.length + 4)
+    ? [ranking.length-4, ranking.length-3, ranking.length-2, ranking.length-1] : [];
+
+  const W = 600, ROW_H = 44, HEADER_H = 76, SECTION_H = 34, PAD = 12, GAP = 10;
+  const relegBlock = relegIdx.length ? (SECTION_H + relegIdx.length*ROW_H + GAP) : 0;
+  const H = HEADER_H + SECTION_H + topIdx.length*ROW_H + relegBlock + PAD*2;
+  const { canvas, ctx } = _mkCanvas(W, H);
+
+  // fundo
+  ctx.fillStyle = '#0A1628'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = '#FFD700'; ctx.fillRect(0,0,W,5);
+
+  // título
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center';
+  ctx.fillText('🏆 Ranking — Bolão ICN Copa 2026', W/2, 38);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '13px Arial';
+  ctx.fillText(new Date().toLocaleDateString('pt-BR'), W/2, 58);
+  ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(0, HEADER_H-2, W, 1);
+
+  // Desenha uma linha de jogador no Y informado, usando o rótulo de posição dado.
+  const drawRow = (u, posLabel, posColor, rowY, releg) => {
+    if (releg) {
+      ctx.fillStyle = 'rgba(255,68,68,0.13)'; ctx.fillRect(0, rowY-4, W, ROW_H);
+      ctx.fillStyle = '#ff5a5a'; ctx.fillRect(0, rowY-4, 4, ROW_H);
+    } else {
+      ctx.fillStyle = 'rgba(255,215,0,0.05)'; ctx.fillRect(0, rowY-4, W, ROW_H);
+      ctx.fillStyle = '#FFD700'; ctx.fillRect(0, rowY-4, 4, ROW_H);
+    }
+    ctx.fillStyle = posColor; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'left';
+    ctx.fillText(posLabel, 18, rowY+26);
+    ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 14px Arial';
+    ctx.fillText(u.apelido.length>24?u.apelido.slice(0,22)+'…':u.apelido, 64, rowY+26);
+    const prevPos = _cachedPositionDeltas[u.uid];
+    if (prevPos) {
+      const curPos = ranking.findIndex(r=>r.uid===u.uid)+1;
+      const d = prevPos - curPos;
+      const dTxt = d>0?`↑${d}`:d<0?`↓${Math.abs(d)}`:'=';
+      const dColor = d>0?'#00C851':d<0?'#ff6b6b':'#8899AA';
+      ctx.fillStyle = dColor; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+      ctx.fillText(dTxt, 320, rowY+27);
+    }
+    ctx.fillStyle = posColor; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'right';
+    ctx.fillText(`${u.pontos} pts`, W-18, rowY+26);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = '11px Arial'; ctx.textAlign = 'right';
+    ctx.fillText(`🎯${u.exatos} ⚡${u.venc_saldo} ✓${u.apenas_venc}`, W-18, rowY+40);
+  };
+
+  let y = HEADER_H + PAD;
+  // Seção Top 5 (densa)
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'left';
+  ctx.fillText('🏅 Top 5 — Classificação', 16, y+18);
+  y += SECTION_H;
+  topIdx.forEach(i => {
+    const d = dense[i];
+    const posColor = d===1?'#FFD700':d===2?'#C0C0C0':d===3?'#CD7F32':'rgba(255,255,255,0.7)';
+    drawRow(ranking[i], `${d}º`, posColor, y, false);
+    y += ROW_H;
+  });
+
+  // Seção Zona de Rebaixamento (últimos 4)
+  if (relegIdx.length) {
+    y += GAP;
+    ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'left';
+    ctx.fillText('🔻 Zona de Rebaixamento — 4 últimos', 16, y+18);
+    y += SECTION_H;
+    relegIdx.forEach(i => {
+      drawRow(ranking[i], `${positions[i]}º`, '#ff8a8a', y, true);
+      y += ROW_H;
+    });
+  }
+
+  const topTxt = topIdx.slice(0,5).map(i => `${dense[i]}º ${ranking[i].apelido} – ${ranking[i].pontos} pts`).join('\n');
+  const relegTxt = relegIdx.length ? `\n\n🔻 Zona de Rebaixamento:\n`+relegIdx.map(i => `${positions[i]}º ${ranking[i].apelido} – ${ranking[i].pontos} pts`).join('\n') : '';
+  await _downloadOrShareCanvas(canvas, 'ranking-top5-rebaixamento.png',
+    `🏆 Ranking Bolão ICN Copa 2026\n\n🏅 Top 5:\n${topTxt}${relegTxt}`);
+}
+
 async function _downloadOrShareCanvas(canvas, filename, text) {
   try {
     const blob = await new Promise(res=>canvas.toBlob(res,'image/png'));
@@ -9876,6 +10091,23 @@ let _pendingPalpiteGid = null;
 function goToPalpiteGame(gid) {
   _pendingPalpiteGid = gid;
   navigateTo('palpites');
+}
+// Deep-link do dashboard para o filtro de uma rodada inteira na tela de Palpites.
+let _pendingPalpiteRound = null;
+function goToPalpiteRound(r) {
+  _pendingPalpiteRound = r;
+  navigateTo('palpites');
+}
+function _applyPendingPalpiteRound() {
+  if (_pendingPalpiteRound == null) return;
+  const r = String(_pendingPalpiteRound);
+  _pendingPalpiteRound = null;
+  switchPalRound(r);
+  // Rola até o início da lista de partidas para o usuário ver os jogos da rodada.
+  setTimeout(() => {
+    const first = document.querySelector('#pal-phases .pal-phase[data-phase="grupos"] .game-row');
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 120);
 }
 // Em qual aba (fase) e grupo o jogo aparece na página de Palpites.
 function _palPhaseOfGame(gid) {
