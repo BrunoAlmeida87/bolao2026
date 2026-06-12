@@ -4891,7 +4891,13 @@ async function renderSimulador() {
     const { allPals, champPicks } = await _fetchPalsCached(users);
     _simUsers = users; _simResOfficial = res; _simAllPals = allPals; _simChampPicks = champPicks;
     _simDraft = {};
-    _simWave = _getStatNextGroupWave(res).items || [];
+    // Só jogos com palpite BLOQUEADO ou EM ANDAMENTO e ainda SEM resultado.
+    // Jogos com palpite ainda aberto ficam de fora (não dá pra simular o que
+    // as pessoas ainda estão preenchendo); jogos já decididos também saem.
+    _simWave = (_getStatNextGroupWave(res).items || []).filter(({ game }) => {
+      const r = res[game.id] || {};
+      return isPalpiteClosed(game, r) && !_hasFullResult(r);
+    });
 
     // Posições no ranking oficial atual — base das setas ↑↓ (calculado uma vez).
     const offRank = computeRanking(users, res, allPals, champPicks);
@@ -4900,7 +4906,7 @@ async function renderSimulador() {
 
     const gamesHtml = _simWave.length
       ? _simWave.map(({ game }) => _simGameRowHtml(game)).join('')
-      : '<div class="text-muted" style="padding:8px 2px;font-size:0.85rem">Não há próximos jogos para simular agora. O ranking abaixo é o oficial atual.</div>';
+      : '<div class="text-muted" style="padding:8px 2px;font-size:0.85rem">Nenhum jogo com palpite bloqueado ou em andamento para simular agora. O ranking abaixo é o oficial atual.</div>';
 
     cont.innerHTML = `<div class="section-title">🔮 Simulador dos Próximos Resultados${_refreshBtn()}</div>
       <div style="display:flex;align-items:flex-start;gap:9px;background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.35);border-radius:12px;padding:11px 14px;margin-bottom:14px">
