@@ -3464,7 +3464,7 @@ async function renderDashboard() {
       ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>
     <div class="ranking-share-row">
       <button class="btn-share" onclick="shareMyRankingCard()">📸 Gerar imagem — Minha posição</button>
-      <button class="btn-share" onclick="shareTop5RelegImage()">📸 Gerar imagem — Top 5 + Rebaixamento</button>
+      <button class="btn-share" onclick="shareTop5RelegImage()">📸 Gerar imagem — Top 3 + Rebaixamento (classificação por densidade)</button>
       <button class="btn-share" onclick="shareRankingImage(10)">📸 Gerar imagem — Top 10</button>
       <button class="btn-share" onclick="shareRankingImage(0)">📸 Gerar imagem — Todos</button>
     </div>
@@ -9860,7 +9860,7 @@ async function shareRankingImage(limit) {
   await _downloadOrShareCanvas(canvas, filename, shareText);
 }
 
-// "Extração" do ranking: imagem compacta com os 5 primeiros (por classificação
+// "Extração" do ranking: imagem compacta com os 3 primeiros (por classificação
 // DENSA — empatados em pontos dividem o mesmo nível) e a zona de rebaixamento
 // (os 4 últimos colocados). Pensada para compartilhar um resumo no WhatsApp.
 async function shareTop5RelegImage() {
@@ -9868,10 +9868,10 @@ async function shareTop5RelegImage() {
   const ranking = _cachedRanking;
   const positions = _rankPositionsTieAware(ranking); // posição tradicional (com empate)
 
-  // Classificação densa: 1,1,1,2,2,3... — pega todos com nível denso <= 5.
+  // Classificação densa: 1,1,1,2,2,3... — pega todos com nível denso <= 3.
   const dense = []; let lvl = 0, lastPts = null;
   ranking.forEach((u,i) => { if (u.pontos !== lastPts) { lvl++; lastPts = u.pontos; } dense[i] = lvl; });
-  const topIdx = ranking.map((_,i)=>i).filter(i => dense[i] <= 5);
+  const topIdx = ranking.map((_,i)=>i).filter(i => dense[i] <= 3);
 
   // Zona de rebaixamento: 4 últimos, só com gente suficiente e sem sobrepor o topo.
   const relegIdx = (ranking.length >= 8 && ranking.length >= topIdx.length + 4)
@@ -9924,7 +9924,7 @@ async function shareTop5RelegImage() {
   let y = HEADER_H + PAD;
   // Seção Top 5 (densa)
   ctx.fillStyle = '#FFD700'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'left';
-  ctx.fillText('🏅 Top 5 — Classificação', 16, y+18);
+  ctx.fillText('🏅 Top 3 — Classificação por densidade', 16, y+18);
   y += SECTION_H;
   topIdx.forEach(i => {
     const d = dense[i];
@@ -9945,10 +9945,10 @@ async function shareTop5RelegImage() {
     });
   }
 
-  const topTxt = topIdx.slice(0,5).map(i => `${dense[i]}º ${ranking[i].apelido} – ${ranking[i].pontos} pts`).join('\n');
+  const topTxt = topIdx.map(i => `${dense[i]}º ${ranking[i].apelido} – ${ranking[i].pontos} pts`).join('\n');
   const relegTxt = relegIdx.length ? `\n\n🔻 Zona de Rebaixamento:\n`+relegIdx.map(i => `${positions[i]}º ${ranking[i].apelido} – ${ranking[i].pontos} pts`).join('\n') : '';
-  await _downloadOrShareCanvas(canvas, 'ranking-top5-rebaixamento.png',
-    `🏆 Ranking Bolão ICN Copa 2026\n\n🏅 Top 5:\n${topTxt}${relegTxt}`);
+  await _downloadOrShareCanvas(canvas, 'ranking-top3-rebaixamento.png',
+    `🏆 Ranking Bolão ICN Copa 2026\n\n🏅 Top 3 (classificação por densidade):\n${topTxt}${relegTxt}`);
 }
 
 async function _downloadOrShareCanvas(canvas, filename, text) {
