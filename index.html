@@ -10624,6 +10624,10 @@ function closeNewResultsModal() {
   const el = document.getElementById('modal-new-results');
   if (el) el.classList.add('hidden');
   setTimeout(_checkAndShowPaymentReminder, 400);
+  // Se este modal estava bloqueando o lembrete de palpites pendentes, tenta de
+  // novo após o eventual lembrete de pagamento abrir (e, se abrir, o fechamento
+  // dele reagenda outra vez).
+  setTimeout(_maybeShowPendingPalpitesAlert, 550);
 }
 
 // Pop-up de novidade do Simulador: mostrado uma única vez por navegador (flag em
@@ -10666,7 +10670,10 @@ function _fmtRemaining(ms) {
 function _maybeShowPendingPalpitesAlert() {
   try {
     if (_pendingAlertShown) return;
-    if (document.querySelector('.modal-overlay:not(.hidden)')) return; // não empilha sobre outro modal
+    if (_currentPage !== 'dashboard') return; // só na página principal
+    // Se há outro modal aberto, não empilha agora: o fechamento dele (new-results
+    // / pagamento) reagenda esta verificação, então o lembrete ainda aparece.
+    if (document.querySelector('.modal-overlay:not(.hidden)')) return;
     const grp = _nextGamesGroup();
     const now = Date.now();
     // Jogos da leva com timer ativo, palpite AINDA ABERTO e sem palpite do usuário.
@@ -10727,6 +10734,8 @@ function _checkAndShowPaymentReminder() {
 function closePaymentModal() {
   const el = document.getElementById('modal-payment');
   if (el) el.classList.add('hidden');
+  // Estava bloqueando o lembrete de palpites pendentes? Tenta exibi-lo agora.
+  setTimeout(_maybeShowPendingPalpitesAlert, 250);
 }
 
 function copyPixKeyPayment() {
