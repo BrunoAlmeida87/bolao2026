@@ -1383,6 +1383,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
       <button class="nav-btn" data-page="chaveamento" onclick="navigateTo('chaveamento')">🔑 Chaves</button>
       <button class="nav-btn" data-page="chaveamento-bilateral" onclick="navigateTo('chaveamento-bilateral')">🏆 Bilateral</button>
       <button class="nav-btn" data-page="estatisticas" onclick="navigateTo('estatisticas')">📈 Stats</button>
+      <button class="nav-btn" data-page="simulador" onclick="navigateTo('simulador')">🔮 Simulador</button>
       <button class="nav-btn" data-page="cardapio" onclick="navigateTo('cardapio')">🍽️ Cardápio</button>
       <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
       <button class="nav-btn" data-page="admin" id="admin-nav" style="display:none" onclick="navigateTo('admin')">⚙️ Admin</button>
@@ -1399,6 +1400,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
         <a onclick="navigateTo('chaveamento-bilateral');toggleDropdown()">🏆 Chave Bilateral</a>
         <a onclick="navigateTo('regras');toggleDropdown()">📋 Regras</a>
         <a onclick="navigateTo('estatisticas');toggleDropdown()">📈 Estatísticas</a>
+        <a onclick="navigateTo('simulador');toggleDropdown()">🔮 Simulador</a>
         <a onclick="navigateTo('cardapio');toggleDropdown()">🍽️ Cardápio</a>
         <a onclick="navigateTo('ver-palpites');toggleDropdown()">👁️ Ver Palpites</a>
         <a onclick="navigateTo('ver-todos');toggleDropdown()">📋 Todos os Palpites</a>
@@ -1432,6 +1434,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <a data-page="chaveamento" onclick="navigateTo('chaveamento');closeMaisSheet()">🔑 Chaveamento</a>
     <a data-page="chaveamento-bilateral" onclick="navigateTo('chaveamento-bilateral');closeMaisSheet()">🏆 Chave Bilateral</a>
     <a data-page="ver-todos" onclick="navigateTo('ver-todos');closeMaisSheet()">📋 Todos os Palpites</a>
+    <a data-page="simulador" onclick="navigateTo('simulador');closeMaisSheet()">🔮 Simulador</a>
     <a data-page="regras" onclick="navigateTo('regras');closeMaisSheet()">📋 Regras</a>
     <a id="mais-admin" data-page="admin" style="display:none" onclick="navigateTo('admin');closeMaisSheet()">⚙️ Admin</a>
     <div class="mais-divider"></div>
@@ -1451,6 +1454,13 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <!-- ── PALPITES ── -->
     <div id="page-palpites" class="page">
       <div class="container" id="palpites-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ── SIMULADOR ── -->
+    <div id="page-simulador" class="page">
+      <div class="container" id="simulador-content">
         <div class="loading-wrap"><div class="spinner"></div></div>
       </div>
     </div>
@@ -2489,7 +2499,7 @@ function navigateTo(page, opts) {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   // Páginas que vivem na folha "Mais" acendem o botão Mais na bottom nav.
-  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','regras','admin']);
+  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','simulador','regras','admin']);
   const _maisBtn = document.getElementById('mais-bottom-nav');
   if (_maisBtn) _maisBtn.classList.toggle('active', _maisPages.has(page));
   document.querySelectorAll('#mais-sheet a').forEach(a=>a.classList.toggle('active',a.dataset.page===page));
@@ -2516,6 +2526,7 @@ function navigateTo(page, opts) {
     case 'chaveamento-bilateral': renderChaveamentoBilateral(); break;
     case 'regras':      renderRegras(); break;
     case 'estatisticas': renderEstatisticas(); break;
+    case 'simulador':   renderSimulador(); break;
     case 'cardapio':    renderCardapio(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
@@ -2526,7 +2537,7 @@ function navigateTo(page, opts) {
 
 function _restorePageFromHash() {
   const hash = (location.hash||'').replace('#','').trim();
-  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','cardapio','admin'];
+  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','simulador','cardapio','admin'];
   const page = valid.includes(hash) ? hash : 'dashboard';
   // admin só restaura se usuário for admin
   if (page === 'admin' && currentUserDoc?.role !== 'admin') return navigateTo('dashboard', { history: 'replace' });
@@ -4850,6 +4861,144 @@ function _vtWireScrollbars() {
     top.addEventListener('scroll', () => { if (syncing) return; syncing = true; main.scrollLeft = top.scrollLeft; syncing = false; });
     main.addEventListener('scroll', () => { if (syncing) return; syncing = true; top.scrollLeft = main.scrollLeft; syncing = false; });
   });
+}
+
+// ════════════════════════════════════════════
+// SIMULADOR DOS PRÓXIMOS RESULTADOS
+// ════════════════════════════════════════════
+// Página "e se?": o usuário digita placares hipotéticos para os PRÓXIMOS jogos
+// (a leva atual — mesmos do dashboard, com timer ativo / em andamento) e vê o
+// ranking recalculado na hora. Tudo em memória: NUNCA grava no Firestore nem
+// altera os resultados oficiais ou qualquer outra tela. O motor é a função pura
+// computeRanking, chamada sobre uma cópia mesclada (oficial + placares simulados).
+let _simUsers = [], _simResOfficial = {}, _simAllPals = {}, _simChampPicks = {};
+let _simWave = [];      // [{game, start}] da leva atual de próximos jogos
+let _simDraft = {};     // { gameId: {h, a} } — placares digitados (0–20)
+let _simOffPos = {};    // uid → posição no ranking OFICIAL atual (base do ↑↓)
+
+async function renderSimulador() {
+  const cont = document.getElementById('simulador-content');
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals, champPicks } = await _fetchPalsCached(users);
+    _simUsers = users; _simResOfficial = res; _simAllPals = allPals; _simChampPicks = champPicks;
+    _simDraft = {};
+    _simWave = _getStatNextGroupWave(res).items || [];
+
+    // Posições no ranking oficial atual — base das setas ↑↓ (calculado uma vez).
+    const offRank = computeRanking(users, res, allPals, champPicks);
+    _simOffPos = {};
+    _rankPositionsTieAware(offRank).forEach((p, i) => { _simOffPos[offRank[i].uid] = p; });
+
+    const gamesHtml = _simWave.length
+      ? _simWave.map(({ game }) => _simGameRowHtml(game)).join('')
+      : '<div class="text-muted" style="padding:8px 2px;font-size:0.85rem">Não há próximos jogos para simular agora. O ranking abaixo é o oficial atual.</div>';
+
+    cont.innerHTML = `<div class="section-title">🔮 Simulador dos Próximos Resultados${_refreshBtn()}</div>
+      <div style="display:flex;align-items:flex-start;gap:9px;background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.35);border-radius:12px;padding:11px 14px;margin-bottom:14px">
+        <span style="font-size:1.2rem;line-height:1">🧪</span>
+        <span style="font-size:0.84rem;line-height:1.4">Digite placares hipotéticos para os próximos jogos e veja o ranking se atualizar na hora. <b>É só simulação</b> — nada aqui altera os resultados oficiais nem aparece para outras pessoas.</span>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+          <div class="card-title" style="margin:0">⚽ Próximos jogos</div>
+          <button class="btn btn-secondary btn-sm" onclick="simReset()">🧹 Limpar simulação</button>
+        </div>
+        <div id="sim-games">${gamesHtml}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🏆 Ranking simulado</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin:4px 0 10px">As setas <b>↑↓</b> mostram a mudança de posição em relação ao ranking <b>oficial atual</b>.</div>
+        <div id="sim-ranking"></div>
+      </div>`;
+    _simRecompute();
+  } catch (e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro ao carregar simulador: ${esc(errMsg(e))}</div>`;
+  }
+}
+
+function _simGameRowHtml(game) {
+  const _r = _simResOfficial[game.id] || {};
+  const teams = _getResolvedTeamsForGame(game, _simResOfficial);
+  const time = _r.time_override || GAME_TIMES[game.id] || '--:--';
+  const dispDate = _r.date_override ? _isoToGameDate(_r.date_override) : (game.date || '');
+  const d = _simDraft[game.id] || {};
+  return `<div class="game-row">
+    <div><div class="team-name home">${teamFlag(teams.h)} ${esc(teams.h)}</div><div class="game-meta">${esc(dispDate)} <span style="font-weight:700;color:var(--gold)">${esc(time)}</span></div></div>
+    <input type="number" class="score-input" id="sim_h_${game.id}" min="0" max="20" inputmode="numeric" placeholder="–" value="${d.h!==undefined?d.h:''}" aria-label="Placar simulado ${esc(teams.h)}" oninput="simOnInput('${game.id}')">
+    <div class="vs-badge">✕</div>
+    <input type="number" class="score-input" id="sim_a_${game.id}" min="0" max="20" inputmode="numeric" placeholder="–" value="${d.a!==undefined?d.a:''}" aria-label="Placar simulado ${esc(teams.a)}" oninput="simOnInput('${game.id}')">
+    <div><div class="team-name">${teamFlag(teams.a)} ${esc(teams.a)}</div><div class="game-meta" id="sim-tag-${game.id}"></div></div>
+  </div>`;
+}
+
+function simOnInput(gid) {
+  const hEl = document.getElementById('sim_h_' + gid);
+  const aEl = document.getElementById('sim_a_' + gid);
+  if (!hEl || !aEl) return;
+  const norm = v => v === '' ? undefined : Math.max(0, Math.min(20, parseInt(v) || 0));
+  const h = norm(hEl.value), a = norm(aEl.value);
+  if (h === undefined && a === undefined) delete _simDraft[gid];
+  else _simDraft[gid] = { h, a };
+  const tag = document.getElementById('sim-tag-' + gid);
+  if (tag) tag.innerHTML = (h !== undefined && a !== undefined)
+    ? '<span style="font-size:0.66rem;color:var(--accent);font-weight:700">simulado ' + h + '×' + a + '</span>'
+    : ((h !== undefined || a !== undefined) ? '<span style="font-size:0.66rem;color:var(--text-muted)">preencha os 2 placares</span>' : '');
+  _simRecompute();
+}
+
+function simReset() {
+  _simDraft = {};
+  _simWave.forEach(({ game }) => {
+    const h = document.getElementById('sim_h_' + game.id), a = document.getElementById('sim_a_' + game.id);
+    if (h) h.value = ''; if (a) a.value = '';
+    const tag = document.getElementById('sim-tag-' + game.id); if (tag) tag.innerHTML = '';
+  });
+  _simRecompute();
+}
+
+function _simRecompute() {
+  const el = document.getElementById('sim-ranking');
+  if (!el) return;
+  // Mescla oficial + simulados COMPLETOS (os dois placares preenchidos).
+  const merged = Object.assign({}, _simResOfficial);
+  let nSim = 0;
+  Object.keys(_simDraft).forEach(gid => {
+    const d = _simDraft[gid];
+    if (d && d.h !== undefined && d.a !== undefined) {
+      merged[gid] = Object.assign({}, _simResOfficial[gid], { h_real: d.h, a_real: d.a });
+      nSim++;
+    }
+  });
+  const simRank = computeRanking(_simUsers, merged, _simAllPals, _simChampPicks);
+  const simPos = _rankPositionsTieAware(simRank);
+  let rows = '';
+  simRank.forEach((u, i) => {
+    const pos = simPos[i];
+    const isMe = u.uid === currentUser.uid;
+    const prev = _simOffPos[u.uid];
+    const delta = prev ? prev - pos : 0;
+    const deltaHtml = !prev ? '' :
+      delta > 0 ? `<span style="color:var(--green);font-weight:700">↑${delta}</span>` :
+      delta < 0 ? `<span style="color:#ff6b6b;font-weight:700">↓${Math.abs(delta)}</span>` :
+      `<span style="color:var(--text-muted)">=</span>`;
+    const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '';
+    rows += `<tr class="${isMe ? 'is-me' : ''}">
+      <td><span class="rank-pos ${posClass}">${pos}</span></td>
+      <td style="text-align:center">${deltaHtml}</td>
+      <td><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.72rem;color:var(--text-muted)">${esc(u.nome || '')}</div></td>
+      <td><span class="pts-badge">${u.pontos}</span></td>
+      <td class="text-green">${u.exatos}</td>
+    </tr>`;
+  });
+  el.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
+      <table class="ranking-table" style="min-width:380px">
+        <thead><tr><th>#</th><th title="Variação vs ranking oficial atual">↑↓</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">${nSim > 0 ? ('🧪 ' + nSim + ' jogo(s) simulado(s) aplicado(s) ao ranking.') : 'Nenhum placar simulado ainda — ranking igual ao oficial.'}</div>`;
 }
 
 // ════════════════════════════════════════════
