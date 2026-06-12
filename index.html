@@ -5008,6 +5008,10 @@ function _simRecompute() {
   });
   const simRank = computeRanking(_simUsers, merged, _simAllPals, _simChampPicks);
   const simPos = _rankPositionsTieAware(simRank);
+  // Posição por adensamento (ranking denso): empatados em pontos dividem o mesmo
+  // nível (1,1,1,2,2,3...). Igual ao "≈ pos" do ranking oficial.
+  const denseArr = []; let _dLvl = 0, _dLast = null;
+  simRank.forEach((u, i) => { if (u.pontos !== _dLast) { _dLvl++; _dLast = u.pontos; } denseArr[i] = _dLvl; });
   let rows = '';
   simRank.forEach((u, i) => {
     const pos = simPos[i];
@@ -5021,6 +5025,7 @@ function _simRecompute() {
     const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '';
     rows += `<tr class="${isMe ? 'is-me' : ''}">
       <td><span class="rank-pos ${posClass}">${pos}</span></td>
+      <td style="color:var(--text-muted);font-weight:600;font-size:0.82rem" title="Posição por adensamento (ranking denso)">${denseArr[i]}º</td>
       <td style="text-align:center">${deltaHtml}</td>
       <td><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.72rem;color:var(--text-muted)">${esc(u.nome || '')}</div></td>
       <td><span class="pts-badge">${u.pontos}</span></td>
@@ -5029,7 +5034,7 @@ function _simRecompute() {
   });
   el.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
       <table class="ranking-table" style="min-width:380px">
-        <thead><tr><th>#</th><th title="Variação vs ranking oficial atual">↑↓</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
+        <thead><tr><th>#</th><th title="Posição por adensamento (ranking denso): empatados em pontos dividem o mesmo nível" style="color:var(--text-muted)">≈ pos</th><th title="Variação vs ranking oficial atual">↑↓</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">${nSim > 0 ? ('🧪 ' + nSim + ' jogo(s) simulado(s) aplicado(s) ao ranking.') : 'Nenhum placar simulado ainda — ranking igual ao oficial.'}</div>`;
