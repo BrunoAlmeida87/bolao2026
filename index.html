@@ -9905,7 +9905,12 @@ async function shareTop5RelegImage() {
     ctx.fillStyle = posColor; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'left';
     ctx.fillText(posLabel, 18, rowY+26);
     ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 14px Arial';
-    ctx.fillText(u.apelido.length>24?u.apelido.slice(0,22)+'…':u.apelido, 64, rowY+26);
+    ctx.fillText(u.apelido.length>24?u.apelido.slice(0,22)+'…':u.apelido, 64, rowY+22);
+    // nome completo embaixo do apelido
+    if (u.nome) {
+      ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '11px Arial';
+      ctx.fillText(u.nome.length>30?u.nome.slice(0,28)+'…':u.nome, 64, rowY+38);
+    }
     const prevPos = _cachedPositionDeltas[u.uid];
     if (prevPos) {
       const curPos = ranking.findIndex(r=>r.uid===u.uid)+1;
