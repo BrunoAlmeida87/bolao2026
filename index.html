@@ -2643,25 +2643,30 @@ function computeRanking(users, resultados, allPalpites, championPicks={}) {
     .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc||((b.acertou_campeao?1:0)-(a.acertou_campeao?1:0)));
 }
 
-// Retorna mapa uid→posição_anterior (usada para setas ↑↓ no ranking).
-// Extrai a lógica duplicada entre renderDashboard e _writeRankingCache.
+// Retorna mapa uid→posição_anterior (base das setas ↑↓ no ranking).
+// Base = ranking imediatamente ANTES do ÚLTIMO resultado inserido — o jogo com
+// resultado completo e maior `updatedAt` (carimbo de quando o admin salvou).
+// Assim o ↑↓ mostra quantas posições cada um subiu/desceu por causa do último
+// placar lançado. Usada tanto em renderDashboard quanto em _writeRankingCache.
 function _computePositionDeltas(users, res, allPals, champPicks) {
-  const rdefs = [
-    { gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
-    { gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
-    { gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
-    ...Object.keys(ELIM_DATA).map(ph=>({ gameIds: ELIM_DATA[ph].games.map(g=>g.id) }))
-  ];
-  const gwr = new Set(Object.keys(res).filter(id=>_hasFullResult(res[id])));
-  let latestIdx = -1;
-  rdefs.forEach((rd,i)=>{ if(rd.gameIds.some(id=>gwr.has(id))) latestIdx=i; });
+  const withRes = Object.keys(res).filter(id => _hasFullResult(res[id]));
+  if (withRes.length < 2) return {}; // sem base anterior significativa
+  const _ms = d => {
+    const t = d && d.updatedAt;
+    if (!t) return 0;
+    if (typeof t.toMillis === 'function') return t.toMillis();
+    if (typeof t.seconds === 'number') return t.seconds * 1000;
+    return 0;
+  };
+  // Jogo com resultado mais recente (maior updatedAt). Em empate de carimbo,
+  // o último na ordem de iteração vence — irrelevante na prática.
+  let lastId = null, lastMs = -Infinity;
+  withRes.forEach(id => { const m = _ms(res[id]); if (m >= lastMs) { lastMs = m; lastId = id; } });
+  if (!lastId) return {};
+  const resPrev = {};
+  Object.entries(res).forEach(([id, d]) => { if (id !== lastId) resPrev[id] = d; });
   const deltas = {};
-  if (latestIdx > 0) {
-    const latestIds = new Set(rdefs[latestIdx].gameIds);
-    const resPrev = {};
-    Object.entries(res).forEach(([id,d])=>{ if(!latestIds.has(id)) resPrev[id]=d; });
-    computeRanking(users, resPrev, allPals, champPicks).forEach((u,i)=>{ deltas[u.uid]=i+1; });
-  }
+  computeRanking(users, resPrev, allPals, champPicks).forEach((u, i) => { deltas[u.uid] = i + 1; });
   return deltas;
 }
 
@@ -3428,10 +3433,11 @@ async function renderDashboard() {
       const isMe = u.uid===currentUser.uid;
       const prevPos = positionDeltas[u.uid];
       const delta = prevPos ? prevPos - pos : null;
+      const _deltaTitle = 'Variação de posição por causa do último resultado lançado';
       const deltaBadge = delta === null ? '' :
-        delta > 0 ? `<span style="font-size:0.65rem;font-weight:700;color:var(--green);display:block;line-height:1">↑${delta}</span>` :
-        delta < 0 ? `<span style="font-size:0.65rem;font-weight:700;color:#ff6b6b;display:block;line-height:1">↓${Math.abs(delta)}</span>` :
-        `<span style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
+        delta > 0 ? `<span title="${_deltaTitle}" style="font-size:0.65rem;font-weight:700;color:var(--green);display:block;line-height:1">↑${delta}</span>` :
+        delta < 0 ? `<span title="${_deltaTitle}" style="font-size:0.65rem;font-weight:700;color:#ff6b6b;display:block;line-height:1">↓${Math.abs(delta)}</span>` :
+        `<span title="${_deltaTitle}" style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
       const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
       const isOwnRow = u.uid === currentUser.uid;
       const tiedMark = _isTiedPos ? `<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1;cursor:help" title="Empate total: mesma posição (empatados em todos os critérios)">=</span>` : '';
@@ -3460,9 +3466,9 @@ async function renderDashboard() {
 
       // Card (mobile)
       const movHtml = delta===null ? '' :
-        delta>0  ? `<span class="rank-mov-pos">↑${delta}</span>` :
-        delta<0  ? `<span class="rank-mov-neg">↓${Math.abs(delta)}</span>` :
-                   `<span class="rank-mov-zero">—</span>`;
+        delta>0  ? `<span class="rank-mov-pos" title="${_deltaTitle}">↑${delta}</span>` :
+        delta<0  ? `<span class="rank-mov-neg" title="${_deltaTitle}">↓${Math.abs(delta)}</span>` :
+                   `<span class="rank-mov-zero" title="${_deltaTitle}">—</span>`;
       cardsHtml += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="openUserProfile('${u.uid}')"${_inReleg?' style="border-color:rgba(255,68,68,.45);background:rgba(255,68,68,.06)"':''}>
         <div class="rank-card-top">
           <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}${_inReleg?'<span style="font-size:0.7rem" title="Zona de rebaixamento">🔻</span>':''}<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1.1;margin-top:2px" title="Posição por pontuação (ranking denso)">≈ ${_dense}º pos</span></div>
@@ -4290,7 +4296,7 @@ function renderRegras() {
             <span style="font-size:1.5rem;min-width:32px">3️⃣</span>
             <div>
               <div style="font-weight:700;color:var(--white);margin-bottom:4px">Acompanhe o ranking</div>
-              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">Após o jogo, o administrador lança o resultado e seus pontos são calculados automaticamente. O <strong>🏠 Ranking</strong> se atualiza em tempo real. Você também vê a variação de posição <strong>↑↓</strong> a cada rodada.</p>
+              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">Após o jogo, o administrador lança o resultado e seus pontos são calculados automaticamente. O <strong>🏠 Ranking</strong> se atualiza em tempo real. Você também vê a variação de posição <strong>↑↓</strong> que cada participante teve por causa do <strong>último resultado lançado</strong>.</p>
             </div>
           </div>
           <div style="display:flex;gap:12px;align-items:flex-start">
@@ -10000,7 +10006,7 @@ async function shareMyRankingCard() {
 
   await _downloadOrShareCanvas(canvas,
     `minha-posicao-bolao.png`,
-    `${medal} ${me.apelido} — ${me.pontos} pts no Bolão ICN Copa 2026! ⚽${delta?' ('+delta+' na última rodada)':''}`);
+    `${medal} ${me.apelido} — ${me.pontos} pts no Bolão ICN Copa 2026! ⚽${delta?' ('+delta+' no último resultado)':''}`);
 }
 
 async function shareRankingImage(limit) {
