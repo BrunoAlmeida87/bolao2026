@@ -364,6 +364,12 @@ select option{background:var(--mid-blue);color:var(--white)}
 .pal-next-btn{display:block;width:100%;margin:0 0 12px;padding:11px 14px;border:none;border-radius:12px;background:linear-gradient(90deg,#ff6b00,#ff3d3d);color:#fff;font-size:0.98rem;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(255,80,0,.35);animation:palNextPulse 1.7s ease-in-out infinite}
 .pal-next-btn.active{outline:2px solid #fff;outline-offset:2px}
 @keyframes palNextPulse{0%,100%{box-shadow:0 2px 10px rgba(255,80,0,.35)}50%{box-shadow:0 2px 20px rgba(255,80,0,.75)}}
+/* Gráfico de evolução da posição (bump chart) */
+@keyframes evoDraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes evoFade{from{opacity:0}to{opacity:1}}
+.evo-line-anim{stroke-dasharray:1;stroke-dashoffset:1;animation:evoDraw .9s ease forwards}
+.evo-fade{animation:evoFade .7s ease both}
+@media (prefers-reduced-motion: reduce){.evo-line-anim,.evo-fade{animation:none!important;stroke-dashoffset:0!important;opacity:1!important}}
 body.light-theme .date-filter-btn{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
 body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 .phase-tab{
@@ -11012,95 +11018,124 @@ function copyPixKeyPayment() {
 // ════════════════════════════════════════════
 // GRÁFICO DE EVOLUÇÃO DE PONTOS
 // ════════════════════════════════════════════
+// Gráfico de evolução da POSIÇÃO (bump chart) na primeira página, por DIA.
+// Cada dia com resultado vira um ponto no eixo X; o eixo Y é a colocação (1º no
+// topo). Para não poluir com ~57 jogadores, destaca VOCÊ (dourado) + Top 5 e
+// deixa o restante como linhas cinza suaves; botão "Ver todos" realça todos.
+let _evoData = null;     // { labels, seriesByUid, order, n }
+let _evoShowAll = false;
 function _renderEvolutionChart(ranking, allPals, res, champPicks, container) {
   if (!container || !ranking.length) return;
-  const roundDefs = [
-    { id:'G1', label:'1ª Rod.', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
-    { id:'G2', label:'2ª Rod.', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
-    { id:'G3', label:'3ª Rod.', gameIds: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
-    { id:'r32',    label:'R32',     gameIds: (ELIM_DATA.r32?.games||[]).map(g=>g.id) },
-    { id:'r16',    label:'Oitavas', gameIds: (ELIM_DATA.r16?.games||[]).map(g=>g.id) },
-    { id:'quartas',label:'Quartas', gameIds: (ELIM_DATA.quartas?.games||[]).map(g=>g.id) },
-    { id:'semi',   label:'Semis',   gameIds: (ELIM_DATA.semi?.games||[]).map(g=>g.id) },
-    { id:'final',  label:'Final',   gameIds: (ELIM_DATA.final?.games||[]).map(g=>g.id) },
-  ];
-  const gamesWithRes = new Set(Object.keys(res).filter(id => res[id].h_real !== undefined));
-  const activeRounds = roundDefs.filter(rd => rd.gameIds.some(id => gamesWithRes.has(id)));
-  if (activeRounds.length < 1) { container.innerHTML = ''; return; }
 
-  const champion = _getFinalChampion(res);
-  const ptsCampeao = CFG.pts_campeao ?? 0;
-  const finalRoundIdx = activeRounds.findIndex(rd => rd.id === 'final');
-
-  const userSeries = ranking.map(u => {
-    let cum = 0;
-    const points = [];
-    const pals = allPals[u.uid] || {};
-    activeRounds.forEach((rd, idx) => {
-      rd.gameIds.forEach(jid => {
-        if (!gamesWithRes.has(jid)) return;
-        const pts = calcPontos(pals[jid], res[jid]);
-        if (pts !== null) cum += pts;
-      });
-      if (idx === finalRoundIdx && champion) {
-        if ((champPicks[u.uid]||null) === champion) cum += ptsCampeao;
-      }
-      points.push(cum);
-    });
-    return { uid: u.uid, apelido: u.apelido, points };
-  });
-
-  const W=580, H=180, PL=36, PR=8, PT=12, PB=28;
-  const chartW=W-PL-PR, chartH=H-PT-PB, n=activeRounds.length;
-  const allPts = userSeries.flatMap(u=>u.points);
-  const maxPts = Math.max(...allPts, 1);
-  const xOf = idx => n>1 ? PL+(idx/(n-1))*chartW : PL+chartW/2;
-  const yOf = pts => PT+chartH-Math.min(pts/maxPts,1)*chartH;
-  const palette = ['#1E90FF','#FF6B6B','#4CAF50','#FF8C00','#9C27B0','#00BCD4','#E91E63','#8BC34A','#FF5722','#607D8B'];
-
-  let gridSvg='', yAxisSvg='', pathsSvg='', dotsSvg='', labelSvg='';
-  for (let i=0; i<=4; i++) {
-    const pts = Math.round(maxPts/4*i);
-    const y = yOf(pts);
-    gridSvg += `<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="rgba(255,255,255,.05)" stroke-width="1"/>`;
-    yAxisSvg += `<text x="${PL-4}" y="${y+3}" text-anchor="end" font-size="8" fill="rgba(255,255,255,.25)">${pts}</text>`;
+  // Dias (Brasília) que têm pelo menos um jogo com resultado, em ordem cronológica.
+  const resGames = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
+  if (!resGames.length) { container.innerHTML = ''; return; }
+  const dayOf = g => _gameFilterISO(g, res[g.id]); // madrugada cola no dia anterior
+  const days = [...new Set(resGames.map(dayOf))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  if (days.length < 2) {
+    container.innerHTML = `<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:20px;text-align:center;color:var(--text-muted);font-size:0.82rem">📈 A evolução da posição aparece quando houver resultados em <b>pelo menos 2 dias</b>.</div>`;
+    return;
   }
-  labelSvg = activeRounds.map((rd,i) => `<text x="${xOf(i)}" y="${H-4}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.4)">${rd.label}</text>`).join('');
 
-  const meIdx = userSeries.findIndex(u=>u.uid===currentUser.uid);
-  const drawOrder = [...Array(userSeries.length).keys()].filter(i=>i!==meIdx);
-  if (meIdx>=0) drawOrder.push(meIdx);
-
-  drawOrder.forEach(i => {
-    const u = userSeries[i];
-    if (!u.points.length) return;
-    const isMe = u.uid === currentUser.uid;
-    const color = isMe ? '#FFD700' : palette[i % palette.length];
-    const d = u.points.map((p,j)=>`${j===0?'M':'L'}${xOf(j).toFixed(1)},${yOf(p).toFixed(1)}`).join(' ');
-    pathsSvg += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${isMe?2.5:1}" stroke-linecap="round" stroke-linejoin="round" opacity="${isMe?1:0.4}"/>`;
-    if (isMe && u.points.length) {
-      const lx=xOf(u.points.length-1), ly=yOf(u.points[u.points.length-1]);
-      dotsSvg += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4" fill="#FFD700" stroke="#0A1628" stroke-width="1.5"/>`;
-    }
+  // Checkpoints cumulativos por dia → posição (tie-aware) de cada participante.
+  let cumIds = [];
+  const labels = [];
+  const posByDay = []; // array de mapas uid→posição
+  days.forEach(d => {
+    cumIds = cumIds.concat(resGames.filter(g => dayOf(g) === d).map(g => g.id));
+    const rk = _computeRankingForGameIds(ranking, res, allPals, cumIds);
+    const pos = _rankPositionsTieAware(rk);
+    const m = {}; rk.forEach((u,i)=>{ m[u.uid] = pos[i]; });
+    posByDay.push(m);
+    labels.push(_isoToGameDate(d)); // "Jun 11"
   });
 
-  const legendHtml = userSeries.map((u,i) => {
-    const isMe = u.uid===currentUser.uid;
-    const color = isMe ? '#FFD700' : palette[i%palette.length];
-    const lastPts = u.points[u.points.length-1]??0;
+  const n = ranking.length;
+  const seriesByUid = {};
+  ranking.forEach(u => { seriesByUid[u.uid] = { apelido: u.apelido, positions: posByDay.map(m => m[u.uid] || n) }; });
+
+  _evoData = { labels, seriesByUid, order: ranking.map(u=>u.uid), n };
+  _evoDraw();
+}
+
+function _evoToggleAll() { _evoShowAll = !_evoShowAll; _evoDraw(); }
+
+function _evoDraw() {
+  const container = document.getElementById('evo-chart-container');
+  if (!container || !_evoData) return;
+  const { labels, seriesByUid, order, n } = _evoData;
+  const numCp = labels.length;
+
+  const W=600, H=Math.min(360, Math.max(200, 70 + n*4)), PL=30, PR=12, PT=16, PB=26;
+  const chartW=W-PL-PR, chartH=H-PT-PB;
+  const xOf = i => numCp>1 ? PL+(i/(numCp-1))*chartW : PL+chartW/2;
+  const yOf = pos => n>1 ? PT+((pos-1)/(n-1))*chartH : PT+chartH/2;
+
+  // Destaque: você + Top 5 (pela ordem atual do ranking).
+  const youUid = currentUser.uid;
+  const topUids = order.slice(0,5);
+  const hl = new Set(topUids); hl.add(youUid);
+  const hlPalette = ['#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA','#FBBF24'];
+  const hlColor = {}; let ci=0;
+  order.forEach(uid => { if (hl.has(uid)) hlColor[uid] = (uid===youUid) ? '#FFD700' : hlPalette[ci++ % hlPalette.length]; });
+
+  const pathD = positions => positions.map((p,j)=>`${j===0?'M':'L'}${xOf(j).toFixed(1)},${yOf(p).toFixed(1)}`).join(' ');
+
+  // Grade horizontal + rótulos do eixo Y (1º, meio, último).
+  let grid='';
+  [1, Math.round((n+1)/2), n].forEach(r => {
+    const y=yOf(r);
+    grid += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W-PR}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.05)"/><text x="${PL-4}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="8" fill="rgba(255,255,255,.3)">${r}º</text>`;
+  });
+  // Rótulos do eixo X (dias) — mostra um subconjunto se houver muitos.
+  const step = Math.ceil(numCp/8);
+  const xlabels = labels.map((l,i)=> (i%step===0||i===numCp-1) ? `<text x="${xOf(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.4)">${esc(l)}</text>` : '').join('');
+
+  // Linhas de fundo (não destacadas).
+  let faint='';
+  order.forEach(uid => {
+    if (hl.has(uid) && !_evoShowAll) return;
+    const s = seriesByUid[uid];
+    const showAllColor = _evoShowAll && !hl.has(uid);
+    faint += `<path d="${pathD(s.positions)}" fill="none" stroke="${showAllColor?'rgba(120,180,255,.45)':'rgba(255,255,255,.06)'}" stroke-width="${showAllColor?1.2:1}" stroke-linejoin="round"/>`;
+  });
+
+  // Linhas destacadas (por cima) + ponto e rótulo no fim.
+  let lines='', dots='';
+  let delay=0;
+  // desenha do 6º destaque para o 1º, deixando você por cima de tudo
+  const hlOrdered = order.filter(uid=>hl.has(uid));
+  hlOrdered.forEach(uid => {
+    const s = seriesByUid[uid];
+    const isMe = uid===youUid;
+    const color = hlColor[uid];
+    lines += `<path class="evo-line-anim" pathLength="1" style="animation-delay:${delay}ms" d="${pathD(s.positions)}" fill="none" stroke="${color}" stroke-width="${isMe?3:2.2}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const lx=xOf(numCp-1), ly=yOf(s.positions[numCp-1]);
+    dots += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="${isMe?4:3}" fill="${color}" stroke="#0A1628" stroke-width="1.5"/>`;
+    delay += 120;
+  });
+
+  // Legenda compacta (só destaques) com a posição atual.
+  const legend = hlOrdered.map(uid => {
+    const s = seriesByUid[uid];
+    const isMe = uid===youUid;
+    const curPos = s.positions[numCp-1];
     return `<div style="display:flex;align-items:center;gap:5px">
-      <div style="width:18px;height:2.5px;border-radius:2px;background:${color};opacity:${isMe?1:0.7}"></div>
-      <span style="font-size:0.7rem;color:${isMe?'var(--gold)':'var(--text-muted)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px" title="${esc(u.apelido)}">${esc(u.apelido)}</span>
-      <span style="font-size:0.68rem;color:${isMe?'var(--gold)':'rgba(255,255,255,.3)'};font-weight:700">${lastPts}</span>
+      <span style="width:16px;height:3px;border-radius:2px;background:${hlColor[uid]};display:inline-block"></span>
+      <span style="font-size:0.7rem;color:${isMe?'var(--gold)':'var(--text)'};font-weight:${isMe?700:600};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px" title="${esc(s.apelido)}">${isMe?'Você':esc(s.apelido)}</span>
+      <span style="font-size:0.66rem;color:var(--text-muted);font-weight:700">${curPos}º</span>
     </div>`;
   }).join('');
 
   container.innerHTML = `<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:12px 10px 8px;margin-bottom:20px">
-    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">📈 Evolução de Pontos por Rodada</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">📈 Evolução da Posição <span style="font-weight:400;text-transform:none">(por dia · 1º no topo)</span></div>
+      <button onclick="_evoToggleAll()" style="font-size:0.68rem;font-weight:700;color:var(--accent);background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.35);border-radius:14px;padding:3px 10px;cursor:pointer;white-space:nowrap">${_evoShowAll?'Ver destaque':'Ver todos'}</button>
+    </div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet" style="overflow:visible">
-      ${gridSvg}${yAxisSvg}${pathsSvg}${dotsSvg}${labelSvg}
+      ${grid}<g class="evo-fade">${faint}</g>${lines}${dots}${xlabels}
     </svg>
-    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:6px">${legendHtml}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:8px">${legend}</div>
   </div>`;
 }
 
