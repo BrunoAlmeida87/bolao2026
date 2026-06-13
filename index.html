@@ -388,6 +388,16 @@ select option{background:var(--mid-blue);color:var(--white)}
 .corrida-actions{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px}
 .corrida-hint{font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:8px;line-height:1.4}
 @media (max-width:600px){.corrida-actions .btn{flex:1 1 135px;padding:10px 8px}.corrida-hint{font-size:0.68rem}}
+/* Diálogo "Baixar vídeo" da Corrida */
+.cv-group{margin-bottom:12px}
+.cv-label{font-size:0.74rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.cv-opts{display:flex;gap:6px;flex-wrap:wrap}
+.cv-btn{flex:0 1 auto}
+.cv-pick{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:0.85rem}
+.cv-pick input{accent-color:var(--gold);width:15px;height:15px;flex:none}
+.cv-dot{width:11px;height:11px;border-radius:50%;flex:none}
+.cv-pick .cv-pn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-foot-hint{font-size:0.72rem;color:var(--text-muted);margin-top:8px;line-height:1.4}
 body.light-theme .date-filter-btn{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
 body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 .phase-tab{
@@ -11355,6 +11365,8 @@ let _corridaSel = null; // Set de uids escolhidos (modo "Escolher"); persiste na
 let _corridaSpeed = 1;  // multiplicador de velocidade na TELA (0,25× … 2×)
 let _corridaVidScope = 'view'; // 'view' (como na tela) | 'all' (todos)
 let _corridaVidSpeed = 1; // velocidade do VÍDEO exportado (1 normal, 0.5 lenta, 0.25 bem lenta)
+let _corridaVidHighlight = 'all'; // 'all' (todos coloridos) | 'me' (só eu) | 'sel' (eu + escolhidos)
+let _corridaVidHlSet = null; // Set de uids escolhidos para destacar (modo 'sel')
 const _BRACE_PALETTE = ['#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA','#FBBF24','#34D399','#F87171','#60A5FA','#C084FC','#4ADE80','#FB923C','#38BDF8','#E879F9','#86EFAC','#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4'];
 
 function _rrect(ctx, x, y, w, h, r) {
@@ -11474,23 +11486,9 @@ async function renderCorrida() {
     <div class="corrida-actions">
       <button id="corrida-play" class="btn btn-primary" onclick="_corridaTogglePlay()" style="display:none">⏸️ Pausar</button>
       <button id="corrida-replay" class="btn btn-secondary" onclick="_corridaReplay()" style="display:none">🔁 Repetir</button>
-      <button id="corrida-video" class="btn btn-secondary" onclick="_corridaDownloadVideo()" style="display:none">🎬 Baixar vídeo</button>
-      <button id="corrida-vidopts-btn" class="btn btn-secondary" onclick="_corridaToggleVidOpts()" style="display:none">⚙️ Opções do vídeo</button>
+      <button id="corrida-video" class="btn btn-secondary" onclick="_corridaOpenVideoModal()" style="display:none">🎬 Baixar vídeo</button>
     </div>
-    <div id="corrida-vidopts" style="display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:8px 10px;margin-top:8px;max-width:520px;margin-left:auto;margin-right:auto">
-      <div class="corrida-modes" style="margin:2px 0 6px;justify-content:flex-start">
-        <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Quem aparece:</span>
-        <button class="date-filter-btn corrida-vscope-btn active" data-vscope="view" onclick="_corridaSetVidScope('view')">Como na tela</button>
-        <button class="date-filter-btn corrida-vscope-btn" data-vscope="all" onclick="_corridaSetVidScope('all')">Todos</button>
-      </div>
-      <div class="corrida-modes" style="margin:2px 0 2px;justify-content:flex-start">
-        <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Velocidade:</span>
-        <button class="date-filter-btn corrida-vspd-btn active" data-vspd="1" onclick="_corridaSetVidSpeed(1)">Normal</button>
-        <button class="date-filter-btn corrida-vspd-btn" data-vspd="0.5" onclick="_corridaSetVidSpeed(0.5)">Lenta (0,5×)</button>
-        <button class="date-filter-btn corrida-vspd-btn" data-vspd="0.25" onclick="_corridaSetVidSpeed(0.25)">Bem lenta (0,25×)</button>
-      </div>
-    </div>
-    <div class="corrida-hint">Arraste a barra para percorrer a corrida e ler os nomes com calma. Em <b>Opções do vídeo</b> dá para escolher quem aparece (todos) e a velocidade. O vídeo sai em <b>MP4</b> (compatível com WhatsApp) quando o navegador suporta.</div>
+    <div class="corrida-hint">Arraste a barra para percorrer a corrida e ler os nomes com calma. Ao tocar em <b>Baixar vídeo</b> você escolhe a velocidade, quem aparece e quem destacar com cor. O vídeo sai em <b>MP4</b> (compatível com WhatsApp) quando o navegador suporta.</div>
   </div>`;
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
@@ -11556,9 +11554,6 @@ function _corridaInit(full, view, topN) {
   window.addEventListener('resize', _corridaState._onResize);
   _corridaSizeCanvas();
   const vb = document.getElementById('corrida-video'); if (vb) vb.style.display = '';
-  const ob = document.getElementById('corrida-vidopts-btn'); if (ob) ob.style.display = '';
-  document.querySelectorAll('.corrida-vscope-btn').forEach(b => b.classList.toggle('active', b.dataset.vscope === _corridaVidScope));
-  document.querySelectorAll('.corrida-vspd-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.vspd) === _corridaVidSpeed));
   const sc = document.getElementById('corrida-scrub'); if (sc) { sc.style.display = ''; sc.value = 0; }
   _corridaReplay();
 }
@@ -11643,31 +11638,33 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
     if (dateW) { ctx.textAlign = 'right'; ctx.font = '800 16px Arial'; ctx.fillStyle = '#FFD700'; ctx.fillText('📅 ' + dateW, W - 10, 22); }
   }
 
+  const dimSet = opts.dim || null;
   const drawRow = (o, top, fixedRank) => {
     const isMe = o.uid === meUid;
+    const isDim = dimSet ? dimSet.has(o.uid) : false; // acinzentado (sem destaque)
     const intRank = (fixedRank != null) ? fixedRank : Math.round(o.r);
     const barW = Math.max(2, o.v / data.maxV * barMaxW);
-    const color = data.colorByUid[o.uid];
+    const color = isDim ? '#4C5A72' : data.colorByUid[o.uid];
     const cyText = top + rowH * 0.5 + fontPx * 0.36;
-    ctx.fillStyle = isMe ? 'rgba(255,215,0,.14)' : 'rgba(255,255,255,.035)';
+    ctx.fillStyle = isDim ? 'rgba(255,255,255,.02)' : (isMe ? 'rgba(255,215,0,.14)' : 'rgba(255,255,255,.035)');
     _rrect(ctx, 5, top + 1, W - 10, rowH - 2, Math.min(7, rowH / 3)); ctx.fill();
     ctx.textAlign = 'left'; ctx.font = `800 ${rankFont}px Arial`;
-    ctx.fillStyle = medals[intRank] || (isMe ? '#FFD700' : '#7E8BA3');
+    ctx.fillStyle = isDim ? '#5A6B82' : (medals[intRank] || (isMe ? '#FFD700' : '#7E8BA3'));
     ctx.fillText(`${intRank + 1}º`, 8, cyText);
     if (showNames) {
-      ctx.textAlign = 'right'; ctx.font = `${isMe ? '800' : '600'} ${fontPx}px Arial`;
-      ctx.fillStyle = isMe ? '#FFD700' : '#E7ECF5';
-      const nm = (isMe ? '★ ' : '') + (data.apel[o.uid] || '');
+      ctx.textAlign = 'right'; ctx.font = `${(isMe && !isDim) ? '800' : '600'} ${fontPx}px Arial`;
+      ctx.fillStyle = isDim ? '#6B7A92' : (isMe ? '#FFD700' : '#E7ECF5');
+      const nm = ((isMe && !isDim) ? '★ ' : '') + (data.apel[o.uid] || '');
       ctx.fillText(_corridaEllipsis(ctx, nm, nameW - 38), nameW - 6, cyText);
     }
     const barH = Math.max(4, rowH - 7);
     const by = top + (rowH - barH) / 2;
-    if (isMe) { ctx.shadowColor = 'rgba(255,215,0,.6)'; ctx.shadowBlur = 8; }
+    if (isMe && !isDim) { ctx.shadowColor = 'rgba(255,215,0,.6)'; ctx.shadowBlur = 8; }
     ctx.fillStyle = color; _rrect(ctx, barLeft, by, barW, barH, Math.min(5, barH / 2)); ctx.fill();
     ctx.shadowBlur = 0;
     if (showVals) {
       ctx.textAlign = 'left'; ctx.font = `800 ${fontPx}px Arial`;
-      ctx.fillStyle = isMe ? '#FFD700' : '#FFFFFF';
+      ctx.fillStyle = isDim ? '#6B7A92' : (isMe ? '#FFD700' : '#FFFFFF');
       ctx.fillText(String(Math.round(o.v)), barLeft + barW + 6, cyText);
     }
   };
@@ -11764,18 +11761,70 @@ function _corridaSetSpeed(mult) {
   if (st.playing) st.startTime = performance.now() - st.seg * st.stepDur; // sem salto
 }
 
-// Opções do vídeo exportado (escopo de participantes e velocidade).
-function _corridaToggleVidOpts() {
-  const p = document.getElementById('corrida-vidopts'); if (!p) return;
-  p.style.display = p.style.display === 'none' ? '' : 'none';
+// Diálogo "Baixar vídeo": pergunta na hora a velocidade, quem aparece e quem
+// destacar com cor (só eu / eu + escolhidos / todos). Monta a lista de
+// participantes dinamicamente a partir dos dados carregados.
+function _corridaOpenVideoModal() {
+  const st = _corridaState;
+  if (!st || !st.data.frames.length) { showToast('Abra a corrida primeiro.', 'warning'); return; }
+  const full = st.full;
+  if (!_corridaVidHlSet) _corridaVidHlSet = new Set();
+  const old = document.getElementById('modal-corrida-video'); if (old) old.remove();
+  const others = full.uids.filter(uid => uid !== full.meUid);
+  const checklist = others.map(uid => {
+    const checked = _corridaVidHlSet.has(uid) ? 'checked' : '';
+    const col = _BRACE_PALETTE[full.uids.indexOf(uid) % _BRACE_PALETTE.length];
+    return `<label class="cv-pick"><input type="checkbox" value="${esc(uid)}" ${checked}><span class="cv-dot" style="background:${col}"></span><span class="cv-pn">${esc(full.apel[uid] || '(sem nome)')}</span></label>`;
+  }).join('');
+  const grp = (id, label, opts, cur) => `<div class="cv-group"><div class="cv-label">${label}</div><div class="cv-opts" id="${id}">${
+    opts.map(o => `<button class="date-filter-btn cv-btn${o.v === cur ? ' active' : ''}" data-v="${o.v}">${o.t}</button>`).join('')
+  }</div></div>`;
+  const ov = document.createElement('div');
+  ov.id = 'modal-corrida-video';
+  ov.className = 'modal-overlay';
+  ov.onclick = e => { if (e.target === ov) _corridaCloseVideoModal(); };
+  ov.innerHTML = `<div class="modal-box" style="max-width:540px;text-align:left">
+    <button class="modal-close" onclick="_corridaCloseVideoModal()">✕</button>
+    <div style="font-weight:800;color:var(--gold);font-size:1.05rem;margin-bottom:12px">🎬 Baixar vídeo</div>
+    ${grp('cv-speed', 'Velocidade', [{ v: '1', t: 'Normal' }, { v: '0.5', t: 'Lenta (0,5×)' }, { v: '0.25', t: 'Bem lenta (0,25×)' }], String(_corridaVidSpeed))}
+    ${grp('cv-scope', 'Quem aparece', [{ v: 'view', t: 'Como na tela' }, { v: 'all', t: 'Todos' }], _corridaVidScope)}
+    ${grp('cv-hl', 'Destacar com cor', [{ v: 'all', t: 'Todos coloridos' }, { v: 'me', t: 'Só eu' }, { v: 'sel', t: 'Eu + escolher' }], _corridaVidHighlight)}
+    <div id="cv-picklist" style="display:${_corridaVidHighlight === 'sel' ? 'grid' : 'none'};margin-top:6px;max-height:210px;overflow:auto;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px">${checklist}</div>
+    <div class="cv-foot-hint">Os destacados ganham cores vivas; os demais ficam em cinza, para guiar o olhar para quem você quer acompanhar.</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-secondary" style="flex:1" onclick="_corridaCloseVideoModal()">Cancelar</button>
+      <button class="btn btn-primary" style="flex:2" onclick="_corridaConfirmVideo()">🎬 Gerar vídeo</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  // Grupos de botões exclusivos; "Destacar = Eu + escolher" abre a lista.
+  ov.querySelectorAll('.cv-opts').forEach(group => {
+    group.querySelectorAll('.cv-btn').forEach(b => {
+      b.onclick = () => {
+        group.querySelectorAll('.cv-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        if (group.id === 'cv-hl') {
+          const pl = document.getElementById('cv-picklist');
+          if (pl) pl.style.display = b.dataset.v === 'sel' ? 'grid' : 'none';
+        }
+      };
+    });
+  });
 }
-function _corridaSetVidScope(s) {
-  _corridaVidScope = s;
-  document.querySelectorAll('.corrida-vscope-btn').forEach(b => b.classList.toggle('active', b.dataset.vscope === s));
+function _corridaCloseVideoModal() {
+  const ov = document.getElementById('modal-corrida-video'); if (ov) ov.remove();
 }
-function _corridaSetVidSpeed(v) {
-  _corridaVidSpeed = v;
-  document.querySelectorAll('.corrida-vspd-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.vspd) === v));
+function _corridaConfirmVideo() {
+  const ov = document.getElementById('modal-corrida-video'); if (!ov) return;
+  const pick = sel => { const b = ov.querySelector(sel + ' .cv-btn.active'); return b ? b.dataset.v : null; };
+  _corridaVidSpeed = parseFloat(pick('#cv-speed')) || 1;
+  _corridaVidScope = pick('#cv-scope') || 'view';
+  _corridaVidHighlight = pick('#cv-hl') || 'all';
+  const hlSet = new Set();
+  if (_corridaVidHighlight === 'sel') ov.querySelectorAll('#cv-picklist input:checked').forEach(c => hlSet.add(c.value));
+  _corridaVidHlSet = hlSet;
+  _corridaCloseVideoModal();
+  _corridaDownloadVideo();
 }
 
 function _corridaSyncButtons() {
@@ -11857,6 +11906,15 @@ async function _corridaDownloadVideo() {
     if (_corridaVidScope === 'all') { data = st.full; slots = data.n; pin = false; }
     else { data = st.data; pin = st.view === 'top'; slots = (st.view === 'top') ? Math.min(st.topN, data.n) : data.n; }
     const geo = _corridaVideoGeo(slots, pin);
+    // Destaque por cor: "me" deixa só você colorido; "sel" colore você + os
+    // escolhidos; o resto vai para o conjunto "dim" (cinza). "all" não acinzenta.
+    let dim = null;
+    if (_corridaVidHighlight === 'me') {
+      dim = new Set(data.uids.filter(u => u !== data.meUid));
+    } else if (_corridaVidHighlight === 'sel') {
+      const keep = new Set(_corridaVidHlSet || []); keep.add(data.meUid);
+      dim = new Set(data.uids.filter(u => !keep.has(u)));
+    }
     const totalSeg = Math.max(1, data.frames.length - 1);
     // Velocidade do vídeo: 1 normal, 0.5 lenta, 0.25 bem lenta → mais quadros = mais lento.
     const totalFrames = Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1;
@@ -11864,7 +11922,7 @@ async function _corridaDownloadVideo() {
       const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
       const arr = _corridaInterp(data, seg);
       const vf = data.frames[Math.min(data.frames.length - 1, Math.round(seg))];
-      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date });
+      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date, dim });
     };
 
     let blob = null, ext = 'mp4';
