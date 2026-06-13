@@ -3965,6 +3965,9 @@ function switchPalRound(r) {
   const groupTabs = document.getElementById('group-tabs');
 
   if (r) {
+    // Rodadas só existem nos grupos: marca a fase de grupos como ativa (estado
+    // coerente para quando o usuário limpar com "Todas" — não volta à eliminatória).
+    document.querySelectorAll('.phase-tab').forEach(t => t.classList.toggle('active', t.dataset.phase === 'grupos'));
     // Jogos de grupos da rodada r, exibidos em ordem de data.
     const ids = Object.values(GRUPOS_DATA)
       .flatMap(g => g.games.filter(gm => gm.r === Number(r)).map(gm => gm.id));
