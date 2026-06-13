@@ -773,6 +773,27 @@ body.light-theme .mais-sheet a.active{color:var(--accent)}
 
 .stats-alt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .stats-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* Carrossel do card "Momento dos Participantes" */
+.mom-carousel{position:relative;margin-top:12px}
+.mom-slide{display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:16px 46px;text-align:center}
+.mom-slide.active{display:block;animation:momFade .4s ease}
+@keyframes momFade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.mom-slide-head{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.mom-tag{font-size:.66rem;font-weight:700;color:var(--text-muted);text-transform:none;letter-spacing:0;background:rgba(255,255,255,.08);padding:2px 9px;border-radius:11px}
+.mom-name{font-size:1.15rem;font-weight:800;margin-top:9px}
+.mom-main{font-size:1.5rem;font-weight:900;margin-top:4px;line-height:1.15}
+.mom-sub{font-size:.84rem;color:var(--text-muted);margin-top:3px}
+.mom-decomp{font-size:.8rem;color:var(--text);margin-top:9px;font-weight:600}
+.mom-reg{font-size:.8rem;color:var(--text-muted);margin-top:2px}
+.mom-legend{font-size:.68rem;color:var(--text-muted);margin-top:9px;opacity:.85}
+.mom-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--text);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:1.15rem;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+.mom-nav:hover{background:rgba(255,255,255,.17)}
+.mom-prev{left:4px}.mom-next{right:4px}
+.mom-dots{display:flex;gap:6px;justify-content:center;margin-top:10px}
+.mom-dot{width:8px;height:8px;border-radius:50%;border:none;background:rgba(255,255,255,.25);cursor:pointer;padding:0;transition:all .2s}
+.mom-dot.active{background:var(--gold);width:18px;border-radius:4px}
+.mom-obs{font-size:.7rem;color:var(--text-muted);margin-top:12px;line-height:1.45;border-top:1px solid var(--border);padding-top:8px}
+.mom-empty{font-size:.86rem;color:var(--text-muted);text-align:center;padding:22px 10px}
 
 /* Dica de arraste: escondida por padrão; o bloco mobile abaixo a exibe.
    (Fica ANTES do @media para a regra do mobile vencer na cascata.) */
@@ -6226,6 +6247,144 @@ function _calcRecentTrend(uid, allPals, res, n=5) {
   return { recentPct, overallPct, delta: recentPct-overallPct, count: totalRecent };
 }
 
+// Calcula o "momento" recente (últimos n jogos COM resultado) de cada participante
+// e seleciona apenas DESTAQUES editoriais (melhores/piores fases) — não vira lista
+// geral. Distingue REGULARIDADE (jogos em que pontuou), PRECISÃO (placares exatos)
+// e EFICIÊNCIA (pontos feitos / pontos possíveis), evitando o "100%" ambíguo.
+function _calcMomentum(ranking, allPals, res, n = 5) {
+  const PTS_MAX = CFG.pts_exato || 10;
+  const PTS_VS = CFG.pts_vencedor_saldo ?? 7;
+  const PTS_V = CFG.pts_apenas_vencedor ?? 5;
+  const gamesOrdered = ALL_GAMES
+    .filter(g => _hasFullResult(res[g.id]))
+    .sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
+  const recent = gamesOrdered.slice(-n);
+  const recentGamesCount = recent.length;
+  if (recentGamesCount < 3) return { slides: [], recentGamesCount };
+
+  const rankPos = {}; ranking.forEach((u, i) => rankPos[u.uid] = i);
+
+  const stats = ranking.map(u => {
+    const pals = allPals[u.uid] || {};
+    // Histórico do próprio participante (base de comparação).
+    let ptsAll = 0, predAll = 0;
+    gamesOrdered.forEach(g => {
+      const p = calcPontos(pals[g.id], res[g.id]);
+      if (p == null) return; predAll++; ptsAll += p;
+    });
+    // Janela recente.
+    let pts = 0, pred = 0, scored = 0, exatos = 0, vSaldo = 0, vencedor = 0, erros = 0;
+    recent.forEach(g => {
+      const p = calcPontos(pals[g.id], res[g.id]);
+      if (p == null) return;
+      pred++; pts += p;
+      if (p === PTS_MAX) { exatos++; scored++; }
+      else if (p === PTS_VS) { vSaldo++; scored++; }
+      else if (p === PTS_V) { vencedor++; scored++; }
+      else erros++;
+    });
+    // Sequência ativa de jogos pontuando (do mais recente para trás).
+    let streak = 0;
+    for (let i = gamesOrdered.length - 1; i >= 0; i--) {
+      const p = calcPontos(pals[gamesOrdered[i].id], res[gamesOrdered[i].id]);
+      if (p == null) break;
+      if (p > 0) streak++; else break;
+    }
+    const eff = pred ? pts / (pred * PTS_MAX) : 0;
+    const effAll = predAll ? ptsAll / (predAll * PTS_MAX) : 0;
+    return {
+      uid: u.uid, apelido: u.apelido || u.nome,
+      pred, scored, exatos, vSaldo, vencedor, erros,
+      pts, ptsMax: pred * PTS_MAX, eff, effAll, deltaEff: eff - effAll,
+      predAll, streak, rankPos: rankPos[u.uid] ?? 999
+    };
+  });
+
+  // Elegibilidade: ao menos 3 dos n jogos recentes com palpite. Destaques NEGATIVOS
+  // exigem histórico mínimo (não punir quem palpitou pouco).
+  const elig = stats.filter(s => s.pred >= 3);
+  const eligNeg = elig.filter(s => s.predAll >= 6);
+
+  const pp = v => (v >= 0 ? '+' : '−') + Math.abs(Math.round(v * 100));
+  const decomp = s => `${s.exatos} exato${s.exatos !== 1 ? 's' : ''} · ${s.vSaldo} V+saldo · ${s.vencedor} vencedor · ${s.erros} erro${s.erros !== 1 ? 's' : ''}`;
+  const tie = (a, b) => (b.pts - a.pts) || (b.exatos - a.exatos) || (a.rankPos - b.rankPos);
+
+  const gens = [
+    { key: 'best', icon: '🔥', title: 'Melhor momento', color: 'var(--green)',
+      list: elig.filter(s => s.eff >= 0.55 && s.scored >= 2).sort((a, b) => (b.eff - a.eff) || tie(a, b)),
+      main: s => `${s.pts}/${s.ptsMax} pts`, sub: s => `${Math.round(s.eff * 100)}% de eficiência`,
+      tag: s => s.eff >= 0.8 ? 'fase iluminada ✨' : 'em alta' },
+    { key: 'evo', icon: '📈', title: 'Maior evolução', color: '#7CE7B0',
+      list: eligNeg.filter(s => s.deltaEff >= 0.12).sort((a, b) => (b.deltaEff - a.deltaEff) || tie(a, b)),
+      main: s => `${pp(s.deltaEff)} pp`, sub: s => `eficiência vs sua média (${Math.round(s.effAll * 100)}% → ${Math.round(s.eff * 100)}%)`,
+      tag: () => 'subindo' },
+    { key: 'sniper', icon: '🎯', title: 'Sniper recente', color: 'var(--gold)',
+      list: elig.filter(s => s.exatos >= 2).sort((a, b) => (b.exatos - a.exatos) || tie(a, b)),
+      main: s => `${s.exatos} placares exatos`, sub: s => `nos últimos ${s.pred} jogos`,
+      tag: () => 'mira calibrada' },
+    { key: 'streak', icon: '🧱', title: 'Sequência positiva', color: '#60A5FA',
+      list: elig.filter(s => s.streak >= 3).sort((a, b) => (b.streak - a.streak) || tie(a, b)),
+      main: s => `Pontuou em ${s.streak} jogos seguidos`, sub: () => 'sequência ativa',
+      tag: () => 'embalado' },
+    { key: 'worst', icon: '❄️', title: 'Fase fria', color: '#9DB4D6',
+      list: eligNeg.filter(s => s.eff <= 0.35 && s.deltaEff <= -0.05).sort((a, b) => (a.eff - b.eff) || (a.deltaEff - b.deltaEff)),
+      main: s => `${s.pts}/${s.ptsMax} pts`, sub: s => `${Math.round(s.eff * 100)}% de eficiência`,
+      tag: () => 'precisa reagir' },
+    { key: 'drop', icon: '📉', title: 'Maior queda', color: '#E6A6A6',
+      list: eligNeg.filter(s => s.deltaEff <= -0.15).sort((a, b) => (a.deltaEff - b.deltaEff) || (a.eff - b.eff)),
+      main: s => `${pp(s.deltaEff)} pp`, sub: s => `eficiência vs sua média (${Math.round(s.effAll * 100)}% → ${Math.round(s.eff * 100)}%)`,
+      tag: () => 'vinha melhor' }
+  ];
+
+  // Seleção gulosa: cada destaque pega o melhor candidato ainda não usado (uids
+  // distintos entre slides → carrossel variado, sem repetir a mesma pessoa).
+  const used = new Set();
+  const slides = [];
+  gens.forEach(g => {
+    const pick = g.list.find(s => !used.has(s.uid));
+    if (!pick) return;
+    used.add(pick.uid);
+    slides.push({
+      icon: g.icon, title: g.title, color: g.color, tag: g.tag(pick),
+      apelido: pick.apelido, main: g.main(pick), sub: g.sub(pick),
+      decomp: decomp(pick), reg: `Pontuou em ${pick.scored}/${pick.pred} jogos recentes`
+    });
+  });
+  return { slides, recentGamesCount };
+}
+
+// Controle do carrossel do card "Momento dos Participantes": auto-avança, navegação
+// manual (setas/bolinhas) e respeita prefers-reduced-motion. Para sozinho quando o
+// card sai da tela (troca de aba).
+let _momState = { idx: 0, n: 0, timer: null };
+function _momStopAuto() { if (_momState.timer) { clearInterval(_momState.timer); _momState.timer = null; } }
+function _momInit() {
+  _momStopAuto();
+  const car = document.getElementById('mom-carousel');
+  if (!car) { _momState.n = 0; return; }
+  _momState.idx = 0;
+  _momState.n = car.querySelectorAll('.mom-slide').length;
+  if (_momState.n <= 1) return;
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce) _momState.timer = setInterval(() => _momNext(1, true), 5500);
+}
+function _momShow(i) {
+  const car = document.getElementById('mom-carousel');
+  if (!car) return;
+  const slides = car.querySelectorAll('.mom-slide');
+  if (!slides.length) return;
+  _momState.idx = (i + slides.length) % slides.length;
+  slides.forEach((s, k) => s.classList.toggle('active', k === _momState.idx));
+  document.querySelectorAll('.mom-dot').forEach((d, k) => d.classList.toggle('active', k === _momState.idx));
+}
+function _momGo(i) { _momStopAuto(); _momShow(i); }
+function _momNext(dir, auto) {
+  const car = document.getElementById('mom-carousel');
+  if (!car || !document.body.contains(car) || car.offsetParent === null) { _momStopAuto(); return; }
+  if (!auto) _momStopAuto(); // navegação manual cancela o automático
+  _momShow(_momState.idx + dir);
+}
+
 function _calcHeadToHead(users, allPals, res) {
   const gamesWithRes = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
   let best = null;
@@ -6618,10 +6777,8 @@ async function renderEstatisticas() {
     const reiEmpates = altData.slice().sort((a,b) => b.empates - a.empates)[0];
     const apostadorOusado = altData.slice().sort((a,b) => b.mediaGols - a.mediaGols)[0];
 
-    // Tendência (últimos 5 jogos com resultado)
-    const trendData = ranking.map(u => ({ user: u, ..._calcRecentTrend(u.uid, allPals, res, 5) })).filter(t => t.count > 0);
-    const emAlta = trendData.slice().sort((a,b)=>b.delta-a.delta)[0];
-    const emQueda = trendData.slice().sort((a,b)=>a.delta-b.delta)[0];
+    // Momento dos participantes — destaques editoriais (últimos 5 jogos com resultado)
+    const momentum = _calcMomentum(ranking, allPals, res, 5);
 
     // Ranking por fase
     const phaseGameIds = {
@@ -7095,24 +7252,36 @@ async function renderEstatisticas() {
       </div>`;
     }
 
-    // ── Tendência e momento ──
-    if (trendData.length > 0) {
-      const renderTrend = (title, icon, color, data, mode) => {
-        if (!data) return '';
-        const arrow = mode === 'up' ? '📈' : '📉';
-        return `<div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:14px">
-          <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">${icon} ${title}</div>
-          <div style="font-size:1rem;font-weight:800;color:${color};margin-top:6px">${esc(data.user.apelido||data.user.nome)}</div>
-          <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px">${arrow} Δ ${data.delta>=0?'+':''}${data.delta.toFixed(1)} pp (últ.5 vs geral)</div>
-          <div style="font-size:0.76rem;color:var(--text-muted)">Últ.5: ${data.recentPct.toFixed(1)}% · Geral: ${data.overallPct.toFixed(1)}%</div>
-        </div>`;
-      };
+    // ── Momento dos Participantes (carrossel de destaques) ──
+    {
+      const obs = 'Baseado nos últimos 5 jogos com resultado. <b>Regularidade</b> = jogos em que pontuou; <b>precisão</b> = placares exatos; <b>eficiência</b> = pontos feitos sobre pontos possíveis.';
+      let body;
+      if (momentum.recentGamesCount < 3) {
+        body = `<div class="mom-empty">Ainda há poucos jogos com resultado para calcular o momento.</div>`;
+      } else if (!momentum.slides.length) {
+        body = `<div class="mom-empty">Ainda não há dados suficientes para apontar grandes momentos.</div>`;
+      } else {
+        const slidesHtml = momentum.slides.map((s, i) => `
+          <div class="mom-slide${i === 0 ? ' active' : ''}" data-idx="${i}">
+            <div class="mom-slide-head" style="color:${s.color}">${s.icon} ${esc(s.title)} <span class="mom-tag">${esc(s.tag)}</span></div>
+            <div class="mom-name">${esc(s.apelido)}</div>
+            <div class="mom-main" style="color:${s.color}">${esc(s.main)}</div>
+            <div class="mom-sub">${esc(s.sub)}</div>
+            <div class="mom-decomp">${esc(s.decomp)}</div>
+            <div class="mom-reg">${esc(s.reg)}</div>
+            <div class="mom-legend">Últimos 5 jogos com resultado</div>
+          </div>`).join('');
+        const multi = momentum.slides.length > 1;
+        const nav = multi ? `
+          <button class="mom-nav mom-prev" onclick="_momNext(-1)" aria-label="Destaque anterior">‹</button>
+          <button class="mom-nav mom-next" onclick="_momNext(1)" aria-label="Próximo destaque">›</button>` : '';
+        const dots = multi ? `<div class="mom-dots">${momentum.slides.map((_, i) => `<button class="mom-dot${i === 0 ? ' active' : ''}" onclick="_momGo(${i})" aria-label="Ir ao destaque ${i + 1}"></button>`).join('')}</div>` : '';
+        body = `<div class="mom-carousel" id="mom-carousel">${slidesHtml}${nav}</div>${dots}`;
+      }
       html += `<div class="card">
         <div class="card-title">📊 Momento dos Participantes</div>
-        <div class="stats-alt-grid">
-          ${renderTrend('Em alta','🔥','var(--green)', emAlta, 'up')}
-          ${renderTrend('Em queda','🧊','#ff8a8a', emQueda, 'down')}
-        </div>
+        ${body}
+        <div class="mom-obs">${obs}</div>
       </div>`;
     }
 
@@ -7608,6 +7777,7 @@ async function renderEstatisticas() {
     }
 
     cont.innerHTML = html;
+    _momInit(); // carrossel do card "Momento dos Participantes"
     _addStatShareButtons(cont); // botão 📸 de compartilhar imagem em cada card
     _applyPendingStatsScroll(); // "Ver mais" do dashboard rola até a partida
   } catch(e) {
