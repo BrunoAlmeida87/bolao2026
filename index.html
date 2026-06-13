@@ -11182,7 +11182,9 @@ function _evoDraw() {
 // Inclui play/pausa, barra para percorrer (scrub) e exportar vídeo .webm.
 let _corridaState = null;
 let _corridaSel = null; // Set de uids escolhidos (modo "Escolher"); persiste na sessão
-let _corridaSpeed = 1;  // multiplicador de velocidade (0.5×, 1×, 1,5×, 2×)
+let _corridaSpeed = 1;  // multiplicador de velocidade na TELA (0,25× … 2×)
+let _corridaVidScope = 'view'; // 'view' (como na tela) | 'all' (todos)
+let _corridaVidSpeed = 1; // velocidade do VÍDEO exportado (1 normal, 0.5 lenta, 0.25 bem lenta)
 const _BRACE_PALETTE = ['#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA','#FBBF24','#34D399','#F87171','#60A5FA','#C084FC','#4ADE80','#FB923C','#38BDF8','#E879F9','#86EFAC','#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4'];
 
 function _rrect(ctx, x, y, w, h, r) {
@@ -11288,6 +11290,7 @@ async function renderCorrida() {
     </div>
     <div class="corrida-modes" style="margin:2px 0 4px">
       <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Velocidade:</span>
+      <button class="date-filter-btn corrida-speed-btn" data-spd="0.25" onclick="_corridaSetSpeed(0.25)">0,25×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="0.5" onclick="_corridaSetSpeed(0.5)">0,5×</button>
       <button class="date-filter-btn corrida-speed-btn active" data-spd="1" onclick="_corridaSetSpeed(1)">1×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="1.5" onclick="_corridaSetSpeed(1.5)">1,5×</button>
@@ -11302,8 +11305,22 @@ async function renderCorrida() {
       <button id="corrida-play" class="btn btn-primary" onclick="_corridaTogglePlay()" style="display:none">⏸️ Pausar</button>
       <button id="corrida-replay" class="btn btn-secondary" onclick="_corridaReplay()" style="display:none">🔁 Repetir</button>
       <button id="corrida-video" class="btn btn-secondary" onclick="_corridaDownloadVideo()" style="display:none">🎬 Baixar vídeo</button>
+      <button id="corrida-vidopts-btn" class="btn btn-secondary" onclick="_corridaToggleVidOpts()" style="display:none">⚙️ Opções do vídeo</button>
     </div>
-    <div class="corrida-hint">Arraste a barra para percorrer a corrida e ler os nomes com calma. O vídeo sai em <b>MP4</b> (compatível com WhatsApp) quando o navegador suporta; no celular abre o compartilhamento direto.</div>
+    <div id="corrida-vidopts" style="display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:8px 10px;margin-top:8px;max-width:520px;margin-left:auto;margin-right:auto">
+      <div class="corrida-modes" style="margin:2px 0 6px;justify-content:flex-start">
+        <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Quem aparece:</span>
+        <button class="date-filter-btn corrida-vscope-btn active" data-vscope="view" onclick="_corridaSetVidScope('view')">Como na tela</button>
+        <button class="date-filter-btn corrida-vscope-btn" data-vscope="all" onclick="_corridaSetVidScope('all')">Todos</button>
+      </div>
+      <div class="corrida-modes" style="margin:2px 0 2px;justify-content:flex-start">
+        <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Velocidade:</span>
+        <button class="date-filter-btn corrida-vspd-btn active" data-vspd="1" onclick="_corridaSetVidSpeed(1)">Normal</button>
+        <button class="date-filter-btn corrida-vspd-btn" data-vspd="0.5" onclick="_corridaSetVidSpeed(0.5)">Lenta (0,5×)</button>
+        <button class="date-filter-btn corrida-vspd-btn" data-vspd="0.25" onclick="_corridaSetVidSpeed(0.25)">Bem lenta (0,25×)</button>
+      </div>
+    </div>
+    <div class="corrida-hint">Arraste a barra para percorrer a corrida e ler os nomes com calma. Em <b>Opções do vídeo</b> dá para escolher quem aparece (todos) e a velocidade. O vídeo sai em <b>MP4</b> (compatível com WhatsApp) quando o navegador suporta.</div>
   </div>`;
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
@@ -11369,6 +11386,9 @@ function _corridaInit(full, view, topN) {
   window.addEventListener('resize', _corridaState._onResize);
   _corridaSizeCanvas();
   const vb = document.getElementById('corrida-video'); if (vb) vb.style.display = '';
+  const ob = document.getElementById('corrida-vidopts-btn'); if (ob) ob.style.display = '';
+  document.querySelectorAll('.corrida-vscope-btn').forEach(b => b.classList.toggle('active', b.dataset.vscope === _corridaVidScope));
+  document.querySelectorAll('.corrida-vspd-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.vspd) === _corridaVidSpeed));
   const sc = document.getElementById('corrida-scrub'); if (sc) { sc.style.display = ''; sc.value = 0; }
   _corridaReplay();
 }
@@ -11574,6 +11594,20 @@ function _corridaSetSpeed(mult) {
   if (st.playing) st.startTime = performance.now() - st.seg * st.stepDur; // sem salto
 }
 
+// Opções do vídeo exportado (escopo de participantes e velocidade).
+function _corridaToggleVidOpts() {
+  const p = document.getElementById('corrida-vidopts'); if (!p) return;
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+}
+function _corridaSetVidScope(s) {
+  _corridaVidScope = s;
+  document.querySelectorAll('.corrida-vscope-btn').forEach(b => b.classList.toggle('active', b.dataset.vscope === s));
+}
+function _corridaSetVidSpeed(v) {
+  _corridaVidSpeed = v;
+  document.querySelectorAll('.corrida-vspd-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.vspd) === v));
+}
+
 function _corridaSyncButtons() {
   const st = _corridaState; if (!st) return;
   const play = document.getElementById('corrida-play');
@@ -11583,16 +11617,20 @@ function _corridaSyncButtons() {
   if (replay) replay.style.display = '';
 }
 
-// Geometria do vídeo vertical (720×1280), partilhada pelos dois codificadores.
-function _corridaVideoGeo(st) {
-  const W = 720, H = 1280, data = st.data;
-  const pin = st.view === 'top';
-  const slots = st.view === 'top' ? Math.min(st.topN, data.n) : (st.view === 'sel' ? data.n : Math.min(18, data.n));
-  const rowH = Math.min(46, Math.max(20, Math.floor((H - 300) / (slots + (pin ? 1 : 0)))));
+// Geometria do vídeo vertical (720×altura), partilhada pelos dois codificadores.
+// A altura cresce com o nº de linhas (até 1920) para caber TODOS os nomes de
+// forma legível quando o escopo é "todos"; mantém 1280 para poucas linhas.
+function _corridaVideoGeo(slots, pin) {
+  const W = 720, padTop = 150, padBottom = 60;
+  const lanes = slots + (pin ? 1 : 0);
+  let rowH = Math.min(46, Math.max(16, Math.round(1710 / lanes)));
+  let H = Math.max(1280, padTop + lanes * rowH + padBottom);
+  if (H > 1920) { H = 1920; rowH = Math.floor((H - padTop - padBottom) / lanes); }
+  H = Math.round(H / 2) * 2; // dimensão par exigida pelo H.264
   const nameW = 250;
-  return { W, H, padTop: 150, padBottom: 60, rowH, slots, pin,
+  return { W, H, padTop, padBottom, rowH, slots, pin,
     showNames: true, showVals: true, nameW, barLeft: nameW + 8,
-    barMaxW: W - (nameW + 8) - 70 - 8, pinTop: 150 + slots * rowH + 16 };
+    barMaxW: W - (nameW + 8) - 70 - 8, pinTop: padTop + slots * rowH + 16 };
 }
 
 // Codifica MP4/H.264 no cliente via WebCodecs + Mp4Muxer (funciona no Chrome
@@ -11642,10 +11680,16 @@ async function _corridaDownloadVideo() {
   const btn = document.getElementById('corrida-video');
   if (btn) { btn.disabled = true; btn.textContent = '🎬 Gerando…'; }
   try {
-    const fps = 30, data = st.data;
-    const geo = _corridaVideoGeo(st);
+    const fps = 30;
+    // Escopo: "todos" usa o conjunto completo (sem destaque fixo); "como na tela"
+    // reproduz o modo atual (Top N com você fixo, ou todos do conjunto exibido).
+    let data, slots, pin;
+    if (_corridaVidScope === 'all') { data = st.full; slots = data.n; pin = false; }
+    else { data = st.data; pin = st.view === 'top'; slots = (st.view === 'top') ? Math.min(st.topN, data.n) : data.n; }
+    const geo = _corridaVideoGeo(slots, pin);
     const totalSeg = Math.max(1, data.frames.length - 1);
-    const totalFrames = Math.ceil(totalSeg * 0.85 * fps) + 1;
+    // Velocidade do vídeo: 1 normal, 0.5 lenta, 0.25 bem lenta → mais quadros = mais lento.
+    const totalFrames = Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1;
     const drawAt = (ctx, i) => {
       const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
       const arr = _corridaInterp(data, seg);
