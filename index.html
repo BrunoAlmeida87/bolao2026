@@ -2208,7 +2208,7 @@ async function _writeRankingCache() {
     _rTracker.add(1);
     const rev = vSnap.exists ? (vSnap.data()?.rev ?? null) : null;
     const ranking = computeRanking(users, res, allPals, champPicks);
-    const deltas = _computePositionDeltas(users, res, allPals, champPicks);
+    const { deltas, denseDeltas } = _computePositionDeltas(users, res, allPals, champPicks);
     const rows = ranking.map((u, i) => ({
       pos: i+1, uid: u.uid,
       nome: u.nome || '', apelido: u.apelido || '',
@@ -2227,7 +2227,7 @@ async function _writeRankingCache() {
     // para a busca completa) para não arriscar estourar o limite do documento.
     const palsSnapshot = users.length <= 80 ? { allPals, champPicks } : null;
     await db_.collection('cache').doc('ranking_atual').set({
-      rev, rows, deltas, pals: palsSnapshot,
+      rev, rows, deltas, densedeltas: denseDeltas, pals: palsSnapshot,
       at: firebase.firestore.FieldValue.serverTimestamp()
     });
   } catch(e) { console.warn('[bolao] _writeRankingCache:', e.message); }
@@ -2685,14 +2685,14 @@ function computeRanking(users, resultados, allPalpites, championPicks={}) {
     .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc||((b.acertou_campeao?1:0)-(a.acertou_campeao?1:0)));
 }
 
-// Retorna mapa uid→posição_anterior (base das setas ↑↓ no ranking).
-// Base = ranking imediatamente ANTES do ÚLTIMO resultado inserido — o jogo com
-// resultado completo e maior `updatedAt` (carimbo de quando o admin salvou).
+// Retorna { deltas, denseDeltas }: mapas uid→posição_anterior (tradicional e
+// densa), base das setas ↑↓ no ranking. Base = ranking imediatamente ANTES do
+// ÚLTIMO resultado inserido — o jogo com resultado completo e maior `updatedAt`.
 // Assim o ↑↓ mostra quantas posições cada um subiu/desceu por causa do último
 // placar lançado. Usada tanto em renderDashboard quanto em _writeRankingCache.
 function _computePositionDeltas(users, res, allPals, champPicks) {
   const withRes = Object.keys(res).filter(id => _hasFullResult(res[id]));
-  if (withRes.length < 2) return {}; // sem base anterior significativa
+  if (withRes.length < 2) return { deltas: {}, denseDeltas: {} }; // sem base anterior
   const _ms = d => {
     const t = d && d.updatedAt;
     if (!t) return 0;
@@ -2704,12 +2704,18 @@ function _computePositionDeltas(users, res, allPals, champPicks) {
   // o último na ordem de iteração vence — irrelevante na prática.
   let lastId = null, lastMs = -Infinity;
   withRes.forEach(id => { const m = _ms(res[id]); if (m >= lastMs) { lastMs = m; lastId = id; } });
-  if (!lastId) return {};
+  if (!lastId) return { deltas: {}, denseDeltas: {} };
   const resPrev = {};
   Object.entries(res).forEach(([id, d]) => { if (id !== lastId) resPrev[id] = d; });
-  const deltas = {};
-  computeRanking(users, resPrev, allPals, champPicks).forEach((u, i) => { deltas[u.uid] = i + 1; });
-  return deltas;
+  const deltas = {}, denseDeltas = {};
+  // Posição tradicional (sequencial) e densa (empatados em pontos no mesmo nível).
+  let _lvl = 0, _last = null;
+  computeRanking(users, resPrev, allPals, champPicks).forEach((u, i) => {
+    deltas[u.uid] = i + 1;
+    if (u.pontos !== _last) { _lvl++; _last = u.pontos; }
+    denseDeltas[u.uid] = _lvl;
+  });
+  return { deltas, denseDeltas };
 }
 
 // ════════════════════════════════════════════
@@ -3258,7 +3264,7 @@ async function renderDashboard() {
     // Se palpites NÃO estão no cache de sessão, tenta usar cache/ranking_atual
     // (pré-calculado pelo admin ao salvar resultado) → ~50 leituras em vez de ~1500.
     // Quando pals já está em cache de sessão (0 leituras de pals), usa caminho normal.
-    let ranking, allPals, champPicks, positionDeltas = {};
+    let ranking, allPals, champPicks, positionDeltas = {}, denseDeltas = {};
     const _palsInCache = !!_scGet('pals');
     let _rankCache = !_palsInCache ? await _tryRankingCache() : null;
 
@@ -3278,6 +3284,7 @@ async function renderDashboard() {
       // Cache hit: ranking pré-calculado — busca só os palpites do usuário atual
       ranking = _rankCache.rows || [];
       positionDeltas = _rankCache.deltas || {};
+      denseDeltas = _rankCache.densedeltas || {};
       const [_myPSnap, _myPDoc] = await Promise.all([
         db_.collection('palpites').doc(currentUser.uid).collection('jogos').get(),
         db_.collection('palpites').doc(currentUser.uid).get()
@@ -3308,7 +3315,9 @@ async function renderDashboard() {
       champPicks = palsData.champPicks;
       ranking = computeRanking(users, res, allPals, champPicks);
       _dashMyPals = allPals[currentUser.uid] || {};
-      positionDeltas = _computePositionDeltas(users, res, allPals, champPicks);
+      const _pd = _computePositionDeltas(users, res, allPals, champPicks);
+      positionDeltas = _pd.deltas;
+      denseDeltas = _pd.denseDeltas;
     }
 
     _cachedRanking = ranking;
@@ -3480,6 +3489,14 @@ async function renderDashboard() {
         delta > 0 ? `<span title="${_deltaTitle}" style="font-size:0.65rem;font-weight:700;color:var(--green);display:block;line-height:1">↑${delta}</span>` :
         delta < 0 ? `<span title="${_deltaTitle}" style="font-size:0.65rem;font-weight:700;color:#ff6b6b;display:block;line-height:1">↓${Math.abs(delta)}</span>` :
         `<span title="${_deltaTitle}" style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
+      // Variação no ranking por ADENSAMENTO (denso) por causa do último resultado.
+      const prevDense = denseDeltas[u.uid];
+      const denseDelta = prevDense ? prevDense - _dense : null;
+      const _denseDeltaTitle = 'Variação na posição por adensamento por causa do último resultado lançado';
+      const denseDeltaBadge = denseDelta === null ? '' :
+        denseDelta > 0 ? `<span title="${_denseDeltaTitle}" style="font-size:0.6rem;font-weight:700;color:var(--green)">↑${denseDelta}</span>` :
+        denseDelta < 0 ? `<span title="${_denseDeltaTitle}" style="font-size:0.6rem;font-weight:700;color:#ff6b6b">↓${Math.abs(denseDelta)}</span>` :
+        `<span title="${_denseDeltaTitle}" style="font-size:0.6rem;color:var(--text-muted)">=</span>`;
       const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
       const isOwnRow = u.uid === currentUser.uid;
       const tiedMark = _isTiedPos ? `<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1;cursor:help" title="Empate total: mesma posição (empatados em todos os critérios)">=</span>` : '';
@@ -3493,7 +3510,7 @@ async function renderDashboard() {
       // Tabela (desktop)
       html += `<tr class="${isMe?'is-me':''}"${_relegRow}>
         <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}${tiedMark}${_inReleg?'<span style="display:block;font-size:0.62rem;line-height:1" title="Zona de rebaixamento">🔻</span>':''}</td>
-        <td style="color:var(--text-muted);font-weight:600;font-size:0.85rem" title="Posição por pontuação (ranking denso)">${_dense}º pos</td>
+        <td style="color:var(--text-muted);font-weight:600;font-size:0.85rem" title="Posição por pontuação (ranking denso)">${_dense}º pos ${denseDeltaBadge}</td>
         <td style="cursor:pointer" onclick="openUserProfile('${u.uid}')" title="Ver perfil e estatísticas"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
         <td><span class="pts-badge">${u.pontos}</span></td>
         <td class="text-green">${u.exatos}</td>
@@ -3513,7 +3530,7 @@ async function renderDashboard() {
                    `<span class="rank-mov-zero" title="${_deltaTitle}">—</span>`;
       cardsHtml += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="openUserProfile('${u.uid}')"${_inReleg?' style="border-color:rgba(255,68,68,.45);background:rgba(255,68,68,.06)"':''}>
         <div class="rank-card-top">
-          <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}${_inReleg?'<span style="font-size:0.7rem" title="Zona de rebaixamento">🔻</span>':''}<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1.1;margin-top:2px" title="Posição por pontuação (ranking denso)">≈ ${_dense}º pos</span></div>
+          <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}${_inReleg?'<span style="font-size:0.7rem" title="Zona de rebaixamento">🔻</span>':''}<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1.1;margin-top:2px" title="Posição por pontuação (ranking denso)">≈ ${_dense}º pos ${denseDeltaBadge}</span></div>
           <div class="rank-card-name"><div class="rk-apelido">${esc(u.apelido)}</div><div class="rk-nome">${esc(u.nome)}</div></div>
           <div class="rank-card-right"><span class="pts-badge">${u.pontos} pts</span><div style="font-size:0.72rem;margin-top:3px">${distLider}</div></div>
         </div>
@@ -3967,7 +3984,9 @@ function switchPalRound(r) {
   if (r) {
     // Rodadas só existem nos grupos: marca a fase de grupos como ativa (estado
     // coerente para quando o usuário limpar com "Todas" — não volta à eliminatória).
-    document.querySelectorAll('.phase-tab').forEach(t => t.classList.toggle('active', t.dataset.phase === 'grupos'));
+    // Escopado a #phase-tabs (Meus Palpites) para não mexer em outros conjuntos de
+    // abas que ficam no DOM (Ver Palpites / editor inline do admin).
+    if (phaseTabs) phaseTabs.querySelectorAll('.phase-tab').forEach(t => t.classList.toggle('active', t.dataset.phase === 'grupos'));
     // Jogos de grupos da rodada r, exibidos em ordem de data.
     const ids = Object.values(GRUPOS_DATA)
       .flatMap(g => g.games.filter(gm => gm.r === Number(r)).map(gm => gm.id));
@@ -3978,7 +3997,7 @@ function switchPalRound(r) {
     document.querySelectorAll('#pal-phases .game-row').forEach(row => { row.style.display = ''; });
     if (phaseTabs) phaseTabs.style.display = '';
     if (groupTabs) groupTabs.style.display = '';
-    const activePhase = document.querySelector('.phase-tab.active');
+    const activePhase = phaseTabs ? phaseTabs.querySelector('.phase-tab.active') : null;
     const key = activePhase ? activePhase.dataset.phase : 'grupos';
     document.querySelectorAll('#pal-phases .pal-phase').forEach(p =>
       p.style.display = p.dataset.phase === key ? 'block' : 'none');
