@@ -370,6 +370,10 @@ select option{background:var(--mid-blue);color:var(--white)}
 .evo-line-anim{stroke-dasharray:1;stroke-dashoffset:1;animation:evoDraw .9s ease forwards}
 .evo-fade{animation:evoFade .7s ease both}
 @media (prefers-reduced-motion: reduce){.evo-line-anim,.evo-fade{animation:none!important;stroke-dashoffset:0!important;opacity:1!important}}
+/* Corrida de barras (bar chart race) */
+.brace-row{position:absolute;left:0;right:0;display:flex;align-items:center;gap:6px;transition:transform .42s cubic-bezier(.4,0,.2,1),opacity .42s ease;will-change:transform}
+.brace-bar{border-radius:0 5px 5px 0;transition:width .42s cubic-bezier(.4,0,.2,1);flex:none;min-width:2px}
+@media (prefers-reduced-motion: reduce){.brace-row,.brace-bar{transition:none}}
 body.light-theme .date-filter-btn{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
 body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 .phase-tab{
@@ -1664,6 +1668,23 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
       <button class="btn btn-primary" onclick="goToPalpitesFromPending()">⚽ Palpitar agora</button>
       <button class="btn btn-secondary" onclick="closePendingPalModal()">Depois</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CORRIDA DO RANKING (bar chart race) -->
+<div id="modal-bar-race" class="modal-overlay hidden" onclick="if(event.target===this)closeBarRace()">
+  <div class="modal-box" style="max-width:780px;width:96%;padding:14px;text-align:left">
+    <button class="modal-close" onclick="closeBarRace()">✕</button>
+    <div style="font-weight:800;color:var(--gold);font-size:1rem">🏁 Corrida do Ranking</div>
+    <div class="date-filter-wrap" style="margin:8px 0 2px">
+      <button class="date-filter-btn brace-mode-btn" data-mode="0" onclick="_barRaceSetMode(0)">Todos</button>
+      <button class="date-filter-btn brace-mode-btn" data-mode="15" onclick="_barRaceSetMode(15)">Top 15</button>
+    </div>
+    <div id="brace-label" style="font-size:0.8rem;color:var(--text);min-height:18px;margin-top:3px"></div>
+    <div id="brace-area" style="position:relative;margin-top:10px"></div>
+    <div style="text-align:center;margin-top:12px">
+      <button id="brace-play" class="btn btn-primary" onclick="_barRaceReplay()" style="display:none">🔁 Repetir</button>
     </div>
   </div>
 </div>
@@ -3593,6 +3614,10 @@ async function renderDashboard() {
       <button class="btn-share" onclick="shareTop5RelegImage()">📸 Gerar imagem — Top 3 + Rebaixamento (classificação por densidade)</button>
       <button class="btn-share" onclick="shareRankingImage(10)">📸 Gerar imagem — Top 10</button>
       <button class="btn-share" onclick="shareRankingImage(0)">📸 Gerar imagem — Todos</button>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:2px 0 16px">
+      <button onclick="openBarRace(0)" style="background:linear-gradient(90deg,#7b2ff7,#f107a3);color:#fff;border:none;border-radius:22px;padding:10px 18px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:0 2px 14px rgba(180,0,200,.35)">🏁 Corrida — Todos</button>
+      <button onclick="openBarRace(15)" style="background:linear-gradient(90deg,#7b2ff7,#f107a3);color:#fff;border:none;border-radius:22px;padding:10px 18px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:0 2px 14px rgba(180,0,200,.35)">🏁 Corrida — Top 15</button>
     </div>
     <div id="evo-chart-container"></div>`;
     cont.innerHTML = html;
@@ -11137,6 +11162,145 @@ function _evoDraw() {
     </svg>
     <div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:8px">${legend}</div>
   </div>`;
+}
+
+// ════════════════════════════════════════════
+// CORRIDA DO RANKING (bar chart race) — todos os jogadores, por jogo
+// ════════════════════════════════════════════
+// Anima a disputa jogo a jogo: barras (pontos acumulados) crescem, os números
+// sobem e as linhas deslizam conforme o ranking muda. Destaca o próprio usuário
+// (dourado). Tudo em memória, sem alterar nada. Respeita prefers-reduced-motion.
+let _braceState = null, _bracePlaying = false;
+const _BRACE_PALETTE = ['#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA','#FBBF24','#34D399','#F87171','#60A5FA','#C084FC','#4ADE80','#FB923C','#38BDF8','#E879F9','#86EFAC','#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4'];
+
+async function _barRaceSetMode(topN) { return openBarRace(topN); }
+
+async function openBarRace(topNArg) {
+  const modal = document.getElementById('modal-bar-race');
+  const area = document.getElementById('brace-area');
+  const playBtn = document.getElementById('brace-play');
+  if (!modal || !area) return;
+  if (playBtn) playBtn.style.display = 'none';
+  area.style.height = '';
+  area.style.overflow = 'hidden';
+  area.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';
+  document.getElementById('brace-label').textContent = 'Carregando…';
+  modal.classList.remove('hidden');
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals } = await _fetchPalsCached(users);
+    // Modo: topN>0 mostra só os N primeiros de cada instante; senão, todos.
+    const topN = (topNArg && topNArg > 0 && topNArg < users.length) ? topNArg : null;
+    document.querySelectorAll('.brace-mode-btn').forEach(b => b.classList.toggle('active', String(topN || 0) === b.dataset.mode));
+    const games = ALL_GAMES.filter(g => _hasFullResult(res[g.id]))
+      .sort((a, b) => ((_effectiveStartInstant(a, res[a.id]) || {}).getTime?.() || 0) - ((_effectiveStartInstant(b, res[b.id]) || {}).getTime?.() || 0));
+    if (!games.length) { area.innerHTML = '<div style="text-align:center;padding:36px;color:var(--text-muted)">Ainda não há resultados para mostrar a corrida.</div>'; document.getElementById('brace-label').textContent = ''; return; }
+
+    const short = t => (t || '').split(' ')[0];
+    const cum = {}; users.forEach(u => cum[u.uid] = 0);
+    const frames = games.map(g => {
+      const r = res[g.id];
+      users.forEach(u => { const pts = calcPontos(allPals[u.uid] && allPals[u.uid][g.id], r); if (pts != null) cum[u.uid] += pts; });
+      return {
+        label: `${teamFlag(g.h)} ${esc(short(g.h))} <b>${r.h_real}×${r.a_real}</b> ${esc(short(g.a))} ${teamFlag(g.a)} <span style="color:var(--text-muted)">· ${esc(_isoToGameDate(_gameFilterISO(g, r)))}</span>`,
+        values: Object.assign({}, cum)
+      };
+    });
+    const lastVals = frames[frames.length - 1].values;
+    const maxV = Math.max(1, ...Object.values(lastVals));
+
+    const n = users.length;
+    const nSlots = topN || n; // quantas linhas visíveis ao mesmo tempo
+    const availH = Math.max(180, Math.min(560, Math.round((window.innerHeight || 700) * 0.6)));
+    const rowH = Math.max(7, Math.min(34, availH / nSlots));
+    const nameFont = Math.max(7, Math.min(13, rowH - 5));
+    area.style.position = 'relative';
+    area.style.height = Math.round(nSlots * rowH) + 'px';
+    area.innerHTML = '';
+
+    const rowByUid = {}, rows = [], apel = {}, uids = [];
+    users.forEach((u, i) => {
+      apel[u.uid] = u.apelido || '';
+      uids.push(u.uid);
+      const isMe = u.uid === currentUser.uid;
+      const color = isMe ? '#FFD700' : _BRACE_PALETTE[i % _BRACE_PALETTE.length];
+      const row = document.createElement('div');
+      row.className = 'brace-row';
+      row.style.height = rowH + 'px';
+      row.innerHTML = `<span class="brace-name" style="width:92px;flex:none;font-size:${nameFont}px;color:${isMe ? '#FFD700' : 'var(--text)'};font-weight:${isMe ? 800 : 600};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isMe ? '★ ' : ''}${esc(u.apelido || '')}</span>
+        <div class="brace-track" style="flex:1;display:flex;align-items:center;min-width:0"><div class="brace-bar" style="height:${Math.max(4, rowH - 4)}px;width:0%;background:${color}"></div><span class="brace-val" style="margin-left:6px;font-size:${nameFont}px;font-weight:700;color:${isMe ? '#FFD700' : 'var(--text-muted)'}">0</span></div>`;
+      area.appendChild(row);
+      const rObj = { uid: u.uid, el: row, bar: row.querySelector('.brace-bar'), valEl: row.querySelector('.brace-val'), shown: 0, target: 0 };
+      rowByUid[u.uid] = rObj; rows.push(rObj);
+    });
+
+    _braceState = { frames, maxV, MAXW: 76, rowH, uids, apel, rowByUid, rows, topN, k: 0, timer: null, raf: null,
+      stepDur: Math.max(180, Math.min(650, Math.round(22000 / frames.length))) };
+    _barRaceReplay();
+  } catch (e) {
+    area.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
+  }
+}
+
+function _braceApplyFrame(k) {
+  const st = _braceState; if (!st) return;
+  const f = st.frames[k];
+  const lbl = document.getElementById('brace-label');
+  if (lbl) lbl.innerHTML = `<b style="color:var(--gold)">${k + 1}/${st.frames.length}</b> &nbsp; ${f.label}`;
+  const order = st.uids.slice().sort((a, b) => (f.values[b] - f.values[a]) || st.apel[a].localeCompare(st.apel[b]));
+  order.forEach((uid, rank) => {
+    const r = st.rowByUid[uid];
+    const visible = !st.topN || rank < st.topN; // no modo Top N, esconde quem está fora
+    r.el.style.opacity = visible ? '1' : '0';
+    // Quem está fora do Top N fica na borda inferior (entra/sai deslizando por ali).
+    const ty = (st.topN && !visible) ? st.topN * st.rowH : rank * st.rowH;
+    r.el.style.transform = `translateY(${ty.toFixed(1)}px)`;
+    r.bar.style.width = `${(f.values[uid] / st.maxV * st.MAXW).toFixed(1)}%`;
+    r.target = f.values[uid];
+  });
+}
+
+function _braceTick() {
+  const st = _braceState; if (!st) return;
+  let active = false;
+  st.rows.forEach(r => {
+    if (Math.abs(r.target - r.shown) >= 0.5) { r.shown += (r.target - r.shown) * 0.22; active = true; }
+    else r.shown = r.target;
+    r.valEl.textContent = Math.round(r.shown);
+  });
+  st.raf = (_bracePlaying || active) ? requestAnimationFrame(_braceTick) : null;
+}
+
+function _braceStep() {
+  const st = _braceState; if (!st) return;
+  if (st.k >= st.frames.length) {
+    _bracePlaying = false;
+    const b = document.getElementById('brace-play'); if (b) b.style.display = '';
+    return;
+  }
+  _braceApplyFrame(st.k);
+  st.k++;
+  st.timer = setTimeout(_braceStep, st.stepDur);
+}
+
+function _barRaceReplay() {
+  const st = _braceState; if (!st) return;
+  if (st.timer) clearTimeout(st.timer);
+  const b = document.getElementById('brace-play'); if (b) b.style.display = 'none';
+  st.k = 0;
+  _braceApplyFrame(0);                       // posiciona o 1º frame
+  st.rows.forEach(r => { r.shown = r.target; r.valEl.textContent = Math.round(r.shown); });
+  st.k = 1;
+  _bracePlaying = true;
+  if (!st.raf) st.raf = requestAnimationFrame(_braceTick);
+  st.timer = setTimeout(_braceStep, st.stepDur);
+}
+
+function closeBarRace() {
+  _bracePlaying = false;
+  if (_braceState) { if (_braceState.timer) clearTimeout(_braceState.timer); if (_braceState.raf) cancelAnimationFrame(_braceState.raf); }
+  const el = document.getElementById('modal-bar-race'); if (el) el.classList.add('hidden');
 }
 
 // ════════════════════════════════════════════
