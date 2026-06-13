@@ -6844,6 +6844,7 @@ async function renderEstatisticas() {
           + _pendingPanelHtml
           + _postLock
           + _palpitesGrid
+          + (_closed ? '<div class="no-capture" style="margin-top:10px;text-align:center"><a onclick="navigateTo(\'simulador\')" style="display:inline-block;font-size:0.82rem;color:var(--accent);font-weight:700;text-decoration:none;cursor:pointer;border:1px solid rgba(30,144,255,.4);background:rgba(30,144,255,.08);border-radius:8px;padding:7px 12px">🔮 Simule aqui os resultados →</a></div>' : '')
           + '<div class="no-capture" style="text-align:right;margin-top:10px">'
           + '<button type="button" class="ngc-mini-btn" title="Compartilhar esta partida como imagem" onclick="shareStatCard(this)">📸 Compartilhar</button>'
           + '</div>'
