@@ -4218,6 +4218,13 @@ async function renderVerPalpites(selectedUid=null) {
         ${_ptsLegendHtml()}
         <div id="pal-view-progress-text" class="progress-text">Calculando...</div>
         <div class="progress-bar"><div class="progress-fill" id="pal-view-progress-fill" style="width:0%"></div></div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin:4px 0 5px;font-weight:600">🔢 Filtrar por rodada <span style="font-weight:400;opacity:.8">(fase de grupos)</span>:</div>
+        <div class="date-filter-wrap" id="ver-round-filter-wrap" style="margin-bottom:12px">
+          <button class="date-filter-btn ver-round-filter-btn active" data-round="" onclick="switchVerPalRound('')">Todas</button>
+          <button class="date-filter-btn ver-round-filter-btn" data-round="1" onclick="switchVerPalRound('1')">1ª rodada</button>
+          <button class="date-filter-btn ver-round-filter-btn" data-round="2" onclick="switchVerPalRound('2')">2ª rodada</button>
+          <button class="date-filter-btn ver-round-filter-btn" data-round="3" onclick="switchVerPalRound('3')">3ª rodada</button>
+        </div>
         <div class="phase-tabs" id="phase-tabs-view">`;
 
       const phases = [
@@ -4289,7 +4296,7 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const aVal = showPal ? (pal.a!==undefined?pal.a:'') : '';
   const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
   const idBadge = `<span style="font-size:0.62rem;font-weight:800;background:rgba(255,255,255,.1);color:var(--text-muted);padding:1px 5px;border-radius:5px;letter-spacing:.03em">${esc(game.id)}</span> `;
-  return `<div class="game-row">
+  return `<div class="game-row" data-round="${game.r||''}">
     <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${idBadge}${displayDate} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
     <input type="number" class="score-input ${iCls}" disabled placeholder="${showPal?'–':'🔒'}" value="${hVal}">
     <div class="vs-badge">${showPal?'✕':'🔒'}</div>
@@ -4298,14 +4305,58 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   </div>`;
 }
 
+// Marca cosmeticamente o botão ativo do filtro por rodada do "Ver".
+function _setVerRoundActive(val) {
+  document.querySelectorAll('.ver-round-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.round === val));
+}
+// Mostra apenas o grupo cuja aba está ativa (seleção única, como no "Ver").
+function _applyVerGroupVisibility() {
+  const groupTabs = document.getElementById('group-tabs-view');
+  const active = groupTabs ? groupTabs.querySelector('.group-tab.active') : null;
+  const gkey = active ? active.dataset.group : Object.keys(GRUPOS_DATA)[0];
+  document.querySelectorAll('#pal-view-phases .pal-group-view').forEach(g =>
+    g.style.display = g.dataset.group === gkey ? 'block' : 'none');
+}
+
 function switchVerPalPhase(key) {
-  document.querySelectorAll('.phase-tab').forEach(t=>t.classList.toggle('active',t.dataset.phase===key));
-  document.querySelectorAll('.pal-phase-view').forEach(p=>p.style.display=p.dataset.phase===key?'block':'none');
+  const phaseTabs = document.getElementById('phase-tabs-view');
+  if (phaseTabs) phaseTabs.querySelectorAll('.phase-tab').forEach(t=>t.classList.toggle('active',t.dataset.phase===key));
+  document.querySelectorAll('#pal-view-phases .pal-phase-view').forEach(p=>p.style.display=p.dataset.phase===key?'block':'none');
+  // Sai de um eventual filtro por rodada: restaura visibilidade das partidas.
+  document.querySelectorAll('#pal-view-phases .game-row').forEach(r=>{ r.style.display=''; });
+  _setVerRoundActive('');
+  _applyVerGroupVisibility();
 }
 
 function switchVerPalGroup(grp) {
-  document.querySelectorAll('.group-tab').forEach(t=>t.classList.toggle('active',t.dataset.group===grp));
-  document.querySelectorAll('.pal-group-view').forEach(p=>p.style.display=p.dataset.group===grp?'block':'none');
+  const groupTabs = document.getElementById('group-tabs-view');
+  if (groupTabs) groupTabs.querySelectorAll('.group-tab').forEach(t=>t.classList.toggle('active',t.dataset.group===grp));
+  // Sai de um eventual filtro por rodada: restaura as partidas antes de isolar o grupo.
+  document.querySelectorAll('#pal-view-phases .game-row').forEach(r=>{ r.style.display=''; });
+  _setVerRoundActive('');
+  document.querySelectorAll('#pal-view-phases .pal-group-view').forEach(p=>p.style.display=p.dataset.group===grp?'block':'none');
+}
+
+// Filtro por rodada (fase de grupos) na tela "Ver Palpites de um participante".
+// Ao escolher uma rodada, força a fase de grupos, exibe todos os grupos e mostra
+// só as partidas daquela rodada. "Todas" volta à navegação normal por fase/grupo.
+function switchVerPalRound(r) {
+  _setVerRoundActive(r);
+  const phaseTabs = document.getElementById('phase-tabs-view');
+  if (r) {
+    if (phaseTabs) phaseTabs.querySelectorAll('.phase-tab').forEach(t=>t.classList.toggle('active',t.dataset.phase==='grupos'));
+    document.querySelectorAll('#pal-view-phases .pal-phase-view').forEach(p=>p.style.display=p.dataset.phase==='grupos'?'block':'none');
+    document.querySelectorAll('#pal-view-phases .pal-group-view').forEach(g=>g.style.display='block');
+    document.querySelectorAll('#pal-view-phases .pal-phase-view[data-phase="grupos"] .game-row').forEach(row=>{
+      row.style.display = row.dataset.round === r ? '' : 'none';
+    });
+  } else {
+    document.querySelectorAll('#pal-view-phases .game-row').forEach(row=>{ row.style.display=''; });
+    const activePhase = phaseTabs ? phaseTabs.querySelector('.phase-tab.active') : null;
+    const key = activePhase ? activePhase.dataset.phase : 'grupos';
+    document.querySelectorAll('#pal-view-phases .pal-phase-view').forEach(p=>p.style.display=p.dataset.phase===key?'block':'none');
+    _applyVerGroupVisibility();
+  }
 }
 
 // ════════════════════════════════════════════
