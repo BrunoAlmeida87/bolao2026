@@ -11638,33 +11638,35 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
     if (dateW) { ctx.textAlign = 'right'; ctx.font = '800 16px Arial'; ctx.fillStyle = '#FFD700'; ctx.fillText('📅 ' + dateW, W - 10, 22); }
   }
 
-  const dimSet = opts.dim || null;
+  // opts.hl = conjunto de uids a REALÇAR (brilho/ênfase). Todos mantêm a cor; os
+  // realçados ganham destaque. Se ausente, só você é realçado (comportamento padrão).
+  const hlSet = opts.hl || null;
   const drawRow = (o, top, fixedRank) => {
     const isMe = o.uid === meUid;
-    const isDim = dimSet ? dimSet.has(o.uid) : false; // acinzentado (sem destaque)
+    const isHl = hlSet ? hlSet.has(o.uid) : isMe; // realçado (com brilho)
     const intRank = (fixedRank != null) ? fixedRank : Math.round(o.r);
     const barW = Math.max(2, o.v / data.maxV * barMaxW);
-    const color = isDim ? '#4C5A72' : data.colorByUid[o.uid];
+    const color = data.colorByUid[o.uid]; // cor sempre preservada
     const cyText = top + rowH * 0.5 + fontPx * 0.36;
-    ctx.fillStyle = isDim ? 'rgba(255,255,255,.02)' : (isMe ? 'rgba(255,215,0,.14)' : 'rgba(255,255,255,.035)');
+    ctx.fillStyle = isMe ? 'rgba(255,215,0,.14)' : (isHl ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.035)');
     _rrect(ctx, 5, top + 1, W - 10, rowH - 2, Math.min(7, rowH / 3)); ctx.fill();
     ctx.textAlign = 'left'; ctx.font = `800 ${rankFont}px Arial`;
-    ctx.fillStyle = isDim ? '#5A6B82' : (medals[intRank] || (isMe ? '#FFD700' : '#7E8BA3'));
+    ctx.fillStyle = medals[intRank] || (isMe ? '#FFD700' : '#7E8BA3');
     ctx.fillText(`${intRank + 1}º`, 8, cyText);
     if (showNames) {
-      ctx.textAlign = 'right'; ctx.font = `${(isMe && !isDim) ? '800' : '600'} ${fontPx}px Arial`;
-      ctx.fillStyle = isDim ? '#6B7A92' : (isMe ? '#FFD700' : '#E7ECF5');
-      const nm = ((isMe && !isDim) ? '★ ' : '') + (data.apel[o.uid] || '');
+      ctx.textAlign = 'right'; ctx.font = `${isHl ? '800' : '600'} ${fontPx}px Arial`;
+      ctx.fillStyle = isMe ? '#FFD700' : (isHl ? '#FFFFFF' : '#E7ECF5');
+      const nm = (isMe ? '★ ' : '') + (data.apel[o.uid] || '');
       ctx.fillText(_corridaEllipsis(ctx, nm, nameW - 38), nameW - 6, cyText);
     }
     const barH = Math.max(4, rowH - 7);
     const by = top + (rowH - barH) / 2;
-    if (isMe && !isDim) { ctx.shadowColor = 'rgba(255,215,0,.6)'; ctx.shadowBlur = 8; }
+    if (isHl) { ctx.shadowColor = isMe ? 'rgba(255,215,0,.6)' : color; ctx.shadowBlur = 8; }
     ctx.fillStyle = color; _rrect(ctx, barLeft, by, barW, barH, Math.min(5, barH / 2)); ctx.fill();
     ctx.shadowBlur = 0;
     if (showVals) {
       ctx.textAlign = 'left'; ctx.font = `800 ${fontPx}px Arial`;
-      ctx.fillStyle = isDim ? '#6B7A92' : (isMe ? '#FFD700' : '#FFFFFF');
+      ctx.fillStyle = isMe ? '#FFD700' : '#FFFFFF';
       ctx.fillText(String(Math.round(o.v)), barLeft + barW + 6, cyText);
     }
   };
@@ -11788,9 +11790,9 @@ function _corridaOpenVideoModal() {
     <div style="font-weight:800;color:var(--gold);font-size:1.05rem;margin-bottom:12px">🎬 Baixar vídeo</div>
     ${grp('cv-speed', 'Velocidade', [{ v: '1', t: 'Normal' }, { v: '0.5', t: 'Lenta (0,5×)' }, { v: '0.25', t: 'Bem lenta (0,25×)' }], String(_corridaVidSpeed))}
     ${grp('cv-scope', 'Quem aparece', [{ v: 'view', t: 'Como na tela' }, { v: 'all', t: 'Todos' }], _corridaVidScope)}
-    ${grp('cv-hl', 'Destacar com cor', [{ v: 'all', t: 'Todos coloridos' }, { v: 'me', t: 'Só eu' }, { v: 'sel', t: 'Eu + escolher' }], _corridaVidHighlight)}
+    ${grp('cv-hl', 'Realçar', [{ v: 'all', t: 'Só eu' }, { v: 'sel', t: 'Eu + escolher' }], _corridaVidHighlight === 'me' ? 'all' : _corridaVidHighlight)}
     <div id="cv-picklist" style="display:${_corridaVidHighlight === 'sel' ? 'grid' : 'none'};margin-top:6px;max-height:210px;overflow:auto;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px">${checklist}</div>
-    <div class="cv-foot-hint">Os destacados ganham cores vivas; os demais ficam em cinza, para guiar o olhar para quem você quer acompanhar.</div>
+    <div class="cv-foot-hint">Todos os jogadores aparecem coloridos; os realçados ganham brilho/ênfase para o olhar acompanhar quem você escolher.</div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn btn-secondary" style="flex:1" onclick="_corridaCloseVideoModal()">Cancelar</button>
       <button class="btn btn-primary" style="flex:2" onclick="_corridaConfirmVideo()">🎬 Gerar vídeo</button>
@@ -11906,14 +11908,13 @@ async function _corridaDownloadVideo() {
     if (_corridaVidScope === 'all') { data = st.full; slots = data.n; pin = false; }
     else { data = st.data; pin = st.view === 'top'; slots = (st.view === 'top') ? Math.min(st.topN, data.n) : data.n; }
     const geo = _corridaVideoGeo(slots, pin);
-    // Destaque por cor: "me" deixa só você colorido; "sel" colore você + os
-    // escolhidos; o resto vai para o conjunto "dim" (cinza). "all" não acinzenta.
-    let dim = null;
+    // Realce (brilho/ênfase) — TODOS mantêm a cor. "me" realça só você; "sel"
+    // realça você + os escolhidos; "all" → só você (padrão).
+    let hl = null;
     if (_corridaVidHighlight === 'me') {
-      dim = new Set(data.uids.filter(u => u !== data.meUid));
+      hl = new Set([data.meUid]);
     } else if (_corridaVidHighlight === 'sel') {
-      const keep = new Set(_corridaVidHlSet || []); keep.add(data.meUid);
-      dim = new Set(data.uids.filter(u => !keep.has(u)));
+      hl = new Set(_corridaVidHlSet || []); hl.add(data.meUid);
     }
     const totalSeg = Math.max(1, data.frames.length - 1);
     // Velocidade do vídeo: 1 normal, 0.5 lenta, 0.25 bem lenta → mais quadros = mais lento.
@@ -11922,7 +11923,7 @@ async function _corridaDownloadVideo() {
       const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
       const arr = _corridaInterp(data, seg);
       const vf = data.frames[Math.min(data.frames.length - 1, Math.round(seg))];
-      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date, dim });
+      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date, hl });
     };
 
     let blob = null, ext = 'mp4';
