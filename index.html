@@ -361,6 +361,9 @@ select option{background:var(--mid-blue);color:var(--white)}
 .date-filter-btn{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:0.78rem;font-weight:600;transition:all .2s;white-space:nowrap}
 .date-filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .date-filter-btn:hover:not(.active){border-color:var(--accent);color:var(--accent)}
+.pal-next-btn{display:block;width:100%;margin:0 0 12px;padding:11px 14px;border:none;border-radius:12px;background:linear-gradient(90deg,#ff6b00,#ff3d3d);color:#fff;font-size:0.98rem;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(255,80,0,.35);animation:palNextPulse 1.7s ease-in-out infinite}
+.pal-next-btn.active{outline:2px solid #fff;outline-offset:2px}
+@keyframes palNextPulse{0%,100%{box-shadow:0 2px 10px rgba(255,80,0,.35)}50%{box-shadow:0 2px 20px rgba(255,80,0,.75)}}
 body.light-theme .date-filter-btn{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
 body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 .phase-tab{
@@ -3590,11 +3593,23 @@ async function renderPalpites(editUid=null) {
       `<button class="date-filter-btn" data-dateiso="${iso}" onclick="switchPalDate('${iso}')">${label}</button>`
     ).join('');
 
+    // "Próximos jogos" = leva atual (timer ativo / em andamento) com palpite ainda
+    // ABERTO. Alimenta o filtro destacado e o deep-link do pop-up de pendentes.
+    _palNextGameIds = new Set(
+      (_getStatNextGroupWave(resCache).items || [])
+        .filter(({ game }) => !isPalpiteClosed(game, resCache[game.id] || {}))
+        .map(({ game }) => game.id)
+    );
+    const _nextBtnHtml = _palNextGameIds.size > 0
+      ? `<button class="pal-next-btn" onclick="switchPalNextGames()">🔥 PRÓXIMOS JOGOS — palpite agora! (${_palNextGameIds.size})</button>`
+      : '';
+
     let html = `<div class="section-title">⚽ Meus Palpites${_refreshBtn()}</div>${who}
       ${buildChampionPickerCard()}
       <div id="pal-progress-text" class="progress-text">Calculando...</div>
       <div class="progress-bar"><div class="progress-fill" id="pal-progress-fill" style="width:0%"></div></div>
       ${_ptsLegendHtml()}
+      ${_nextBtnHtml}
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;font-weight:600">📅 Filtrar por data:</div>
       <div class="date-filter-wrap" id="date-filter-wrap">
         <button class="date-filter-btn active" data-dateiso="" onclick="switchPalDate('')">Todos</button>
@@ -3609,7 +3624,7 @@ async function renderPalpites(editUid=null) {
       </div>
       <div class="phase-tabs" id="phase-tabs">`;
     phases.forEach((p,i)=>{ html += `<button class="phase-tab ${i===0?'active':''}" onclick="switchPalPhase('${p.key}')" data-phase="${p.key}">${p.label}</button>`; });
-    html += `</div><div id="pal-phases">`;
+    html += `</div><div id="pal-phases"><div id="pal-sorted-list" style="display:none"></div>`;
 
     html += `<div class="pal-phase" data-phase="grupos">`;
     const groupKeys = Object.keys(GRUPOS_DATA);
@@ -3639,6 +3654,7 @@ async function renderPalpites(editUid=null) {
     updateGroupTabState();
     _applyPendingPalpiteScroll(); // deep-link "clique aqui" do dashboard
     _applyPendingPalpiteRound();  // deep-link do lembrete de rodada do dashboard
+    _applyPendingPalpiteNext();   // deep-link do pop-up de palpites pendentes
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
@@ -3686,7 +3702,7 @@ function buildPalRow(game) {
   const effectiveIso = _gameFilterISO(game, res);
   const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
   const idBadge = `<span style="font-size:0.62rem;font-weight:800;background:rgba(255,255,255,.1);color:var(--text-muted);padding:1px 5px;border-radius:5px;letter-spacing:.03em">${esc(game.id)}</span> `;
-  return `<div class="game-row" data-gameiso="${effectiveIso}" data-round="${game.r||''}">
+  return `<div class="game-row" data-gameid="${game.id}" data-gameiso="${effectiveIso}" data-round="${game.r||''}">
     <div><div class="team-name home">${flagH} ${esc(teams.h)}</div><div class="game-meta">${idBadge}${displayDate} <span style="font-weight:700;color:var(--gold)">${time}</span>${phaseLabel}</div></div>
     <input type="number" class="score-input ${iCls}" id="ph_${game.id}" min="0" max="20" placeholder="–" value="${pal.h!==undefined?pal.h:''}" aria-label="Palpite gols - ${esc(teams.h)}" ${closeAttr} oninput="onPalInput('${game.id}','h',this.value)">
     <div class="vs-badge">✕</div>
@@ -3832,6 +3848,8 @@ function switchPalDate(iso) {
   document.querySelectorAll('.date-filter-btn:not(.round-filter-btn)').forEach(b =>
     b.classList.toggle('active', b.dataset.dateiso === iso));
   _setRoundFilterActive(''); // sai do filtro por rodada (modos exclusivos)
+  _setPalNextActive(false);  // sai do filtro "próximos jogos"
+  _palExitSorted();          // desfaz a ordenação por data (volta as linhas ao lugar)
 
   const phaseTabs = document.getElementById('phase-tabs');
   const groupTabs = document.getElementById('group-tabs');
@@ -3882,11 +3900,13 @@ function switchPalDate(iso) {
 }
 
 function switchPalPhase(key) {
+  _palExitSorted(); // desfaz ordenação por data (volta as linhas ao lugar)
   document.querySelectorAll('.phase-tab').forEach(t=>t.classList.toggle('active',t.dataset.phase===key));
   document.querySelectorAll('.pal-phase').forEach(p=>p.style.display=p.dataset.phase===key?'block':'none');
   // Sai de um eventual filtro por rodada: restaura a visibilidade das partidas.
   document.querySelectorAll('#pal-phases .game-row').forEach(r => { r.style.display = ''; });
   _setRoundFilterActive('');
+  _setPalNextActive(false);
   _applyPalGroupVisibility();
 }
 
@@ -3900,11 +3920,13 @@ function switchPalGroup(grp, el) {
   if (!tab) return;
   tab.classList.toggle('active');
   if (!tabsWrap.querySelector('.group-tab.active')) tab.classList.add('active');
+  _palExitSorted(); // desfaz ordenação por data (volta as linhas ao lugar)
   // Sai de um eventual filtro por rodada: restaura as partidas antes de aplicar
   // a visibilidade por grupo (senão linhas escondidas pela rodada ficariam ocultas).
   const scope = tabsWrap.closest('.pal-phase') || document;
   scope.querySelectorAll('.game-row').forEach(r => { r.style.display = ''; });
   _setRoundFilterActive('');
+  _setPalNextActive(false);
   _applyPalGroupVisibility(tabsWrap);
 }
 
@@ -3938,27 +3960,18 @@ function _setDateFilterActive(iso) {
 function switchPalRound(r) {
   _setRoundFilterActive(r);
   _setDateFilterActive(''); // sai do filtro por data (modos exclusivos)
+  _setPalNextActive(false); // sai do filtro "próximos jogos"
   const phaseTabs = document.getElementById('phase-tabs');
   const groupTabs = document.getElementById('group-tabs');
 
   if (r) {
-    if (phaseTabs) phaseTabs.style.display = '';
-    // Vai para a fase de grupos e a marca como ativa.
-    document.querySelectorAll('.phase-tab').forEach(t => t.classList.toggle('active', t.dataset.phase === 'grupos'));
-    document.querySelectorAll('#pal-phases .pal-phase').forEach(p =>
-      p.style.display = p.dataset.phase === 'grupos' ? 'block' : 'none');
-    // Reativa todos os grupos e mostra seus containers.
-    if (groupTabs) {
-      groupTabs.style.display = '';
-      groupTabs.querySelectorAll('.group-tab').forEach(t => t.classList.add('active'));
-    }
-    document.querySelectorAll('#pal-phases .pal-group').forEach(g => g.style.display = 'block');
-    // Mostra só as partidas da rodada escolhida.
-    document.querySelectorAll('#pal-phases .pal-phase[data-phase="grupos"] .game-row').forEach(row => {
-      row.style.display = row.dataset.round === r ? '' : 'none';
-    });
+    // Jogos de grupos da rodada r, exibidos em ordem de data.
+    const ids = Object.values(GRUPOS_DATA)
+      .flatMap(g => g.games.filter(gm => gm.r === Number(r)).map(gm => gm.id));
+    _palShowSorted(ids);
   } else {
     // "Todas": restaura visibilidade e volta à navegação normal por fase/grupo.
+    _palExitSorted();
     document.querySelectorAll('#pal-phases .game-row').forEach(row => { row.style.display = ''; });
     if (phaseTabs) phaseTabs.style.display = '';
     if (groupTabs) groupTabs.style.display = '';
@@ -3968,6 +3981,87 @@ function switchPalRound(r) {
       p.style.display = p.dataset.phase === key ? 'block' : 'none');
     _applyPalGroupVisibility();
   }
+}
+
+// ── Ordenação por data nos filtros de rodada / próximos jogos ────────────────
+// As linhas vivem em containers por grupo/fase. Para exibir um subconjunto em
+// ordem de DATA, movemos fisicamente as linhas (sem duplicar ids) para uma lista
+// única (#pal-sorted-list) ordenada, e restauramos depois. _palGameSortKey usa o
+// instante de início efetivo (com overrides do admin).
+function _palGameSortKey(id) {
+  const g = ALL_GAMES.find(x => x.id === id);
+  const inst = g ? _effectiveStartInstant(g, resultados[id]) : null;
+  return inst ? inst.getTime() : Number.MAX_SAFE_INTEGER;
+}
+function _palRestoreHomes() {
+  // Re-anexa TODAS as linhas aos seus containers na ordem canônica (corrige a
+  // ordem mesmo de linhas que ficaram na lista ordenada).
+  Object.keys(GRUPOS_DATA).forEach(g => {
+    const parent = document.querySelector(`#pal-phases .pal-group[data-group="${g}"]`);
+    if (!parent) return;
+    GRUPOS_DATA[g].games.forEach(game => {
+      const row = document.querySelector(`#pal-phases .game-row[data-gameid="${game.id}"]`);
+      if (row) parent.appendChild(row);
+    });
+  });
+  Object.entries(ELIM_DATA).forEach(([key, data]) => {
+    const parent = document.querySelector(`#pal-phases .pal-phase[data-phase="${key}"]`);
+    if (!parent) return;
+    data.games.forEach(game => {
+      const row = document.querySelector(`#pal-phases .game-row[data-gameid="${game.id}"]`);
+      if (row) parent.appendChild(row);
+    });
+  });
+}
+function _palShowSorted(ids) {
+  _palRestoreHomes(); // tudo no lugar antes de reorganizar
+  const list = document.getElementById('pal-sorted-list');
+  if (!list) return;
+  const phaseTabs = document.getElementById('phase-tabs');
+  if (phaseTabs) phaseTabs.style.display = 'none';
+  document.querySelectorAll('#pal-phases .pal-phase').forEach(p => p.style.display = 'none');
+  const rows = [];
+  ids.forEach(id => {
+    const row = document.querySelector(`#pal-phases .game-row[data-gameid="${id}"]`);
+    if (row) { row.style.display = ''; rows.push(row); }
+  });
+  rows.sort((a, b) => _palGameSortKey(a.dataset.gameid) - _palGameSortKey(b.dataset.gameid));
+  rows.forEach(r => list.appendChild(r));
+  list.style.display = rows.length ? 'block' : 'none';
+}
+function _palExitSorted() {
+  const list = document.getElementById('pal-sorted-list');
+  if (list) {
+    if (list.children.length) _palRestoreHomes();
+    list.style.display = 'none';
+  }
+  const phaseTabs = document.getElementById('phase-tabs');
+  if (phaseTabs) phaseTabs.style.display = '';
+}
+
+// ── Filtro "Próximos jogos!!" (leva atual, palpite aberto) ──────────────────
+// Conjunto de IDs preenchido em renderPalpites; usado pelo botão destacado e pelo
+// deep-link do pop-up de palpites pendentes.
+let _palNextGameIds = new Set();
+let _pendingPalpiteNext = false;
+function _setPalNextActive(on) {
+  document.querySelectorAll('.pal-next-btn').forEach(b => b.classList.toggle('active', !!on));
+}
+// Mostra apenas as partidas dos "próximos jogos" (qualquer fase/grupo), ignorando
+// a navegação por aba. Limpa os filtros de data/rodada (modos exclusivos).
+function switchPalNextGames() {
+  _setRoundFilterActive('');
+  _setDateFilterActive('');
+  _setPalNextActive(true);
+  _palShowSorted([..._palNextGameIds]); // próximos jogos em ordem de data
+  const cont = document.getElementById('palpites-content');
+  if (cont) cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// Deep-link do pop-up de palpites pendentes: já abre filtrado nos próximos jogos.
+function _applyPendingPalpiteNext() {
+  if (!_pendingPalpiteNext) return;
+  _pendingPalpiteNext = false;
+  if (_palNextGameIds.size > 0) switchPalNextGames();
 }
 
 let _bigScoreWarned = {};
@@ -6550,9 +6644,10 @@ async function renderEstatisticas() {
               + '</div>'
               + '</div>'
               + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
-              + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
-              + '<div style="font-size:0.68rem;color:var(--text-muted)">🗳️ Palpite do Povo</div>'
+              + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px" title="Média de gols palpitada pelos participantes para cada time">'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">🗳️ Palpite do Povo <span style="opacity:.8">(média de gols)</span></div>'
               + '<div style="font-size:0.92rem;font-weight:700;color:var(--gold)">' + _avgH + ' × ' + _avgA + '</div>'
+              + '<div style="font-size:0.6rem;color:var(--text-muted);margin-top:1px">média de gols por time</div>'
               + '</div>'
               + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
               + '<div style="font-size:0.68rem;color:var(--text-muted)">🎯 Top 3 placares apostados</div>'
@@ -10773,6 +10868,7 @@ function closePendingPalModal() {
   if (el) el.classList.add('hidden');
 }
 function goToPalpitesFromPending() {
+  _pendingPalpiteNext = true; // já abre a tela de Palpites filtrada nos próximos jogos
   closePendingPalModal();
   navigateTo('palpites');
 }
