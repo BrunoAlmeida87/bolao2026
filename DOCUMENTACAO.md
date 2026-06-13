@@ -128,7 +128,7 @@ Criar uma experiência de bolão **completa, bonita e fácil de usar** para um g
 
 ### Navegação Desktop (header)
 
-9 abas visíveis + badge de ADMIN:
+10 abas visíveis + badge de ADMIN:
 
 | Aba | Ícone | Página |
 |-----|-------|--------|
@@ -139,6 +139,7 @@ Criar uma experiência de bolão **completa, bonita e fácil de usar** para um g
 | Chaves | 🔑 | `#chaveamento` |
 | Bilateral | 🏆 | `#chaveamento-bilateral` |
 | Stats | 📈 | `#estatisticas` |
+| Corrida | 🏁 | `#corrida` |
 | Cardápio | 🍽️ | `#cardapio` |
 | Regras | 📋 | `#regras` |
 | Admin | ⚙️ | `#admin` *(só admin)* |
@@ -190,6 +191,8 @@ Dropdown do usuário (canto superior direito): apelido clicável para editar, ba
 **Delta de posição:** compara ranking atual com a última vez que o usuário abriu o dashboard. Mostra ↑3, ↓1, ou = ao lado de cada posição.
 
 **Gráfico de evolução:** bump chart (SVG) mostrando a trajetória de pontos de cada participante ao longo dos jogos.
+
+**🏁 Corrida do Ranking (aba própria):** bar chart race renderizado em `<canvas>` (sem reflow → fluido mesmo com muitos participantes), interpolando valor e posição a cada frame. Três modos: **Top 12 + Você** (você fica sempre visível, mesmo fora do top, numa faixa fixa), **Todos** e **Escolher** (corrida só entre os participantes que você selecionar). Tem play/pausa, barra para percorrer/pausar e ler os nomes com calma, e exportação de vídeo vertical `.webm` (mesmo renderizador do canvas).
 
 **Resultados novos:** modal que aparece na primeira abertura após novos resultados, mostrando quais jogos tiveram placar inserido e os pontos ganhos por cada um.
 
