@@ -11229,77 +11229,73 @@ async function openBarRace(topNArg) {
       row.className = 'brace-row';
       row.style.height = rowH + 'px';
       row.innerHTML = `<span class="brace-name" style="width:92px;flex:none;font-size:${nameFont}px;color:${isMe ? '#FFD700' : 'var(--text)'};font-weight:${isMe ? 800 : 600};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isMe ? '★ ' : ''}${esc(u.apelido || '')}</span>
-        <div class="brace-track" style="flex:1;display:flex;align-items:center;min-width:0"><div class="brace-bar" style="height:${Math.max(4, rowH - 4)}px;width:0%;background:${color}"></div><span class="brace-val" style="margin-left:6px;font-size:${nameFont}px;font-weight:700;color:${isMe ? '#FFD700' : 'var(--text-muted)'}">0</span></div>`;
+        <div class="brace-track" style="flex:1;display:flex;align-items:center;min-width:0"><div class="brace-bar" style="height:${Math.max(4, rowH - 4)}px;width:0%;background:${color};transition:none"></div><span class="brace-val" style="margin-left:6px;font-size:${nameFont}px;font-weight:700;color:${isMe ? '#FFD700' : 'var(--text-muted)'}">0</span></div>`;
       area.appendChild(row);
-      const rObj = { uid: u.uid, el: row, bar: row.querySelector('.brace-bar'), valEl: row.querySelector('.brace-val'), shown: 0, target: 0 };
+      // Posição/largura são dirigidas a cada frame (rAF) — sem transição de transform
+      // (evita o efeito "picotado"); mantém só um fade rápido para entradas/saídas no Top N.
+      row.style.transition = 'opacity .28s ease';
+      const rObj = { uid: u.uid, el: row, bar: row.querySelector('.brace-bar'), valEl: row.querySelector('.brace-val') };
       rowByUid[u.uid] = rObj; rows.push(rObj);
     });
 
-    _braceState = { frames, maxV, MAXW: 76, rowH, uids, apel, rowByUid, rows, topN, k: 0, timer: null, raf: null,
-      stepDur: Math.max(180, Math.min(650, Math.round(22000 / frames.length))) };
+    _braceState = { frames, maxV, MAXW: 76, rowH, uids, apel, rowByUid, rows, topN, raf: null, startTime: 0,
+      stepDur: Math.max(220, Math.min(1100, Math.round(30000 / Math.max(1, frames.length - 1)))) };
     _barRaceReplay();
   } catch (e) {
     area.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
-function _braceApplyFrame(k) {
+// Motor da corrida: INTERPOLA tudo a cada frame (rAF) entre o jogo k e o k+1.
+// Reordena por valor interpolado a cada frame → movimento contínuo e fluido
+// (sem o efeito "picotado" das transições CSS por passo). easeInOut suaviza
+// cada trecho. Valores/posições/largura/números são desenhados por frame.
+function _braceRender(now) {
   const st = _braceState; if (!st) return;
-  const f = st.frames[k];
-  const lbl = document.getElementById('brace-label');
-  if (lbl) lbl.innerHTML = `<b style="color:var(--gold)">${k + 1}/${st.frames.length}</b> &nbsp; ${f.label}`;
-  const order = st.uids.slice().sort((a, b) => (f.values[b] - f.values[a]) || st.apel[a].localeCompare(st.apel[b]));
-  order.forEach((uid, rank) => {
-    const r = st.rowByUid[uid];
-    const visible = !st.topN || rank < st.topN; // no modo Top N, esconde quem está fora
-    r.el.style.opacity = visible ? '1' : '0';
-    // Quem está fora do Top N fica na borda inferior (entra/sai deslizando por ali).
+  const last = st.frames.length - 1;
+  const segRaw = st.stepDur > 0 ? (now - st.startTime) / st.stepDur : last;
+  const done = segRaw >= last;
+  const seg = Math.min(segRaw, last);
+  const k = Math.min(last, Math.floor(seg));
+  const kn = Math.min(last, k + 1);
+  let p = seg - k;
+  p = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // easeInOutQuad por trecho
+  const fa = st.frames[k].values, fb = st.frames[kn].values;
+
+  const arr = st.uids.map(uid => ({ uid, v: fa[uid] + (fb[uid] - fa[uid]) * p }));
+  arr.sort((a, b) => (b.v - a.v) || st.apel[a.uid].localeCompare(st.apel[b.uid]));
+  arr.forEach((o, rank) => {
+    const r = st.rowByUid[o.uid];
+    const visible = !st.topN || rank < st.topN;
     const ty = (st.topN && !visible) ? st.topN * st.rowH : rank * st.rowH;
     r.el.style.transform = `translateY(${ty.toFixed(1)}px)`;
-    r.bar.style.width = `${(f.values[uid] / st.maxV * st.MAXW).toFixed(1)}%`;
-    r.target = f.values[uid];
+    r.el.style.opacity = visible ? '1' : '0';
+    r.bar.style.width = `${(o.v / st.maxV * st.MAXW).toFixed(2)}%`;
+    r.valEl.textContent = Math.round(o.v);
   });
-}
 
-function _braceTick() {
-  const st = _braceState; if (!st) return;
-  let active = false;
-  st.rows.forEach(r => {
-    if (Math.abs(r.target - r.shown) >= 0.5) { r.shown += (r.target - r.shown) * 0.22; active = true; }
-    else r.shown = r.target;
-    r.valEl.textContent = Math.round(r.shown);
-  });
-  st.raf = (_bracePlaying || active) ? requestAnimationFrame(_braceTick) : null;
-}
+  const li = Math.min(last, Math.round(seg));
+  const lbl = document.getElementById('brace-label');
+  if (lbl) lbl.innerHTML = `<b style="color:var(--gold)">${li + 1}/${st.frames.length}</b> &nbsp; ${st.frames[li].label}`;
 
-function _braceStep() {
-  const st = _braceState; if (!st) return;
-  if (st.k >= st.frames.length) {
-    _bracePlaying = false;
-    const b = document.getElementById('brace-play'); if (b) b.style.display = '';
-    return;
-  }
-  _braceApplyFrame(st.k);
-  st.k++;
-  st.timer = setTimeout(_braceStep, st.stepDur);
+  if (done) { _bracePlaying = false; st.raf = null; const b = document.getElementById('brace-play'); if (b) b.style.display = ''; return; }
+  st.raf = requestAnimationFrame(_braceRender);
 }
 
 function _barRaceReplay() {
   const st = _braceState; if (!st) return;
-  if (st.timer) clearTimeout(st.timer);
+  if (st.raf) cancelAnimationFrame(st.raf);
   const b = document.getElementById('brace-play'); if (b) b.style.display = 'none';
-  st.k = 0;
-  _braceApplyFrame(0);                       // posiciona o 1º frame
-  st.rows.forEach(r => { r.shown = r.target; r.valEl.textContent = Math.round(r.shown); });
-  st.k = 1;
   _bracePlaying = true;
-  if (!st.raf) st.raf = requestAnimationFrame(_braceTick);
-  st.timer = setTimeout(_braceStep, st.stepDur);
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Reduced motion: pula direto para o quadro final (sem animar).
+  st.startTime = reduce ? (performance.now() - st.stepDur * st.frames.length) : performance.now();
+  st.raf = requestAnimationFrame(_braceRender);
 }
 
 function closeBarRace() {
   _bracePlaying = false;
-  if (_braceState) { if (_braceState.timer) clearTimeout(_braceState.timer); if (_braceState.raf) cancelAnimationFrame(_braceState.raf); }
+  if (_braceState && _braceState.raf) cancelAnimationFrame(_braceState.raf);
   const el = document.getElementById('modal-bar-race'); if (el) el.classList.add('hidden');
 }
 
