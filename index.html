@@ -371,7 +371,7 @@ select option{background:var(--mid-blue);color:var(--white)}
 .evo-fade{animation:evoFade .7s ease both}
 @media (prefers-reduced-motion: reduce){.evo-line-anim,.evo-fade{animation:none!important;stroke-dashoffset:0!important;opacity:1!important}}
 /* Corrida de barras (bar chart race) */
-.brace-row{position:absolute;left:0;right:0;display:flex;align-items:center;gap:6px;transition:transform .42s cubic-bezier(.4,0,.2,1),opacity .42s ease;will-change:transform}
+.brace-row{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:6px;will-change:transform,opacity}
 .brace-bar{border-radius:0 5px 5px 0;transition:width .42s cubic-bezier(.4,0,.2,1);flex:none;min-width:2px}
 @media (prefers-reduced-motion: reduce){.brace-row,.brace-bar{transition:none}}
 body.light-theme .date-filter-btn{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
@@ -11212,9 +11212,17 @@ async function openBarRace(topNArg) {
 
     const n = users.length;
     const nSlots = topN || n; // quantas linhas visíveis ao mesmo tempo
-    const availH = Math.max(180, Math.min(560, Math.round((window.innerHeight || 700) * 0.6)));
-    const rowH = Math.max(7, Math.min(34, availH / nSlots));
-    const nameFont = Math.max(7, Math.min(13, rowH - 5));
+    const availH = Math.max(200, Math.min(620, Math.round((window.innerHeight || 700) * 0.66)));
+    const gap = nSlots > 30 ? 2 : 3;                 // respiro entre as barras
+    const rowH = Math.max(6, Math.min(36, availH / nSlots));
+    const barH = Math.max(3, rowH - gap);
+    const nameFont = Math.max(8, Math.min(13, rowH - 6));
+    // Quando as linhas ficam finas, entra o MODO DENSO: nome/valor escondidos para
+    // todos (mantém só as barras correndo, todas com a MESMA pista → comparáveis).
+    // O usuário aparece como um rótulo dourado sobreposto, que acompanha sua barra.
+    const showNames = rowH >= 15;
+    const showVals = rowH >= 11;
+    const uniformNameW = Math.max(60, Math.min(110, Math.round((window.innerWidth || 400) * 0.26)));
     area.style.position = 'relative';
     area.style.height = Math.round(nSlots * rowH) + 'px';
     area.innerHTML = '';
@@ -11228,13 +11236,22 @@ async function openBarRace(topNArg) {
       const row = document.createElement('div');
       row.className = 'brace-row';
       row.style.height = rowH + 'px';
-      row.innerHTML = `<span class="brace-name" style="width:92px;flex:none;font-size:${nameFont}px;color:${isMe ? '#FFD700' : 'var(--text)'};font-weight:${isMe ? 800 : 600};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isMe ? '★ ' : ''}${esc(u.apelido || '')}</span>
-        <div class="brace-track" style="flex:1;display:flex;align-items:center;min-width:0"><div class="brace-bar" style="height:${Math.max(4, rowH - 4)}px;width:0%;background:${color};transition:none"></div><span class="brace-val" style="margin-left:6px;font-size:${nameFont}px;font-weight:700;color:${isMe ? '#FFD700' : 'var(--text-muted)'}">0</span></div>`;
+      row.innerHTML = `<span class="brace-name" style="${showNames?'':'display:none;'}width:${uniformNameW}px;flex:none;font-size:${nameFont}px;color:${isMe ? '#FFD700' : 'var(--text)'};font-weight:${isMe ? 800 : 600};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">${isMe ? '★ ' : ''}${esc(u.apelido || '')}</span>
+        <div class="brace-track" style="flex:1;display:flex;align-items:center;min-width:0"><div class="brace-bar" style="height:${barH}px;width:0%;background:${color};transition:none;box-shadow:${isMe ? '0 0 7px rgba(255,215,0,.7)' : 'none'}"></div><span class="brace-val" style="${showVals?'':'display:none;'}margin-left:6px;font-size:${nameFont}px;font-weight:700;color:${isMe ? '#FFD700' : 'var(--text-muted)'}">0</span></div>`;
       area.appendChild(row);
-      // Posição/largura são dirigidas a cada frame (rAF) — sem transição de transform
-      // (evita o efeito "picotado"); mantém só um fade rápido para entradas/saídas no Top N.
+      // Posição/largura dirigidas a cada frame (rAF) — sem transição de transform
+      // (evita o "picotado"); só um fade rápido para entradas/saídas no Top N.
       row.style.transition = 'opacity .28s ease';
-      const rObj = { uid: u.uid, el: row, bar: row.querySelector('.brace-bar'), valEl: row.querySelector('.brace-val') };
+      let valEl = row.querySelector('.brace-val');
+      // Modo denso: rótulo dourado sobreposto do próprio usuário (não afeta a pista).
+      if (isMe && !showNames) {
+        const ov = document.createElement('span');
+        ov.style.cssText = `position:absolute;left:6px;top:0;height:${rowH}px;display:flex;align-items:center;gap:6px;font-size:${Math.max(9, nameFont)}px;font-weight:800;color:#FFD700;text-shadow:0 1px 3px #000,0 0 2px #000;pointer-events:none;white-space:nowrap;z-index:3`;
+        ov.innerHTML = `★ ${esc(u.apelido || '')} <span class="brace-you-val" style="font-weight:700">0</span>`;
+        row.appendChild(ov);
+        valEl = ov.querySelector('.brace-you-val'); // o número do usuário atualiza aqui
+      }
+      const rObj = { uid: u.uid, el: row, bar: row.querySelector('.brace-bar'), valEl };
       rowByUid[u.uid] = rObj; rows.push(rObj);
     });
 
