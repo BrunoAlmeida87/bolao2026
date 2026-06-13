@@ -3253,6 +3253,42 @@ function _startCountdownTimer() {
   _countdownTimer = setInterval(_tick, 1000);
 }
 
+// ── Contagem animada de números (KPIs e premiação) ──────────────────────────
+// Anima do ÚLTIMO valor mostrado até o atual (realça o que mudou). Respeita
+// prefers-reduced-motion e não anima quando o valor não mudou. Os spans nascem
+// com o valor final no HTML (fallback) e são animados após o render.
+let _animLast = {};
+function _animFmt(type) {
+  if (type === 'brl') return v => formatBRL(v);
+  if (type === 'pos') return v => Math.round(v) + 'º';
+  return v => String(Math.round(v));
+}
+function _animSpan(key, value, fmt) {
+  return `<span class="js-animnum" data-key="${key}" data-to="${value}" data-fmt="${fmt}">${_animFmt(fmt)(value)}</span>`;
+}
+function _animateNumber(el, from, to, fmt, dur = 850) {
+  const t0 = performance.now();
+  const ease = p => 1 - Math.pow(1 - p, 3); // easeOutCubic
+  (function tick(now) {
+    const p = Math.min(1, (now - t0) / dur);
+    el.textContent = fmt(from + (to - from) * ease(p));
+    if (p < 1) requestAnimationFrame(tick);
+  })(performance.now());
+}
+function _runAnimNumbers() {
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('#dashboard-content .js-animnum').forEach(el => {
+    const to = parseFloat(el.dataset.to);
+    if (!isFinite(to)) return;
+    const key = el.dataset.key;
+    const fmt = _animFmt(el.dataset.fmt);
+    const from = (key in _animLast) ? _animLast[key] : 0;
+    _animLast[key] = to;
+    if (reduce || from === to) { el.textContent = fmt(to); return; }
+    _animateNumber(el, from, to, fmt);
+  });
+}
+
 async function renderDashboard() {
   const cont = document.getElementById('dashboard-content');
   cont.innerHTML = `<div class="skeleton-wrap">${Array.from({length:6},()=>`<div class="skel skel-card"></div>`).join('')}</div>`;
@@ -3385,19 +3421,19 @@ async function renderDashboard() {
       <!-- Painel de arrecadação e premiação -->
       <div class="prize-pool-bar">
         <div class="prize-pool-item">
-          <div class="ppi-val">${formatBRL(_totalArr)}</div>
+          <div class="ppi-val">${_animSpan('prize_total', _totalArr, 'brl')}</div>
           <div class="ppi-lbl">💰 Total Arrecadado</div>
         </div>
         <div class="prize-pool-item">
-          <div class="ppi-val" style="color:var(--gold)">🥇 ${formatBRL(_premios.primeiro)}</div>
+          <div class="ppi-val" style="color:var(--gold)">🥇 ${_animSpan('prize_1', _premios.primeiro, 'brl')}</div>
           <div class="ppi-lbl">1º lugar (50%)</div>
         </div>
         <div class="prize-pool-item">
-          <div class="ppi-val" style="color:#C0C0C0">🥈 ${formatBRL(_premios.segundo)}</div>
+          <div class="ppi-val" style="color:#C0C0C0">🥈 ${_animSpan('prize_2', _premios.segundo, 'brl')}</div>
           <div class="ppi-lbl">2º lugar (30%)</div>
         </div>
         <div class="prize-pool-item">
-          <div class="ppi-val" style="color:#CD7F32">🥉 ${formatBRL(_premios.terceiro)}</div>
+          <div class="ppi-val" style="color:#CD7F32">🥉 ${_animSpan('prize_3', _premios.terceiro, 'brl')}</div>
           <div class="ppi-lbl">3º lugar (20%)</div>
         </div>
       </div>
@@ -3405,18 +3441,18 @@ async function renderDashboard() {
       <div class="dash-kpi-grid">
         <div class="dash-kpi kpi-pos">
           <div class="dash-kpi-icon">🎯</div>
-          <div class="dash-kpi-val" style="color:var(--accent)">${myRank > 0 ? myRank+'º' : '—'}</div>
+          <div class="dash-kpi-val" style="color:var(--accent)">${myRank > 0 ? _animSpan('kpi_pos', myRank, 'pos') : '—'}</div>
           <div class="dash-kpi-sub">de ${ranking.length} jogador${ranking.length!==1?'es':''}</div>
           ${_kpiDeltaHtml}
         </div>
         <div class="dash-kpi kpi-pts">
           <div class="dash-kpi-icon">⭐</div>
-          <div class="dash-kpi-val" style="color:var(--gold)">${_myPontos}</div>
+          <div class="dash-kpi-val" style="color:var(--gold)">${_animSpan('kpi_pts', _myPontos, 'int')}</div>
           <div class="dash-kpi-sub">${_myExatos} exato${_myExatos!==1?'s':''}</div>
         </div>
         <div class="dash-kpi kpi-games">
           <div class="dash-kpi-icon">⚽</div>
-          <div class="dash-kpi-val" style="color:var(--green)">${totalJogos}<span style="font-size:1rem;font-weight:600;color:var(--text-muted);opacity:.6">/${ALL_GAMES.length}</span></div>
+          <div class="dash-kpi-val" style="color:var(--green)">${_animSpan('kpi_games', totalJogos, 'int')}<span style="font-size:1rem;font-weight:600;color:var(--text-muted);opacity:.6">/${ALL_GAMES.length}</span></div>
           <div class="dash-kpi-sub">jogos com resultado</div>
           <div class="dash-kpi-bar"><div class="dash-kpi-bar-fill" style="width:${_kpiPct}%"></div></div>
         </div>
@@ -3554,6 +3590,7 @@ async function renderDashboard() {
     </div>
     <div id="evo-chart-container"></div>`;
     cont.innerHTML = html;
+    _runAnimNumbers(); // contagem animada dos KPIs e da premiação (a partir do valor anterior)
     _startCountdownTimer();
     // Gráfico de evolução só renderiza quando allPals disponível (caminho completo)
     if (allPals) _renderEvolutionChart(ranking, allPals, res, champPicks, document.getElementById('evo-chart-container'));
@@ -5224,7 +5261,7 @@ function _simRecompute() {
       delta < 0 ? `<span style="color:#ff6b6b;font-weight:700">↓${Math.abs(delta)}</span>` :
       `<span style="color:var(--text-muted)">=</span>`;
     const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '';
-    rows += `<tr class="${isMe ? 'is-me' : ''}">
+    rows += `<tr class="${isMe ? 'is-me' : ''}" data-uid="${u.uid}">
       <td><span class="rank-pos ${posClass}">${pos}</span></td>
       <td style="color:var(--text-muted);font-weight:600;font-size:0.82rem" title="Posição por adensamento (ranking denso)">${denseArr[i]}º</td>
       <td style="text-align:center">${deltaHtml}</td>
@@ -5233,12 +5270,39 @@ function _simRecompute() {
       <td class="text-green">${u.exatos}</td>
     </tr>`;
   });
+  // FLIP: guarda a posição atual de cada linha (por uid) ANTES de re-renderizar,
+  // para depois animar o deslize até a nova posição.
+  const _flipFirst = new Map();
+  el.querySelectorAll('tr[data-uid]').forEach(tr => _flipFirst.set(tr.dataset.uid, tr.getBoundingClientRect().top));
+
   el.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
       <table class="ranking-table" style="min-width:380px">
         <thead><tr><th>#</th><th title="Posição por adensamento (ranking denso): empatados em pontos dividem o mesmo nível" style="color:var(--text-muted)">≈ pos</th><th title="Variação vs ranking oficial atual">↑↓</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">${nSim > 0 ? ('🧪 ' + nSim + ' jogo(s) simulado(s) aplicado(s) ao ranking.') : 'Nenhum placar simulado ainda — ranking igual ao oficial.'}</div>`;
+
+  _simPlayFlip(el, _flipFirst);
+}
+
+// Anima (FLIP) as linhas do ranking simulado deslizando da posição antiga para a
+// nova. Respeita prefers-reduced-motion. Só anima quem realmente mudou de lugar.
+function _simPlayFlip(el, first) {
+  if (!first || !first.size) return;
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.querySelectorAll('tr[data-uid]').forEach(tr => {
+    const prevTop = first.get(tr.dataset.uid);
+    if (prevTop === undefined) return;
+    const dy = prevTop - tr.getBoundingClientRect().top;
+    if (!dy) return;
+    tr.style.transition = 'none';
+    tr.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => {
+      tr.style.transition = 'transform .45s cubic-bezier(.22,.61,.36,1)';
+      tr.style.transform = '';
+      tr.addEventListener('transitionend', () => { tr.style.transition = ''; tr.style.transform = ''; }, { once: true });
+    });
+  });
 }
 
 // ════════════════════════════════════════════
