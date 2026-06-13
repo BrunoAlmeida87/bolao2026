@@ -6525,27 +6525,42 @@ async function renderEstatisticas() {
 
         // Grid (2 colunas) com o palpite de cada participante — só após o jogo
         // travar (palpites já são públicos pelas regras). Duas colunas para não
-        // virar uma lista gigante com ~57 participantes. Se o resultado já saiu,
-        // mostra também os pontos de cada um.
+        // virar uma lista gigante com ~57 participantes. Inclui quem NÃO palpitou
+        // (marcado "não palpitou"), agrupado ao fim. Se o resultado já saiu,
+        // mostra também os pontos de quem palpitou.
         let _palpitesGrid = '';
         if (_closed) {
           const _hasRes = _gr.h_real !== undefined && _gr.a_real !== undefined;
-          const _palRows = users
-            .map(u => ({ u, p: allPals[u.uid]?.[game.id] }))
-            .filter(x => x.p && x.p.h !== undefined && x.p.a !== undefined)
-            .sort((a, b) => (a.u.apelido || '').localeCompare(b.u.apelido || ''));
-          if (_palRows.length) {
+          const _allRows = users
+            .map(u => {
+              const p = allPals[u.uid]?.[game.id];
+              const has = !!(p && p.h !== undefined && p.a !== undefined);
+              return { u, p, has };
+            })
+            // Palpitaram primeiro (alfabético), depois quem não palpitou (alfabético).
+            .sort((a, b) => (a.has === b.has)
+              ? (a.u.apelido || '').localeCompare(b.u.apelido || '')
+              : (a.has ? -1 : 1));
+          if (_allRows.length) {
+            const _nPal = _allRows.filter(x => x.has).length;
+            const _nMiss = _allRows.length - _nPal;
             _palpitesGrid = '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:12px">'
-              + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Palpite de cada participante (' + _palRows.length + ')</div>'
+              + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Palpite de cada participante (' + _nPal + ' palpitaram' + (_nMiss > 0 ? ' · ' + _nMiss + ' não' : '') + ')</div>'
               + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px">'
-              + _palRows.map(({ u, p }) => {
-                  const _pts = _hasRes ? calcPontos(p, _gr) : null;
-                  const _ps = (_hasRes && _pts !== null) ? _ptsBadgeStyle(_pts) : null;
-                  const _scoreCol = _ps ? _ps.color : 'var(--gold)';
-                  const _ptsTag = (_hasRes && _pts !== null) ? ' <span style="font-size:0.62rem;color:' + (_ps ? _ps.color : 'var(--text-muted)') + '">(' + (_pts > 0 ? '+' + _pts : '0') + ')</span>' : '';
-                  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;background:rgba(255,255,255,.03);border-radius:6px;padding:4px 8px;min-width:0">'
-                    + '<span style="font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(u.apelido || '') + (u.nome ? ' — ' + esc(u.nome) : '') + '">' + esc(u.apelido || '—') + '</span>'
-                    + '<span style="font-size:0.82rem;font-weight:700;color:' + _scoreCol + ';white-space:nowrap">' + p.h + '×' + p.a + _ptsTag + '</span>'
+              + _allRows.map(({ u, p, has }) => {
+                  let _valHtml;
+                  if (has) {
+                    const _pts = _hasRes ? calcPontos(p, _gr) : null;
+                    const _ps = (_hasRes && _pts !== null) ? _ptsBadgeStyle(_pts) : null;
+                    const _scoreCol = _ps ? _ps.color : 'var(--gold)';
+                    const _ptsTag = (_hasRes && _pts !== null) ? ' <span style="font-size:0.62rem;color:' + (_ps ? _ps.color : 'var(--text-muted)') + '">(' + (_pts > 0 ? '+' + _pts : '0') + ')</span>' : '';
+                    _valHtml = '<span style="font-size:0.82rem;font-weight:700;color:' + _scoreCol + ';white-space:nowrap">' + p.h + '×' + p.a + _ptsTag + '</span>';
+                  } else {
+                    _valHtml = '<span style="font-size:0.68rem;font-style:italic;color:#ff8a8a;white-space:nowrap">não palpitou</span>';
+                  }
+                  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;background:' + (has ? 'rgba(255,255,255,.03)' : 'rgba(255,68,68,.06)') + ';border-radius:6px;padding:4px 8px;min-width:0">'
+                    + '<span style="font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + (has ? '' : 'color:var(--text-muted)') + '" title="' + esc(u.apelido || '') + (u.nome ? ' — ' + esc(u.nome) : '') + '">' + esc(u.apelido || '—') + '</span>'
+                    + _valHtml
                     + '</div>';
                 }).join('')
               + '</div>'
