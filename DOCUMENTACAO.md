@@ -379,6 +379,7 @@ Página que exibe os palpites de **todos os participantes** organizados por jogo
 
 ### Estatísticas Exibidas
 
+- **📊 Momento dos Participantes** (carrossel de destaques): com base nos **últimos 5 jogos com resultado**, seleciona apenas pessoas em fases marcantes — não é lista geral. Distingue **regularidade** (jogos em que pontuou), **precisão** (placares exatos) e **eficiência** (pontos feitos / pontos possíveis), evitando o "100%" ambíguo. Destaques possíveis: 🔥 Melhor momento, 📈 Maior evolução, 🎯 Sniper recente, 🧱 Sequência positiva, ❄️ Fase fria, 📉 Maior queda. Cada destaque escolhe uma pessoa distinta; exige ≥3 palpites nos 5 jogos recentes (e histórico ≥6 jogos para destaques negativos). Alterna automaticamente (respeita `prefers-reduced-motion`) com setas/bolinhas para navegação manual; mensagens neutras quando faltam dados.
 - **Mais Certeiro**: participante com maior % de acertos
 - **Rei do Placar Exato**: quem mais acertou placares exatos
 - **Mais Indeciso**: quem mais editou os palpites (lê histórico de edições)
