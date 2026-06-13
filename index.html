@@ -373,6 +373,10 @@ select option{background:var(--mid-blue);color:var(--white)}
 /* Corrida de barras (bar chart race) */
 .brace-row{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:6px;will-change:transform,opacity}
 .brace-bar{border-radius:0 5px 5px 0;transition:width .42s cubic-bezier(.4,0,.2,1);flex:none;min-width:2px}
+.brace-modal{max-width:780px;width:96%;padding:14px;text-align:left}
+.brace-actions{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px}
+.brace-hint{font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:6px;line-height:1.35}
+@media (max-width:600px){.brace-modal{width:100%;height:100dvh;max-height:100dvh;border-radius:0;padding:12px}.brace-actions .btn{flex:1 1 135px;padding:10px 8px}.brace-hint{font-size:0.68rem}}
 @media (prefers-reduced-motion: reduce){.brace-row,.brace-bar{transition:none}}
 body.light-theme .date-filter-btn{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
 body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
@@ -1674,7 +1678,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 
 <!-- MODAL CORRIDA DO RANKING (bar chart race) -->
 <div id="modal-bar-race" class="modal-overlay hidden" onclick="if(event.target===this)closeBarRace()">
-  <div class="modal-box" style="max-width:780px;width:96%;padding:14px;text-align:left">
+  <div class="modal-box brace-modal">
     <button class="modal-close" onclick="closeBarRace()">✕</button>
     <div style="font-weight:800;color:var(--gold);font-size:1rem">🏁 Corrida do Ranking</div>
     <div class="date-filter-wrap" style="margin:8px 0 2px">
@@ -1683,9 +1687,11 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     </div>
     <div id="brace-label" style="font-size:0.8rem;color:var(--text);min-height:18px;margin-top:3px"></div>
     <div id="brace-area" style="position:relative;margin-top:10px"></div>
-    <div style="text-align:center;margin-top:12px">
+    <div class="brace-actions">
       <button id="brace-play" class="btn btn-primary" onclick="_barRaceReplay()" style="display:none">🔁 Repetir</button>
+      <button id="brace-video" class="btn btn-secondary" onclick="_barRaceDownloadVideo()" style="display:none">🎬 Baixar vídeo</button>
     </div>
+    <div class="brace-hint">No celular, o vídeo abre o compartilhamento quando suportado; se não, baixa um .webm para Arquivos/Downloads.</div>
   </div>
 </div>
 
@@ -11179,8 +11185,10 @@ async function openBarRace(topNArg) {
   const modal = document.getElementById('modal-bar-race');
   const area = document.getElementById('brace-area');
   const playBtn = document.getElementById('brace-play');
+  const videoBtn = document.getElementById('brace-video');
   if (!modal || !area) return;
   if (playBtn) playBtn.style.display = 'none';
+  if (videoBtn) videoBtn.style.display = 'none';
   area.style.height = '';
   area.style.overflow = 'hidden';
   area.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';
@@ -11204,6 +11212,7 @@ async function openBarRace(topNArg) {
       users.forEach(u => { const pts = calcPontos(allPals[u.uid] && allPals[u.uid][g.id], r); if (pts != null) cum[u.uid] += pts; });
       return {
         label: `${teamFlag(g.h)} ${esc(short(g.h))} <b>${r.h_real}×${r.a_real}</b> ${esc(short(g.a))} ${teamFlag(g.a)} <span style="color:var(--text-muted)">· ${esc(_isoToGameDate(_gameFilterISO(g, r)))}</span>`,
+        plainLabel: `${short(g.h)} ${r.h_real}×${r.a_real} ${short(g.a)} · ${_isoToGameDate(_gameFilterISO(g, r))}`,
         values: Object.assign({}, cum)
       };
     });
@@ -11256,7 +11265,8 @@ async function openBarRace(topNArg) {
     });
 
     _braceState = { frames, maxV, MAXW: 76, rowH, uids, apel, rowByUid, rows, topN, raf: null, startTime: 0,
-      stepDur: Math.max(220, Math.min(1100, Math.round(30000 / Math.max(1, frames.length - 1)))) };
+      stepDur: Math.max(260, Math.min(900, Math.round(28000 / Math.max(1, frames.length - 1)))) };
+    if (videoBtn) videoBtn.style.display = '';
     _barRaceReplay();
   } catch (e) {
     area.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
@@ -11308,6 +11318,67 @@ function _barRaceReplay() {
   // Reduced motion: pula direto para o quadro final (sem animar).
   st.startTime = reduce ? (performance.now() - st.stepDur * st.frames.length) : performance.now();
   st.raf = requestAnimationFrame(_braceRender);
+}
+
+// Gera um vídeo vertical (720×1280, .webm) da corrida desenhando num canvas e
+// gravando com captureStream()+MediaRecorder. Tenta navigator.share(); se não der,
+// baixa o arquivo. Independente da animação na tela (re-desenha o próprio quadro).
+async function _barRaceDownloadVideo() {
+  const st = _braceState;
+  if (!st || !st.frames.length) { showToast('Abra a corrida primeiro.', 'warning'); return; }
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) { showToast('Seu navegador não permite gerar vídeo aqui. Tente Chrome/Edge no Android ou use gravação de tela no iPhone.', 'warning', 5200); return; }
+  const btn = document.getElementById('brace-video');
+  if (btn) { btn.disabled = true; btn.textContent = '🎬 Gerando…'; }
+  try {
+    const W = 720, H = 1280, fps = 30;
+    const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const stream = canvas.captureStream(fps);
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 3500000 });
+    const chunks = [];
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    const done = new Promise((resolve, reject) => { rec.onstop = resolve; rec.onerror = reject; });
+    rec.start(250);
+
+    const slots = st.topN || Math.min(18, st.uids.length);
+    const rowH = Math.min(46, Math.max(22, Math.floor((H - 230) / slots)));
+    const left = 164, right = 42, top = 150, maxBar = W - left - right - 54;
+    const totalSeg = Math.max(1, st.frames.length - 1);
+    const framesToDraw = Math.ceil(totalSeg * 0.75 * fps);
+    const palette = _BRACE_PALETTE;
+
+    const draw = (seg) => {
+      const last = st.frames.length - 1, k = Math.min(last, Math.floor(seg)), kn = Math.min(last, k + 1);
+      let p = seg - k; p = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2,2)/2;
+      const fa = st.frames[k].values, fb = st.frames[kn].values;
+      const arr = st.uids.map(uid => ({ uid, v: fa[uid] + (fb[uid] - fa[uid]) * p })).sort((a,b)=>(b.v-a.v)||st.apel[a.uid].localeCompare(st.apel[b.uid]));
+      ctx.fillStyle = '#071428'; ctx.fillRect(0,0,W,H);
+      const grad = ctx.createLinearGradient(0,0,W,H); grad.addColorStop(0,'rgba(123,47,247,.35)'); grad.addColorStop(1,'rgba(241,7,163,.12)'); ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle = '#FFD700'; ctx.font = '800 36px Arial'; ctx.textAlign = 'center'; ctx.fillText('🏁 Corrida do Ranking', W/2, 58);
+      ctx.fillStyle = '#FFFFFF'; ctx.font = '700 22px Arial'; ctx.fillText(st.frames[Math.min(last, Math.round(seg))].plainLabel || '', W/2, 96);
+      arr.slice(0, slots).forEach((o, rank) => {
+        const isMe = currentUser && o.uid === currentUser.uid;
+        const y = top + rank * rowH, color = isMe ? '#FFD700' : palette[st.uids.indexOf(o.uid) % palette.length];
+        ctx.fillStyle = isMe ? 'rgba(255,215,0,.13)' : 'rgba(255,255,255,.035)'; ctx.fillRect(20, y-3, W-40, rowH-5);
+        ctx.fillStyle = rank < 3 ? ['#FFD700','#C0C0C0','#CD7F32'][rank] : '#9AA8BD'; ctx.font = '800 18px Arial'; ctx.textAlign='right'; ctx.fillText(`${rank+1}º`, 58, y + rowH*.58);
+        ctx.fillStyle = isMe ? '#FFD700' : '#FFFFFF'; ctx.font = `${isMe?'800':'700'} 18px Arial`; ctx.textAlign='right'; ctx.fillText((isMe?'★ ':'') + (st.apel[o.uid] || ''), left-12, y + rowH*.58);
+        ctx.fillStyle = color; ctx.fillRect(left, y + 7, Math.max(2, o.v / st.maxV * maxBar), rowH - 17);
+        ctx.fillStyle = '#FFFFFF'; ctx.font = '800 17px Arial'; ctx.textAlign='left'; ctx.fillText(String(Math.round(o.v)), left + Math.max(2, o.v / st.maxV * maxBar) + 8, y + rowH*.58);
+      });
+      ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.font = '14px Arial'; ctx.textAlign='center'; ctx.fillText('Bolão ICN Copa 2026', W/2, H - 34);
+    };
+    for (let i=0; i<=framesToDraw; i++) { draw(i / framesToDraw * totalSeg); await new Promise(r => setTimeout(r, 1000/fps)); }
+    rec.stop(); await done; stream.getTracks().forEach(t => t.stop());
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const file = new File([blob], `corrida-ranking-${fmtDate()}.webm`, { type: 'video/webm' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text: '🏁 Corrida do Ranking — Bolão ICN Copa 2026' });
+    else { _fallbackDownload(blob, file.name); showToast('Vídeo gerado! Confira seus Downloads/Arquivos.', 'success', 4500); }
+  } catch(e) {
+    showToast('Erro ao gerar vídeo: ' + errMsg(e), 'error', 6000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🎬 Baixar vídeo'; }
+  }
 }
 
 function closeBarRace() {
