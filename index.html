@@ -370,14 +370,15 @@ select option{background:var(--mid-blue);color:var(--white)}
 .evo-line-anim{stroke-dasharray:1;stroke-dashoffset:1;animation:evoDraw .9s ease forwards}
 .evo-fade{animation:evoFade .7s ease both}
 @media (prefers-reduced-motion: reduce){.evo-line-anim,.evo-fade{animation:none!important;stroke-dashoffset:0!important;opacity:1!important}}
-/* Corrida de barras (bar chart race) */
-.brace-row{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:6px;will-change:transform,opacity}
-.brace-bar{border-radius:0 5px 5px 0;transition:width .42s cubic-bezier(.4,0,.2,1);flex:none;min-width:2px}
-.brace-modal{max-width:780px;width:96%;padding:14px;text-align:left}
-.brace-actions{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px}
-.brace-hint{font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:6px;line-height:1.35}
-@media (max-width:600px){.brace-modal{width:100%;height:100dvh;max-height:100dvh;border-radius:0;padding:12px}.brace-actions .btn{flex:1 1 135px;padding:10px 8px}.brace-hint{font-size:0.68rem}}
-@media (prefers-reduced-motion: reduce){.brace-row,.brace-bar{transition:none}}
+/* Corrida do ranking (bar chart race em canvas) */
+.corrida-wrap{max-width:780px;margin:0 auto;padding:0 4px}
+.corrida-modes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:6px 0 6px}
+.corrida-canvas-box{position:relative;width:100%;border-radius:14px;overflow:hidden;background:#071428;border:1px solid var(--border);box-shadow:0 6px 30px rgba(0,0,0,.35)}
+.corrida-canvas-box canvas{display:block;width:100%}
+.corrida-scrub{width:100%;margin-top:10px;accent-color:var(--gold);cursor:pointer}
+.corrida-actions{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px}
+.corrida-hint{font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:8px;line-height:1.4}
+@media (max-width:600px){.corrida-actions .btn{flex:1 1 135px;padding:10px 8px}.corrida-hint{font-size:0.68rem}}
 body.light-theme .date-filter-btn{background:var(--light-blue);border-color:var(--border);color:var(--text-muted)}
 body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 .phase-tab{
@@ -1400,6 +1401,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
       <button class="nav-btn" data-page="chaveamento" onclick="navigateTo('chaveamento')">🔑 Chaves</button>
       <button class="nav-btn" data-page="chaveamento-bilateral" onclick="navigateTo('chaveamento-bilateral')">🏆 Bilateral</button>
       <button class="nav-btn" data-page="estatisticas" onclick="navigateTo('estatisticas')">📈 Stats</button>
+      <button class="nav-btn" data-page="corrida" onclick="navigateTo('corrida')">🏁 Corrida</button>
       <button class="nav-btn" data-page="simulador" onclick="navigateTo('simulador')">🔮 Simulador</button>
       <button class="nav-btn" data-page="cardapio" onclick="navigateTo('cardapio')">🍽️ Cardápio</button>
       <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
@@ -1417,6 +1419,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
         <a onclick="navigateTo('chaveamento-bilateral');toggleDropdown()">🏆 Chave Bilateral</a>
         <a onclick="navigateTo('regras');toggleDropdown()">📋 Regras</a>
         <a onclick="navigateTo('estatisticas');toggleDropdown()">📈 Estatísticas</a>
+        <a onclick="navigateTo('corrida');toggleDropdown()">🏁 Corrida do Ranking</a>
         <a onclick="navigateTo('simulador');toggleDropdown()">🔮 Simulador</a>
         <a onclick="navigateTo('cardapio');toggleDropdown()">🍽️ Cardápio</a>
         <a onclick="navigateTo('ver-palpites');toggleDropdown()">👁️ Ver Palpites</a>
@@ -1451,6 +1454,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <a data-page="chaveamento" onclick="navigateTo('chaveamento');closeMaisSheet()">🔑 Chaveamento</a>
     <a data-page="chaveamento-bilateral" onclick="navigateTo('chaveamento-bilateral');closeMaisSheet()">🏆 Chave Bilateral</a>
     <a data-page="ver-todos" onclick="navigateTo('ver-todos');closeMaisSheet()">📋 Todos os Palpites</a>
+    <a data-page="corrida" onclick="navigateTo('corrida');closeMaisSheet()">🏁 Corrida do Ranking</a>
     <a data-page="simulador" onclick="navigateTo('simulador');closeMaisSheet()">🔮 Simulador</a>
     <a data-page="regras" onclick="navigateTo('regras');closeMaisSheet()">📋 Regras</a>
     <a id="mais-admin" data-page="admin" style="display:none" onclick="navigateTo('admin');closeMaisSheet()">⚙️ Admin</a>
@@ -1534,6 +1538,13 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <!-- ── CARDÁPIO E TRANSPORTE ── -->
     <div id="page-cardapio" class="page">
       <div class="container" id="cardapio-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ── CORRIDA DO RANKING ── -->
+    <div id="page-corrida" class="page">
+      <div class="container" id="corrida-content">
         <div class="loading-wrap"><div class="spinner"></div></div>
       </div>
     </div>
@@ -1673,25 +1684,6 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
       <button class="btn btn-primary" onclick="goToPalpitesFromPending()">⚽ Palpitar agora</button>
       <button class="btn btn-secondary" onclick="closePendingPalModal()">Depois</button>
     </div>
-  </div>
-</div>
-
-<!-- MODAL CORRIDA DO RANKING (bar chart race) -->
-<div id="modal-bar-race" class="modal-overlay hidden" onclick="if(event.target===this)closeBarRace()">
-  <div class="modal-box brace-modal">
-    <button class="modal-close" onclick="closeBarRace()">✕</button>
-    <div style="font-weight:800;color:var(--gold);font-size:1rem">🏁 Corrida do Ranking</div>
-    <div class="date-filter-wrap" style="margin:8px 0 2px">
-      <button class="date-filter-btn brace-mode-btn" data-mode="0" onclick="_barRaceSetMode(0)">Todos</button>
-      <button class="date-filter-btn brace-mode-btn" data-mode="15" onclick="_barRaceSetMode(15)">Top 15</button>
-    </div>
-    <div id="brace-label" style="font-size:0.8rem;color:var(--text);min-height:18px;margin-top:3px"></div>
-    <div id="brace-area" style="position:relative;margin-top:10px"></div>
-    <div class="brace-actions">
-      <button id="brace-play" class="btn btn-primary" onclick="_barRaceReplay()" style="display:none">🔁 Repetir</button>
-      <button id="brace-video" class="btn btn-secondary" onclick="_barRaceDownloadVideo()" style="display:none">🎬 Baixar vídeo</button>
-    </div>
-    <div class="brace-hint">No celular, o vídeo abre o compartilhamento quando suportado; se não, baixa um .webm para Arquivos/Downloads.</div>
   </div>
 </div>
 
@@ -2570,11 +2562,12 @@ function navigateTo(page, opts) {
   _currentPage = page;
   if (_countdownTimer && page !== 'dashboard') { clearInterval(_countdownTimer); _countdownTimer = null; }
   if (_cardapioTimer && page !== 'cardapio') { clearInterval(_cardapioTimer); _cardapioTimer = null; }
+  if (page !== 'corrida' && typeof _corridaStop === 'function') _corridaStop(); // pausa a corrida ao sair da aba
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   // Páginas que vivem na folha "Mais" acendem o botão Mais na bottom nav.
-  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','simulador','regras','admin']);
+  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','corrida','simulador','regras','admin']);
   const _maisBtn = document.getElementById('mais-bottom-nav');
   if (_maisBtn) _maisBtn.classList.toggle('active', _maisPages.has(page));
   document.querySelectorAll('#mais-sheet a').forEach(a=>a.classList.toggle('active',a.dataset.page===page));
@@ -2602,6 +2595,7 @@ function navigateTo(page, opts) {
     case 'regras':      renderRegras(); break;
     case 'estatisticas': renderEstatisticas(); break;
     case 'simulador':   renderSimulador(); break;
+    case 'corrida':     renderCorrida(); break;
     case 'cardapio':    renderCardapio(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
@@ -2612,7 +2606,7 @@ function navigateTo(page, opts) {
 
 function _restorePageFromHash() {
   const hash = (location.hash||'').replace('#','').trim();
-  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','simulador','cardapio','admin'];
+  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','corrida','simulador','cardapio','admin'];
   const page = valid.includes(hash) ? hash : 'dashboard';
   // admin só restaura se usuário for admin
   if (page === 'admin' && currentUserDoc?.role !== 'admin') return navigateTo('dashboard', { history: 'replace' });
@@ -3622,8 +3616,7 @@ async function renderDashboard() {
       <button class="btn-share" onclick="shareRankingImage(0)">📸 Gerar imagem — Todos</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:2px 0 16px">
-      <button onclick="openBarRace(0)" style="background:linear-gradient(90deg,#7b2ff7,#f107a3);color:#fff;border:none;border-radius:22px;padding:10px 18px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:0 2px 14px rgba(180,0,200,.35)">🏁 Corrida — Todos</button>
-      <button onclick="openBarRace(15)" style="background:linear-gradient(90deg,#7b2ff7,#f107a3);color:#fff;border:none;border-radius:22px;padding:10px 18px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:0 2px 14px rgba(180,0,200,.35)">🏁 Corrida — Top 15</button>
+      <button onclick="navigateTo('corrida')" style="background:linear-gradient(90deg,#7b2ff7,#f107a3);color:#fff;border:none;border-radius:22px;padding:10px 20px;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 2px 14px rgba(180,0,200,.35)">🏁 Ver a Corrida do Ranking</button>
     </div>
     <div id="evo-chart-container"></div>`;
     cont.innerHTML = html;
@@ -11171,220 +11164,426 @@ function _evoDraw() {
 }
 
 // ════════════════════════════════════════════
-// CORRIDA DO RANKING (bar chart race) — todos os jogadores, por jogo
+// CORRIDA DO RANKING (bar chart race em CANVAS) — aba dedicada
 // ════════════════════════════════════════════
-// Anima a disputa jogo a jogo: barras (pontos acumulados) crescem, os números
-// sobem e as linhas deslizam conforme o ranking muda. Destaca o próprio usuário
-// (dourado). Tudo em memória, sem alterar nada. Respeita prefers-reduced-motion.
-let _braceState = null, _bracePlaying = false;
+// Anima a disputa jogo a jogo (pontos acumulados). Desenha tudo num <canvas>
+// (sem reflow → fluido mesmo com muitos participantes) interpolando VALOR e
+// POSIÇÃO (rank fracionário) a cada frame com easeInOut. Três modos: Top N +
+// você sempre visível, Todos, e Escolher (subconjunto selecionado pelo usuário).
+// Inclui play/pausa, barra para percorrer (scrub) e exportar vídeo .webm.
+let _corridaState = null;
+let _corridaSel = null; // Set de uids escolhidos (modo "Escolher"); persiste na sessão
 const _BRACE_PALETTE = ['#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA','#FBBF24','#34D399','#F87171','#60A5FA','#C084FC','#4ADE80','#FB923C','#38BDF8','#E879F9','#86EFAC','#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4'];
 
-async function _barRaceSetMode(topN) { return openBarRace(topN); }
+function _rrect(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, h / 2, w / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function _corridaEllipsis(ctx, t, maxW) {
+  if (ctx.measureText(t).width <= maxW) return t;
+  let s = t;
+  while (s.length > 1 && ctx.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+  return s + '…';
+}
 
-async function openBarRace(topNArg) {
-  const modal = document.getElementById('modal-bar-race');
-  const area = document.getElementById('brace-area');
-  const playBtn = document.getElementById('brace-play');
-  const videoBtn = document.getElementById('brace-video');
-  if (!modal || !area) return;
-  if (playBtn) playBtn.style.display = 'none';
-  if (videoBtn) videoBtn.style.display = 'none';
-  area.style.height = '';
-  area.style.overflow = 'hidden';
-  area.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';
-  document.getElementById('brace-label').textContent = 'Carregando…';
-  modal.classList.remove('hidden');
+// Monta os quadros: pontos acumulados por usuário a cada jogo com resultado, e o
+// rank (0-based, com desempate por apelido) de cada um em cada quadro.
+function _corridaBuild(users, res, allPals) {
+  const short = t => (t || '').split(' ')[0];
+  const games = ALL_GAMES.filter(g => _hasFullResult(res[g.id]))
+    .sort((a, b) => ((_effectiveStartInstant(a, res[a.id]) || {}).getTime?.() || 0) - ((_effectiveStartInstant(b, res[b.id]) || {}).getTime?.() || 0));
+  if (!games.length) return null;
+  const uids = users.map(u => u.uid);
+  const apel = {}; users.forEach(u => apel[u.uid] = u.apelido || '');
+  const cum = {}; uids.forEach(uid => cum[uid] = 0);
+  const frames = games.map(g => {
+    const r = res[g.id];
+    users.forEach(u => { const pts = calcPontos(allPals[u.uid] && allPals[u.uid][g.id], r); if (pts != null) cum[u.uid] += pts; });
+    const values = Object.assign({}, cum);
+    const order = uids.slice().sort((a, b) => (values[b] - values[a]) || apel[a].localeCompare(apel[b]));
+    const rank = {}; order.forEach((uid, i) => rank[uid] = i);
+    return {
+      label: `${teamFlag(g.h)} ${esc(short(g.h))} <b>${r.h_real}×${r.a_real}</b> ${esc(short(g.a))} ${teamFlag(g.a)} · ${esc(_isoToGameDate(_gameFilterISO(g, r)))}`,
+      plainLabel: `${short(g.h)} ${r.h_real}×${r.a_real} ${short(g.a)} · ${_isoToGameDate(_gameFilterISO(g, r))}`,
+      values, rank
+    };
+  });
+  const maxV = Math.max(1, ...uids.map(uid => frames[frames.length - 1].values[uid]));
+  const colorByUid = {}; uids.forEach((uid, i) => colorByUid[uid] = (uid === currentUser.uid) ? '#FFD700' : _BRACE_PALETTE[i % _BRACE_PALETTE.length]);
+  return { frames, uids, apel, maxV, colorByUid, meUid: currentUser.uid, n: uids.length };
+}
+
+// Restringe os dados a um subconjunto de uids, recalculando rank e máximo DENTRO
+// do grupo (corrida "privada" entre os escolhidos).
+function _corridaSubset(full, uidSet) {
+  const uids = full.uids.filter(u => uidSet.has(u));
+  if (uids.length < 2) return null;
+  const apel = {}; uids.forEach(u => apel[u] = full.apel[u]);
+  const colorByUid = {}; uids.forEach((u, i) => colorByUid[u] = (u === full.meUid) ? '#FFD700' : _BRACE_PALETTE[i % _BRACE_PALETTE.length]);
+  const frames = full.frames.map(f => {
+    const values = {}; uids.forEach(u => values[u] = f.values[u]);
+    const order = uids.slice().sort((a, b) => (values[b] - values[a]) || apel[a].localeCompare(apel[b]));
+    const rank = {}; order.forEach((u, i) => rank[u] = i);
+    return { label: f.label, plainLabel: f.plainLabel, values, rank };
+  });
+  const maxV = Math.max(1, ...uids.map(u => frames[frames.length - 1].values[u]));
+  return { frames, uids, apel, maxV, colorByUid, meUid: full.meUid, n: uids.length };
+}
+
+// Interpola valor e rank (posição fracionária) entre o quadro k e k+1.
+function _corridaInterp(data, seg) {
+  const last = data.frames.length - 1;
+  seg = Math.max(0, Math.min(seg, last));
+  const k = Math.min(last, Math.floor(seg)), kn = Math.min(last, k + 1);
+  let p = seg - k; p = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+  const fa = data.frames[k], fb = data.frames[kn];
+  return data.uids.map(uid => ({
+    uid,
+    v: fa.values[uid] + (fb.values[uid] - fa.values[uid]) * p,
+    r: fa.rank[uid] + (fb.rank[uid] - fa.rank[uid]) * p
+  }));
+}
+
+async function renderCorrida() {
+  const cont = document.getElementById('corrida-content');
+  if (!cont) return;
+  cont.innerHTML = `<div class="corrida-wrap">
+    <div style="text-align:center;margin-bottom:8px">
+      <div style="font-weight:800;color:var(--gold);font-size:1.18rem">🏁 Corrida do Ranking</div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px">A disputa jogo a jogo — pontos acumulados de cada participante</div>
+    </div>
+    <div class="corrida-modes">
+      <button class="date-filter-btn corrida-mode-btn active" data-view="top" onclick="_corridaSetView('top')">Top 12 + Você</button>
+      <button class="date-filter-btn corrida-mode-btn" data-view="all" onclick="_corridaSetView('all')">Todos</button>
+      <button class="date-filter-btn corrida-mode-btn" data-view="sel" onclick="_corridaTogglePicker()">✓ Escolher</button>
+    </div>
+    <div id="corrida-picker" style="display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:0.82rem">Quem entra na corrida?</span>
+        <span style="display:flex;gap:6px">
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem" onclick="_corridaPickAll(true)">Marcar todos</button>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem" onclick="_corridaPickAll(false)">Limpar</button>
+        </span>
+      </div>
+      <div id="corrida-picker-list" style="max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px"></div>
+      <div style="text-align:center;margin-top:8px"><button class="btn btn-primary" style="padding:8px 22px" onclick="_corridaApplySel()">🏁 Correr selecionados</button></div>
+    </div>
+    <div id="corrida-label" style="font-size:0.84rem;color:var(--text);min-height:20px;text-align:center;margin:4px 0 8px;line-height:1.4"></div>
+    <div class="corrida-canvas-box"><canvas id="corrida-canvas"></canvas>
+      <div id="corrida-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(7,20,40,.55)"><div class="spinner"></div></div>
+    </div>
+    <input id="corrida-scrub" class="corrida-scrub" type="range" min="0" max="1000" value="0" oninput="_corridaScrub(this.value)" style="display:none">
+    <div class="corrida-actions">
+      <button id="corrida-play" class="btn btn-primary" onclick="_corridaTogglePlay()" style="display:none">⏸️ Pausar</button>
+      <button id="corrida-replay" class="btn btn-secondary" onclick="_corridaReplay()" style="display:none">🔁 Repetir</button>
+      <button id="corrida-video" class="btn btn-secondary" onclick="_corridaDownloadVideo()" style="display:none">🎬 Baixar vídeo</button>
+    </div>
+    <div class="corrida-hint">Arraste a barra para percorrer a corrida e ler os nomes com calma. No celular, o vídeo abre o compartilhamento quando suportado; senão, baixa um .webm.</div>
+  </div>`;
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u => u.ativo !== false);
     const { allPals } = await _fetchPalsCached(users);
-    // Modo: topN>0 mostra só os N primeiros de cada instante; senão, todos.
-    const topN = (topNArg && topNArg > 0 && topNArg < users.length) ? topNArg : null;
-    document.querySelectorAll('.brace-mode-btn').forEach(b => b.classList.toggle('active', String(topN || 0) === b.dataset.mode));
-    const games = ALL_GAMES.filter(g => _hasFullResult(res[g.id]))
-      .sort((a, b) => ((_effectiveStartInstant(a, res[a.id]) || {}).getTime?.() || 0) - ((_effectiveStartInstant(b, res[b.id]) || {}).getTime?.() || 0));
-    if (!games.length) { area.innerHTML = '<div style="text-align:center;padding:36px;color:var(--text-muted)">Ainda não há resultados para mostrar a corrida.</div>'; document.getElementById('brace-label').textContent = ''; return; }
-
-    const short = t => (t || '').split(' ')[0];
-    const cum = {}; users.forEach(u => cum[u.uid] = 0);
-    const frames = games.map(g => {
-      const r = res[g.id];
-      users.forEach(u => { const pts = calcPontos(allPals[u.uid] && allPals[u.uid][g.id], r); if (pts != null) cum[u.uid] += pts; });
-      return {
-        label: `${teamFlag(g.h)} ${esc(short(g.h))} <b>${r.h_real}×${r.a_real}</b> ${esc(short(g.a))} ${teamFlag(g.a)} <span style="color:var(--text-muted)">· ${esc(_isoToGameDate(_gameFilterISO(g, r)))}</span>`,
-        plainLabel: `${short(g.h)} ${r.h_real}×${r.a_real} ${short(g.a)} · ${_isoToGameDate(_gameFilterISO(g, r))}`,
-        values: Object.assign({}, cum)
-      };
-    });
-    const lastVals = frames[frames.length - 1].values;
-    const maxV = Math.max(1, ...Object.values(lastVals));
-
-    const n = users.length;
-    const nSlots = topN || n; // quantas linhas visíveis ao mesmo tempo
-    const availH = Math.max(200, Math.min(620, Math.round((window.innerHeight || 700) * 0.66)));
-    const gap = nSlots > 30 ? 2 : 3;                 // respiro entre as barras
-    const rowH = Math.max(6, Math.min(36, availH / nSlots));
-    const barH = Math.max(3, rowH - gap);
-    const nameFont = Math.max(8, Math.min(13, rowH - 6));
-    // Quando as linhas ficam finas, entra o MODO DENSO: nome/valor escondidos para
-    // todos (mantém só as barras correndo, todas com a MESMA pista → comparáveis).
-    // O usuário aparece como um rótulo dourado sobreposto, que acompanha sua barra.
-    const showNames = rowH >= 15;
-    const showVals = rowH >= 11;
-    const uniformNameW = Math.max(60, Math.min(110, Math.round((window.innerWidth || 400) * 0.26)));
-    area.style.position = 'relative';
-    area.style.height = Math.round(nSlots * rowH) + 'px';
-    area.innerHTML = '';
-
-    const rowByUid = {}, rows = [], apel = {}, uids = [];
-    users.forEach((u, i) => {
-      apel[u.uid] = u.apelido || '';
-      uids.push(u.uid);
-      const isMe = u.uid === currentUser.uid;
-      const color = isMe ? '#FFD700' : _BRACE_PALETTE[i % _BRACE_PALETTE.length];
-      const row = document.createElement('div');
-      row.className = 'brace-row';
-      row.style.height = rowH + 'px';
-      row.innerHTML = `<span class="brace-name" style="${showNames?'':'display:none;'}width:${uniformNameW}px;flex:none;font-size:${nameFont}px;color:${isMe ? '#FFD700' : 'var(--text)'};font-weight:${isMe ? 800 : 600};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">${isMe ? '★ ' : ''}${esc(u.apelido || '')}</span>
-        <div class="brace-track" style="flex:1;display:flex;align-items:center;min-width:0"><div class="brace-bar" style="height:${barH}px;width:0%;background:${color};transition:none;box-shadow:${isMe ? '0 0 7px rgba(255,215,0,.7)' : 'none'}"></div><span class="brace-val" style="${showVals?'':'display:none;'}margin-left:6px;font-size:${nameFont}px;font-weight:700;color:${isMe ? '#FFD700' : 'var(--text-muted)'}">0</span></div>`;
-      area.appendChild(row);
-      // Posição/largura dirigidas a cada frame (rAF) — sem transição de transform
-      // (evita o "picotado"); só um fade rápido para entradas/saídas no Top N.
-      row.style.transition = 'opacity .28s ease';
-      let valEl = row.querySelector('.brace-val');
-      // Modo denso: rótulo dourado sobreposto do próprio usuário (não afeta a pista).
-      if (isMe && !showNames) {
-        const ov = document.createElement('span');
-        ov.style.cssText = `position:absolute;left:6px;top:0;height:${rowH}px;display:flex;align-items:center;gap:6px;font-size:${Math.max(9, nameFont)}px;font-weight:800;color:#FFD700;text-shadow:0 1px 3px #000,0 0 2px #000;pointer-events:none;white-space:nowrap;z-index:3`;
-        ov.innerHTML = `★ ${esc(u.apelido || '')} <span class="brace-you-val" style="font-weight:700">0</span>`;
-        row.appendChild(ov);
-        valEl = ov.querySelector('.brace-you-val'); // o número do usuário atualiza aqui
-      }
-      const rObj = { uid: u.uid, el: row, bar: row.querySelector('.brace-bar'), valEl };
-      rowByUid[u.uid] = rObj; rows.push(rObj);
-    });
-
-    _braceState = { frames, maxV, MAXW: 76, rowH, uids, apel, rowByUid, rows, topN, raf: null, startTime: 0,
-      stepDur: Math.max(260, Math.min(900, Math.round(28000 / Math.max(1, frames.length - 1)))) };
-    if (videoBtn) videoBtn.style.display = '';
-    _barRaceReplay();
+    const full = _corridaBuild(users, res, allPals);
+    const loadingEl = document.getElementById('corrida-loading'); if (loadingEl) loadingEl.remove();
+    if (!full) { const l = document.getElementById('corrida-label'); if (l) l.textContent = 'Ainda não há resultados para mostrar a corrida.'; return; }
+    _corridaBuildPicker(full);
+    const view = (_corridaState && _corridaState.view) || 'top';
+    _corridaInit(full, view, 12);
   } catch (e) {
-    area.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
+    const loadingEl = document.getElementById('corrida-loading'); if (loadingEl) loadingEl.remove();
+    const box = cont.querySelector('.corrida-canvas-box'); if (box) box.innerHTML = `<div class="alert alert-error" style="margin:10px">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
-// Motor da corrida: INTERPOLA tudo a cada frame (rAF) entre o jogo k e o k+1.
-// Reordena por valor interpolado a cada frame → movimento contínuo e fluido
-// (sem o efeito "picotado" das transições CSS por passo). easeInOut suaviza
-// cada trecho. Valores/posições/largura/números são desenhados por frame.
-function _braceRender(now) {
-  const st = _braceState; if (!st) return;
-  const last = st.frames.length - 1;
-  const segRaw = st.stepDur > 0 ? (now - st.startTime) / st.stepDur : last;
-  const done = segRaw >= last;
-  const seg = Math.min(segRaw, last);
-  const k = Math.min(last, Math.floor(seg));
-  const kn = Math.min(last, k + 1);
-  let p = seg - k;
-  p = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // easeInOutQuad por trecho
-  const fa = st.frames[k].values, fb = st.frames[kn].values;
+function _corridaBuildPicker(full) {
+  const list = document.getElementById('corrida-picker-list'); if (!list) return;
+  if (!_corridaSel) _corridaSel = new Set([full.meUid]);
+  list.innerHTML = full.uids.map(uid => {
+    const isMe = uid === full.meUid;
+    const checked = _corridaSel.has(uid) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:0.85rem;${isMe ? 'color:var(--gold);font-weight:700' : ''}">
+      <input type="checkbox" value="${esc(uid)}" ${checked} style="accent-color:var(--gold);width:16px;height:16px;flex:none">
+      <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isMe ? '★ ' : ''}${esc(full.apel[uid] || '(sem nome)')}</span></label>`;
+  }).join('');
+}
+function _corridaPickAll(v) { document.querySelectorAll('#corrida-picker-list input[type=checkbox]').forEach(b => b.checked = v); }
+function _corridaTogglePicker() {
+  const p = document.getElementById('corrida-picker'); if (!p) return;
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+}
+function _corridaApplySel() {
+  const boxes = document.querySelectorAll('#corrida-picker-list input[type=checkbox]:checked');
+  const set = new Set(Array.from(boxes).map(b => b.value));
+  if (set.size < 2) { showToast('Selecione pelo menos 2 participantes.', 'warning'); return; }
+  _corridaSel = set;
+  const p = document.getElementById('corrida-picker'); if (p) p.style.display = 'none';
+  _corridaSetView('sel');
+}
 
-  const arr = st.uids.map(uid => ({ uid, v: fa[uid] + (fb[uid] - fa[uid]) * p }));
-  arr.sort((a, b) => (b.v - a.v) || st.apel[a.uid].localeCompare(st.apel[b.uid]));
-  arr.forEach((o, rank) => {
-    const r = st.rowByUid[o.uid];
-    const visible = !st.topN || rank < st.topN;
-    const ty = (st.topN && !visible) ? st.topN * st.rowH : rank * st.rowH;
-    r.el.style.transform = `translateY(${ty.toFixed(1)}px)`;
-    r.el.style.opacity = visible ? '1' : '0';
-    r.bar.style.width = `${(o.v / st.maxV * st.MAXW).toFixed(2)}%`;
-    r.valEl.textContent = Math.round(o.v);
-  });
+function _corridaInit(full, view, topN) {
+  const canvas = document.getElementById('corrida-canvas');
+  if (!canvas) return;
+  if (_corridaState && _corridaState.raf) cancelAnimationFrame(_corridaState.raf);
+  if (_corridaState && _corridaState._onResize) window.removeEventListener('resize', _corridaState._onResize);
+  let data = full;
+  if (view === 'sel') {
+    const sub = _corridaSubset(full, _corridaSel || new Set());
+    if (sub) data = sub; else { view = 'top'; showToast('Selecione pelo menos 2 participantes em "Escolher".', 'warning'); }
+  }
+  const stepDur = Math.max(420, Math.min(1100, Math.round(34000 / Math.max(1, data.frames.length - 1))));
+  _corridaState = {
+    full, data, view, topN: topN || 12, canvas, ctx: null, raf: null,
+    startTime: 0, seg: 0, playing: false, _scrubbing: false,
+    padTop: 12, padBottom: 12, rowH: 42, cssW: 0, cssH: 0, stepDur,
+    _onResize: () => { _corridaSizeCanvas(); _corridaRenderSeg(_corridaState.seg); }
+  };
+  document.querySelectorAll('.corrida-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  window.addEventListener('resize', _corridaState._onResize);
+  _corridaSizeCanvas();
+  const vb = document.getElementById('corrida-video'); if (vb) vb.style.display = '';
+  const sc = document.getElementById('corrida-scrub'); if (sc) { sc.style.display = ''; sc.value = 0; }
+  _corridaReplay();
+}
 
+function _corridaSizeCanvas() {
+  const st = _corridaState; if (!st || !st.canvas) return;
+  const box = st.canvas.parentElement;
+  const cssW = Math.max(280, Math.floor(box.clientWidth));
+  let rowH, cssH;
+  if (st.view === 'top') {
+    const slots = Math.min(st.topN, st.data.n);
+    rowH = st.topN <= 12 ? 42 : 36;
+    cssH = st.padTop + (slots + 1) * rowH + 14 + st.padBottom; // +1 = faixa fixa "Você"
+  } else {
+    const n = st.data.n;
+    const maxH = Math.min((window.innerHeight || 720) * 0.84, 940);
+    const bandH = maxH - st.padTop - st.padBottom;
+    rowH = Math.max(7, Math.min(46, bandH / n));
+    cssH = st.padTop + n * rowH + st.padBottom;
+  }
+  st.rowH = rowH; st.cssW = cssW; st.cssH = cssH;
+  const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+  st.canvas.width = Math.round(cssW * dpr); st.canvas.height = Math.round(cssH * dpr);
+  st.canvas.style.height = cssH + 'px';
+  const ctx = st.canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  st.ctx = ctx;
+}
+
+function _corridaGeo(st) {
+  const W = st.cssW, H = st.cssH, rowH = st.rowH;
+  const slots = st.view === 'top' ? Math.min(st.topN, st.data.n) : st.data.n;
+  const pin = st.view === 'top';
+  const showNames = rowH >= 14, showVals = rowH >= 12;
+  const nameW = showNames ? Math.round(Math.min(0.36 * W, 168)) : 42;
+  const barLeft = nameW + 8;
+  const valW = showVals ? 46 : 6;
+  const barMaxW = Math.max(20, W - barLeft - valW - 8);
+  const pinTop = st.padTop + slots * rowH + 13;
+  return { W, H, padTop: st.padTop, padBottom: st.padBottom, rowH, slots, pin, showNames, showVals, nameW, barLeft, barMaxW, pinTop };
+}
+
+// Desenho puro de um instante. geo define a geometria; opts.header desenha
+// título/rodapé (usado no vídeo). Funciona para qualquer dimensão.
+function _corridaPaint(ctx, geo, data, arr, opts) {
+  opts = opts || {};
+  const { W, H, padTop, rowH, slots, pin, showNames, showVals, nameW, barLeft, barMaxW, pinTop } = geo;
+  const meUid = data.meUid;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#071428'; ctx.fillRect(0, 0, W, H);
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, 'rgba(123,47,247,.26)'); g.addColorStop(1, 'rgba(241,7,163,.09)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  if (opts.header) {
+    ctx.textAlign = 'center'; ctx.fillStyle = '#FFD700'; ctx.font = '800 36px Arial';
+    ctx.fillText('🏁 Corrida do Ranking', W / 2, 52);
+    ctx.fillStyle = '#FFFFFF'; ctx.font = '700 22px Arial'; ctx.fillText(opts.plainLabel || '', W / 2, 92);
+  }
+  const bandTop = padTop;
+  const bandBottom = bandTop + slots * rowH;
+  const fontPx = Math.max(9, Math.min(16, Math.round(rowH * 0.42)));
+  const rankFont = Math.max(9, Math.min(17, Math.round(rowH * 0.46)));
+  const medals = ['#FFD700', '#C0C0C0', '#CD7F32'];
+
+  const drawRow = (o, top, fixedRank) => {
+    const isMe = o.uid === meUid;
+    const intRank = (fixedRank != null) ? fixedRank : Math.round(o.r);
+    const barW = Math.max(2, o.v / data.maxV * barMaxW);
+    const color = data.colorByUid[o.uid];
+    const cyText = top + rowH * 0.5 + fontPx * 0.36;
+    ctx.fillStyle = isMe ? 'rgba(255,215,0,.14)' : 'rgba(255,255,255,.035)';
+    _rrect(ctx, 5, top + 1, W - 10, rowH - 2, Math.min(7, rowH / 3)); ctx.fill();
+    ctx.textAlign = 'left'; ctx.font = `800 ${rankFont}px Arial`;
+    ctx.fillStyle = medals[intRank] || (isMe ? '#FFD700' : '#7E8BA3');
+    ctx.fillText(`${intRank + 1}º`, 8, cyText);
+    if (showNames) {
+      ctx.textAlign = 'right'; ctx.font = `${isMe ? '800' : '600'} ${fontPx}px Arial`;
+      ctx.fillStyle = isMe ? '#FFD700' : '#E7ECF5';
+      const nm = (isMe ? '★ ' : '') + (data.apel[o.uid] || '');
+      ctx.fillText(_corridaEllipsis(ctx, nm, nameW - 38), nameW - 6, cyText);
+    }
+    const barH = Math.max(4, rowH - 7);
+    const by = top + (rowH - barH) / 2;
+    if (isMe) { ctx.shadowColor = 'rgba(255,215,0,.6)'; ctx.shadowBlur = 8; }
+    ctx.fillStyle = color; _rrect(ctx, barLeft, by, barW, barH, Math.min(5, barH / 2)); ctx.fill();
+    ctx.shadowBlur = 0;
+    if (showVals) {
+      ctx.textAlign = 'left'; ctx.font = `800 ${fontPx}px Arial`;
+      ctx.fillStyle = isMe ? '#FFD700' : '#FFFFFF';
+      ctx.fillText(String(Math.round(o.v)), barLeft + barW + 6, cyText);
+    }
+  };
+
+  // Banda principal: do menor rank para o maior (você por cima quando dentro).
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, bandTop - 2, W, (bandBottom - bandTop) + 4); ctx.clip();
+  const inBand = arr.filter(o => o.r < slots + 0.85).sort((a, b) => b.r - a.r);
+  const meObj = arr.find(o => o.uid === meUid);
+  inBand.forEach(o => { if (pin && o.uid === meUid) return; drawRow(o, bandTop + o.r * rowH); });
+  if (pin && meObj && meObj.r < slots + 0.85) drawRow(meObj, bandTop + meObj.r * rowH); // você por cima
+  ctx.restore();
+
+  // Faixa fixa "Você" (só no modo Top): garante que você sempre apareça.
+  if (pin && meObj) {
+    const meRank = Math.round(meObj.r);
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(8, pinTop - 8); ctx.lineTo(W - 8, pinTop - 8); ctx.stroke(); ctx.setLineDash([]);
+    if (meRank >= slots) drawRow(meObj, pinTop, meRank);
+    else {
+      ctx.textAlign = 'center'; ctx.font = `700 ${Math.max(11, fontPx)}px Arial`;
+      ctx.fillStyle = 'rgba(255,215,0,.92)';
+      ctx.fillText(`★ Você está no Top ${slots}! (${meRank + 1}º)`, W / 2, pinTop + rowH * 0.5 + fontPx * 0.36);
+    }
+  }
+  if (opts.header) {
+    ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.font = '14px Arial';
+    ctx.fillText('Bolão ICN Copa 2026', W / 2, H - 22);
+  }
+}
+
+function _corridaRenderSeg(seg) {
+  const st = _corridaState; if (!st || !st.ctx) return;
+  st.seg = seg;
+  const arr = _corridaInterp(st.data, seg);
+  _corridaPaint(st.ctx, _corridaGeo(st), st.data, arr, { header: false });
+  const last = st.data.frames.length - 1;
   const li = Math.min(last, Math.round(seg));
-  const lbl = document.getElementById('brace-label');
-  if (lbl) lbl.innerHTML = `<b style="color:var(--gold)">${li + 1}/${st.frames.length}</b> &nbsp; ${st.frames[li].label}`;
-
-  if (done) { _bracePlaying = false; st.raf = null; const b = document.getElementById('brace-play'); if (b) b.style.display = ''; return; }
-  st.raf = requestAnimationFrame(_braceRender);
+  const lbl = document.getElementById('corrida-label');
+  if (lbl) lbl.innerHTML = `<b style="color:var(--gold)">${li + 1}/${st.data.frames.length}</b> · ${st.data.frames[li].label}`;
+  const sc = document.getElementById('corrida-scrub');
+  if (sc && !st._scrubbing && last > 0) sc.value = Math.round(seg / last * 1000);
 }
 
-function _barRaceReplay() {
-  const st = _braceState; if (!st) return;
+function _corridaLoop(now) {
+  const st = _corridaState; if (!st) return;
+  const last = st.data.frames.length - 1;
+  const seg = st.stepDur > 0 ? (now - st.startTime) / st.stepDur : last;
+  const done = seg >= last;
+  _corridaRenderSeg(Math.min(seg, last));
+  if (done) { st.playing = false; st.raf = null; _corridaSyncButtons(); return; }
+  st.raf = requestAnimationFrame(_corridaLoop);
+}
+
+function _corridaReplay() {
+  const st = _corridaState; if (!st) return;
   if (st.raf) cancelAnimationFrame(st.raf);
-  const b = document.getElementById('brace-play'); if (b) b.style.display = 'none';
-  _bracePlaying = true;
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // Reduced motion: pula direto para o quadro final (sem animar).
-  st.startTime = reduce ? (performance.now() - st.stepDur * st.frames.length) : performance.now();
-  st.raf = requestAnimationFrame(_braceRender);
+  if (reduce) { st.playing = false; st.raf = null; _corridaRenderSeg(st.data.frames.length - 1); _corridaSyncButtons(); return; }
+  st.playing = true; st.startTime = performance.now(); st.raf = requestAnimationFrame(_corridaLoop);
+  _corridaSyncButtons();
 }
 
-// Gera um vídeo vertical (720×1280, .webm) da corrida desenhando num canvas e
-// gravando com captureStream()+MediaRecorder. Tenta navigator.share(); se não der,
-// baixa o arquivo. Independente da animação na tela (re-desenha o próprio quadro).
-async function _barRaceDownloadVideo() {
-  const st = _braceState;
-  if (!st || !st.frames.length) { showToast('Abra a corrida primeiro.', 'warning'); return; }
+function _corridaTogglePlay() {
+  const st = _corridaState; if (!st) return;
+  const last = st.data.frames.length - 1;
+  if (st.playing) { if (st.raf) cancelAnimationFrame(st.raf); st.raf = null; st.playing = false; }
+  else if (st.seg >= last) { _corridaReplay(); return; }
+  else { st.startTime = performance.now() - st.seg * st.stepDur; st.playing = true; st.raf = requestAnimationFrame(_corridaLoop); }
+  _corridaSyncButtons();
+}
+
+function _corridaScrub(v) {
+  const st = _corridaState; if (!st) return;
+  if (st.raf) { cancelAnimationFrame(st.raf); st.raf = null; }
+  st.playing = false;
+  const last = st.data.frames.length - 1;
+  st._scrubbing = true; _corridaRenderSeg(v / 1000 * last); st._scrubbing = false;
+  _corridaSyncButtons();
+}
+
+function _corridaSetView(view, topN) {
+  const st = _corridaState; if (!st) return;
+  _corridaInit(st.full, view, topN || st.topN);
+}
+
+function _corridaSyncButtons() {
+  const st = _corridaState; if (!st) return;
+  const play = document.getElementById('corrida-play');
+  const replay = document.getElementById('corrida-replay');
+  const last = st.data.frames.length - 1;
+  if (play) { play.style.display = ''; play.innerHTML = st.playing ? '⏸️ Pausar' : (st.seg >= last ? '🔁 Recomeçar' : '▶️ Tocar'); }
+  if (replay) replay.style.display = '';
+}
+
+// Gera um vídeo vertical (720×1280, .webm) reusando o MESMO _corridaPaint.
+async function _corridaDownloadVideo() {
+  const st = _corridaState;
+  if (!st || !st.data.frames.length) { showToast('Abra a corrida primeiro.', 'warning'); return; }
   if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) { showToast('Seu navegador não permite gerar vídeo aqui. Tente Chrome/Edge no Android ou use gravação de tela no iPhone.', 'warning', 5200); return; }
-  const btn = document.getElementById('brace-video');
+  const btn = document.getElementById('corrida-video');
   if (btn) { btn.disabled = true; btn.textContent = '🎬 Gerando…'; }
   try {
     const W = 720, H = 1280, fps = 30;
-    const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    const stream = canvas.captureStream(fps);
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const stream = cv.captureStream(fps);
     const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
     const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 3500000 });
     const chunks = [];
     rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-    const done = new Promise((resolve, reject) => { rec.onstop = resolve; rec.onerror = reject; });
+    const done = new Promise((res, rej) => { rec.onstop = res; rec.onerror = rej; });
     rec.start(250);
-
-    const slots = st.topN || Math.min(18, st.uids.length);
-    const rowH = Math.min(46, Math.max(22, Math.floor((H - 230) / slots)));
-    const left = 164, right = 42, top = 150, maxBar = W - left - right - 54;
-    const totalSeg = Math.max(1, st.frames.length - 1);
-    const framesToDraw = Math.ceil(totalSeg * 0.75 * fps);
-    const palette = _BRACE_PALETTE;
-
-    const draw = (seg) => {
-      const last = st.frames.length - 1, k = Math.min(last, Math.floor(seg)), kn = Math.min(last, k + 1);
-      let p = seg - k; p = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2,2)/2;
-      const fa = st.frames[k].values, fb = st.frames[kn].values;
-      const arr = st.uids.map(uid => ({ uid, v: fa[uid] + (fb[uid] - fa[uid]) * p })).sort((a,b)=>(b.v-a.v)||st.apel[a.uid].localeCompare(st.apel[b.uid]));
-      ctx.fillStyle = '#071428'; ctx.fillRect(0,0,W,H);
-      const grad = ctx.createLinearGradient(0,0,W,H); grad.addColorStop(0,'rgba(123,47,247,.35)'); grad.addColorStop(1,'rgba(241,7,163,.12)'); ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
-      ctx.fillStyle = '#FFD700'; ctx.font = '800 36px Arial'; ctx.textAlign = 'center'; ctx.fillText('🏁 Corrida do Ranking', W/2, 58);
-      ctx.fillStyle = '#FFFFFF'; ctx.font = '700 22px Arial'; ctx.fillText(st.frames[Math.min(last, Math.round(seg))].plainLabel || '', W/2, 96);
-      arr.slice(0, slots).forEach((o, rank) => {
-        const isMe = currentUser && o.uid === currentUser.uid;
-        const y = top + rank * rowH, color = isMe ? '#FFD700' : palette[st.uids.indexOf(o.uid) % palette.length];
-        ctx.fillStyle = isMe ? 'rgba(255,215,0,.13)' : 'rgba(255,255,255,.035)'; ctx.fillRect(20, y-3, W-40, rowH-5);
-        ctx.fillStyle = rank < 3 ? ['#FFD700','#C0C0C0','#CD7F32'][rank] : '#9AA8BD'; ctx.font = '800 18px Arial'; ctx.textAlign='right'; ctx.fillText(`${rank+1}º`, 58, y + rowH*.58);
-        ctx.fillStyle = isMe ? '#FFD700' : '#FFFFFF'; ctx.font = `${isMe?'800':'700'} 18px Arial`; ctx.textAlign='right'; ctx.fillText((isMe?'★ ':'') + (st.apel[o.uid] || ''), left-12, y + rowH*.58);
-        ctx.fillStyle = color; ctx.fillRect(left, y + 7, Math.max(2, o.v / st.maxV * maxBar), rowH - 17);
-        ctx.fillStyle = '#FFFFFF'; ctx.font = '800 17px Arial'; ctx.textAlign='left'; ctx.fillText(String(Math.round(o.v)), left + Math.max(2, o.v / st.maxV * maxBar) + 8, y + rowH*.58);
-      });
-      ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.font = '14px Arial'; ctx.textAlign='center'; ctx.fillText('Bolão ICN Copa 2026', W/2, H - 34);
+    const data = st.data;
+    const pin = st.view === 'top';
+    const slots = st.view === 'top' ? st.topN : (st.view === 'sel' ? data.n : Math.min(18, data.n));
+    const rowH = Math.min(46, Math.max(20, Math.floor((H - 300) / (slots + (pin ? 1 : 0)))));
+    const nameW = 250;
+    const geo = {
+      W, H, padTop: 150, padBottom: 60, rowH, slots, pin,
+      showNames: true, showVals: true, nameW, barLeft: nameW + 8,
+      barMaxW: W - (nameW + 8) - 70 - 8, pinTop: 150 + slots * rowH + 16
     };
-    for (let i=0; i<=framesToDraw; i++) { draw(i / framesToDraw * totalSeg); await new Promise(r => setTimeout(r, 1000/fps)); }
+    const totalSeg = Math.max(1, data.frames.length - 1);
+    const framesToDraw = Math.ceil(totalSeg * 0.85 * fps);
+    for (let i = 0; i <= framesToDraw; i++) {
+      const seg = i / framesToDraw * totalSeg;
+      const arr = _corridaInterp(data, seg);
+      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: data.frames[Math.min(data.frames.length - 1, Math.round(seg))].plainLabel });
+      await new Promise(r => setTimeout(r, 1000 / fps));
+    }
     rec.stop(); await done; stream.getTracks().forEach(t => t.stop());
     const blob = new Blob(chunks, { type: 'video/webm' });
     const file = new File([blob], `corrida-ranking-${fmtDate()}.webm`, { type: 'video/webm' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text: '🏁 Corrida do Ranking — Bolão ICN Copa 2026' });
     else { _fallbackDownload(blob, file.name); showToast('Vídeo gerado! Confira seus Downloads/Arquivos.', 'success', 4500); }
-  } catch(e) {
+  } catch (e) {
     showToast('Erro ao gerar vídeo: ' + errMsg(e), 'error', 6000);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🎬 Baixar vídeo'; }
   }
 }
 
-function closeBarRace() {
-  _bracePlaying = false;
-  if (_braceState && _braceState.raf) cancelAnimationFrame(_braceState.raf);
-  const el = document.getElementById('modal-bar-race'); if (el) el.classList.add('hidden');
+function _corridaStop() {
+  const st = _corridaState; if (!st) return;
+  if (st.raf) cancelAnimationFrame(st.raf);
+  st.raf = null; st.playing = false;
+  if (st._onResize) window.removeEventListener('resize', st._onResize);
 }
 
 // ════════════════════════════════════════════
