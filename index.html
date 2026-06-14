@@ -251,6 +251,83 @@ select option{background:var(--mid-blue);color:var(--white)}
 .stat-card .lbl{font-size:0.72rem;color:var(--text-muted);margin-top:2px}
 
 /* ══════════════════════════════════════════
+   GRÁFICOS (sub-aba de Estatísticas)
+══════════════════════════════════════════ */
+.gx-subtabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.gx-subtab{
+  flex:1 1 auto;min-width:120px;padding:10px 14px;border-radius:10px;
+  border:1px solid var(--border);background:transparent;color:var(--text-muted);
+  font-weight:700;font-size:0.9rem;cursor:pointer;transition:all .2s;
+}
+.gx-subtab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.gx-subtab:hover:not(.active){border-color:var(--accent);color:var(--accent)}
+.gx-desc{font-size:0.78rem;color:var(--text-muted);margin:2px 0 14px;line-height:1.45}
+.gx-intro{font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;line-height:1.5}
+.gx-empty{text-align:center;padding:24px 14px;color:var(--text-muted);font-size:0.86rem;line-height:1.5}
+.gx-select{
+  width:100%;max-width:100%;padding:9px 12px;border-radius:10px;margin-bottom:14px;
+  background:var(--mid-blue);border:1px solid var(--border);color:var(--white);
+  font-size:0.9rem;font-weight:600;cursor:pointer;
+}
+body.light-theme .gx-select{background:#fff}
+.gx-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.gx-chip{
+  padding:6px 12px;border-radius:20px;border:1px solid var(--border);
+  background:transparent;color:var(--text-muted);font-size:0.78rem;font-weight:700;
+  cursor:pointer;transition:all .15s;
+}
+.gx-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.gx-chip:hover:not(.active){border-color:var(--accent);color:var(--accent)}
+/* Barras horizontais reutilizáveis */
+.gx-bar-row{display:flex;align-items:center;gap:10px;padding:5px 0}
+.gx-bar-label{flex:0 0 38%;max-width:38%;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gx-bar-track{flex:1;height:14px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden}
+body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
+.gx-bar-fill{height:100%;border-radius:7px;min-width:2px;transition:width .4s}
+.gx-bar-val{flex:0 0 auto;font-size:0.78rem;font-weight:700;color:var(--text-muted);min-width:34px;text-align:right}
+/* Barra empilhada (precisão por tipo) */
+.gx-stack-row{display:flex;align-items:center;gap:10px;padding:5px 0}
+.gx-stack-name{flex:0 0 34%;max-width:34%;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gx-stack-bar{flex:1;height:16px;border-radius:8px;overflow:hidden;display:flex;background:rgba(255,255,255,.06)}
+.gx-stack-seg{height:100%}
+.gx-stack-pts{flex:0 0 auto;font-size:0.78rem;font-weight:800;color:var(--gold);min-width:34px;text-align:right}
+.gx-legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px;font-size:0.74rem;color:var(--text-muted)}
+.gx-legend span{display:inline-flex;align-items:center;gap:5px}
+.gx-legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+/* Destaques (mini KPI) */
+.gx-hl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.gx-hl{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
+.gx-hl .v{font-size:1.15rem;font-weight:800;color:var(--gold);line-height:1.2;word-break:break-word}
+.gx-hl .l{font-size:0.7rem;color:var(--text-muted);margin-top:3px;text-transform:uppercase;letter-spacing:.3px}
+/* Resumo da rodada */
+.gx-round-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.gx-round-item{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:12px}
+.gx-round-item .ri-l{font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+.gx-round-item .ri-v{font-size:0.92rem;font-weight:700;color:var(--white)}
+.gx-round-item .ri-s{font-size:0.74rem;color:var(--gold);margin-top:2px}
+/* Heatmap */
+.gx-heat-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
+.gx-heat{border-collapse:separate;border-spacing:2px}
+.gx-heat th,.gx-heat td{padding:0}
+.gx-heat .hn{position:sticky;left:0;z-index:1;background:var(--card);font-size:0.72rem;
+  text-align:right;padding-right:8px;white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis}
+.gx-heat .hc{width:16px;height:16px;border-radius:3px;text-align:center}
+.gx-heat .hh{font-size:0.6rem;color:var(--text-muted);height:14px;vertical-align:bottom;text-align:center;white-space:nowrap}
+.gx-heat-rank{font-size:0.62rem;color:var(--text-muted);padding-right:4px;text-align:right}
+/* Tabela genérica de gráficos */
+.gx-table{width:100%;border-collapse:collapse;font-size:0.8rem}
+.gx-table th{text-align:left;color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:.3px;padding:6px 8px;border-bottom:1px solid var(--border)}
+.gx-table td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05)}
+.gx-table tr:last-child td{border-bottom:none}
+.gx-table .is-me td{background:rgba(255,215,0,.07)}
+/* H2H */
+.gx-h2h-sels{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.gx-h2h-sels .gx-select{flex:1;min-width:130px;margin-bottom:0}
+.gx-h2h-vs{display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--text-muted);padding:0 4px}
+.gx-h2h-bar{display:flex;height:26px;border-radius:8px;overflow:hidden;margin:6px 0 4px;font-size:0.74rem;font-weight:800;color:#fff}
+.gx-h2h-bar>div{display:flex;align-items:center;padding:0 8px}
+
+/* ══════════════════════════════════════════
    DASHBOARD KPI CARDS
 ══════════════════════════════════════════ */
 .dash-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
@@ -7231,7 +7308,9 @@ async function renderEstatisticas() {
       + '<div style="flex:1;height:1px;background:var(--border)"></div>'
       + '</div>';
 
-    let html = '<div class="section-title">📈 Estatísticas & Curiosidades</div>'
+    let html = _gxSubTabsBar()
+      + '<div id="stats-tab-classic">'
+      + '<div class="section-title">📈 Estatísticas & Curiosidades</div>'
       + _beforeHtml
       + _sectionDivider
       + `<div class="stats-grid">
@@ -7802,13 +7881,739 @@ async function renderEstatisticas() {
       </div>`;
     }
 
+    // Fecha a sub-aba clássica e prepara a sub-aba "Gráficos" (renderizada sob demanda).
+    html += '</div><div id="stats-tab-graficos" style="display:none"></div>';
+    // Guarda em memória todos os dados já carregados para os Gráficos reusarem
+    // (zero leituras Firestore adicionais).
+    _graficosData = { users, res, allPals, champPicks, ranking, analiseJogos, jogosComResultado, userAccStats };
+    _graficosRendered = false;
     cont.innerHTML = html;
+    if (_graficosPendingTab) { switchStatsSubTab('graficos'); _graficosPendingTab = false; }
     _momInit(); // carrossel do card "Momento dos Participantes"
     _addStatShareButtons(cont); // botão 📸 de compartilhar imagem em cada card
     _applyPendingStatsScroll(); // "Ver mais" do dashboard rola até a partida
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
+}
+
+// ════════════════════════════════════════════
+// GRÁFICOS — sub-aba avançada de Estatísticas
+// ════════════════════════════════════════════
+// Reutiliza os dados já carregados por renderEstatisticas (usuários, resultados,
+// palpites, ranking, análise por jogo) — NÃO faz novas leituras Firestore.
+// Cada gráfico tem uma função de CÁLCULO (compute*) separada da RENDERIZAÇÃO.
+let _graficosData = null;       // snapshot dos dados do bolão para os gráficos
+let _graficosRendered = false;  // evita re-render ao alternar de aba
+let _graficosPendingTab = false;// abrir já na aba Gráficos (ex.: deep-link)
+
+function _gxSubTabsBar() {
+  return `<div class="gx-subtabs">
+    <button class="gx-subtab active" data-gxtab="classic" onclick="switchStatsSubTab('classic')">📈 Estatísticas</button>
+    <button class="gx-subtab" data-gxtab="graficos" onclick="switchStatsSubTab('graficos')">📊 Gráficos</button>
+  </div>`;
+}
+
+function switchStatsSubTab(tab) {
+  const cont = document.getElementById('estatisticas-content');
+  if (!cont) return;
+  cont.querySelectorAll('.gx-subtab').forEach(b => b.classList.toggle('active', b.dataset.gxtab === tab));
+  const classic = document.getElementById('stats-tab-classic');
+  const graf = document.getElementById('stats-tab-graficos');
+  if (classic) classic.style.display = (tab === 'classic') ? '' : 'none';
+  if (graf) graf.style.display = (tab === 'graficos') ? '' : 'none';
+  if (tab === 'graficos' && !_graficosRendered) { renderGraficos(); _graficosRendered = true; }
+}
+
+// ── Helpers reutilizáveis ─────────────────────────────────────────────────────
+function _gxName(u) { return esc((u && (u.apelido || u.nome)) || '—'); }
+function _gxShortName(u, n = 12) { return esc(((u && (u.apelido || u.nome)) || '—').substring(0, n)); }
+function _gxGameTeams(gid, res) {
+  const g = ALL_GAMES.find(x => x.id === gid) || { h: '?', a: '?' };
+  return _getResolvedTeamsForGame(g, res);
+}
+function _gxEmpty(msg) { return `<div class="gx-empty">${esc(msg)}</div>`; }
+function _gxCard(title, body, desc) {
+  return `<div class="card"><div class="card-title">${title}</div>${desc ? `<div class="gx-desc">${desc}</div>` : ''}<div>${body}</div></div>`;
+}
+// Barras horizontais simples. rows: [{label(jáEscapado), value, sub, color}]
+function _gxBars(rows, fallback) {
+  if (!rows || !rows.length) return _gxEmpty(fallback || 'Sem dados suficientes.');
+  const max = Math.max(1, ...rows.map(r => r.value));
+  return rows.map(r => `<div class="gx-bar-row">
+    <div class="gx-bar-label">${r.label}</div>
+    <div class="gx-bar-track"><div class="gx-bar-fill" style="width:${(r.value / max * 100).toFixed(1)}%;background:${r.color || 'var(--gold)'}"></div></div>
+    <div class="gx-bar-val">${r.sub != null ? r.sub : r.value}</div>
+  </div>`).join('');
+}
+// Fases acumuladas que já têm resultado (base de "resumo da rodada" e "distância p/ líder").
+function _gxPhaseCheckpoints(res) {
+  const grR = r => Object.values(GRUPOS_DATA).flatMap(g => g.games.filter(gm => gm.r === r).map(gm => gm.id));
+  const phases = [
+    { label: '1ª Rod. (Grupos)', ids: grR(1) },
+    { label: '2ª Rod. (Grupos)', ids: grR(2) },
+    { label: '3ª Rod. (Grupos)', ids: grR(3) },
+    ...Object.values(ELIM_DATA).map(d => ({ label: d.label, ids: d.games.map(g => g.id) }))
+  ];
+  let cum = [];
+  const out = [];
+  phases.forEach(ph => {
+    const played = ph.ids.filter(id => _hasFullResult(res[id]));
+    cum = cum.concat(ph.ids);
+    if (played.length) out.push({ label: ph.label, phaseIds: ph.ids, playedIds: played, cumIds: [...cum] });
+  });
+  return out;
+}
+// Estatística central por jogo — base de vários gráficos (placares, difíceis, zebras).
+function _gxGameStats(gid, data) {
+  const { users, res, allPals } = data;
+  const r = res[gid];
+  if (!_hasFullResult(r)) return null;
+  const teams = _gxGameTeams(gid, res);
+  let nPals = 0, sumPts = 0, exatos = 0, erros = 0;
+  const oc = { H: 0, D: 0, A: 0 };
+  const scoreFreq = {};
+  users.forEach(u => {
+    const p = allPals[u.uid]?.[gid];
+    if (!p || p.h === undefined || p.a === undefined) return;
+    const h = parseInt(p.h), a = parseInt(p.a);
+    if (isNaN(h) || isNaN(a)) return;
+    nPals++;
+    const pts = calcPontos(p, r);
+    if (pts != null) { sumPts += pts; if (pts === CFG.pts_exato) exatos++; if (pts === 0) erros++; }
+    const o = h > a ? 'H' : h < a ? 'A' : 'D'; oc[o]++;
+    const key = `${h}×${a}`; scoreFreq[key] = (scoreFreq[key] || 0) + 1;
+  });
+  const rh = parseInt(r.h_real), ra = parseInt(r.a_real);
+  const winnerOutcome = rh > ra ? 'H' : rh < ra ? 'A' : 'D';
+  const topOutcome = ['H', 'D', 'A'].sort((a, b) => oc[b] - oc[a])[0];
+  return {
+    gid, teams, label: `${teams.h} × ${teams.a}`, rh, ra,
+    realScore: `${rh}×${ra}`, nPals, sumPts,
+    mediaPts: nPals ? sumPts / nPals : 0, exatos, erros,
+    errPct: nPals ? erros / nPals * 100 : 0, outcomeCounts: oc, scoreFreq,
+    winnerOutcome, pctOnWinner: nPals ? oc[winnerOutcome] / nPals : 0,
+    topOutcome, consensusPct: nPals ? oc[topOutcome] / nPals : 0
+  };
+}
+function _gxOutcomeLabel(o, teams) { return o === 'H' ? teams.h : o === 'A' ? teams.a : 'Empate'; }
+
+// Cores do heatmap por pontuação obtida no jogo.
+function _gxHeatColor(pts) {
+  if (pts == null) return 'rgba(255,255,255,.03)';      // sem palpite
+  if (pts === CFG.pts_exato) return '#00C851';          // placar exato → verde forte
+  if (pts === (CFG.pts_vencedor_saldo ?? 7)) return '#FFD98A'; // vencedor+saldo → dourado claro
+  if (pts === (CFG.pts_apenas_vencedor ?? 5)) return '#1E90FF';// apenas vencedor → azul
+  return 'rgba(140,160,190,.20)';                        // 0 pontos → cinza
+}
+
+// ── ORQUESTRADOR ─────────────────────────────────────────────────────────────
+function renderGraficos() {
+  const host = document.getElementById('stats-tab-graficos');
+  if (!host) return;
+  const d = _graficosData;
+  if (!d) { host.innerHTML = _gxEmpty('Dados ainda não carregados. Atualize a página.'); return; }
+  if (!d.jogosComResultado || d.jogosComResultado.length === 0) {
+    host.innerHTML = `<div class="section-title">📊 Gráficos & Análises</div>`
+      + _gxCard('📊 Gráficos', _gxEmpty('Os gráficos aparecem assim que houver jogos com resultado lançado. Volte após as primeiras partidas! ⚽'));
+    return;
+  }
+  let html = `<div class="section-title">📊 Gráficos & Análises</div>`
+    + `<div class="gx-intro">Visões avançadas do bolão, prontas para compartilhar no grupo (use o 📸 em cada card). Tudo calculado a partir dos dados já carregados.</div>`;
+  try {
+    html += renderGxResumoGeral(d);
+    html += renderGxRoundSummary(d);
+    html += renderGxAccuracyBreakdown(d);
+    html += renderGxStreaks(d);
+    html += renderGxBoldness(d);
+    html += renderGxScoreline(d);
+    html += renderGxHardestGames(d);
+    html += renderGxZebras(d);
+    html += renderGxChampion(d);
+    html += renderGxCompleteness(d);
+    html += renderGxHeatmap(d);
+    html += renderGxLeaderGap(d);
+    html += renderGxH2H(d);
+  } catch (e) {
+    html += `<div class="alert alert-error">Erro ao montar gráficos: ${esc(errMsg(e))}</div>`;
+    console.error('renderGraficos', e);
+  }
+  host.innerHTML = html;
+  _addStatShareButtons(host);
+}
+
+// ── 0. Resumo geral ───────────────────────────────────────────────────────────
+function renderGxResumoGeral(d) {
+  const { jogosComResultado, ranking } = d;
+  let totalPts = 0, totalPals = 0, acertos = 0;
+  jogosComResultado.forEach(jid => {
+    const s = _gxGameStats(jid, d);
+    if (!s) return;
+    totalPts += s.sumPts; totalPals += s.nPals; acertos += (s.nPals - s.erros);
+  });
+  const taxa = totalPals ? Math.round(acertos / totalPals * 100) : 0;
+  const lider = ranking[0];
+  return _gxCard('🧮 Resumo Geral', `<div class="stats-grid">
+    <div class="stat-card"><div class="val">${totalPts.toLocaleString('pt-BR')}</div><div class="lbl">Pontos distribuídos</div></div>
+    <div class="stat-card"><div class="val">${totalPals.toLocaleString('pt-BR')}</div><div class="lbl">Palpites avaliados</div></div>
+    <div class="stat-card"><div class="val">${taxa}%</div><div class="lbl">Taxa de acerto do bolão</div></div>
+    <div class="stat-card"><div class="val" style="font-size:1.05rem">${lider ? _gxShortName(lider, 14) : '—'}</div><div class="lbl">Líder atual</div></div>
+  </div>`);
+}
+
+// ── 6. Resumo / destaques da rodada ───────────────────────────────────────────
+function computeRoundSummary(d) {
+  const { users, res, allPals } = d;
+  const cps = _gxPhaseCheckpoints(res);
+  if (!cps.length) return null;
+  const last = cps[cps.length - 1];
+  const prevCumIds = last.cumIds.filter(id => !last.phaseIds.includes(id));
+  const hasPrev = prevCumIds.some(id => _hasFullResult(res[id]));
+  const rankPhase = _computeRankingForGameIds(users, res, allPals, last.playedIds);
+  const rankAfter = _computeRankingForGameIds(users, res, allPals, last.cumIds);
+  const posAfter = {}; rankAfter.forEach((u, i) => posAfter[u.uid] = i + 1);
+  let posBefore = null;
+  if (hasPrev) { posBefore = {}; _computeRankingForGameIds(users, res, allPals, prevCumIds).forEach((u, i) => posBefore[u.uid] = i + 1); }
+  const topScorer = rankPhase[0] || null;
+  const sniper = rankPhase.slice().sort((a, b) => b.exatos - a.exatos)[0] || null;
+  let bestUp = null, bestDown = null;
+  if (posBefore) {
+    rankAfter.forEach(u => {
+      const delta = (posBefore[u.uid] || posAfter[u.uid]) - posAfter[u.uid]; // +sobe / -desce
+      if (delta > 0 && (!bestUp || delta > bestUp.delta)) bestUp = { u, delta };
+      if (delta < 0 && (!bestDown || delta < bestDown.delta)) bestDown = { u, delta };
+    });
+  }
+  const gameStats = last.playedIds.map(id => _gxGameStats(id, d)).filter(Boolean);
+  const maisDificil = gameStats.slice().sort((a, b) => a.mediaPts - b.mediaPts)[0] || null;
+  const maisConsensual = gameStats.slice().sort((a, b) => b.consensusPct - a.consensusPct)[0] || null;
+  // zebra = menor % no vencedor real (com ao menos 1 palpiteiro acertando o lado)
+  const zebra = gameStats.filter(g => g.outcomeCounts[g.winnerOutcome] > 0)
+    .sort((a, b) => a.pctOnWinner - b.pctOnWinner)[0] || null;
+  const totalPts = rankPhase.reduce((s, u) => s + u.pontos, 0);
+  return { phase: last, topScorer, sniper, bestUp, bestDown, maisDificil, maisConsensual, zebra, totalPts };
+}
+function renderGxRoundSummary(d) {
+  const r = computeRoundSummary(d);
+  if (!r) return _gxCard('🏟️ Resumo da Rodada', _gxEmpty('Aguardando resultados da primeira rodada.'));
+  const item = (l, v, s) => `<div class="gx-round-item"><div class="ri-l">${l}</div><div class="ri-v">${v}</div>${s ? `<div class="ri-s">${s}</div>` : ''}</div>`;
+  let body = `<div class="gx-round-grid">`;
+  if (r.topScorer) body += item('👑 Maior pontuador', _gxName(r.topScorer), `${r.topScorer.pontos} pts na rodada`);
+  if (r.sniper && r.sniper.exatos > 0) body += item('🎯 Sniper da rodada', _gxName(r.sniper), `${r.sniper.exatos} placar(es) exato(s)`);
+  if (r.bestUp) body += item('📈 Maior subida', _gxName(r.bestUp.u), `subiu ${r.bestUp.delta} posição(ões)`);
+  if (r.bestDown) body += item('📉 Maior queda', _gxName(r.bestDown.u), `caiu ${Math.abs(r.bestDown.delta)} posição(ões)`);
+  if (r.maisConsensual) body += item('🤝 Jogo mais consensual', esc(r.maisConsensual.label), `${Math.round(r.maisConsensual.consensusPct * 100)}% no mesmo resultado`);
+  if (r.maisDificil) body += item('😤 Jogo mais difícil', esc(r.maisDificil.label), `média ${r.maisDificil.mediaPts.toFixed(1)} pts`);
+  if (r.zebra && r.zebra.pctOnWinner < 0.5) body += item('🦓 Zebra da rodada', esc(r.zebra.label), `só ${Math.round(r.zebra.pctOnWinner * 100)}% acertaram o vencedor`);
+  body += item('💰 Pontos distribuídos', `${r.totalPts}`, 'na rodada');
+  body += `</div>`;
+  return _gxCard(`🏟️ Resumo da Rodada · ${esc(r.phase.label)}`, body, 'Os principais destaques da fase mais recente com resultados.');
+}
+
+// ── 3. Precisão por tipo de acerto ────────────────────────────────────────────
+function computeAccuracyBreakdown(d) {
+  return d.ranking
+    .filter(u => u.jogos > 0)
+    .map(u => ({ u, exatos: u.exatos, venc_saldo: u.venc_saldo, apenas_venc: u.apenas_venc, erros: u.erros, jogos: u.jogos, pontos: u.pontos }))
+    .sort((a, b) => b.exatos - a.exatos || b.pontos - a.pontos);
+}
+function renderGxAccuracyBreakdown(d) {
+  const rows = computeAccuracyBreakdown(d);
+  if (!rows.length) return _gxCard('🎯 Precisão por Tipo de Acerto', _gxEmpty('Ainda não há palpites avaliados.'));
+  const top = rows.slice(0, 12);
+  const meUid = currentUser?.uid;
+  const seg = (n, total, color) => n > 0 ? `<div class="gx-stack-seg" style="width:${(n / total * 100).toFixed(1)}%;background:${color}" title="${n}"></div>` : '';
+  const body = top.map(r => {
+    const t = r.exatos + r.venc_saldo + r.apenas_venc + r.erros || 1;
+    return `<div class="gx-stack-row"${r.u.uid === meUid ? ' style="background:rgba(255,215,0,.06);border-radius:8px"' : ''}>
+      <div class="gx-stack-name">${_gxName(r.u)}</div>
+      <div class="gx-stack-bar">
+        ${seg(r.exatos, t, '#00C851')}${seg(r.venc_saldo, t, '#FFD98A')}${seg(r.apenas_venc, t, '#1E90FF')}${seg(r.erros, t, 'rgba(140,160,190,.30)')}
+      </div>
+      <div class="gx-stack-pts">${r.pontos}</div>
+    </div>`;
+  }).join('');
+  const legend = `<div class="gx-legend">
+    <span><i style="background:#00C851"></i>Placar exato</span>
+    <span><i style="background:#FFD98A"></i>Vencedor + saldo</span>
+    <span><i style="background:#1E90FF"></i>Apenas vencedor</span>
+    <span><i style="background:rgba(140,160,190,.30)"></i>Erro</span>
+  </div>`;
+  return _gxCard('🎯 Precisão por Tipo de Acerto', body + legend,
+    'Composição dos palpites de cada participante (Top 12 por placares exatos). Identifica “snipers” e regulares.');
+}
+
+// ── 8. Sequências de acertos e erros ──────────────────────────────────────────
+function computeStreaks(d) {
+  const { users, res, allPals, userAccStats } = d;
+  const ordered = ALL_GAMES.filter(g => _hasFullResult(res[g.id])).sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
+  return users.map(u => {
+    const acc = userAccStats[u.uid] || {};
+    let maxMiss = 0, tmp = 0;
+    for (const g of ordered) {
+      const p = allPals[u.uid]?.[g.id];
+      if (!p || p.h === undefined) { tmp = 0; continue; }
+      const pts = calcPontos(p, res[g.id]);
+      if (pts === 0) { tmp++; maxMiss = Math.max(maxMiss, tmp); } else tmp = 0;
+    }
+    return { u, maxStreak: acc.maxStreak || 0, currentStreak: acc.currentStreak || 0, maxExactStreak: acc.maxExactStreak || 0, maxMiss };
+  });
+}
+function renderGxStreaks(d) {
+  const rows = computeStreaks(d).filter(r => (r.u.ativo !== false));
+  if (!rows.length) return _gxCard('🔥 Sequências', _gxEmpty('Sem dados suficientes.'));
+  const list = (arr, color, fb) => _gxBars(arr.map(r => ({ label: _gxName(r.u), value: r.value, color })), fb);
+  const hot = rows.filter(r => r.maxStreak > 0).sort((a, b) => b.maxStreak - a.maxStreak).slice(0, 5).map(r => ({ u: r.u, value: r.maxStreak }));
+  const cold = rows.filter(r => r.maxMiss > 0).sort((a, b) => b.maxMiss - a.maxMiss).slice(0, 5).map(r => ({ u: r.u, value: r.maxMiss }));
+  const exact = rows.filter(r => r.maxExactStreak > 0).sort((a, b) => b.maxExactStreak - a.maxExactStreak).slice(0, 5).map(r => ({ u: r.u, value: r.maxExactStreak }));
+  const cur = rows.filter(r => r.currentStreak > 0).sort((a, b) => b.currentStreak - a.currentStreak).slice(0, 5).map(r => ({ u: r.u, value: r.currentStreak }));
+  const block = (t, c, fb) => `<div style="margin:12px 0 4px;font-weight:700;font-size:0.86rem;color:var(--gold)">${t}</div>${c}`;
+  const body =
+    block('🔥 Maior sequência pontuando', list(hot, '#00C851', 'Ninguém emendou pontos ainda.')) +
+    block('⚡ Sequência atual pontuando', list(cur, '#1E90FF', 'Nenhuma sequência ativa.')) +
+    block('🎯 Maior sequência de placares exatos', list(exact, '#FFD700', 'Nenhum exato consecutivo ainda.')) +
+    block('❄️ Maior sequência sem pontuar', list(cold, 'rgba(140,160,190,.5)', 'Ninguém ficou zerado em sequência.'));
+  return _gxCard('🔥 Sequências de Acertos e Erros', body, 'Top 5 de cada categoria, em jogos consecutivos com resultado.');
+}
+
+// ── 9. Ousadia x pontos ───────────────────────────────────────────────────────
+function computeBoldnessVsPoints(d) {
+  const { users, res, allPals, ranking } = d;
+  const games = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
+  // consenso (resultado mais apostado) por jogo
+  const consensus = {};
+  games.forEach(g => {
+    const s = _gxGameStats(g.id, d);
+    if (s) consensus[g.id] = s.topOutcome;
+  });
+  const ptsByUid = {}; ranking.forEach(u => ptsByUid[u.uid] = u.pontos);
+  const pts = [];
+  const rows = users.map(u => {
+    let bold = 0, n = 0;
+    games.forEach(g => {
+      const p = allPals[u.uid]?.[g.id];
+      if (!p || p.h === undefined) return;
+      const h = parseInt(p.h), a = parseInt(p.a);
+      if (isNaN(h) || isNaN(a)) return;
+      n++;
+      const o = h > a ? 'H' : h < a ? 'A' : 'D';
+      if (consensus[g.id] && o !== consensus[g.id]) bold++;
+    });
+    return { u, ousadia: n ? bold / n * 100 : 0, pontos: ptsByUid[u.uid] || 0, n };
+  }).filter(r => r.n > 0);
+  rows.forEach(r => pts.push(r.pontos));
+  const med = arr => { if (!arr.length) return 0; const s = arr.slice().sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  return { rows, medOusadia: med(rows.map(r => r.ousadia)), medPontos: med(rows.map(r => r.pontos)) };
+}
+function renderGxBoldness(d) {
+  const { rows, medOusadia, medPontos } = computeBoldnessVsPoints(d);
+  if (rows.length < 3) return _gxCard('🎲 Ousadia × Pontos', _gxEmpty('Precisamos de mais palpites avaliados para este gráfico.'));
+  const W = 460, H = 300, padL = 40, padR = 14, padT = 26, padB = 34;
+  const maxP = Math.max(...rows.map(r => r.pontos), 1);
+  const xFor = o => padL + (o / 100) * (W - padL - padR);
+  const yFor = p => H - padB - (p / maxP) * (H - padT - padB);
+  const mx = xFor(medOusadia), my = yFor(medPontos);
+  const meUid = currentUser?.uid;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:300px">`;
+  // quadrantes
+  svg += `<line x1="${mx}" y1="${padT}" x2="${mx}" y2="${H - padB}" stroke="rgba(255,255,255,.12)" stroke-dasharray="4,4"/>`;
+  svg += `<line x1="${padL}" y1="${my.toFixed(1)}" x2="${W - padR}" y2="${my.toFixed(1)}" stroke="rgba(255,255,255,.12)" stroke-dasharray="4,4"/>`;
+  svg += `<text x="${W - padR - 4}" y="${padT + 12}" font-size="10" text-anchor="end" fill="#00C851" opacity=".75" font-weight="700">Gênio</text>`;
+  svg += `<text x="${padL + 4}" y="${padT + 12}" font-size="10" fill="#1E90FF" opacity=".75" font-weight="700">Eficiente</text>`;
+  svg += `<text x="${W - padR - 4}" y="${H - padB - 6}" font-size="10" text-anchor="end" fill="#FF8C00" opacity=".75" font-weight="700">Maluco</text>`;
+  svg += `<text x="${padL + 4}" y="${H - padB - 6}" font-size="10" fill="var(--text-muted)" opacity=".85" font-weight="700">Conservador</text>`;
+  // eixos
+  svg += `<text x="${(W) / 2}" y="${H - 6}" font-size="9" text-anchor="middle" fill="var(--text-muted)">Ousadia (% contra o consenso) →</text>`;
+  svg += `<text x="12" y="${H / 2}" font-size="9" text-anchor="middle" fill="var(--text-muted)" transform="rotate(-90 12 ${H / 2})">Pontos →</text>`;
+  rows.forEach(r => {
+    const x = xFor(r.ousadia).toFixed(1), y = yFor(r.pontos).toFixed(1);
+    const me = r.u.uid === meUid;
+    svg += `<circle cx="${x}" cy="${y}" r="${me ? 5 : 3.4}" fill="${me ? '#FFD700' : 'rgba(30,144,255,.7)'}" stroke="rgba(0,0,0,.4)" stroke-width="1"><title>${_gxName(r.u)} · ${Math.round(r.ousadia)}% ousadia · ${r.pontos} pts</title></circle>`;
+    if (me) svg += `<text x="${x}" y="${(parseFloat(y) - 8).toFixed(1)}" font-size="9" text-anchor="middle" fill="#FFD700" font-weight="700">você</text>`;
+  });
+  svg += `</svg>`;
+  const legend = `<div class="gx-legend"><span><i style="background:#FFD700"></i>Você</span><span><i style="background:rgba(30,144,255,.7)"></i>Participantes</span><span>Linhas tracejadas = medianas do bolão</span></div>`;
+  return _gxCard('🎲 Ousadia × Pontos', svg + legend,
+    'Ousadia = % de palpites contra o resultado mais apostado. Quadrantes: Gênio (ousado e pontua), Maluco (ousado e erra), Eficiente (seguro e pontua), Conservador (seguro e poucos pontos).');
+}
+
+// ── 1. Distribuição de placares por jogo ──────────────────────────────────────
+function _gxScorelineEligible(d) {
+  const { res, allPals, users } = d;
+  return ALL_GAMES.filter(g => {
+    const r = res[g.id] || {};
+    if (!(_hasFullResult(r) || isPalpiteClosed(g, r))) return false;
+    return users.some(u => allPals[u.uid]?.[g.id]?.h !== undefined);
+  }).sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
+}
+function computeScorelineDistribution(gid, d) {
+  const { users, res, allPals } = d;
+  const teams = _gxGameTeams(gid, res);
+  const r = res[gid] || {};
+  const hasRes = _hasFullResult(r);
+  const oc = { H: 0, D: 0, A: 0 }; const freq = {}; let n = 0;
+  users.forEach(u => {
+    const p = allPals[u.uid]?.[gid];
+    if (!p || p.h === undefined || p.a === undefined) return;
+    const h = parseInt(p.h), a = parseInt(p.a); if (isNaN(h) || isNaN(a)) return;
+    n++; const key = `${h}×${a}`; freq[key] = (freq[key] || 0) + 1;
+    const o = h > a ? 'H' : h < a ? 'A' : 'D'; oc[o]++;
+  });
+  const scorelines = Object.entries(freq).map(([k, c]) => ({ key: k, count: c })).sort((a, b) => b.count - a.count);
+  const topOutcome = ['H', 'D', 'A'].sort((x, y) => oc[y] - oc[x])[0];
+  const rh = hasRes ? parseInt(r.h_real) : null, ra = hasRes ? parseInt(r.a_real) : null;
+  return {
+    gid, teams, hasRes, total: n, scorelines, outcomes: oc, topScore: scorelines[0] || null,
+    topOutcome, consensusPct: n ? oc[topOutcome] / n : 0,
+    realScore: hasRes ? `${rh}×${ra}` : null,
+    realOutcome: hasRes ? (rh > ra ? 'H' : rh < ra ? 'A' : 'D') : null
+  };
+}
+function renderGxScoreline(d) {
+  const eligible = _gxScorelineEligible(d);
+  if (!eligible.length) return _gxCard('📊 Distribuição de Placares', _gxEmpty('Nenhum jogo bloqueado ou com resultado tem palpites ainda.'));
+  // default: último com resultado, senão último elegível
+  const withRes = eligible.filter(g => _hasFullResult(d.res[g.id]));
+  const def = (withRes[withRes.length - 1] || eligible[eligible.length - 1]).id;
+  const opts = eligible.map(g => {
+    const t = _gxGameTeams(g.id, d.res);
+    const tag = _hasFullResult(d.res[g.id]) ? '✅' : '🔒';
+    return `<option value="${esc(g.id)}"${g.id === def ? ' selected' : ''}>${tag} ${esc(t.h)} × ${esc(t.a)}</option>`;
+  }).join('');
+  const sel = `<select class="gx-select" onchange="gxRenderScoreline(this.value)">${opts}</select>`;
+  return _gxCard('📊 Distribuição de Placares por Jogo', sel + `<div id="gx-score-out">${_gxScorelineBody(def, d)}</div>`,
+    'Os placares e resultados mais apostados em cada jogo bloqueado ou já decidido.');
+}
+function _gxScorelineBody(gid, d) {
+  const s = computeScorelineDistribution(gid, d);
+  if (!s.total) return _gxEmpty('Sem palpites para este jogo.');
+  const t = s.teams;
+  const topScoreCard = s.topScore ? `<div class="gx-hl"><div class="v">${esc(s.topScore.key)}</div><div class="l">Placar + apostado (${s.topScore.count})</div></div>` : '';
+  const vencCard = `<div class="gx-hl"><div class="v">${esc(_gxOutcomeLabel(s.topOutcome, t))}</div><div class="l">Vencedor + apostado</div></div>`;
+  const consCard = `<div class="gx-hl"><div class="v">${Math.round(s.consensusPct * 100)}%</div><div class="l">Consenso</div></div>`;
+  const realCard = s.hasRes ? `<div class="gx-hl"><div class="v" style="color:var(--green)">${esc(s.realScore)}</div><div class="l">Resultado real</div></div>` : '';
+  const scoreBars = _gxBars(s.scorelines.slice(0, 8).map(x => ({
+    label: esc(x.key) + (s.hasRes && x.key === s.realScore ? ' ✅' : ''),
+    value: x.count, color: (s.hasRes && x.key === s.realScore) ? 'var(--green)' : 'var(--gold)'
+  })));
+  const ocColor = { H: '#1E90FF', D: 'rgba(140,160,190,.6)', A: '#FF8C00' };
+  const ocBars = _gxBars(['H', 'D', 'A'].map(o => ({
+    label: esc(_gxOutcomeLabel(o, t)) + (s.hasRes && o === s.realOutcome ? ' ✅' : ''),
+    value: s.outcomes[o], sub: `${s.outcomes[o]} (${Math.round(s.outcomes[o] / s.total * 100)}%)`,
+    color: (s.hasRes && o === s.realOutcome) ? 'var(--green)' : ocColor[o]
+  })));
+  return `<div class="gx-hl-grid">${topScoreCard}${vencCard}${consCard}${realCard}</div>
+    <div style="font-weight:700;font-size:0.84rem;margin:6px 0 4px;color:var(--gold)">Placares mais apostados</div>${scoreBars}
+    <div style="font-weight:700;font-size:0.84rem;margin:14px 0 4px;color:var(--gold)">Distribuição por resultado</div>${ocBars}`;
+}
+function gxRenderScoreline(gid) {
+  const out = document.getElementById('gx-score-out');
+  if (out && _graficosData) out.innerHTML = _gxScorelineBody(gid, _graficosData);
+}
+
+// ── 10. Jogos mais difíceis ───────────────────────────────────────────────────
+function computeHardestGames(d) {
+  return d.jogosComResultado.map(id => _gxGameStats(id, d)).filter(s => s && s.nPals > 0)
+    .sort((a, b) => a.mediaPts - b.mediaPts);
+}
+function renderGxHardestGames(d) {
+  const all = computeHardestGames(d);
+  if (!all.length) return _gxCard('😤 Jogos Mais Difíceis', _gxEmpty('Sem jogos avaliados ainda.'));
+  const rows = all.slice(0, 8).map(s => `<tr>
+    <td>${esc(s.label)}</td>
+    <td style="text-align:center;font-weight:700;color:var(--green)">${esc(s.realScore)}</td>
+    <td style="text-align:center">${s.mediaPts.toFixed(1)}</td>
+    <td style="text-align:center">${Math.round(s.errPct)}%</td>
+    <td style="text-align:center">${s.exatos}</td>
+  </tr>`).join('');
+  const body = `<div style="overflow-x:auto"><table class="gx-table">
+    <thead><tr><th>Jogo</th><th style="text-align:center">Real</th><th style="text-align:center">Média</th><th style="text-align:center">% Erros</th><th style="text-align:center">Exatos</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+  return _gxCard('😤 Jogos Mais Difíceis', body, 'Menor média de pontos e maior taxa de erro — onde o bolão mais tropeçou.');
+}
+
+// ── 7. Ranking de zebras ──────────────────────────────────────────────────────
+let _gxZebraThreshold = 30;
+function computeZebras(d, thresholdPct) {
+  const { users } = d;
+  const th = (thresholdPct ?? _gxZebraThreshold) / 100;
+  const zebraGames = d.jogosComResultado.map(id => _gxGameStats(id, d))
+    .filter(s => s && s.nPals > 0 && s.outcomeCounts[s.winnerOutcome] > 0 && s.pctOnWinner < th)
+    .sort((a, b) => a.pctOnWinner - b.pctOnWinner);
+  const zebraIds = new Set(zebraGames.map(g => g.gid));
+  const userZebras = users.map(u => {
+    let count = 0;
+    zebraGames.forEach(g => {
+      const p = d.allPals[u.uid]?.[g.gid];
+      if (!p || p.h === undefined) return;
+      const h = parseInt(p.h), a = parseInt(p.a);
+      const o = h > a ? 'H' : h < a ? 'A' : 'D';
+      if (o === g.winnerOutcome) count++;
+    });
+    return { u, count };
+  }).filter(r => r.count > 0).sort((a, b) => b.count - a.count);
+  return { zebraGames, userZebras, zebraIds, th };
+}
+function renderGxZebras(d) {
+  const z = computeZebras(d);
+  const chips = [20, 30, 40].map(v => `<button class="gx-chip${v === _gxZebraThreshold ? ' active' : ''}" onclick="gxSetZebraThreshold(${v})">&lt; ${v}%</button>`).join('');
+  let body = `<div class="gx-chips">${chips}</div><div id="gx-zebra-out">${_gxZebraBody(z)}</div>`;
+  return _gxCard('🦓 Ranking de Zebras', body,
+    'Zebra = jogo onde menos participantes acertaram o vencedor real. Quem acerta esses jogos ganha destaque.');
+}
+function _gxZebraBody(z) {
+  if (!z.zebraGames.length) return _gxEmpty('Nenhuma zebra com esse critério ainda. Tente um limite maior.');
+  const rank = _gxBars(z.userZebras.slice(0, 10).map(r => ({ label: _gxName(r.u), value: r.count, color: 'var(--accent)' })), 'Ninguém acertou as zebras.');
+  const games = z.zebraGames.slice(0, 8).map(g => `<tr>
+    <td>${esc(g.label)}</td>
+    <td style="text-align:center;font-weight:700;color:var(--green)">${esc(g.realScore)}</td>
+    <td style="text-align:center">${Math.round(g.pctOnWinner * 100)}%</td>
+    <td style="text-align:center">${g.outcomeCounts[g.winnerOutcome]}</td>
+  </tr>`).join('');
+  return `<div style="font-weight:700;font-size:0.84rem;margin:4px 0;color:var(--gold)">Quem mais acertou zebras</div>${rank}
+    <div style="font-weight:700;font-size:0.84rem;margin:14px 0 6px;color:var(--gold)">Jogos zebra</div>
+    <div style="overflow-x:auto"><table class="gx-table">
+      <thead><tr><th>Jogo</th><th style="text-align:center">Real</th><th style="text-align:center">% acertou</th><th style="text-align:center">Acertaram</th></tr></thead>
+      <tbody>${games}</tbody></table></div>`;
+}
+function gxSetZebraThreshold(v) {
+  _gxZebraThreshold = v;
+  const out = document.getElementById('gx-zebra-out');
+  if (out && _graficosData) {
+    out.innerHTML = _gxZebraBody(computeZebras(_graficosData, v));
+    const card = out.closest('.card');
+    if (card) card.querySelectorAll('.gx-chip').forEach(c => c.classList.toggle('active', c.getAttribute('onclick').includes('(' + v + ')')));
+  }
+}
+
+// ── 4. Distribuição dos palpites de campeão ───────────────────────────────────
+function computeChampionPickDistribution(d) {
+  const { users, champPicks, res } = d;
+  const finalChampion = _getFinalChampion(res);
+  const isAdmin = currentUserDoc?.role === 'admin';
+  const revealed = isAdmin || CFG.campeao_locked === true || !!finalChampion;
+  const votes = {};
+  users.forEach(u => { const t = champPicks[u.uid]; if (t) votes[t] = (votes[t] || 0) + 1; });
+  const arr = Object.entries(votes).map(([team, count]) => ({ team, count })).sort((a, b) => b.count - a.count);
+  const total = arr.reduce((s, x) => s + x.count, 0);
+  return { revealed, arr, total, semEscolha: users.length - total, finalChampion };
+}
+function renderGxChampion(d) {
+  const c = computeChampionPickDistribution(d);
+  if (!c.revealed) {
+    return _gxCard('🏆 Palpites de Campeão', `<div style="text-align:center;padding:14px">
+      <div style="font-size:1.5rem;margin-bottom:8px">🔒</div>
+      <div style="font-size:0.85rem;color:var(--text-muted)">Visível após o admin bloquear as escolhas de campeão (ou quando a campeã for definida).</div></div>`);
+  }
+  if (!c.arr.length) return _gxCard('🏆 Palpites de Campeão', _gxEmpty('Nenhum palpite de campeão registrado ainda.'));
+  const bars = _gxBars(c.arr.map(x => ({
+    label: `${teamFlag(x.team)} ${esc(x.team)}${x.team === c.finalChampion ? ' ✅' : ''}`,
+    value: x.count, sub: `${x.count} (${Math.round(x.count / c.total * 100)}%)`,
+    color: x.team === c.finalChampion ? 'var(--green)' : 'var(--gold)'
+  })));
+  const champBadge = c.finalChampion ? `<div class="alert alert-success" style="margin-bottom:12px;font-size:0.82rem">🏆 Campeã definida: <b>${teamFlag(c.finalChampion)} ${esc(c.finalChampion)}</b></div>` : '';
+  const semEsc = c.semEscolha > 0 ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:10px">${c.semEscolha} participante(s) ainda sem escolha de campeão.</div>` : '';
+  return _gxCard(`🏆 Palpites de Campeão (${c.total})`, champBadge + bars + semEsc, 'Em quem o bolão está apostando para levantar a taça.');
+}
+
+// ── 5. Completude dos palpites ────────────────────────────────────────────────
+function _gxBettableGameIds(res) {
+  const ids = Object.values(GRUPOS_DATA).flatMap(g => g.games.map(x => x.id)); // grupos sempre apostáveis
+  Object.values(ELIM_DATA).forEach(d => d.games.forEach(g => {
+    const r = res[g.id];
+    if (r && r.h_team && r.a_team) ids.push(g.id); // eliminatórias: só após times definidos
+  }));
+  return ids;
+}
+function computeCompleteness(d) {
+  const { users, res, allPals } = d;
+  const expectedIds = _gxBettableGameIds(res);
+  const expected = expectedIds.length || 1;
+  return users.map(u => {
+    let filled = 0;
+    expectedIds.forEach(id => { const p = allPals[u.uid]?.[id]; if (p && p.h !== undefined && p.a !== undefined) filled++; });
+    return { u, filled, expected, pct: Math.round(filled / expected * 100) };
+  }).sort((a, b) => a.pct - b.pct || a.filled - b.filled);
+}
+function renderGxCompleteness(d) {
+  const rows = computeCompleteness(d);
+  if (!rows.length) return _gxCard('✅ Completude dos Palpites', _gxEmpty('Sem participantes.'));
+  const completos = rows.filter(r => r.pct >= 100).length;
+  const meUid = currentUser?.uid;
+  const bars = rows.slice(0, 25).map(r => `<div class="gx-bar-row"${r.u.uid === meUid ? ' style="background:rgba(255,215,0,.06);border-radius:8px"' : ''}>
+    <div class="gx-bar-label">${_gxName(r.u)}</div>
+    <div class="gx-bar-track"><div class="gx-bar-fill" style="width:${r.pct}%;background:${r.pct >= 100 ? 'var(--green)' : r.pct >= 70 ? 'var(--gold)' : 'var(--orange)'}"></div></div>
+    <div class="gx-bar-val">${r.filled}/${r.expected}</div>
+  </div>`).join('');
+  const head = `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">${completos} de ${rows.length} participante(s) com 100% preenchido. Os pendentes aparecem no topo.</div>`;
+  return _gxCard('✅ Completude dos Palpites', head + bars, `Quantos dos ${rows[0].expected} palpites esperados cada um já preencheu.`);
+}
+
+// ── 2. Heatmap de pontos por participante × jogo ──────────────────────────────
+let _gxHeatFilter = 'recent';
+function computeScoreHeatmapData(d, filter) {
+  const { res, allPals, ranking } = d;
+  const grpIds = new Set(Object.values(GRUPOS_DATA).flatMap(g => g.games.map(x => x.id)));
+  let games = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
+  if (filter === 'grupos') games = games.filter(g => grpIds.has(g.id));
+  else if (filter === 'mata') games = games.filter(g => !grpIds.has(g.id));
+  games = games.sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
+  if (filter === 'recent') games = games.slice(-10);
+  const rows = ranking.map(u => ({
+    user: u,
+    cells: games.map(g => {
+      const p = allPals[u.uid]?.[g.id];
+      if (!p || p.h === undefined) return null;
+      return calcPontos(p, res[g.id]);
+    })
+  }));
+  return { games, rows };
+}
+function renderGxHeatmap(d) {
+  const chips = [['recent', 'Últimos 10'], ['grupos', 'Fase de grupos'], ['mata', 'Mata-mata'], ['todos', 'Todos']]
+    .map(([v, l]) => `<button class="gx-chip${v === _gxHeatFilter ? ' active' : ''}" onclick="gxSetHeatFilter('${v}')">${l}</button>`).join('');
+  return _gxCard('🔥 Heatmap de Pontos', `<div class="gx-chips">${chips}</div><div id="gx-heat-out">${_gxHeatBody(d, _gxHeatFilter)}</div>`,
+    'Cada célula é a pontuação de um participante em um jogo. Linhas ordenadas pelo ranking atual.');
+}
+function _gxHeatBody(d, filter) {
+  const { games, rows } = computeScoreHeatmapData(d, filter);
+  if (!games.length) return _gxEmpty('Sem jogos nesta faixa ainda.');
+  const header = `<tr><td class="hn"></td>${games.map(g => `<td class="hh" title="${esc(_gxGameTeams(g.id, d.res).h)} × ${esc(_gxGameTeams(g.id, d.res).a)}">${esc(g.id)}</td>`).join('')}</tr>`;
+  const meUid = currentUser?.uid;
+  const body = rows.map((r, i) => `<tr>
+    <td class="hn"${r.user.uid === meUid ? ' style="color:var(--gold);font-weight:700"' : ''}><span class="gx-heat-rank">${i + 1}º</span>${_gxShortName(r.user, 14)}</td>
+    ${r.cells.map(pts => `<td><div class="hc" style="background:${_gxHeatColor(pts)}" title="${pts == null ? 'sem palpite' : pts + ' pts'}"></div></td>`).join('')}
+  </tr>`).join('');
+  const legend = `<div class="gx-legend">
+    <span><i style="background:#00C851"></i>Exato (${CFG.pts_exato})</span>
+    <span><i style="background:#FFD98A"></i>Venc.+saldo (${CFG.pts_vencedor_saldo ?? 7})</span>
+    <span><i style="background:#1E90FF"></i>Só vencedor (${CFG.pts_apenas_vencedor ?? 5})</span>
+    <span><i style="background:rgba(140,160,190,.20)"></i>0 pts</span>
+    <span><i style="background:rgba(255,255,255,.03)"></i>Sem palpite</span>
+  </div>`;
+  return `<div class="gx-heat-scroll"><table class="gx-heat">${header}${body}</table></div>${legend}`;
+}
+function gxSetHeatFilter(f) {
+  _gxHeatFilter = f;
+  const out = document.getElementById('gx-heat-out');
+  if (out && _graficosData) {
+    out.innerHTML = _gxHeatBody(_graficosData, f);
+    const card = out.closest('.card');
+    if (card) card.querySelectorAll('.gx-chip').forEach(c => c.classList.toggle('active', c.getAttribute('onclick').includes(`'${f}'`)));
+  }
+}
+
+// ── 11. Histórico da distância para o líder ───────────────────────────────────
+function computeLeaderGapHistory(d) {
+  const { users, res, allPals, ranking } = d;
+  const cps = _gxPhaseCheckpoints(res);
+  if (cps.length < 2) return null;
+  const series = cps.map(cp => {
+    const rk = _computeRankingForGameIds(users, res, allPals, cp.cumIds);
+    const leaderPts = rk.length ? rk[0].pontos : 0;
+    const gap = {}; rk.forEach(u => gap[u.uid] = leaderPts - u.pontos);
+    return { label: cp.label, gap };
+  });
+  const meUid = currentUser?.uid;
+  const uids = [...new Set([...ranking.slice(0, 5).map(u => u.uid), ...(meUid ? [meUid] : [])])];
+  return { labels: cps.map(c => c.label), series, uids };
+}
+function renderGxLeaderGap(d) {
+  const data = computeLeaderGapHistory(d);
+  if (!data) return _gxCard('📉 Distância para o Líder', _gxEmpty('São necessárias ao menos 2 fases com resultado.'));
+  const { labels, series, uids } = data;
+  const nameByUid = {}; d.users.forEach(u => nameByUid[u.uid] = u);
+  const maxGap = Math.max(1, ...series.flatMap(s => uids.map(u => s.gap[u] || 0)));
+  const W = 560, H = 260, padL = 36, padR = 120, padT = 16, padB = 30;
+  const xFor = i => padL + (labels.length < 2 ? 0 : i / (labels.length - 1) * (W - padL - padR));
+  const yFor = g => padT + (g / maxGap) * (H - padT - padB);
+  const palette = ['#FFD700', '#00C4FF', '#FF6B9D', '#00E5A0', '#FF9F45', '#A78BFA'];
+  const meUid = currentUser?.uid;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:320px">`;
+  svg += `<line x1="${padL}" y1="${yFor(0).toFixed(1)}" x2="${W - padR}" y2="${yFor(0).toFixed(1)}" stroke="rgba(255,215,0,.4)" stroke-dasharray="3,3"/><text x="${padL - 4}" y="${(yFor(0) + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="var(--gold)">líder</text>`;
+  labels.forEach((l, i) => { const x = xFor(i); svg += `<text x="${x.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${esc(l.substring(0, 8))}</text>`; });
+  uids.forEach((uid, idx) => {
+    const me = uid === meUid;
+    const color = me ? '#FFD700' : palette[idx % palette.length];
+    const pts = series.map((s, i) => ({ x: xFor(i), y: yFor(s.gap[uid] != null ? s.gap[uid] : maxGap) }));
+    let path = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) path += ` L ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)}`;
+    svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="${me ? 3 : 1.8}" opacity="${me ? 1 : .7}"/>`;
+    pts.forEach(p => svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${me ? 3.4 : 2.4}" fill="${color}"/>`);
+    const last = pts[pts.length - 1];
+    const u = nameByUid[uid];
+    svg += `<text x="${W - padR + 6}" y="${(last.y + 3).toFixed(1)}" font-size="${me ? 10 : 9}" fill="${color}" font-weight="${me ? 700 : 400}">${_gxShortName(u, 12)}${me ? ' (você)' : ''}</text>`;
+  });
+  svg += `</svg>`;
+  return _gxCard('📉 Distância para o Líder', svg + `<div class="gx-desc" style="margin:8px 0 0">Quanto menor, mais perto do topo. Top 5 + você ao longo das fases.</div>`,
+    'Evolução da diferença de pontos para o líder a cada fase concluída.');
+}
+
+// ── 12. Comparativo direto entre dois participantes ───────────────────────────
+function computeH2HCompare(uidA, uidB, d) {
+  const { res, allPals } = d;
+  const games = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
+  const acc = { totalA: 0, totalB: 0, winA: 0, winB: 0, ties: 0, exatosA: 0, exatosB: 0, n: 0 };
+  games.forEach(g => {
+    const pa = allPals[uidA]?.[g.id], pb = allPals[uidB]?.[g.id];
+    if (!pa || pa.h === undefined || !pb || pb.h === undefined) return;
+    const ptsA = calcPontos(pa, res[g.id]), ptsB = calcPontos(pb, res[g.id]);
+    if (ptsA == null || ptsB == null) return;
+    acc.n++; acc.totalA += ptsA; acc.totalB += ptsB;
+    if (ptsA === CFG.pts_exato) acc.exatosA++;
+    if (ptsB === CFG.pts_exato) acc.exatosB++;
+    if (ptsA > ptsB) acc.winA++; else if (ptsB > ptsA) acc.winB++; else acc.ties++;
+  });
+  return acc;
+}
+function _gxUserOptions(selUid, d, exclude) {
+  return d.ranking.map(u => u.uid)
+    .concat(d.users.map(u => u.uid).filter(uid => !d.ranking.some(r => r.uid === uid)))
+    .filter((uid, i, arr) => arr.indexOf(uid) === i && uid !== exclude)
+    .map(uid => { const u = d.users.find(x => x.uid === uid); if (!u) return ''; return `<option value="${esc(uid)}"${uid === selUid ? ' selected' : ''}>${_gxName(u)}</option>`; })
+    .join('');
+}
+function renderGxH2H(d) {
+  if (d.users.length < 2) return _gxCard('⚔️ Comparativo Direto', _gxEmpty('São necessários ao menos 2 participantes.'));
+  const meUid = currentUser?.uid;
+  const defA = (meUid && d.users.some(u => u.uid === meUid)) ? meUid : (d.ranking[0]?.uid || d.users[0].uid);
+  const defB = (d.ranking.find(u => u.uid !== defA) || d.users.find(u => u.uid !== defA)).uid;
+  const sels = `<div class="gx-h2h-sels">
+    <select class="gx-select" id="gx-h2h-a" onchange="gxRenderH2H()">${_gxUserOptions(defA, d)}</select>
+    <div class="gx-h2h-vs">×</div>
+    <select class="gx-select" id="gx-h2h-b" onchange="gxRenderH2H()">${_gxUserOptions(defB, d)}</select>
+  </div>`;
+  return _gxCard('⚔️ Comparativo Direto', sels + `<div id="gx-h2h-out">${_gxH2HBody(defA, defB, d)}</div>`,
+    'Escolha dois participantes e compare desempenho jogo a jogo.');
+}
+function _gxH2HBody(uidA, uidB, d) {
+  if (uidA === uidB) return _gxEmpty('Escolha dois participantes diferentes.');
+  const uA = d.users.find(u => u.uid === uidA), uB = d.users.find(u => u.uid === uidB);
+  if (!uA || !uB) return _gxEmpty('Participante não encontrado.');
+  const r = computeH2HCompare(uidA, uidB, d);
+  if (!r.n) return _gxEmpty('Estes dois ainda não têm jogos avaliados em comum.');
+  const tot = r.totalA + r.totalB || 1;
+  const bar = `<div class="gx-h2h-bar">
+    <div style="width:${(r.totalA / tot * 100).toFixed(1)}%;background:#1E90FF;justify-content:flex-start">${r.totalA}</div>
+    <div style="width:${(r.totalB / tot * 100).toFixed(1)}%;background:#FF8C00;justify-content:flex-end">${r.totalB}</div>
+  </div>
+  <div style="display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;margin-bottom:10px">
+    <span style="color:#1E90FF">${_gxName(uA)}</span><span style="color:#FF8C00">${_gxName(uB)}</span></div>`;
+  const win = r.winA > r.winB ? _gxName(uA) : r.winB > r.winA ? _gxName(uB) : 'Empate técnico';
+  const summary = `<div style="font-size:0.84rem;color:var(--text-muted);margin-bottom:12px">Em <b>${r.n}</b> jogos avaliados em comum, ${win === 'Empate técnico' ? 'estão empatados em jogos vencidos' : `<b style="color:var(--gold)">${win}</b> levou a melhor em mais jogos`}.</div>`;
+  const tbl = `<table class="gx-table">
+    <thead><tr><th>Métrica</th><th style="text-align:center">${_gxShortName(uA, 10)}</th><th style="text-align:center">${_gxShortName(uB, 10)}</th></tr></thead>
+    <tbody>
+      <tr><td>Pontos (jogos comuns)</td><td style="text-align:center;font-weight:700">${r.totalA}</td><td style="text-align:center;font-weight:700">${r.totalB}</td></tr>
+      <tr><td>Jogos em que fez mais pontos</td><td style="text-align:center">${r.winA}</td><td style="text-align:center">${r.winB}</td></tr>
+      <tr><td>Placares exatos</td><td style="text-align:center">${r.exatosA}</td><td style="text-align:center">${r.exatosB}</td></tr>
+      <tr><td>Empates no confronto</td><td style="text-align:center" colspan="2">${r.ties}</td></tr>
+    </tbody></table>`;
+  return bar + summary + tbl;
+}
+function gxRenderH2H() {
+  const a = document.getElementById('gx-h2h-a'), b = document.getElementById('gx-h2h-b'), out = document.getElementById('gx-h2h-out');
+  if (a && b && out && _graficosData) out.innerHTML = _gxH2HBody(a.value, b.value, _graficosData);
 }
 
 // ════════════════════════════════════════════
