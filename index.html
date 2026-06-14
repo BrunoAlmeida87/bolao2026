@@ -4292,8 +4292,10 @@ async function savePalpite(gameId) {
     showPalpiteClosedReason(gameId);
     return;
   }
-  if (hInp) hInp.classList.add('saving');
-  if (aInp) aInp.classList.add('saving');
+  // Limpa estados anteriores (inclui save-err de uma tentativa offline) antes de
+  // marcar "salvando" — senão o .save-err persistiria por cima do .saved-ok.
+  if (hInp) { hInp.classList.remove('save-err','saved-ok'); hInp.classList.add('saving'); }
+  if (aInp) { aInp.classList.remove('save-err','saved-ok'); aInp.classList.add('saving'); }
   try {
     await db_.collection('palpites').doc(uid).set({
       uid,
