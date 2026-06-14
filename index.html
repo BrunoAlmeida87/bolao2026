@@ -988,9 +988,8 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 }
 .ngc-mini-btn:hover{color:var(--gold);border-color:var(--gold)}
 .next-games-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
-/* PC: 4 colunas no desktop normal, 5 no desktop largo */
+/* PC: sempre 4 colunas no desktop */
 @media (min-width:768px){.next-games-grid{grid-template-columns:repeat(4,1fr)}}
-@media (min-width:1200px){.next-games-grid{grid-template-columns:repeat(5,1fr)}}
 .next-games-grid .next-game-card{margin-bottom:0}
 .next-game-card.locked-soon{background:linear-gradient(135deg,rgba(255,68,68,.14),rgba(200,0,0,.07));border-color:rgba(255,68,68,.55)}
 .next-game-card.locked-soon .ngc-label{color:rgba(255,90,90,.95)}
@@ -3336,7 +3335,7 @@ function _animFmt(type) {
 function _animSpan(key, value, fmt) {
   return `<span class="js-animnum" data-key="${key}" data-to="${value}" data-fmt="${fmt}">${_animFmt(fmt)(value)}</span>`;
 }
-function _animateNumber(el, from, to, fmt, dur = 850) {
+function _animateNumber(el, from, to, fmt, dur = 1700) {
   const t0 = performance.now();
   const ease = p => 1 - Math.pow(1 - p, 3); // easeOutCubic
   (function tick(now) {
