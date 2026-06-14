@@ -1791,6 +1791,27 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   </div>
 </div>
 
+<!-- MODAL NOVIDADE: Gráficos de Estatísticas (mostrado 1x por navegador) -->
+<div id="modal-graficos-intro" class="modal-overlay hidden" onclick="if(event.target===this)closeGraficosIntro()">
+  <div class="modal-box" style="max-width:440px">
+    <button class="modal-close" onclick="closeGraficosIntro()">✕</button>
+    <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">🆕 Novidade</div>
+    <div style="font-size:2rem;margin-bottom:4px">📊</div>
+    <h3 style="margin:0 0 6px;color:var(--gold)">Gráficos de Estatísticas</h3>
+    <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.55;margin:0 0 14px">A página <b>📈 Estatísticas</b> agora tem uma sub-aba <b>📊 Gráficos</b> com análises visuais do bolão — prontas para compartilhar no grupo! 🎉</p>
+    <div style="text-align:left;display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>📊</span><span style="font-size:0.85rem;line-height:1.45"><b>Distribuição de placares</b>, <b>heatmap de pontos</b> e <b>jogos mais difíceis</b>.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>🎯</span><span style="font-size:0.85rem;line-height:1.45">Precisão por tipo de acerto, <b>sequências</b>, <b>zebras</b> e ousadia × pontos.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>⚔️</span><span style="font-size:0.85rem;line-height:1.45">Compare <b>dois participantes</b> e veja a <b>distância para o líder</b>.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>📸</span><span style="font-size:0.85rem;line-height:1.45">Toque no <b>📸</b> de cada card para compartilhar a imagem no WhatsApp.</span></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <button class="btn btn-primary" onclick="openGraficosFromIntro()">📊 Ver Gráficos</button>
+      <button class="btn btn-secondary" onclick="closeGraficosIntro()">Entendi</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PALPITES PENDENTES (próximos jogos com timer ativo) -->
 <div id="modal-pending-pal" class="modal-overlay hidden" onclick="if(event.target===this)closePendingPalModal()">
   <div class="modal-box" style="max-width:440px">
@@ -3745,7 +3766,8 @@ async function renderDashboard() {
     if (allPals) _renderEvolutionChart(ranking, allPals, res, champPicks, document.getElementById('evo-chart-container'));
     _showNewResultsModal(res, _dashMyPals);
     setTimeout(_maybeShowPendingPalpitesAlert, 450); // lembrete de palpites pendentes (a cada entrada)
-    setTimeout(_maybeShowSimuladorIntro, 900);       // pop-up de novidade (1x por navegador)
+    setTimeout(_maybeShowSimuladorIntro, 900);       // pop-up de novidade Simulador (1x por navegador)
+    setTimeout(_maybeShowGraficosIntro, 1300);       // pop-up de novidade Gráficos (1x por navegador)
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
   }
@@ -12021,6 +12043,31 @@ function closeSimuladorIntro() {
 function openSimuladorFromIntro() {
   closeSimuladorIntro();
   navigateTo('simulador');
+}
+
+// Pop-up de novidade dos Gráficos: mostrado uma única vez por navegador (flag em
+// localStorage). Mesmo padrão do Simulador: não empilha sobre outro modal aberto,
+// reagendando para a próxima visita ao dashboard até aparecer pelo menos uma vez.
+function _maybeShowGraficosIntro() {
+  try {
+    const key = 'bolao_seen_graficos_v1';
+    if (localStorage.getItem(key)) return;
+    if (document.querySelector('.modal-overlay:not(.hidden)')) return; // outro modal aberto
+    const el = document.getElementById('modal-graficos-intro');
+    if (!el) return;
+    localStorage.setItem(key, '1');
+    el.classList.remove('hidden');
+  } catch(_) {}
+}
+function closeGraficosIntro() {
+  const el = document.getElementById('modal-graficos-intro');
+  if (el) el.classList.add('hidden');
+}
+function openGraficosFromIntro() {
+  closeGraficosIntro();
+  // Abre direto na sub-aba Gráficos assim que a página renderizar.
+  _graficosPendingTab = true;
+  navigateTo('estatisticas');
 }
 
 // Alerta de palpites pendentes: aparece sempre que o usuário ENTRA na página
