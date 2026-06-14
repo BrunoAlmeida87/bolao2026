@@ -11961,7 +11961,9 @@ function _corridaVideoGeo(slots, pin, maxH = 1920) {
   const lanes = slots + (pin ? 1 : 0);
   let rowH = Math.min(46, Math.max(16, Math.round(1710 / lanes)));
   let H = Math.max(1280, padTop + lanes * rowH + padBottom);
-  if (H > maxH) { H = maxH; rowH = Math.max(10, Math.floor((H - padTop - padBottom) / lanes)); }
+  // Ao bater no teto de altura, rowH é recalculado para CABER todas as linhas
+  // (piso 1, nunca um mínimo que estoure a banda e corte os últimos colocados).
+  if (H > maxH) { H = maxH; rowH = Math.max(1, Math.floor((H - padTop - padBottom) / lanes)); }
   H = Math.round(H / 2) * 2; // dimensão par exigida pelo H.264
   const nameW = 250;
   return { W, H, padTop, padBottom, rowH, slots, pin,
