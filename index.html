@@ -4236,6 +4236,18 @@ async function savePalpite(gameId) {
   const hInp = document.getElementById(`ph_${gameId}`);
   const aInp = document.getElementById(`pa_${gameId}`);
 
+  // SEM INTERNET: não há persistência offline do Firestore, então a escrita
+  // ficaria pendente (campo travado em "salvando") e o palpite NÃO seria salvo
+  // de forma confiável — se o app fechar antes de reconectar, perde-se. Avisa de
+  // forma explícita em vez de deixar o usuário achando que salvou.
+  if (!navigator.onLine) {
+    ['saving','saved-ok'].forEach(c => { if (hInp) hInp.classList.remove(c); if (aInp) aInp.classList.remove(c); });
+    if (hInp) hInp.classList.add('save-err');
+    if (aInp) aInp.classList.add('save-err');
+    showToast('📵 Sem internet — seu palpite NÃO foi salvo. Conecte-se à internet e digite novamente para salvar.', 'error', 5500);
+    return;
+  }
+
   // Relê o resultado direto do Firestore (1 leitura) para não salvar com estado
   // velho do cache: se o admin travou/lançou resultado enquanto a tela estava
   // aberta, o bloqueio é detectado aqui. Em falha de rede, cai no cache local.
@@ -9752,8 +9764,14 @@ async function histBuscar() {
       if (out) out.innerHTML = `<div class="alert alert-info">Nenhum registro de histórico para <b>${esc(uname)}</b>. (Só há registros a partir da v1.9.0.)</div>`;
       return;
     }
-    const rows = snap.docs.map(d => {
-      const x = d.data();
+    const docs = snap.docs.map(d => d.data());
+    // Tag por tipo: 1º preenchimento (edit:false) × alteração (edit:true) × apagar.
+    const tagFor = x => x.action === 'delete'
+      ? `<span style="font-weight:700;color:var(--red)">🗑️ apagou</span>`
+      : (x.edit
+        ? `<span style="font-weight:700;color:var(--orange)">✏️ alteração</span>`
+        : `<span style="font-weight:700;color:var(--green)">🆕 1º palpite</span>`);
+    const rows = docs.map(x => {
       const when = x.at?.toDate ? x.at.toDate().toLocaleString('pt-BR') : '—';
       const gdef = ALL_GAMES.find(g=>g.id===x.gameId);
       const jogo = gdef ? `${esc(gdef.h)} × ${esc(gdef.a)}` : '';
@@ -9763,17 +9781,71 @@ async function histBuscar() {
       const quem = x.adminEdit ? `<span style="color:var(--orange)">admin (${esc(x.byEmail||x.by||'')})</span>` : esc(x.byEmail||x.by||'próprio usuário');
       return `<tr>
         <td style="white-space:nowrap">${esc(when)}</td>
+        <td>${tagFor(x)}</td>
         <td><b>${esc(x.gameId||'')}</b> <span style="color:var(--text-muted)">${jogo}</span></td>
         <td>${placar}</td>
         <td style="font-size:0.78rem">${quem}</td>
       </tr>`;
     }).join('');
+
+    // Resumo "1º palpite por jogo" — o que importa para "ela diz que colocou e
+    // não salvou". Reusa a MESMA busca (sem leitura extra). Para cada jogo: quando
+    // foi o PRIMEIRO preenchimento e a situação atual pelo histórico.
+    const asc = docs.slice().reverse(); // snap vem em ordem desc → asc por data
+    const byGame = new Map();
+    asc.forEach(x => {
+      if (!x.gameId) return;
+      let e = byGame.get(x.gameId);
+      if (!e) { e = { firstSet: null, firstIsCreation: false, edits: 0, deletes: 0, lastAction: null, lastAt: null }; byGame.set(x.gameId, e); }
+      if (x.action === 'set') {
+        if (!e.firstSet) { e.firstSet = x; e.firstIsCreation = !x.edit; }
+        if (x.edit) e.edits++;
+      } else if (x.action === 'delete') e.deletes++;
+      e.lastAction = x.action; e.lastAt = x.at;
+    });
+    const gameSort = id => { const i = ALL_GAMES.findIndex(g=>g.id===id); return i<0?9999:i; };
+    const sumRows = [...byGame.entries()].sort((a,b)=>gameSort(a[0])-gameSort(b[0])).map(([gid,e]) => {
+      const gdef = ALL_GAMES.find(g=>g.id===gid);
+      const jogo = gdef ? `${esc(gdef.h)} × ${esc(gdef.a)}` : '';
+      const fWhen = e.firstSet?.at?.toDate ? e.firstSet.at.toDate().toLocaleString('pt-BR') : '—';
+      const fVal = e.firstSet ? `${e.firstSet.h ?? '?'} × ${e.firstSet.a ?? '?'}` : '—';
+      const firstCell = e.firstSet
+        ? `<b>${esc(fVal)}</b> <span style="color:var(--text-muted);font-size:0.78rem">· ${esc(fWhen)}</span>${e.firstIsCreation ? '' : ' <span style="color:var(--orange);font-size:0.72rem">(1º registro conhecido — pode ter sido criado antes do histórico)</span>'}`
+        : '<span style="color:var(--text-muted)">—</span>';
+      const dWhen = e.lastAt?.toDate ? e.lastAt.toDate().toLocaleString('pt-BR') : '';
+      const status = e.lastAction === 'delete'
+        ? `<span style="color:var(--red);font-weight:700">❌ apagado</span> <span style="color:var(--text-muted);font-size:0.76rem">em ${esc(dWhen)}</span>`
+        : `<span style="color:var(--green);font-weight:700">✅ consta salvo</span>`;
+      const extra = (e.edits || e.deletes) ? `<span style="color:var(--text-muted);font-size:0.74rem">${e.edits} alteração(ões)${e.deletes?` · ${e.deletes} exclusão(ões)`:''}</span>` : '';
+      return `<tr>
+        <td><b>${esc(gid)}</b> <span style="color:var(--text-muted)">${jogo}</span></td>
+        <td>${firstCell}</td>
+        <td>${status} ${extra}</td>
+      </tr>`;
+    }).join('');
+    const sumTable = sumRows ? `
+      <div style="font-weight:700;font-size:0.9rem;margin:4px 0 6px">🆕 1º palpite por jogo <span style="font-weight:400;color:var(--text-muted);font-size:0.8rem">(quando preencheu pela primeira vez e a situação atual pelo histórico)</span></div>
+      <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-bottom:16px">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+          <thead><tr style="background:rgba(255,255,255,.05);text-align:left">
+            <th style="padding:8px">Jogo</th><th style="padding:8px">1º palpite (criação)</th><th style="padding:8px">Situação atual</th>
+          </tr></thead>
+          <tbody>${sumRows}</tbody>
+        </table>
+      </div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
+        Se um jogo <b>não aparece aqui</b> e a pessoa diz que preencheu, é sinal de que o palpite <b>nunca chegou ao servidor</b>
+        (não salvou). Para casos sem histórico (palpites antigos, pré-v1.9), confirme pela <b>🕵️ Verificação de Integridade</b> abaixo,
+        que usa o carimbo real do servidor.
+      </div>` : '';
+
     if (status) status.textContent = `${snap.size} registro(s).`;
-    if (out) out.innerHTML = `
+    if (out) out.innerHTML = sumTable + `
+      <div style="font-weight:700;font-size:0.9rem;margin:2px 0 6px">📜 Linha do tempo completa</div>
       <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)">
         <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
           <thead><tr style="background:rgba(255,255,255,.05);text-align:left">
-            <th style="padding:8px">Quando</th><th style="padding:8px">Jogo</th><th style="padding:8px">Alteração</th><th style="padding:8px">Por</th>
+            <th style="padding:8px">Quando</th><th style="padding:8px">Tipo</th><th style="padding:8px">Jogo</th><th style="padding:8px">Placar</th><th style="padding:8px">Por</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>

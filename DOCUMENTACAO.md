@@ -564,6 +564,8 @@ Campos editáveis:
 - Precache: `index.html`, `manifest.json`, ícones
 - Detecta automaticamente se está em `/bolao2026/` ou `/`
 - Suporte offline: carrega versão cacheada se sem internet
+- **Salvar palpite offline:** a persistência offline do Firestore **não** está ligada, então uma aposta feita sem internet **não é salva**. O `savePalpite` detecta `!navigator.onLine` e avisa explicitamente (campo fica vermelho + toast "📵 Sem internet — seu palpite NÃO foi salvo"), evitando o "salvando" travado e a falsa impressão de que salvou.
+- **Auditoria do 1º palpite:** Admin → 📜 Histórico mostra, por usuário, um resumo **"1º palpite por jogo"** (quando preencheu pela primeira vez — `edit:false` — e a situação atual) além da linha do tempo completa, marcando cada registro como 🆕 1º palpite / ✏️ alteração / 🗑️ apagou. Para palpites sem histórico (pré-v1.9), a 🕵️ Verificação de Integridade usa o carimbo real do servidor.
 - Versão sincronizada com app: `v1.12.2`
 
 ### Manifest (`manifest.json`)
