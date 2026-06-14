@@ -11548,6 +11548,7 @@ async function renderCorrida() {
     </div>
     <div class="corrida-modes" style="margin:2px 0 4px">
       <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Velocidade:</span>
+      <button class="date-filter-btn corrida-speed-btn" data-spd="0.15" onclick="_corridaSetSpeed(0.15)">0,15×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="0.25" onclick="_corridaSetSpeed(0.25)">0,25×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="0.5" onclick="_corridaSetSpeed(0.5)">0,5×</button>
       <button class="date-filter-btn corrida-speed-btn active" data-spd="1" onclick="_corridaSetSpeed(1)">1×</button>
@@ -11955,12 +11956,12 @@ function _corridaSyncButtons() {
 // Geometria do vídeo vertical (720×altura), partilhada pelos dois codificadores.
 // A altura cresce com o nº de linhas (até 1920) para caber TODOS os nomes de
 // forma legível quando o escopo é "todos"; mantém 1280 para poucas linhas.
-function _corridaVideoGeo(slots, pin) {
+function _corridaVideoGeo(slots, pin, maxH = 1920) {
   const W = 720, padTop = 150, padBottom = 60;
   const lanes = slots + (pin ? 1 : 0);
   let rowH = Math.min(46, Math.max(16, Math.round(1710 / lanes)));
   let H = Math.max(1280, padTop + lanes * rowH + padBottom);
-  if (H > 1920) { H = 1920; rowH = Math.floor((H - padTop - padBottom) / lanes); }
+  if (H > maxH) { H = maxH; rowH = Math.max(10, Math.floor((H - padTop - padBottom) / lanes)); }
   H = Math.round(H / 2) * 2; // dimensão par exigida pelo H.264
   const nameW = 250;
   return { W, H, padTop, padBottom, rowH, slots, pin,
@@ -11971,9 +11972,9 @@ function _corridaVideoGeo(slots, pin) {
 // Codifica MP4/H.264 no cliente via WebCodecs + Mp4Muxer (funciona no Chrome
 // Android, desktop e iOS novo) → vídeo que o WhatsApp reproduz. Retorna Blob ou
 // null se não houver suporte (aí cai no MediaRecorder/WebM).
-async function _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt, onProg) {
+async function _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt, onProg, bitrate = 3500000) {
   if (typeof window.VideoEncoder !== 'function' || typeof window.VideoFrame !== 'function' || typeof Mp4Muxer === 'undefined') return null;
-  const W = geo.W, H = geo.H, bitrate = 3500000;
+  const W = geo.W, H = geo.H;
   let codec = null;
   for (const c of ['avc1.42E01F', 'avc1.42001F', 'avc1.4D401F', 'avc1.640028']) {
     try { const s = await VideoEncoder.isConfigSupported({ codec: c, width: W, height: H, bitrate, framerate: fps }); if (s && s.supported) { codec = c; break; } } catch (_) {}
@@ -12015,13 +12016,20 @@ async function _corridaDownloadVideo() {
   const btn = document.getElementById('corrida-video');
   if (btn) { btn.disabled = true; btn.textContent = '🎬 Gerando…'; }
   try {
-    const fps = 60; // mais frames por segundo → animação bem mais suave (vale p/ todas as velocidades)
+    // No celular a geração pesada (60fps, vídeo alto) derrubava o app por memória.
+    // Detecta mobile e usa config bem mais leve: 30fps, altura menor, bitrate e
+    // teto de quadros menores. No desktop mantém o 60fps suave.
+    const isMobile = (navigator.userAgentData && navigator.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || '');
+    const fps = isMobile ? 30 : 60;
+    const bitrate = isMobile ? 2200000 : 3500000;
+    const maxH = isMobile ? 1280 : 1920;
+    const maxFrames = isMobile ? 1500 : 3600;
     // Escopo: "todos" usa o conjunto completo (sem destaque fixo); "como na tela"
     // reproduz o modo atual (Top N com você fixo, ou todos do conjunto exibido).
     let data, slots, pin;
     if (_corridaVidScope === 'all') { data = st.full; slots = data.n; pin = false; }
     else { data = st.data; pin = st.view === 'top'; slots = (st.view === 'top') ? Math.min(st.topN, data.n) : data.n; }
-    const geo = _corridaVideoGeo(slots, pin);
+    const geo = _corridaVideoGeo(slots, pin, maxH);
     // Realce (brilho/ênfase) — TODOS mantêm a cor. "me" → só você; "sel" → você +
     // escolhidos; "top3" → realça dinamicamente quem está em 1º/2º/3º naquele momento.
     let hl = null, top3 = false;
@@ -12031,7 +12039,7 @@ async function _corridaDownloadVideo() {
     const totalSeg = Math.max(1, data.frames.length - 1);
     // Velocidade: quanto menor, mais quadros (mais lento e suave). Cap de segurança
     // (~60s @60fps) para o modo "bem smooth" não estourar memória/derrubar a página.
-    const totalFrames = Math.min(3600, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
+    const totalFrames = Math.min(maxFrames, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
     const drawAt = (ctx, i) => {
       const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
       const arr = _corridaInterp(data, seg);
@@ -12041,7 +12049,7 @@ async function _corridaDownloadVideo() {
     const onProg = p => { if (btn) btn.textContent = `🎬 Gerando… ${Math.round(p * 100)}%`; };
 
     let blob = null, ext = 'mp4';
-    try { blob = await _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt, onProg); } catch (_) { blob = null; }
+    try { blob = await _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt, onProg, bitrate); } catch (_) { blob = null; }
 
     if (!blob && hasMR) {
       const W = geo.W, H = geo.H;
@@ -12052,7 +12060,7 @@ async function _corridaDownloadVideo() {
         : MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : null;
       const mime = mp4mime || (MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm');
       ext = mp4mime ? 'mp4' : 'webm';
-      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 3500000 });
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
       const chunks = [];
       rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
       const recDone = new Promise((res, rej) => { rec.onstop = res; rec.onerror = rej; });
