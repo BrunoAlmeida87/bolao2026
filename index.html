@@ -11531,7 +11531,8 @@ async function renderCorrida() {
       <div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px">A disputa jogo a jogo — pontos acumulados de cada participante</div>
     </div>
     <div class="corrida-modes">
-      <button class="date-filter-btn corrida-mode-btn active" data-view="top" onclick="_corridaSetView('top')">Top 12 + Você</button>
+      <button class="date-filter-btn corrida-mode-btn active" data-view="top" data-topn="12" onclick="_corridaSetView('top',12)">Top 12</button>
+      <button class="date-filter-btn corrida-mode-btn" data-view="top" data-topn="20" onclick="_corridaSetView('top',20)">Top 20</button>
       <button class="date-filter-btn corrida-mode-btn" data-view="all" onclick="_corridaSetView('all')">Todos</button>
       <button class="date-filter-btn corrida-mode-btn" data-view="sel" onclick="_corridaTogglePicker()">✓ Escolher</button>
     </div>
@@ -11576,7 +11577,8 @@ async function renderCorrida() {
     if (!full) { const l = document.getElementById('corrida-label'); if (l) l.textContent = 'Ainda não há resultados para mostrar a corrida.'; return; }
     _corridaBuildPicker(full);
     const view = (_corridaState && _corridaState.view) || 'top';
-    _corridaInit(full, view, 12);
+    const topN = (_corridaState && _corridaState.topN) || 12;
+    _corridaInit(full, view, topN);
   } catch (e) {
     const loadingEl = document.getElementById('corrida-loading'); if (loadingEl) loadingEl.remove();
     const box = cont.querySelector('.corrida-canvas-box'); if (box) box.innerHTML = `<div class="alert alert-error" style="margin:10px">Erro: ${esc(errMsg(e))}</div>`;
@@ -11626,7 +11628,8 @@ function _corridaInit(full, view, topN) {
     padTop: 34, padBottom: 14, rowH: 42, cssW: 0, cssH: 0, baseStepDur, stepDur: baseStepDur / speed,
     _onResize: () => { _corridaSizeCanvas(); _corridaRenderSeg(_corridaState.seg); }
   };
-  document.querySelectorAll('.corrida-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  const _tn = topN || 12;
+  document.querySelectorAll('.corrida-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view && (b.dataset.view !== 'top' || parseInt(b.dataset.topn) === _tn)));
   document.querySelectorAll('.corrida-speed-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.spd) === speed));
   window.addEventListener('resize', _corridaState._onResize);
   _corridaSizeCanvas();
@@ -11673,7 +11676,7 @@ function _corridaGeo(st) {
   const valW = showVals ? 46 : 6;
   const barMaxW = Math.max(20, W - barLeft - valW - 8);
   const pinTop = st.padTop + slots * rowH + 13;
-  return { W, H, padTop: st.padTop, padBottom: st.padBottom, rowH, slots, pin, showNames, showVals, nameW, barLeft, barMaxW, pinTop };
+  return { W, H, s: 1, padTop: st.padTop, padBottom: st.padBottom, rowH, slots, pin, pinCount: pin ? 1 : 0, showNames, showVals, nameW, barLeft, barMaxW, pinTop };
 }
 
 // Desenho puro de um instante. geo define a geometria; opts.header desenha
@@ -11687,16 +11690,17 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
   const g = ctx.createLinearGradient(0, 0, W, H);
   g.addColorStop(0, 'rgba(123,47,247,.26)'); g.addColorStop(1, 'rgba(241,7,163,.09)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const s = geo.s || 1; // escala da resolução (1 = 720 de largura)
   if (opts.header) {
-    ctx.textAlign = 'center'; ctx.fillStyle = '#FFD700'; ctx.font = '800 34px Arial';
-    ctx.fillText('🏁 Corrida do Ranking', W / 2, 44);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#FFD700'; ctx.font = `800 ${Math.round(34 * s)}px Arial`;
+    ctx.fillText('🏁 Corrida do Ranking', W / 2, Math.round(46 * s));
     // Partida atual em DESTAQUE: pílula com a partida/placar, fonte grande (encolhe
     // se for muito larga). É o que mais muda a cada quadro — fica bem visível.
     const matchTxt = opts.plainLabel || '';
     if (matchTxt) {
-      let fs = 32; ctx.font = `800 ${fs}px Arial`;
-      while (fs > 18 && ctx.measureText(matchTxt).width > W - 72) { fs -= 2; ctx.font = `800 ${fs}px Arial`; }
-      const pw = Math.min(W - 24, ctx.measureText(matchTxt).width + 40), ph = fs + 18, px = (W - pw) / 2, py = 66;
+      let fs = Math.round(32 * s); ctx.font = `800 ${fs}px Arial`;
+      while (fs > Math.round(18 * s) && ctx.measureText(matchTxt).width > W - 72 * s) { fs -= 2; ctx.font = `800 ${fs}px Arial`; }
+      const pw = Math.min(W - 24 * s, ctx.measureText(matchTxt).width + 40 * s), ph = fs + 18 * s, px = (W - pw) / 2, py = Math.round(70 * s);
       ctx.fillStyle = 'rgba(255,255,255,.10)'; _rrect(ctx, px, py, pw, ph, ph / 2); ctx.fill();
       ctx.strokeStyle = 'rgba(255,215,0,.55)'; ctx.lineWidth = 1.5; _rrect(ctx, px, py, pw, ph, ph / 2); ctx.stroke();
       ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.fillText(matchTxt, W / 2, py + ph / 2 + fs * 0.35);
@@ -11704,8 +11708,8 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
   }
   const bandTop = padTop;
   const bandBottom = bandTop + slots * rowH;
-  const fontPx = Math.max(9, Math.min(16, Math.round(rowH * 0.42)));
-  const rankFont = Math.max(9, Math.min(17, Math.round(rowH * 0.46)));
+  const fontPx = Math.max(9, Math.min(Math.round(22 * s), Math.round(rowH * 0.44)));
+  const rankFont = Math.max(9, Math.min(Math.round(24 * s), Math.round(rowH * 0.48)));
   const medals = ['#FFD700', '#C0C0C0', '#CD7F32'];
 
   // Dia (andamento do tempo): marca d'água grande ao fundo (estilo "ano" dos chart
@@ -11786,30 +11790,37 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
     }
   };
 
-  // Banda principal: do menor rank para o maior (você por cima quando dentro).
+  // Lista FIXA (modo Top): você + (no vídeo) os escolhidos a realçar — todos
+  // continuam sempre na tela, mesmo fora do Top N, cada um em sua faixa.
+  const pinList = (opts.pinUids && opts.pinUids.length) ? opts.pinUids.slice(0, geo.pinCount || opts.pinUids.length) : (pin ? [meUid] : []);
+  const pinSet = new Set(pinList);
+
+  // Banda principal: do menor rank para o maior (fixados por cima quando dentro).
   ctx.save();
   ctx.beginPath(); ctx.rect(0, bandTop - 2, W, (bandBottom - bandTop) + 4); ctx.clip();
   const inBand = arr.filter(o => o.r < slots + 0.85).sort((a, b) => b.r - a.r);
-  const meObj = arr.find(o => o.uid === meUid);
-  inBand.forEach(o => { if (pin && o.uid === meUid) return; drawRow(o, bandTop + o.r * rowH); });
-  if (pin && meObj && meObj.r < slots + 0.85) drawRow(meObj, bandTop + meObj.r * rowH); // você por cima
+  inBand.forEach(o => { if (pin && pinSet.has(o.uid)) return; drawRow(o, bandTop + o.r * rowH); });
+  if (pin) pinList.forEach(uid => { const o = arr.find(x => x.uid === uid); if (o && o.r < slots + 0.85) drawRow(o, bandTop + o.r * rowH); }); // fixados por cima
   ctx.restore();
 
-  // Faixa fixa "Você" (só no modo Top): garante que você sempre apareça.
-  if (pin && meObj) {
-    const meRank = Math.round(meObj.r);
+  // Faixas fixas (modo Top): garantem que você + escolhidos sempre apareçam.
+  if (pin && pinList.length) {
     ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
     ctx.beginPath(); ctx.moveTo(8, pinTop - 8); ctx.lineTo(W - 8, pinTop - 8); ctx.stroke(); ctx.setLineDash([]);
-    if (meRank >= slots) drawRow(meObj, pinTop, meRank);
-    else {
-      ctx.textAlign = 'center'; ctx.font = `700 ${Math.max(11, fontPx)}px Arial`;
-      ctx.fillStyle = 'rgba(255,215,0,.92)';
-      ctx.fillText(`★ Você está no Top ${slots}! (${meRank + 1}º)`, W / 2, pinTop + rowH * 0.5 + fontPx * 0.36);
-    }
+    pinList.forEach((uid, idx) => {
+      const o = arr.find(x => x.uid === uid); if (!o) return;
+      const y = pinTop + idx * rowH, rk = Math.round(o.r), isMe = uid === meUid;
+      if (rk >= slots) drawRow(o, y, rk); // fora do Top → mostra a linha completa
+      else { // dentro do Top → apenas confirma a presença
+        ctx.textAlign = 'center'; ctx.font = `700 ${Math.max(11, fontPx)}px Arial`;
+        ctx.fillStyle = isMe ? 'rgba(255,215,0,.92)' : 'rgba(255,255,255,.85)';
+        ctx.fillText(`${isMe ? '★ Você' : '▶ ' + (data.apel[uid] || '')} no Top ${slots} (${rk + 1}º)`, W / 2, y + rowH * 0.5 + fontPx * 0.36);
+      }
+    });
   }
   if (opts.header) {
-    ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.font = '14px Arial';
-    ctx.fillText('Bolão ICN Copa 2026', W / 2, H - 22);
+    ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.font = `${Math.round(14 * s)}px Arial`;
+    ctx.fillText('Bolão ICN Copa 2026', W / 2, H - Math.round(22 * s));
   }
 }
 
@@ -11953,22 +11964,26 @@ function _corridaSyncButtons() {
   if (replay) replay.style.display = '';
 }
 
-// Geometria do vídeo vertical (720×altura), partilhada pelos dois codificadores.
-// A altura cresce com o nº de linhas (até 1920) para caber TODOS os nomes de
-// forma legível quando o escopo é "todos"; mantém 1280 para poucas linhas.
-function _corridaVideoGeo(slots, pin, maxH = 1920) {
-  const W = 720, padTop = 150, padBottom = 60;
-  const lanes = slots + (pin ? 1 : 0);
-  let rowH = Math.min(46, Math.max(16, Math.round(1710 / lanes)));
-  let H = Math.max(1280, padTop + lanes * rowH + padBottom);
-  // Ao bater no teto de altura, rowH é recalculado para CABER todas as linhas
-  // (piso 1, nunca um mínimo que estoure a banda e corte os últimos colocados).
-  if (H > maxH) { H = maxH; rowH = Math.max(1, Math.floor((H - padTop - padBottom) / lanes)); }
-  H = Math.round(H / 2) * 2; // dimensão par exigida pelo H.264
-  const nameW = 250;
-  return { W, H, padTop, padBottom, rowH, slots, pin,
-    showNames: true, showVals: true, nameW, barLeft: nameW + 8,
-    barMaxW: W - (nameW + 8) - 70 - 8, pinTop: padTop + slots * rowH + 16 };
+// Geometria do vídeo vertical (largura W; padrão 720, desktop 1080 p/ mais nitidez).
+// PREENCHE a altura (sem sobra embaixo): as linhas crescem até ocupar ~9:16; com
+// muita gente o vídeo fica mais alto, até maxH, sem cortar ninguém. pinCount = nº
+// de faixas fixas (você + escolhidos) reservadas no rodapé do modo Top.
+function _corridaVideoGeo(slots, pin, maxH = 1920, W = 720, pinCount = (pin ? 1 : 0)) {
+  const s = W / 720;
+  const padTop = Math.round(150 * s), padBottom = Math.round(58 * s);
+  const gap = pinCount > 0 ? Math.round(14 * s) : 0;
+  const lanes = slots + pinCount;
+  const chrome = padTop + padBottom + gap;
+  const targetH = Math.round(W * 16 / 9); // 720→1280, 1080→1920
+  // rowH preenche o alvo; teto p/ poucas linhas não ficarem absurdas; piso legível.
+  let rowH = Math.min(Math.round(110 * s), Math.max(Math.round(16 * s), Math.floor((targetH - chrome) / lanes)));
+  let H = chrome + lanes * rowH;
+  if (H > maxH) { rowH = Math.max(1, Math.floor((maxH - chrome) / lanes)); H = chrome + lanes * rowH; }
+  H = Math.max(Math.round(360 * s), Math.round(H / 2) * 2); // par exigido pelo H.264
+  const nameW = Math.round(250 * s), valW = Math.round(78 * s);
+  return { W, H, s, padTop, padBottom, rowH, slots, pin, pinCount,
+    showNames: true, showVals: true, nameW, barLeft: nameW + Math.round(8 * s),
+    barMaxW: W - nameW - Math.round(8 * s) - valW, pinTop: padTop + slots * rowH + gap };
 }
 
 // Codifica MP4/H.264 no cliente via WebCodecs + Mp4Muxer (funciona no Chrome
@@ -11978,7 +11993,9 @@ async function _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt, onProg,
   if (typeof window.VideoEncoder !== 'function' || typeof window.VideoFrame !== 'function' || typeof Mp4Muxer === 'undefined') return null;
   const W = geo.W, H = geo.H;
   let codec = null;
-  for (const c of ['avc1.42E01F', 'avc1.42001F', 'avc1.4D401F', 'avc1.640028']) {
+  // Perfis em ordem: baseline (telas pequenas) → high level 4.0/5.1/5.2 (1080×1920@60
+  // precisa de nível alto; os menores retornam "não suportado" e caímos no próximo).
+  for (const c of ['avc1.42E01F', 'avc1.42001F', 'avc1.4D401F', 'avc1.640028', 'avc1.640033', 'avc1.640034', 'avc1.4D4034']) {
     try { const s = await VideoEncoder.isConfigSupported({ codec: c, width: W, height: H, bitrate, framerate: fps }); if (s && s.supported) { codec = c; break; } } catch (_) {}
   }
   if (!codec) return null;
@@ -12022,8 +12039,11 @@ async function _corridaDownloadVideo() {
     // Detecta mobile e usa config bem mais leve: 30fps, altura menor, bitrate e
     // teto de quadros menores. No desktop mantém o 60fps suave.
     const isMobile = (navigator.userAgentData && navigator.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || '');
+    // Desktop: resolução maior (1080) + bitrate maior → nomes mais legíveis no
+    // modo "Todos". Mobile: 720/30fps/bitrate menor para não derrubar o app.
+    const W = isMobile ? 720 : 1080;
     const fps = isMobile ? 30 : 60;
-    const bitrate = isMobile ? 2200000 : 3500000;
+    const bitrate = isMobile ? 2600000 : 7000000;
     const maxH = isMobile ? 1280 : 1920;
     const maxFrames = isMobile ? 1500 : 3600;
     // Escopo: "todos" usa o conjunto completo (sem destaque fixo); "como na tela"
@@ -12031,22 +12051,28 @@ async function _corridaDownloadVideo() {
     let data, slots, pin;
     if (_corridaVidScope === 'all') { data = st.full; slots = data.n; pin = false; }
     else { data = st.data; pin = st.view === 'top'; slots = (st.view === 'top') ? Math.min(st.topN, data.n) : data.n; }
-    const geo = _corridaVideoGeo(slots, pin, maxH);
     // Realce (brilho/ênfase) — TODOS mantêm a cor. "me" → só você; "sel" → você +
     // escolhidos; "top3" → realça dinamicamente quem está em 1º/2º/3º naquele momento.
     let hl = null, top3 = false;
     if (_corridaVidHighlight === 'top3') top3 = true;
     else if (_corridaVidHighlight === 'me') hl = new Set([data.meUid]);
     else if (_corridaVidHighlight === 'sel') { hl = new Set(_corridaVidHlSet || []); hl.add(data.meUid); }
+    // Faixas FIXAS no modo Top: você + escolhidos continuam na tela mesmo fora do Top.
+    let pinUids = [];
+    if (pin) {
+      pinUids = [data.meUid];
+      if (_corridaVidHighlight === 'sel' && _corridaVidHlSet) _corridaVidHlSet.forEach(u => { if (u !== data.meUid && data.uids.includes(u)) pinUids.push(u); });
+    }
+    const geo = _corridaVideoGeo(slots, pin, maxH, W, pin ? pinUids.length : 0);
     const totalSeg = Math.max(1, data.frames.length - 1);
     // Velocidade: quanto menor, mais quadros (mais lento e suave). Cap de segurança
-    // (~60s @60fps) para o modo "bem smooth" não estourar memória/derrubar a página.
+    // para o modo "bem smooth" não estourar memória/derrubar a página.
     const totalFrames = Math.min(maxFrames, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
     const drawAt = (ctx, i) => {
       const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
       const arr = _corridaInterp(data, seg);
       const vf = data.frames[Math.min(data.frames.length - 1, Math.round(seg))];
-      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date, hl, top3 });
+      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date, hl, top3, pinUids });
     };
     const onProg = p => { if (btn) btn.textContent = `🎬 Gerando… ${Math.round(p * 100)}%`; };
 
