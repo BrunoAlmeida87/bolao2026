@@ -988,6 +988,9 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 }
 .ngc-mini-btn:hover{color:var(--gold);border-color:var(--gold)}
 .next-games-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
+/* PC: 4 colunas no desktop normal, 5 no desktop largo */
+@media (min-width:768px){.next-games-grid{grid-template-columns:repeat(4,1fr)}}
+@media (min-width:1200px){.next-games-grid{grid-template-columns:repeat(5,1fr)}}
 .next-games-grid .next-game-card{margin-bottom:0}
 .next-game-card.locked-soon{background:linear-gradient(135deg,rgba(255,68,68,.14),rgba(200,0,0,.07));border-color:rgba(255,68,68,.55)}
 .next-game-card.locked-soon .ngc-label{color:rgba(255,90,90,.95)}
@@ -11722,14 +11725,15 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
     if (dateW) { ctx.textAlign = 'right'; ctx.font = '800 16px Arial'; ctx.fillStyle = '#FFD700'; ctx.fillText('📅 ' + dateW, W - 10, 22); }
   }
 
-  // opts.hl = conjunto de uids a REALÇAR (brilho/ênfase). Todos mantêm a cor; os
-  // realçados ganham destaque. Se ausente, só você é realçado (comportamento padrão).
+  // opts.hl = conjunto de uids a REALÇAR; opts.top3 = realça dinamicamente quem
+  // está em 1º/2º/3º naquele instante. Todos mantêm a cor; os realçados brilham.
   const hlSet = opts.hl || null;
+  const top3 = !!opts.top3;
   const drawRow = (o, top, fixedRank) => {
     const isMe = o.uid === meUid;
-    const isHl = hlSet ? hlSet.has(o.uid) : isMe; // realçado (com brilho)
-    const strong = isHl && !isMe; // realce FORTE para os escolhidos (você já é dourado)
     const intRank = (fixedRank != null) ? fixedRank : Math.round(o.r);
+    const isHl = top3 ? (isMe || intRank < 3) : (hlSet ? hlSet.has(o.uid) : isMe); // realçado (brilho)
+    const strong = isHl && !isMe; // realce FORTE para os destacados (você já é dourado)
     const barW = Math.max(2, o.v / data.maxV * barMaxW);
     const color = data.colorByUid[o.uid]; // cor sempre preservada
     const cyText = top + rowH * 0.5 + fontPx * 0.36;
@@ -11901,7 +11905,7 @@ function _corridaOpenVideoModal() {
     <div style="font-weight:800;color:var(--gold);font-size:1.05rem;margin-bottom:12px">🎬 Baixar vídeo</div>
     ${grp('cv-speed', 'Velocidade', [{ v: '1', t: 'Normal' }, { v: '0.5', t: 'Lenta (0,5×)' }, { v: '0.25', t: 'Bem lenta (0,25×)' }, { v: '0.15', t: 'Bem smooth (0,15×)' }], String(_corridaVidSpeed))}
     ${grp('cv-scope', 'Quem aparece', [{ v: 'view', t: 'Como na tela' }, { v: 'all', t: 'Todos' }], _corridaVidScope)}
-    ${grp('cv-hl', 'Realçar', [{ v: 'all', t: 'Só eu' }, { v: 'sel', t: 'Eu + escolher' }], _corridaVidHighlight === 'me' ? 'all' : _corridaVidHighlight)}
+    ${grp('cv-hl', 'Realçar', [{ v: 'all', t: 'Só eu' }, { v: 'top3', t: '🏅 Top 3 do momento' }, { v: 'sel', t: 'Eu + escolher' }], _corridaVidHighlight === 'me' ? 'all' : _corridaVidHighlight)}
     <div id="cv-picklist" style="display:${_corridaVidHighlight === 'sel' ? 'grid' : 'none'};margin-top:6px;max-height:210px;overflow:auto;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px">${checklist}</div>
     <div class="cv-foot-hint">Todos os jogadores aparecem coloridos; os realçados ganham brilho/ênfase para o olhar acompanhar quem você escolher.</div>
     <div style="display:flex;gap:8px;margin-top:14px">
@@ -11968,7 +11972,7 @@ function _corridaVideoGeo(slots, pin) {
 // Codifica MP4/H.264 no cliente via WebCodecs + Mp4Muxer (funciona no Chrome
 // Android, desktop e iOS novo) → vídeo que o WhatsApp reproduz. Retorna Blob ou
 // null se não houver suporte (aí cai no MediaRecorder/WebM).
-async function _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt) {
+async function _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt, onProg) {
   if (typeof window.VideoEncoder !== 'function' || typeof window.VideoFrame !== 'function' || typeof Mp4Muxer === 'undefined') return null;
   const W = geo.W, H = geo.H, bitrate = 3500000;
   let codec = null;
@@ -11993,7 +11997,7 @@ async function _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt) {
     const frame = new VideoFrame(cv, { timestamp: i * usPerFrame, duration: usPerFrame });
     encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
     frame.close();
-    if (i % 8 === 0) await new Promise(r => setTimeout(r)); // cede a thread → UI não congela
+    if (i % 8 === 0) { if (onProg) onProg(i / totalFrames); await new Promise(r => setTimeout(r)); } // cede a thread → UI não congela
   }
   await encoder.flush();
   if (encErr) throw encErr;
@@ -12019,27 +12023,26 @@ async function _corridaDownloadVideo() {
     if (_corridaVidScope === 'all') { data = st.full; slots = data.n; pin = false; }
     else { data = st.data; pin = st.view === 'top'; slots = (st.view === 'top') ? Math.min(st.topN, data.n) : data.n; }
     const geo = _corridaVideoGeo(slots, pin);
-    // Realce (brilho/ênfase) — TODOS mantêm a cor. "me" realça só você; "sel"
-    // realça você + os escolhidos; "all" → só você (padrão).
-    let hl = null;
-    if (_corridaVidHighlight === 'me') {
-      hl = new Set([data.meUid]);
-    } else if (_corridaVidHighlight === 'sel') {
-      hl = new Set(_corridaVidHlSet || []); hl.add(data.meUid);
-    }
+    // Realce (brilho/ênfase) — TODOS mantêm a cor. "me" → só você; "sel" → você +
+    // escolhidos; "top3" → realça dinamicamente quem está em 1º/2º/3º naquele momento.
+    let hl = null, top3 = false;
+    if (_corridaVidHighlight === 'top3') top3 = true;
+    else if (_corridaVidHighlight === 'me') hl = new Set([data.meUid]);
+    else if (_corridaVidHighlight === 'sel') { hl = new Set(_corridaVidHlSet || []); hl.add(data.meUid); }
     const totalSeg = Math.max(1, data.frames.length - 1);
     // Velocidade: quanto menor, mais quadros (mais lento e suave). Cap de segurança
-    // para o modo "bem smooth" não gerar um vídeo gigantesco (máx. ~2,5 min @60fps).
-    const totalFrames = Math.min(9000, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
+    // (~60s @60fps) para o modo "bem smooth" não estourar memória/derrubar a página.
+    const totalFrames = Math.min(3600, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
     const drawAt = (ctx, i) => {
       const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
       const arr = _corridaInterp(data, seg);
       const vf = data.frames[Math.min(data.frames.length - 1, Math.round(seg))];
-      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date, hl });
+      _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date, hl, top3 });
     };
+    const onProg = p => { if (btn) btn.textContent = `🎬 Gerando… ${Math.round(p * 100)}%`; };
 
     let blob = null, ext = 'mp4';
-    try { blob = await _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt); } catch (_) { blob = null; }
+    try { blob = await _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt, onProg); } catch (_) { blob = null; }
 
     if (!blob && hasMR) {
       const W = geo.W, H = geo.H;
@@ -12055,21 +12058,51 @@ async function _corridaDownloadVideo() {
       rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
       const recDone = new Promise((res, rej) => { rec.onstop = res; rec.onerror = rej; });
       rec.start(250);
-      for (let i = 0; i < totalFrames; i++) { drawAt(ctx, i); await new Promise(r => setTimeout(r, 1000 / fps)); }
+      for (let i = 0; i < totalFrames; i++) { drawAt(ctx, i); if (i % 12 === 0) onProg(i / totalFrames); await new Promise(r => setTimeout(r, 1000 / fps)); }
       rec.stop(); await recDone; stream.getTracks().forEach(t => t.stop());
       blob = new Blob(chunks, { type: ext === 'mp4' ? 'video/mp4' : 'video/webm' });
     }
     if (!blob) throw new Error('Não foi possível gerar o vídeo neste navegador.');
 
+    // IMPORTANTE: navigator.share() exige gesto do usuário e a geração (sobretudo
+    // lenta) excede a janela de ativação → estoura "Must be handling a user
+    // gesture". Por isso NÃO compartilhamos automaticamente: mostramos um diálogo
+    // com botões; o toque do usuário fornece um gesto novo e válido.
     const file = new File([blob], `corrida-ranking-${fmtDate()}.${ext}`, { type: blob.type });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text: '🏁 Corrida do Ranking — Bolão ICN Copa 2026' });
-    else { _fallbackDownload(blob, file.name); showToast(ext === 'mp4' ? 'Vídeo MP4 gerado! Confira Downloads/Arquivos.' : 'Vídeo gerado (WebM)! Confira Downloads/Arquivos.', 'success', 4500); }
+    _corridaShowResult(file, blob, ext);
   } catch (e) {
-    if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) return; // usuário cancelou o compartilhamento
     showToast('Erro ao gerar vídeo: ' + errMsg(e), 'error', 6000);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🎬 Baixar vídeo'; }
   }
+}
+
+// Diálogo pós-geração: compartilhar (gesto válido) ou baixar. Resolve o erro
+// "Must be handling a user gesture" ao adiar o share para um clique do usuário.
+function _corridaShowResult(file, blob, ext) {
+  const old = document.getElementById('modal-corrida-result'); if (old) old.remove();
+  const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+  const ov = document.createElement('div');
+  ov.id = 'modal-corrida-result'; ov.className = 'modal-overlay';
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = `<div class="modal-box" style="max-width:420px;text-align:center">
+    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    <div style="font-size:1.7rem;margin-bottom:4px">✅</div>
+    <div style="font-weight:800;color:var(--gold);font-size:1.05rem;margin-bottom:6px">Vídeo pronto!</div>
+    <div style="font-size:0.84rem;color:var(--text-muted);margin-bottom:14px">${ext === 'mp4' ? 'Formato MP4 (compatível com WhatsApp).' : 'Formato WebM.'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      ${canShare ? `<button class="btn btn-primary" style="flex:1 1 150px" id="cvr-share">📲 Compartilhar</button>` : ''}
+      <button class="btn btn-secondary" style="flex:1 1 150px" id="cvr-download">💾 Baixar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  const sb = ov.querySelector('#cvr-share');
+  if (sb) sb.onclick = async () => {
+    try { await navigator.share({ files: [file], text: '🏁 Corrida do Ranking — Bolão ICN Copa 2026' }); ov.remove(); }
+    catch (e) { if (!(e && e.name === 'AbortError')) { _fallbackDownload(blob, file.name); ov.remove(); showToast('Compartilhamento indisponível — vídeo baixado.', 'info', 4000); } }
+  };
+  const db = ov.querySelector('#cvr-download');
+  if (db) db.onclick = () => { _fallbackDownload(blob, file.name); ov.remove(); showToast('Vídeo salvo em Downloads/Arquivos.', 'success', 4000); };
 }
 
 function _corridaStop() {
