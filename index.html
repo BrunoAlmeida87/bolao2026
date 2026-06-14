@@ -8163,17 +8163,24 @@ function renderGxStreaks(d) {
   const rows = computeStreaks(d).filter(r => (r.u.ativo !== false));
   if (!rows.length) return _gxCard('🔥 Sequências', _gxEmpty('Sem dados suficientes.'));
   const list = (arr, color, fb) => _gxBars(arr.map(r => ({ label: _gxName(r.u), value: r.value, color })), fb);
-  const hot = rows.filter(r => r.maxStreak > 0).sort((a, b) => b.maxStreak - a.maxStreak).slice(0, 5).map(r => ({ u: r.u, value: r.maxStreak }));
-  const cold = rows.filter(r => r.maxMiss > 0).sort((a, b) => b.maxMiss - a.maxMiss).slice(0, 5).map(r => ({ u: r.u, value: r.maxMiss }));
-  const exact = rows.filter(r => r.maxExactStreak > 0).sort((a, b) => b.maxExactStreak - a.maxExactStreak).slice(0, 5).map(r => ({ u: r.u, value: r.maxExactStreak }));
-  const cur = rows.filter(r => r.currentStreak > 0).sort((a, b) => b.currentStreak - a.currentStreak).slice(0, 5).map(r => ({ u: r.u, value: r.currentStreak }));
+  // Top 5 — mas mantém quem estiver empatado no valor do 5º colocado (pode passar de 5).
+  const top5Ties = (arr, key) => {
+    const sorted = arr.filter(r => r[key] > 0).sort((a, b) => b[key] - a[key]);
+    if (sorted.length <= 5) return sorted.map(r => ({ u: r.u, value: r[key] }));
+    const cut = sorted[4][key];
+    return sorted.filter(r => r[key] >= cut).map(r => ({ u: r.u, value: r[key] }));
+  };
+  const hot = top5Ties(rows, 'maxStreak');
+  const cold = top5Ties(rows, 'maxMiss');
+  const exact = top5Ties(rows, 'maxExactStreak');
+  const cur = top5Ties(rows, 'currentStreak');
   const block = (t, c, fb) => `<div style="margin:12px 0 4px;font-weight:700;font-size:0.86rem;color:var(--gold)">${t}</div>${c}`;
   const body =
     block('🔥 Maior sequência pontuando', list(hot, '#00C851', 'Ninguém emendou pontos ainda.')) +
     block('⚡ Sequência atual pontuando', list(cur, '#1E90FF', 'Nenhuma sequência ativa.')) +
     block('🎯 Maior sequência de placares exatos', list(exact, '#FFD700', 'Nenhum exato consecutivo ainda.')) +
     block('❄️ Maior sequência sem pontuar', list(cold, 'rgba(140,160,190,.5)', 'Ninguém ficou zerado em sequência.'));
-  return _gxCard('🔥 Sequências de Acertos e Erros', body, 'Top 5 de cada categoria, em jogos consecutivos com resultado.');
+  return _gxCard('🔥 Sequências de Acertos e Erros', body, 'Top 5 de cada categoria (incluindo empatados no valor do 5º), em jogos consecutivos com resultado.');
 }
 
 // ── 9. Ousadia x pontos ───────────────────────────────────────────────────────
