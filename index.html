@@ -7019,7 +7019,7 @@ async function renderEstatisticas() {
             const _paw = Math.round(_aw/_tot*100);
             const _avgH = (_gPals.reduce((a,p)=>a+parseInt(p.h||0),0)/_tot).toFixed(1);
             const _avgA = (_gPals.reduce((a,p)=>a+parseInt(p.a||0),0)/_tot).toFixed(1);
-            const _sf={}; _gPals.forEach(p=>{ const _ph=parseInt(p.h)||0,_pa=parseInt(p.a)||0; const k=`${Math.max(_ph,_pa)}×${Math.min(_ph,_pa)}`; _sf[k]=(_sf[k]||0)+1; });
+            const _sf={}; _gPals.forEach(p=>{ const _ph=parseInt(p.h)||0,_pa=parseInt(p.a)||0; const k=`${_ph}×${_pa}`; _sf[k]=(_sf[k]||0)+1; });
             const _top3 = Object.entries(_sf).sort((a,b)=>b[1]-a[1]).slice(0,3);
             const _maxPct=Math.max(_phw,_pdr,_paw);
             const _minPct=Math.min(_phw,_pdr,_paw);
@@ -7072,7 +7072,7 @@ async function renderEstatisticas() {
               + '<div style="font-size:0.6rem;color:var(--text-muted);margin-top:1px">média de gols por time</div>'
               + '</div>'
               + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
-              + '<div style="font-size:0.68rem;color:var(--text-muted)">🎯 Top 3 placares apostados</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">🎯 Top 3 placares apostados <span style="opacity:.8">(' + esc(game.h) + ' × ' + esc(game.a) + ')</span></div>'
               + '<div style="font-size:0.88rem;font-weight:700;color:var(--green)">'
               + _top3.map((t,i) => (i===0?'':' · ') + '<span style="opacity:' + (i===0?'1':i===1?'.8':'.6') + '">' + t[0] + ' <span style="font-size:0.68rem;font-weight:400">(' + t[1] + 'x)</span></span>').join('')
               + '</div>'
