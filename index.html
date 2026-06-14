@@ -11552,7 +11552,7 @@ async function renderCorrida() {
       <button class="date-filter-btn corrida-speed-btn" data-spd="1.5" onclick="_corridaSetSpeed(1.5)">1,5×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="2" onclick="_corridaSetSpeed(2)">2×</button>
     </div>
-    <div id="corrida-label" style="font-size:0.84rem;color:var(--text);min-height:20px;text-align:center;margin:4px 0 8px;line-height:1.4"></div>
+    <div id="corrida-label" style="font-size:1.04rem;font-weight:700;color:var(--text);min-height:24px;text-align:center;margin:6px auto 10px;line-height:1.4;max-width:560px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:20px;padding:8px 14px"></div>
     <div class="corrida-canvas-box"><canvas id="corrida-canvas"></canvas>
       <div id="corrida-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(7,20,40,.55)"><div class="spinner"></div></div>
     </div>
@@ -11685,9 +11685,19 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
   g.addColorStop(0, 'rgba(123,47,247,.26)'); g.addColorStop(1, 'rgba(241,7,163,.09)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   if (opts.header) {
-    ctx.textAlign = 'center'; ctx.fillStyle = '#FFD700'; ctx.font = '800 36px Arial';
-    ctx.fillText('🏁 Corrida do Ranking', W / 2, 52);
-    ctx.fillStyle = '#FFFFFF'; ctx.font = '700 22px Arial'; ctx.fillText(opts.plainLabel || '', W / 2, 92);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#FFD700'; ctx.font = '800 34px Arial';
+    ctx.fillText('🏁 Corrida do Ranking', W / 2, 44);
+    // Partida atual em DESTAQUE: pílula com a partida/placar, fonte grande (encolhe
+    // se for muito larga). É o que mais muda a cada quadro — fica bem visível.
+    const matchTxt = opts.plainLabel || '';
+    if (matchTxt) {
+      let fs = 32; ctx.font = `800 ${fs}px Arial`;
+      while (fs > 18 && ctx.measureText(matchTxt).width > W - 72) { fs -= 2; ctx.font = `800 ${fs}px Arial`; }
+      const pw = Math.min(W - 24, ctx.measureText(matchTxt).width + 40), ph = fs + 18, px = (W - pw) / 2, py = 66;
+      ctx.fillStyle = 'rgba(255,255,255,.10)'; _rrect(ctx, px, py, pw, ph, ph / 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,215,0,.55)'; ctx.lineWidth = 1.5; _rrect(ctx, px, py, pw, ph, ph / 2); ctx.stroke();
+      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.fillText(matchTxt, W / 2, py + ph / 2 + fs * 0.35);
+    }
   }
   const bandTop = padTop;
   const bandBottom = bandTop + slots * rowH;
@@ -11718,30 +11728,57 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
   const drawRow = (o, top, fixedRank) => {
     const isMe = o.uid === meUid;
     const isHl = hlSet ? hlSet.has(o.uid) : isMe; // realçado (com brilho)
+    const strong = isHl && !isMe; // realce FORTE para os escolhidos (você já é dourado)
     const intRank = (fixedRank != null) ? fixedRank : Math.round(o.r);
     const barW = Math.max(2, o.v / data.maxV * barMaxW);
     const color = data.colorByUid[o.uid]; // cor sempre preservada
     const cyText = top + rowH * 0.5 + fontPx * 0.36;
-    ctx.fillStyle = isMe ? 'rgba(255,215,0,.14)' : (isHl ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.035)');
-    _rrect(ctx, 5, top + 1, W - 10, rowH - 2, Math.min(7, rowH / 3)); ctx.fill();
+    const rr = Math.min(7, rowH / 3);
+    // Faixa de fundo: realçados ganham faixa tingida na própria cor + contorno.
+    if (isHl) {
+      ctx.save();
+      ctx.globalAlpha = isMe ? 0.16 : 0.24;
+      ctx.fillStyle = isMe ? '#FFD700' : color;
+      _rrect(ctx, 5, top + 1, W - 10, rowH - 2, rr); ctx.fill();
+      ctx.restore();
+      ctx.lineWidth = strong ? 2 : 1.5;
+      ctx.strokeStyle = isMe ? 'rgba(255,215,0,.75)' : color;
+      _rrect(ctx, 5.5, top + 1.5, W - 11, rowH - 3, rr); ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,.035)';
+      _rrect(ctx, 5, top + 1, W - 10, rowH - 2, rr); ctx.fill();
+    }
     ctx.textAlign = 'left'; ctx.font = `800 ${rankFont}px Arial`;
-    ctx.fillStyle = medals[intRank] || (isMe ? '#FFD700' : '#7E8BA3');
+    ctx.fillStyle = medals[intRank] || (isMe ? '#FFD700' : (isHl ? '#FFFFFF' : '#7E8BA3'));
     ctx.fillText(`${intRank + 1}º`, 8, cyText);
     if (showNames) {
       ctx.textAlign = 'right'; ctx.font = `${isHl ? '800' : '600'} ${fontPx}px Arial`;
       ctx.fillStyle = isMe ? '#FFD700' : (isHl ? '#FFFFFF' : '#E7ECF5');
-      const nm = (isMe ? '★ ' : '') + (data.apel[o.uid] || '');
+      const mark = isMe ? '★ ' : (strong ? '▶ ' : '');
+      const nm = mark + (data.apel[o.uid] || '');
       ctx.fillText(_corridaEllipsis(ctx, nm, nameW - 38), nameW - 6, cyText);
     }
     const barH = Math.max(4, rowH - 7);
     const by = top + (rowH - barH) / 2;
-    if (isHl) { ctx.shadowColor = isMe ? 'rgba(255,215,0,.6)' : color; ctx.shadowBlur = 8; }
-    ctx.fillStyle = color; _rrect(ctx, barLeft, by, barW, barH, Math.min(5, barH / 2)); ctx.fill();
-    ctx.shadowBlur = 0;
+    const bw = Math.max(2, barW);
+    // Brilho mais forte para realçados (passada dupla intensifica o glow).
+    if (isHl) {
+      ctx.shadowColor = isMe ? '#FFD700' : color;
+      ctx.shadowBlur = strong ? 16 : 11;
+      ctx.fillStyle = color; _rrect(ctx, barLeft, by, bw, barH, Math.min(5, barH / 2)); ctx.fill();
+      if (strong) { _rrect(ctx, barLeft, by, bw, barH, Math.min(5, barH / 2)); ctx.fill(); }
+      ctx.shadowBlur = 0;
+      // contorno claro na barra para destacar do fundo
+      ctx.lineWidth = strong ? 2 : 1.5;
+      ctx.strokeStyle = strong ? 'rgba(255,255,255,.9)' : 'rgba(255,215,0,.85)';
+      _rrect(ctx, barLeft, by, bw, barH, Math.min(5, barH / 2)); ctx.stroke();
+    } else {
+      ctx.fillStyle = color; _rrect(ctx, barLeft, by, bw, barH, Math.min(5, barH / 2)); ctx.fill();
+    }
     if (showVals) {
       ctx.textAlign = 'left'; ctx.font = `800 ${fontPx}px Arial`;
-      ctx.fillStyle = isMe ? '#FFD700' : '#FFFFFF';
-      ctx.fillText(String(Math.round(o.v)), barLeft + barW + 6, cyText);
+      ctx.fillStyle = isMe ? '#FFD700' : (isHl ? '#FFFFFF' : '#FFFFFF');
+      ctx.fillText(String(Math.round(o.v)), barLeft + bw + 6, cyText);
     }
   };
 
@@ -11862,7 +11899,7 @@ function _corridaOpenVideoModal() {
   ov.innerHTML = `<div class="modal-box" style="max-width:540px;text-align:left">
     <button class="modal-close" onclick="_corridaCloseVideoModal()">✕</button>
     <div style="font-weight:800;color:var(--gold);font-size:1.05rem;margin-bottom:12px">🎬 Baixar vídeo</div>
-    ${grp('cv-speed', 'Velocidade', [{ v: '1', t: 'Normal' }, { v: '0.5', t: 'Lenta (0,5×)' }, { v: '0.25', t: 'Bem lenta (0,25×)' }], String(_corridaVidSpeed))}
+    ${grp('cv-speed', 'Velocidade', [{ v: '1', t: 'Normal' }, { v: '0.5', t: 'Lenta (0,5×)' }, { v: '0.25', t: 'Bem lenta (0,25×)' }, { v: '0.15', t: 'Bem smooth (0,15×)' }], String(_corridaVidSpeed))}
     ${grp('cv-scope', 'Quem aparece', [{ v: 'view', t: 'Como na tela' }, { v: 'all', t: 'Todos' }], _corridaVidScope)}
     ${grp('cv-hl', 'Realçar', [{ v: 'all', t: 'Só eu' }, { v: 'sel', t: 'Eu + escolher' }], _corridaVidHighlight === 'me' ? 'all' : _corridaVidHighlight)}
     <div id="cv-picklist" style="display:${_corridaVidHighlight === 'sel' ? 'grid' : 'none'};margin-top:6px;max-height:210px;overflow:auto;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px">${checklist}</div>
@@ -11975,7 +12012,7 @@ async function _corridaDownloadVideo() {
   const btn = document.getElementById('corrida-video');
   if (btn) { btn.disabled = true; btn.textContent = '🎬 Gerando…'; }
   try {
-    const fps = 30;
+    const fps = 60; // mais frames por segundo → animação bem mais suave (vale p/ todas as velocidades)
     // Escopo: "todos" usa o conjunto completo (sem destaque fixo); "como na tela"
     // reproduz o modo atual (Top N com você fixo, ou todos do conjunto exibido).
     let data, slots, pin;
@@ -11991,8 +12028,9 @@ async function _corridaDownloadVideo() {
       hl = new Set(_corridaVidHlSet || []); hl.add(data.meUid);
     }
     const totalSeg = Math.max(1, data.frames.length - 1);
-    // Velocidade do vídeo: 1 normal, 0.5 lenta, 0.25 bem lenta → mais quadros = mais lento.
-    const totalFrames = Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1;
+    // Velocidade: quanto menor, mais quadros (mais lento e suave). Cap de segurança
+    // para o modo "bem smooth" não gerar um vídeo gigantesco (máx. ~2,5 min @60fps).
+    const totalFrames = Math.min(9000, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
     const drawAt = (ctx, i) => {
       const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
       const arr = _corridaInterp(data, seg);
