@@ -12944,13 +12944,12 @@ function _corridaOpenVideoModal() {
   const st = _corridaState;
   if (!st || !st.data.frames.length) { showToast('Abra a corrida primeiro.', 'warning'); return; }
   const full = st.full;
-  // Preset: o vídeo já abre no mesmo realce escolhido na tela (Top 3 dinâmico ou
-  // Top 3 do Momento fixo) com os mesmos jogadores extras marcados. Sincroniza
-  // SEMPRE os extras (mesmo vazio) para não carregar uma seleção antiga.
-  if (_corridaHl === 'top3dyn' || _corridaHl === 'top3fix') {
-    _corridaVidHighlight = _corridaHl === 'top3dyn' ? 'top3' : 'top3fix';
-    _corridaVidHlSet = new Set(_corridaTop3Extra || []);
-  }
+  // Preset: o vídeo abre SEMPRE no mesmo realce da tela e com os mesmos extras
+  // (mesmo vazio), para nunca carregar uma seleção antiga de uma exportação anterior.
+  _corridaVidHlSet = new Set(_corridaTop3Extra || []);
+  if (_corridaHl === 'top3dyn') _corridaVidHighlight = 'top3';
+  else if (_corridaHl === 'top3fix') _corridaVidHighlight = 'top3fix';
+  else _corridaVidHighlight = _corridaVidHlSet.size ? 'sel' : 'all'; // ⭐ Você (com/sem extras)
   if (!_corridaVidHlSet) _corridaVidHlSet = new Set();
   const old = document.getElementById('modal-corrida-video'); if (old) old.remove();
   const others = full.uids.filter(uid => uid !== full.meUid);
@@ -13128,9 +13127,12 @@ async function _corridaDownloadVideo() {
     const totalSeg = Math.max(1, data.frames.length - 1);
     // Velocidade: quanto menor, mais quadros (mais lento e suave). Cap de segurança
     // para o modo "bem smooth" não estourar memória/derrubar a página.
-    const totalFrames = Math.min(maxFrames, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
+    const animFrames = Math.min(maxFrames, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
+    // Segura o quadro final por ~3s para dar tempo de ler o ranking do fim.
+    const holdFrames = Math.round(fps * 3);
+    const totalFrames = animFrames + holdFrames;
     const drawAt = (ctx, i) => {
-      const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
+      const seg = (Math.min(i, animFrames - 1) / Math.max(1, animFrames - 1)) * totalSeg;
       const arr = _corridaInterp(data, seg);
       const vf = data.frames[Math.min(data.frames.length - 1, Math.round(seg))];
       _corridaPaint(ctx, geo, data, arr, { header: true, plainLabel: vf.plainLabel, date: vf.date, hl, top3, pinUids });
@@ -13689,9 +13691,12 @@ async function _palcoDownloadVideo() {
     const vst = { data, cssW: W, cssH: H, laneH, playing: true, _clock: 0 };
     const totalSeg = Math.max(1, data.frames.length - 1);
     const spd = _palcoVidSpeed || 0.5;
-    const totalFrames = Math.min(maxFrames, Math.ceil(totalSeg * (0.85 / spd) * fps) + 1);
+    const animFrames = Math.min(maxFrames, Math.ceil(totalSeg * (0.85 / spd) * fps) + 1);
+    // Segura o quadro final por ~3s para apreciar o resultado final.
+    const holdFrames = Math.round(fps * 3);
+    const totalFrames = animFrames + holdFrames;
     const drawAt = (ctx, i) => {
-      const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
+      const seg = (Math.min(i, animFrames - 1) / Math.max(1, animFrames - 1)) * totalSeg;
       vst._clock = i / fps * 1000;
       const last = data.frames.length - 1, li = Math.min(last, Math.round(seg));
       if (mode === 'horses') _palcoPaintHorses(ctx, vst, _corridaInterp(data, seg), data.frames[li]);
