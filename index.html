@@ -459,12 +459,21 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 #corrida-content{max-width:1320px}
 .corrida-wrap{max-width:1280px;margin:0 auto;padding:0 4px}
 .corrida-modes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:6px 0 6px}
-.corrida-canvas-box{position:relative;width:100%;border-radius:14px;overflow:hidden;background:#071428;border:1px solid var(--border);box-shadow:0 6px 30px rgba(0,0,0,.35)}
+.corrida-canvas-box{position:relative;width:100%;border-radius:14px;overflow:hidden;background:#0A1A30;border:1px solid var(--border);box-shadow:0 6px 30px rgba(0,0,0,.35)}
 .corrida-canvas-box canvas{display:block;width:100%}
 .corrida-scrub{width:100%;margin-top:10px;accent-color:var(--gold);cursor:pointer}
 .corrida-actions{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px}
 .corrida-hint{font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:8px;line-height:1.4}
 @media (max-width:600px){.corrida-actions .btn{flex:1 1 135px;padding:10px 8px}.corrida-hint{font-size:0.68rem}}
+/* ── PALCO / GP DO BOLÃO (admin) ── */
+#palco-content{max-width:1320px}
+.palco-wrap{max-width:1280px;margin:0 auto;padding:0 4px}
+.palco-modeswitch{display:inline-flex;gap:4px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:999px;padding:4px}
+.palco-modeswitch button{border:0;background:transparent;color:var(--text-muted);font-weight:800;font-size:0.86rem;padding:8px 16px;border-radius:999px;cursor:pointer;transition:all .18s}
+.palco-modeswitch button.active{background:linear-gradient(135deg,#13294b,#1e4377);color:#fff;box-shadow:0 1px 8px rgba(0,0,0,.3);border:1px solid rgba(255,215,0,.4)}
+.palco-canvas-box{position:relative;width:100%;border-radius:16px;overflow:hidden;background:#0A1A30;border:1px solid var(--border);box-shadow:0 10px 40px rgba(0,0,0,.45)}
+.palco-canvas-box canvas{display:block;width:100%}
+.palco-canvas-box:fullscreen{display:flex;align-items:center;justify-content:center;background:#0A1A30}
 /* Diálogo "Baixar vídeo" da Corrida */
 .cv-group{margin-bottom:12px}
 .cv-label{font-size:0.74rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
@@ -1544,6 +1553,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
         <a onclick="navigateTo('ver-palpites');toggleDropdown()">👁️ Ver Palpites</a>
         <a onclick="navigateTo('ver-todos');toggleDropdown()">📋 Todos os Palpites</a>
         <a onclick="showApelidoModal();toggleDropdown()">✏️ Alterar Apelido</a>
+        <a id="palco-dropdown" style="display:none" onclick="navigateTo('palco');toggleDropdown()">🎬 GP do Bolão</a>
         <a id="admin-dropdown" style="display:none" onclick="navigateTo('admin');toggleDropdown()">⚙️ Admin</a>
       </div>
     </div>
@@ -1576,6 +1586,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <a data-page="corrida" onclick="navigateTo('corrida');closeMaisSheet()">🏁 Corrida do Ranking</a>
     <a data-page="simulador" onclick="navigateTo('simulador');closeMaisSheet()">🔮 Simulador</a>
     <a data-page="regras" onclick="navigateTo('regras');closeMaisSheet()">📋 Regras</a>
+    <a id="mais-palco" data-page="palco" style="display:none" onclick="navigateTo('palco');closeMaisSheet()">🎬 GP do Bolão</a>
     <a id="mais-admin" data-page="admin" style="display:none" onclick="navigateTo('admin');closeMaisSheet()">⚙️ Admin</a>
     <div class="mais-divider"></div>
     <a onclick="showApelidoModal();closeMaisSheet()">✏️ Alterar Apelido</a>
@@ -1664,6 +1675,13 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <!-- ── CORRIDA DO RANKING ── -->
     <div id="page-corrida" class="page">
       <div class="container" id="corrida-content">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ── PALCO / GP DO BOLÃO (oculto, só admin) ── -->
+    <div id="page-palco" class="page">
+      <div class="container" id="palco-content">
         <div class="loading-wrap"><div class="spinner"></div></div>
       </div>
     </div>
@@ -2679,6 +2697,11 @@ function showApp() {
   document.getElementById('admin-dropdown').style.display = isAdmin?'block':'none';
   const adminMais = document.getElementById('mais-admin');
   if (adminMais) adminMais.style.display = isAdmin?'block':'none';
+  // Palco "GP do Bolão" — recurso oculto, visível apenas para admin.
+  const palcoDrop = document.getElementById('palco-dropdown');
+  if (palcoDrop) palcoDrop.style.display = isAdmin?'block':'none';
+  const palcoMais = document.getElementById('mais-palco');
+  if (palcoMais) palcoMais.style.display = isAdmin?'block':'none';
 }
 
 // ════════════════════════════════════════════
@@ -2703,11 +2726,12 @@ function navigateTo(page, opts) {
   if (_countdownTimer && page !== 'dashboard') { clearInterval(_countdownTimer); _countdownTimer = null; }
   if (_cardapioTimer && page !== 'cardapio') { clearInterval(_cardapioTimer); _cardapioTimer = null; }
   if (page !== 'corrida' && typeof _corridaStop === 'function') _corridaStop(); // pausa a corrida ao sair da aba
+  if (page !== 'palco' && typeof _palcoStop === 'function') _palcoStop(); // pausa o palco ao sair da aba
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
   // Páginas que vivem na folha "Mais" acendem o botão Mais na bottom nav.
-  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','corrida','simulador','regras','admin']);
+  const _maisPages = new Set(['tabelas','chaveamento','chaveamento-bilateral','ver-todos','corrida','simulador','regras','palco','admin']);
   const _maisBtn = document.getElementById('mais-bottom-nav');
   if (_maisBtn) _maisBtn.classList.toggle('active', _maisPages.has(page));
   document.querySelectorAll('#mais-sheet a').forEach(a=>a.classList.toggle('active',a.dataset.page===page));
@@ -2736,6 +2760,7 @@ function navigateTo(page, opts) {
     case 'estatisticas': renderEstatisticas(); break;
     case 'simulador':   renderSimulador(); break;
     case 'corrida':     renderCorrida(); break;
+    case 'palco':       if (currentUserDoc?.role==='admin') renderPalco(); else navigateTo('dashboard',{history:'replace'}); break;
     case 'cardapio':    renderCardapio(); break;
     case 'admin':       if (currentUserDoc?.role==='admin') renderAdmin(); break;
   }
@@ -2746,10 +2771,10 @@ function navigateTo(page, opts) {
 
 function _restorePageFromHash() {
   const hash = (location.hash||'').replace('#','').trim();
-  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','corrida','simulador','cardapio','admin'];
+  const valid = ['dashboard','palpites','tabelas','chaveamento','chaveamento-bilateral','regras','estatisticas','corrida','simulador','cardapio','palco','admin'];
   const page = valid.includes(hash) ? hash : 'dashboard';
-  // admin só restaura se usuário for admin
-  if (page === 'admin' && currentUserDoc?.role !== 'admin') return navigateTo('dashboard', { history: 'replace' });
+  // admin/palco só restauram se usuário for admin
+  if ((page === 'admin' || page === 'palco') && currentUserDoc?.role !== 'admin') return navigateTo('dashboard', { history: 'replace' });
   navigateTo(page, { history: 'replace' });
 }
 
@@ -3756,7 +3781,7 @@ async function renderDashboard() {
       <button class="btn-share" onclick="shareRankingImage(0)">📸 Gerar imagem — Todos</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:2px 0 16px">
-      <button onclick="navigateTo('corrida')" style="background:linear-gradient(90deg,#7b2ff7,#f107a3);color:#fff;border:none;border-radius:22px;padding:10px 20px;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 2px 14px rgba(180,0,200,.35)">🏁 Ver a Corrida do Ranking</button>
+      <button onclick="navigateTo('corrida')" style="background:linear-gradient(135deg,#13294b,#1e4377);color:#fff;border:1px solid rgba(255,215,0,.45);border-radius:22px;padding:10px 20px;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 2px 14px rgba(0,0,0,.35)">🏁 Ver a Corrida do Ranking</button>
     </div>
     <div id="evo-chart-container"></div>`;
     cont.innerHTML = html;
@@ -12545,9 +12570,11 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
   const { W, H, padTop, rowH, slots, pin, showNames, showVals, nameW, barLeft, barMaxW, pinTop } = geo;
   const meUid = data.meUid;
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#071428'; ctx.fillRect(0, 0, W, H);
-  const g = ctx.createLinearGradient(0, 0, W, H);
-  g.addColorStop(0, 'rgba(123,47,247,.26)'); g.addColorStop(1, 'rgba(241,7,163,.09)');
+  // Fundo sóbrio: azul-marinho profundo com leve brilho dourado no topo (sem o
+  // antigo roxo/rosa). Mantém o dourado como cor de destaque da identidade.
+  ctx.fillStyle = '#0A1A30'; ctx.fillRect(0, 0, W, H);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, 'rgba(255,215,0,.07)'); g.addColorStop(0.5, 'rgba(13,34,64,.0)'); g.addColorStop(1, 'rgba(0,0,0,.22)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   const s = geo.s || 1; // escala da resolução (1 = 720 de largura)
   if (opts.header) {
@@ -13004,6 +13031,405 @@ function _corridaStop() {
   if (st.raf) cancelAnimationFrame(st.raf);
   st.raf = null; st.playing = false;
   if (st._onResize) window.removeEventListener('resize', st._onResize);
+}
+
+// ════════════════════════════════════════════
+// PALCO / GP DO BOLÃO  (recurso oculto — só admin)
+// ════════════════════════════════════════════
+// Dois "palcos" animados estilo TV, reaproveitando o mesmo motor de dados da
+// Corrida (_corridaBuild / _corridaInterp / _corridaSubset). Tudo em canvas, bem
+// suave, e adaptando a orientação à tela (vertical no celular, horizontal no PC):
+//   • 🐴 Cavalos  — corrida de cavalos (clima "Fantástico"), avança até a chegada.
+//   • 📈 Linhas    — line race estilo Flourish, com nome na ponta de cada linha.
+let _palcoState = null;
+let _palcoMode = 'horses';   // 'horses' | 'lines'
+let _palcoTopN = null;       // número | 'all' | null (automático conforme a tela)
+let _palcoSpeed = 1;
+let _palcoFull = null;       // dataset completo (cache do render atual)
+
+async function renderPalco() {
+  const cont = document.getElementById('palco-content');
+  if (!cont) return;
+  cont.innerHTML = `<div class="palco-wrap">
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-weight:800;color:var(--gold);font-size:1.2rem">🎬 GP do Bolão</div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px">Palco animado da disputa — jogo a jogo, pronto pra gravar. <b>Visível só para o admin.</b></div>
+    </div>
+    <div style="display:flex;justify-content:center;margin-bottom:10px">
+      <div class="palco-modeswitch">
+        <button class="palco-mode-btn active" data-mode="horses" onclick="_palcoSetMode('horses')">🐴 Cavalos</button>
+        <button class="palco-mode-btn" data-mode="lines" onclick="_palcoSetMode('lines')">📈 Linhas</button>
+      </div>
+    </div>
+    <div class="corrida-modes">
+      <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Mostrar:</span>
+      <button class="date-filter-btn palco-top-btn" data-top="8" onclick="_palcoSetTop(8)">Top 8</button>
+      <button class="date-filter-btn palco-top-btn" data-top="12" onclick="_palcoSetTop(12)">Top 12</button>
+      <button class="date-filter-btn palco-top-btn" data-top="all" onclick="_palcoSetTop('all')">Todos</button>
+    </div>
+    <div class="corrida-modes" style="margin:2px 0 4px">
+      <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Velocidade:</span>
+      <button class="date-filter-btn palco-speed-btn" data-spd="0.15" onclick="_palcoSetSpeed(0.15)">0,15×</button>
+      <button class="date-filter-btn palco-speed-btn" data-spd="0.25" onclick="_palcoSetSpeed(0.25)">0,25×</button>
+      <button class="date-filter-btn palco-speed-btn" data-spd="0.5" onclick="_palcoSetSpeed(0.5)">0,5×</button>
+      <button class="date-filter-btn palco-speed-btn active" data-spd="1" onclick="_palcoSetSpeed(1)">1×</button>
+      <button class="date-filter-btn palco-speed-btn" data-spd="1.5" onclick="_palcoSetSpeed(1.5)">1,5×</button>
+      <button class="date-filter-btn palco-speed-btn" data-spd="2" onclick="_palcoSetSpeed(2)">2×</button>
+    </div>
+    <div id="palco-label" style="font-size:1.02rem;font-weight:700;color:var(--text);min-height:24px;text-align:center;margin:6px auto 10px;line-height:1.4;max-width:560px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:20px;padding:8px 14px"></div>
+    <div class="palco-canvas-box"><canvas id="palco-canvas"></canvas>
+      <div id="palco-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,26,48,.6)"><div class="spinner"></div></div>
+    </div>
+    <input id="palco-scrub" class="corrida-scrub" type="range" min="0" max="1000" value="0" oninput="_palcoScrub(this.value)" style="display:none">
+    <div class="corrida-actions">
+      <button id="palco-play" class="btn btn-primary" onclick="_palcoTogglePlay()" style="display:none">⏸️ Pausar</button>
+      <button id="palco-replay" class="btn btn-secondary" onclick="_palcoReplay()" style="display:none">🔁 Repetir</button>
+      <button id="palco-fs" class="btn btn-secondary" onclick="_palcoFullscreen()" style="display:none">⛶ Tela cheia</button>
+    </div>
+    <div class="corrida-hint">Use a barra para percorrer com calma. Em <b>Tela cheia</b> + gravador de tela vira vídeo. O ranking é o mesmo da Corrida oficial — aqui muda só a apresentação.</div>
+  </div>`;
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals } = await _fetchPalsCached(users);
+    const full = _corridaBuild(users, res, allPals);
+    const loadingEl = document.getElementById('palco-loading'); if (loadingEl) loadingEl.remove();
+    if (!full) { const l = document.getElementById('palco-label'); if (l) l.textContent = 'Ainda não há resultados para montar o palco.'; return; }
+    _palcoFull = full;
+    if (_palcoTopN == null) _palcoTopN = _palcoAutoTop(full);
+    _palcoSyncTopButtons();
+    _palcoInit();
+  } catch (e) {
+    const loadingEl = document.getElementById('palco-loading'); if (loadingEl) loadingEl.remove();
+    const box = cont.querySelector('.palco-canvas-box'); if (box) box.innerHTML = `<div class="alert alert-error" style="margin:10px">Erro: ${esc(errMsg(e))}</div>`;
+  }
+}
+
+function _palcoAutoTop(full) {
+  const cap = (window.innerWidth || 800) >= 760 ? 12 : 8;
+  return full.n <= cap ? 'all' : cap;
+}
+
+// Retorna os dados a animar conforme o filtro (Top N + você, ou todos).
+function _palcoData() {
+  const full = _palcoFull;
+  const n = _palcoTopN;
+  if (n === 'all' || n == null || n >= full.n) return full;
+  const finalF = full.frames[full.frames.length - 1];
+  const ordered = full.uids.slice().sort((a, b) => (finalF.values[b] - finalF.values[a]) || (full.apel[a] || '').localeCompare(full.apel[b] || ''));
+  const set = new Set(ordered.slice(0, n));
+  set.add(full.meUid);
+  const sub = _corridaSubset(full, set);
+  return sub || full;
+}
+
+function _palcoInit() {
+  const canvas = document.getElementById('palco-canvas');
+  if (!canvas || !_palcoFull) return;
+  _palcoStop();
+  const data = _palcoData();
+  const baseStepDur = Math.max(420, Math.min(1200, Math.round(38000 / Math.max(1, data.frames.length - 1))));
+  _palcoState = {
+    data, canvas, ctx: null, raf: null, startTime: 0, seg: 0, playing: false, _scrubbing: false,
+    baseStepDur, stepDur: baseStepDur / (_palcoSpeed || 1), cssW: 0, cssH: 0, laneH: 48,
+    _onResize: () => { _palcoSizeCanvas(); _palcoRenderSeg(_palcoState.seg); }
+  };
+  window.addEventListener('resize', _palcoState._onResize);
+  document.addEventListener('fullscreenchange', _palcoState._onResize);
+  _palcoSizeCanvas();
+  _palcoSyncModeButtons();
+  _palcoSyncSpeedButtons();
+  const sc = document.getElementById('palco-scrub'); if (sc) { sc.style.display = ''; sc.value = 0; }
+  _palcoReplay();
+}
+
+function _palcoSizeCanvas() {
+  const st = _palcoState; if (!st || !st.canvas) return;
+  const box = st.canvas.parentElement;
+  const fs = document.fullscreenElement === box;
+  const cssW = Math.max(300, Math.floor((fs ? window.innerWidth : box.clientWidth) || 320));
+  const wide = cssW >= 760;
+  const n = st.data.n;
+  let cssH;
+  if (_palcoMode === 'horses') {
+    const target = fs ? (window.innerHeight - 8) : (wide ? Math.min(680, window.innerHeight * 0.74) : Math.min(window.innerHeight * 0.7, 600));
+    const chrome = 80; // título + rodapé
+    const laneH = Math.max(30, Math.min(wide ? 88 : 64, (target - chrome) / n));
+    cssH = Math.round(chrome + n * laneH);
+    st.laneH = laneH;
+  } else {
+    cssH = fs ? (window.innerHeight - 8) : (wide ? Math.min(560, Math.max(380, cssW * 0.5)) : Math.min(window.innerHeight * 0.62, 470));
+    cssH = Math.round(cssH);
+  }
+  st.cssW = cssW; st.cssH = cssH;
+  const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+  st.canvas.width = Math.round(cssW * dpr); st.canvas.height = Math.round(cssH * dpr);
+  st.canvas.style.height = cssH + 'px';
+  const ctx = st.canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  st.ctx = ctx;
+}
+
+function _palcoBg(ctx, W, H) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0A1A30'; ctx.fillRect(0, 0, W, H);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, 'rgba(255,215,0,.07)'); g.addColorStop(0.5, 'rgba(13,34,64,0)'); g.addColorStop(1, 'rgba(0,0,0,.24)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+function _palcoValAt(data, seg, uid) {
+  const last = data.frames.length - 1; seg = Math.max(0, Math.min(seg, last));
+  const k = Math.floor(seg), kn = Math.min(last, k + 1), p = seg - k;
+  const a = data.frames[k].values[uid] || 0, b = data.frames[kn].values[uid] || 0;
+  const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+  return a + (b - a) * e;
+}
+
+// ── Painter: CAVALOS ──────────────────────────────────────────────────────────
+function _palcoPaintHorses(ctx, st, arr, frame) {
+  const W = st.cssW, H = st.cssH, n = st.data.n, laneH = st.laneH, data = st.data, meUid = data.meUid;
+  const wide = W >= 760;
+  _palcoBg(ctx, W, H);
+  const padTop = 56, padBottom = 24;
+  const nameW = Math.round(Math.min(0.30 * W, wide ? 158 : 120));
+  const trackLeft = nameW + 10;
+  const finishX = W - 24;
+  const trackW = Math.max(40, finishX - trackLeft);
+  const bandTop = padTop, bandH = n * laneH;
+  // Título
+  ctx.textAlign = 'center'; ctx.fillStyle = '#FFD700'; ctx.font = `800 ${wide ? 26 : 20}px Arial`;
+  ctx.fillText('🏇 GP do Bolão', W / 2, 26);
+  // Pílula da partida atual
+  const matchTxt = (frame && frame.plainLabel) || '';
+  if (matchTxt) {
+    let fsz = wide ? 18 : 14; ctx.font = `800 ${fsz}px Arial`;
+    while (fsz > 11 && ctx.measureText(matchTxt).width > W - 60) { fsz--; ctx.font = `800 ${fsz}px Arial`; }
+    const pw = Math.min(W - 20, ctx.measureText(matchTxt).width + 26), ph = fsz + 12, px = (W - pw) / 2, py = 36;
+    ctx.fillStyle = 'rgba(255,255,255,.08)'; _rrect(ctx, px, py, pw, ph, ph / 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,215,0,.5)'; ctx.lineWidth = 1; _rrect(ctx, px, py, pw, ph, ph / 2); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.fillText(matchTxt, W / 2, py + ph / 2 + fsz * 0.35);
+  }
+  // Marca d'água da data
+  if (frame && frame.date) {
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `900 ${Math.max(28, Math.min(110, Math.round(W * 0.14)))}px Arial`;
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillText(frame.date, W / 2, bandTop + bandH / 2); ctx.restore();
+  }
+  // Linha de chegada (quadriculada)
+  const sq = Math.max(7, Math.round(laneH / 5));
+  for (let yy = bandTop - 4; yy < bandTop + bandH + 4; yy += sq) {
+    for (let c = 0; c < 2; c++) {
+      ctx.fillStyle = ((Math.floor((yy - bandTop) / sq) + c) % 2 === 0) ? '#fff' : '#11203a';
+      ctx.fillRect(finishX + c * sq, yy, sq, sq);
+    }
+  }
+  // Separadores de raia
+  ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1;
+  for (let i = 1; i < n; i++) { const y = bandTop + i * laneH; ctx.beginPath(); ctx.moveTo(8, y); ctx.lineTo(finishX + 2 * sq, y); ctx.stroke(); }
+  const now = performance.now();
+  const curMax = Math.max(1, data.maxV);
+  const sorted = arr.slice().sort((a, b) => a.r - b.r);
+  sorted.forEach(o => {
+    const top = bandTop + o.r * laneH;
+    const yc = top + laneH / 2;
+    const isMe = o.uid === meUid;
+    const isLeader = Math.round(o.r) === 0;
+    const color = data.colorByUid[o.uid] || '#888';
+    const frac = Math.max(0, Math.min(1, o.v / curMax));
+    const hx = trackLeft + frac * trackW;
+    const bob = st.playing ? Math.sin(now / 110 + o.r * 1.7) * (laneH * 0.05) : 0;
+    const hy = yc + bob;
+    if (isMe || isLeader) {
+      ctx.save(); ctx.globalAlpha = isMe ? 0.14 : 0.10; ctx.fillStyle = isMe ? '#FFD700' : color;
+      _rrect(ctx, 6, top + 1, W - 12, laneH - 2, Math.min(9, laneH / 3)); ctx.fill(); ctx.restore();
+    }
+    // Rótulo (posição + nome) na coluna esquerda
+    const lblF = Math.max(10, Math.min(15, laneH * 0.26));
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = `800 ${lblF}px Arial`;
+    ctx.fillStyle = isMe ? '#FFD700' : '#8597B0'; ctx.fillText(`${Math.round(o.r) + 1}º`, 8, yc + lblF * 0.35);
+    ctx.fillStyle = isMe ? '#FFD700' : '#E7ECF5'; ctx.font = `${isMe ? '800' : '700'} ${lblF}px Arial`;
+    ctx.fillText(_corridaEllipsis(ctx, (isMe ? '★ ' : '') + (data.apel[o.uid] || ''), nameW - 36), 32, yc + lblF * 0.35);
+    // Rastro do cavalo
+    const grad = ctx.createLinearGradient(trackLeft, 0, hx, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,0)'); grad.addColorStop(1, color);
+    ctx.strokeStyle = grad; ctx.lineWidth = Math.max(2, laneH * 0.09); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(trackLeft, hy); ctx.lineTo(Math.max(trackLeft + 1, hx - 6), hy); ctx.stroke();
+    // Disco do cavalo
+    const r = Math.max(11, Math.min(wide ? 22 : 17, laneH * 0.34));
+    ctx.beginPath(); ctx.arc(hx, hy, r, 0, Math.PI * 2); ctx.fillStyle = 'rgba(8,20,40,.92)'; ctx.fill();
+    if (isMe || isLeader) { ctx.shadowColor = isMe ? '#FFD700' : color; ctx.shadowBlur = 12; }
+    ctx.lineWidth = isMe ? 3 : 2; ctx.strokeStyle = isMe ? '#FFD700' : color; ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `${Math.round(r * 1.2)}px Arial`;
+    ctx.fillText('🐎', hx, hy + 1); ctx.textBaseline = 'alphabetic';
+    // Pontos perto do cavalo (clampado dentro da pista)
+    const pv = String(Math.round(o.v)); ctx.font = `800 ${Math.max(10, Math.min(14, laneH * 0.24))}px Arial`;
+    const tw = ctx.measureText(pv).width; let lx = hx + r + 6;
+    if (lx + tw > finishX - 2) lx = hx - r - 6 - tw;
+    ctx.textAlign = 'left'; ctx.fillStyle = isMe ? '#FFD700' : '#fff'; ctx.fillText(pv, lx, hy + 4);
+  });
+  ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.font = '12px Arial';
+  ctx.fillText('Bolão ICN Copa 2026', W / 2, H - 7);
+}
+
+// ── Painter: LINHAS (line race / Flourish) ────────────────────────────────────
+function _palcoPaintLines(ctx, st, seg, li) {
+  const W = st.cssW, H = st.cssH, data = st.data, meUid = data.meUid;
+  const wide = W >= 760;
+  _palcoBg(ctx, W, H);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#FFD700'; ctx.font = `800 ${wide ? 24 : 19}px Arial`;
+  ctx.fillText('📈 GP do Bolão — Evolução', W / 2, 28);
+  if (data.frames[li] && data.frames[li].date) {
+    ctx.textAlign = 'right'; ctx.font = '800 14px Arial'; ctx.fillStyle = 'rgba(255,215,0,.85)';
+    ctx.fillText('📅 ' + data.frames[li].date, W - 12, 22);
+  }
+  const padL = 46, padR = wide ? 132 : 92, padT = 46, padB = 32;
+  const plotW = Math.max(20, W - padL - padR), plotH = Math.max(20, H - padT - padB);
+  const last = data.frames.length - 1, maxV = Math.max(1, data.maxV);
+  const xFor = i => padL + (last ? i / last : 0) * plotW;
+  const yFor = v => padT + plotH - (v / maxV) * plotH;
+  // Grade + eixo Y
+  ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = '11px Arial'; ctx.textBaseline = 'middle';
+  for (let i = 0; i <= 4; i++) {
+    const v = Math.round(maxV / 4 * i), y = yFor(v);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    ctx.textAlign = 'right'; ctx.fillText(String(v), padL - 8, y);
+  }
+  // Eixo X (nº do jogo, esparso)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(255,255,255,.5)';
+  const every = Math.max(1, Math.ceil((last + 1) / (wide ? 8 : 5)));
+  data.frames.forEach((f, i) => { if (i % every !== 0 && i !== last) return; ctx.fillText('J' + (i + 1), xFor(i), padT + plotH + 8); });
+  ctx.textBaseline = 'alphabetic';
+  const headIdx = Math.min(last, seg), k = Math.floor(headIdx), p = headIdx - k;
+  const heads = [];
+  data.uids.forEach(uid => {
+    const isMe = uid === meUid;
+    const isLeader = data.frames[li].rank[uid] === 0;
+    const color = data.colorByUid[uid] || '#888';
+    ctx.beginPath();
+    for (let i = 0; i <= k; i++) { const x = xFor(i), y = yFor(data.frames[i].values[uid] || 0); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    const vHead = _palcoValAt(data, headIdx, uid);
+    const xh = xFor(headIdx), yh = yFor(vHead);
+    if (k < last && p > 0) ctx.lineTo(xh, yh);
+    ctx.strokeStyle = color; ctx.globalAlpha = (isMe || isLeader) ? 1 : 0.5;
+    ctx.lineWidth = isMe ? 4 : (isLeader ? 3.2 : 1.7); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(xh, yh, isMe ? 5 : 3.4, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    heads.push({ uid, y: yh, color, isMe, v: vHead, x: xh });
+  });
+  // Declutter dos rótulos na ponta
+  heads.sort((a, b) => a.y - b.y);
+  const gap = wide ? 15 : 12;
+  for (let i = 1; i < heads.length; i++) if (heads[i].y - heads[i - 1].y < gap) heads[i].y = heads[i - 1].y + gap;
+  const overflow = heads.length ? (heads[heads.length - 1].y - (padT + plotH)) : 0;
+  if (overflow > 0) heads.forEach(h => h.y -= overflow);
+  ctx.textBaseline = 'middle';
+  heads.forEach(h => {
+    ctx.textAlign = 'left'; ctx.font = `${h.isMe ? '800' : '700'} ${wide ? 12 : 10}px Arial`;
+    ctx.fillStyle = h.isMe ? '#FFD700' : h.color;
+    const tx = Math.min(W - 4, h.x + 8);
+    ctx.fillText(_corridaEllipsis(ctx, (h.isMe ? '★ ' : '') + (data.apel[h.uid] || '') + ' (' + Math.round(h.v) + ')', padR - 6), tx, h.y);
+  });
+  ctx.textBaseline = 'alphabetic';
+}
+
+function _palcoRenderSeg(seg) {
+  const st = _palcoState; if (!st || !st.ctx) return;
+  st.seg = seg;
+  const last = st.data.frames.length - 1;
+  const li = Math.min(last, Math.round(seg));
+  if (_palcoMode === 'horses') _palcoPaintHorses(st.ctx, st, _corridaInterp(st.data, seg), st.data.frames[li]);
+  else _palcoPaintLines(st.ctx, st, seg, li);
+  const lbl = document.getElementById('palco-label');
+  if (lbl) lbl.innerHTML = `<b style="color:var(--gold)">${li + 1}/${st.data.frames.length}</b> · ${st.data.frames[li].label}`;
+  const sc = document.getElementById('palco-scrub');
+  if (sc && !st._scrubbing && last > 0) sc.value = Math.round(seg / last * 1000);
+}
+
+function _palcoLoop(now) {
+  const st = _palcoState; if (!st) return;
+  const last = st.data.frames.length - 1;
+  const seg = st.stepDur > 0 ? (now - st.startTime) / st.stepDur : last;
+  const done = seg >= last;
+  _palcoRenderSeg(Math.min(seg, last));
+  if (done) { st.playing = false; st.raf = null; _palcoSyncButtons(); return; }
+  st.raf = requestAnimationFrame(_palcoLoop);
+}
+
+function _palcoReplay() {
+  const st = _palcoState; if (!st) return;
+  if (st.raf) cancelAnimationFrame(st.raf);
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) { st.playing = false; st.raf = null; _palcoRenderSeg(st.data.frames.length - 1); _palcoSyncButtons(); return; }
+  st.playing = true; st.startTime = performance.now(); st.raf = requestAnimationFrame(_palcoLoop); _palcoSyncButtons();
+}
+
+function _palcoTogglePlay() {
+  const st = _palcoState; if (!st) return;
+  const last = st.data.frames.length - 1;
+  if (st.playing) { if (st.raf) cancelAnimationFrame(st.raf); st.raf = null; st.playing = false; }
+  else if (st.seg >= last) { _palcoReplay(); return; }
+  else { st.startTime = performance.now() - st.seg * st.stepDur; st.playing = true; st.raf = requestAnimationFrame(_palcoLoop); }
+  _palcoSyncButtons();
+}
+
+function _palcoScrub(v) {
+  const st = _palcoState; if (!st) return;
+  if (st.raf) { cancelAnimationFrame(st.raf); st.raf = null; } st.playing = false;
+  const last = st.data.frames.length - 1;
+  st._scrubbing = true; _palcoRenderSeg(v / 1000 * last); st._scrubbing = false; _palcoSyncButtons();
+}
+
+function _palcoSetSpeed(mult) {
+  _palcoSpeed = mult; _palcoSyncSpeedButtons();
+  const st = _palcoState; if (!st) return;
+  st.stepDur = st.baseStepDur / mult;
+  if (st.playing) st.startTime = performance.now() - st.seg * st.stepDur;
+}
+
+function _palcoSetMode(mode) {
+  if (mode === _palcoMode) return;
+  _palcoMode = mode; _palcoSyncModeButtons();
+  if (!_palcoState) return;
+  _palcoSizeCanvas(); _palcoRenderSeg(_palcoState.seg);
+}
+
+function _palcoSetTop(n) {
+  _palcoTopN = n; _palcoSyncTopButtons(); _palcoInit();
+}
+
+function _palcoFullscreen() {
+  const box = document.querySelector('#palco-content .palco-canvas-box'); if (!box) return;
+  if (!document.fullscreenElement) box.requestFullscreen?.(); else document.exitFullscreen?.();
+}
+
+function _palcoSyncButtons() {
+  const st = _palcoState; if (!st) return;
+  const last = st.data.frames.length - 1;
+  const b = document.getElementById('palco-play');
+  if (b) { b.style.display = ''; b.textContent = st.playing ? '⏸️ Pausar' : (st.seg >= last ? '▶️ Recomeçar' : '▶️ Continuar'); }
+  const rp = document.getElementById('palco-replay'); if (rp) rp.style.display = '';
+  const fb = document.getElementById('palco-fs'); if (fb) fb.style.display = '';
+}
+function _palcoSyncModeButtons() {
+  document.querySelectorAll('.palco-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === _palcoMode));
+}
+function _palcoSyncSpeedButtons() {
+  document.querySelectorAll('.palco-speed-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.spd) === _palcoSpeed));
+}
+function _palcoSyncTopButtons() {
+  document.querySelectorAll('.palco-top-btn').forEach(b => {
+    const v = b.dataset.top;
+    const active = (v === 'all') ? (_palcoTopN === 'all' || (_palcoFull && typeof _palcoTopN === 'number' && _palcoTopN >= _palcoFull.n)) : (String(_palcoTopN) === v);
+    b.classList.toggle('active', active);
+  });
+}
+
+function _palcoStop() {
+  const st = _palcoState; if (!st) return;
+  if (st.raf) cancelAnimationFrame(st.raf);
+  st.raf = null; st.playing = false;
+  if (st._onResize) { window.removeEventListener('resize', st._onResize); document.removeEventListener('fullscreenchange', st._onResize); }
 }
 
 // ════════════════════════════════════════════
