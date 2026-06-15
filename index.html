@@ -5115,7 +5115,7 @@ function _menuCardHtml(c, isToday) {
       <div class="menu-mini">🥗 Saladas</div>${chips(a.saladas)}
       <div class="menu-mini">🍛 Pratos</div>${chips(a.pratos)}
       <div class="menu-extras">
-        ${extra('🧃', 'Suco', a.suco)}
+        ${extra('🥤', 'Suco', a.suco)}
         ${extra('🍮', 'Sobremesa', a.sobremesa)}
         ${extra('🍎', 'Fruta', a.fruta)}
       </div>
@@ -5476,6 +5476,8 @@ function _simRecompute() {
   // nível (1,1,1,2,2,3...). Igual ao "≈ pos" do ranking oficial.
   const denseArr = []; let _dLvl = 0, _dLast = null;
   simRank.forEach((u, i) => { if (u.pontos !== _dLast) { _dLvl++; _dLast = u.pontos; } denseArr[i] = _dLvl; });
+  // Jogos simulados completos — base dos pontos ganhos por cada um "agora".
+  const simGids = Object.keys(_simDraft).filter(gid => { const d = _simDraft[gid]; return d && d.h !== undefined && d.a !== undefined; });
   let rows = '';
   simRank.forEach((u, i) => {
     const pos = simPos[i];
@@ -5486,11 +5488,16 @@ function _simRecompute() {
       delta > 0 ? `<span style="color:var(--green);font-weight:700">↑${delta}</span>` :
       delta < 0 ? `<span style="color:#ff6b6b;font-weight:700">↓${Math.abs(delta)}</span>` :
       `<span style="color:var(--text-muted)">=</span>`;
+    // Pontos que esta pessoa ganha com os placares simulados deste momento.
+    let gain = 0;
+    simGids.forEach(gid => { const p = _simAllPals[u.uid] && _simAllPals[u.uid][gid]; const pts = calcPontos(p, merged[gid]); if (pts != null) gain += pts; });
+    const gainHtml = (simGids.length > 0 && gain > 0)
+      ? `<div style="color:var(--green);font-weight:700;font-size:0.7rem;line-height:1.1" title="Pontos ganhos com os placares simulados">+${gain}</div>` : '';
     const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '';
     rows += `<tr class="${isMe ? 'is-me' : ''}" data-uid="${u.uid}">
       <td><span class="rank-pos ${posClass}">${pos}</span></td>
       <td style="color:var(--text-muted);font-weight:600;font-size:0.82rem" title="Posição por adensamento (ranking denso)">${denseArr[i]}º</td>
-      <td style="text-align:center">${deltaHtml}</td>
+      <td style="text-align:center;white-space:nowrap">${deltaHtml}${gainHtml}</td>
       <td><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.72rem;color:var(--text-muted)">${esc(u.nome || '')}</div></td>
       <td><span class="pts-badge">${u.pontos}</span></td>
       <td class="text-green">${u.exatos}</td>
@@ -5503,7 +5510,7 @@ function _simRecompute() {
 
   el.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
       <table class="ranking-table" style="min-width:380px">
-        <thead><tr><th>#</th><th title="Posição por adensamento (ranking denso): empatados em pontos dividem o mesmo nível" style="color:var(--text-muted)">≈ pos</th><th title="Variação vs ranking oficial atual">↑↓</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
+        <thead><tr><th>#</th><th title="Posição por adensamento (ranking denso): empatados em pontos dividem o mesmo nível" style="color:var(--text-muted)">≈ pos</th><th title="Variação de posição vs ranking oficial + pontos ganhos com os placares simulados">↑↓ / pts</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">${nSim > 0 ? ('🧪 ' + nSim + ' jogo(s) simulado(s) aplicado(s) ao ranking.') : 'Nenhum placar simulado ainda — ranking igual ao oficial.'}</div>`;
@@ -6859,6 +6866,48 @@ function _buildBumpChart(users, res, allPals) {
   return svg;
 }
 
+// Card de uma partida JÁ FINALIZADA (reabre a análise depois que ela sai de
+// "Próximas Partidas"). Reaproveita _gxGameStats (mesma base dos Gráficos).
+function _statFinishedGameBody(gid, data) {
+  const s = _gxGameStats(gid, data);
+  if (!s) return '<p class="text-muted" style="margin-top:10px">Sem dados para esta partida.</p>';
+  const t = s.teams, oc = s.outcomeCounts, tot = s.nPals || 1;
+  const ocColor = { H: '#1E90FF', D: 'rgba(140,160,190,.6)', A: '#FF8C00' };
+  const ocLabel = { H: t.h, D: 'Empate', A: t.a };
+  const ocBar = o => `<div class="gx-bar-row"><div class="gx-bar-label">${esc(ocLabel[o])}${o === s.winnerOutcome ? ' ✅' : ''}</div>
+    <div class="gx-bar-track"><div class="gx-bar-fill" style="width:${(oc[o] / tot * 100).toFixed(1)}%;background:${o === s.winnerOutcome ? 'var(--green)' : ocColor[o]}"></div></div>
+    <div class="gx-bar-val">${oc[o]} (${Math.round(oc[o] / tot * 100)}%)</div></div>`;
+  const topScores = Object.entries(s.scoreFreq).map(([k, c]) => ({ k, c })).sort((a, b) => b.c - a.c).slice(0, 5);
+  const maxSc = topScores.length ? topScores[0].c : 1;
+  const scoreBars = topScores.map(x => `<div class="gx-bar-row"><div class="gx-bar-label">${esc(x.k)}${x.k === s.realScore ? ' ✅' : ''}</div>
+    <div class="gx-bar-track"><div class="gx-bar-fill" style="width:${(x.c / maxSc * 100).toFixed(1)}%;background:${x.k === s.realScore ? 'var(--green)' : 'var(--gold)'}"></div></div>
+    <div class="gx-bar-val">${x.c}</div></div>`).join('');
+  const ptsColor = p => p === CFG.pts_exato ? '#00C851' : p === (CFG.pts_vencedor_saldo ?? 7) ? '#FFD98A' : p === (CFG.pts_apenas_vencedor ?? 5) ? '#1E90FF' : 'var(--text-muted)';
+  const parts = data.users.map(u => { const p = data.allPals[u.uid]?.[gid]; if (!p || p.h === undefined || p.a === undefined) return null; const pts = calcPontos(p, data.res[gid]); return { u, ph: parseInt(p.h), pa: parseInt(p.a), pts }; })
+    .filter(Boolean).sort((a, b) => b.pts - a.pts || (a.u.apelido || '').localeCompare(b.u.apelido || ''));
+  const meUid = currentUser?.uid;
+  const partList = parts.map(r => `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.05);font-size:0.82rem${r.u.uid === meUid ? ';background:rgba(255,215,0,.06);border-radius:6px' : ''}">
+    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap${r.u.uid === meUid ? ';color:var(--gold);font-weight:700' : ''}">${esc(r.u.apelido || r.u.nome || '—')}</span>
+    <span style="white-space:nowrap"><b>${r.ph}×${r.pa}</b> · <span style="color:${ptsColor(r.pts)};font-weight:800">${r.pts} pt${r.pts === 1 ? '' : 's'}</span></span></div>`).join('') || '<p class="text-muted">Ninguém palpitou nesta partida.</p>';
+  return `<div style="text-align:center;margin:4px 0 12px">
+      <div style="font-size:1.05rem;font-weight:800">${esc(t.h)} <span style="color:var(--green)">${esc(s.realScore)}</span> ${esc(t.a)}</div>
+    </div>
+    <div class="gx-hl-grid">
+      <div class="gx-hl"><div class="v">${s.exatos}</div><div class="l">Cravaram o placar</div></div>
+      <div class="gx-hl"><div class="v">${s.mediaPts.toFixed(1)}</div><div class="l">Média de pontos</div></div>
+      <div class="gx-hl"><div class="v">${Math.round(s.errPct)}%</div><div class="l">Erraram</div></div>
+      <div class="gx-hl"><div class="v">${s.nPals}</div><div class="l">Palpites</div></div>
+    </div>
+    <div style="font-weight:700;font-size:0.84rem;margin:12px 0 4px;color:var(--gold)">Resultado apostado</div>${['H', 'D', 'A'].map(ocBar).join('')}
+    <div style="font-weight:700;font-size:0.84rem;margin:14px 0 4px;color:var(--gold)">Placares mais apostados</div>${scoreBars}
+    <div style="font-weight:700;font-size:0.84rem;margin:14px 0 6px;color:var(--gold)">Palpite de cada um</div>
+    <div style="max-height:300px;overflow:auto">${partList}</div>`;
+}
+function statShowFinishedGame(gid) {
+  const out = document.getElementById('stat-fin-out');
+  if (out && _graficosData) out.innerHTML = _statFinishedGameBody(gid, _graficosData);
+}
+
 async function renderEstatisticas() {
   const cont = document.getElementById('estatisticas-content');
   cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
@@ -7382,6 +7431,21 @@ async function renderEstatisticas() {
         <div class="stat-card"><div class="val">${Object.values(analiseJogos).reduce((a,b)=>a+b.exatos,0)}</div><div class="lbl">Placares Exatos</div></div>
         <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
       </div>`;
+
+    // ── Partidas já realizadas: reabre o card de qualquer jogo finalizado ──
+    const _finGames = jogosComResultado
+      .map(id => ALL_GAMES.find(g => g.id === id)).filter(Boolean)
+      .sort((a, b) => _parseGameDate(b.date) - _parseGameDate(a.date));
+    if (_finGames.length) {
+      const _finDef = _finGames[0].id;
+      const _finOpts = _finGames.map(g => { const tt = _getResolvedTeamsForGame(g, res); const r = res[g.id]; return `<option value="${esc(g.id)}"${g.id === _finDef ? ' selected' : ''}>${esc(tt.h)} ${r.h_real}×${r.a_real} ${esc(tt.a)} · ${esc(g.date)}</option>`; }).join('');
+      html += `<div class="card">
+        <div class="card-title">🏁 Partidas Realizadas</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 10px">Reveja o card de qualquer jogo já finalizado — eles saem de “Próximas Partidas” depois de terminar.</div>
+        <select class="gx-select" onchange="statShowFinishedGame(this.value)">${_finOpts}</select>
+        <div id="stat-fin-out">${_statFinishedGameBody(_finDef, { users, res, allPals })}</div>
+      </div>`;
+    }
 
     // ── Bump Chart: evolução do ranking ──
     const bumpSvg = _buildBumpChart(users, res, allPals);
