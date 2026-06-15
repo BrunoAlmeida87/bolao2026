@@ -12477,6 +12477,7 @@ async function renderCorrida() {
       <button class="date-filter-btn corrida-mode-btn active" data-view="top" data-topn="12" onclick="_corridaSetView('top',12)">Top 12</button>
       <button class="date-filter-btn corrida-mode-btn" data-view="top" data-topn="20" onclick="_corridaSetView('top',20)">Top 20</button>
       <button class="date-filter-btn corrida-mode-btn" data-view="all" onclick="_corridaSetView('all')">Todos</button>
+      <button class="date-filter-btn corrida-mode-btn" data-view="top3" onclick="_corridaSetView('top3')">🏅 Top 3 do Momento</button>
       <button class="date-filter-btn corrida-mode-btn" data-view="sel" onclick="_corridaTogglePicker()">✓ Escolher</button>
     </div>
     <div id="corrida-picker" style="display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px">
@@ -12489,6 +12490,18 @@ async function renderCorrida() {
       </div>
       <div id="corrida-picker-list" style="max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px"></div>
       <div style="text-align:center;margin-top:8px"><button class="btn btn-primary" style="padding:8px 22px" onclick="_corridaApplySel()">🏁 Correr selecionados</button></div>
+    </div>
+    <div id="corrida-top3-bar" style="display:none;text-align:center;margin:2px 0 6px">
+      <span style="font-size:0.74rem;color:var(--text-muted)">Top 3 do momento sempre realçado.</span>
+      <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.78rem;margin-left:6px" onclick="_corridaTop3TogglePicker()">➕ Destacar também outros jogadores</button>
+    </div>
+    <div id="corrida-top3-picker" style="display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:0.82rem">Realçar junto com o Top 3:</span>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem" onclick="_corridaTop3PickAll(false)">Limpar</button>
+      </div>
+      <div id="corrida-top3-list" style="max-height:220px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px"></div>
+      <div style="text-align:center;margin-top:8px"><button class="btn btn-primary" style="padding:8px 22px" onclick="_corridaTop3ApplyExtra()">✓ Aplicar destaques</button></div>
     </div>
     <div class="corrida-modes" style="margin:2px 0 4px">
       <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Velocidade:</span>
@@ -12519,6 +12532,7 @@ async function renderCorrida() {
     const loadingEl = document.getElementById('corrida-loading'); if (loadingEl) loadingEl.remove();
     if (!full) { const l = document.getElementById('corrida-label'); if (l) l.textContent = 'Ainda não há resultados para mostrar a corrida.'; return; }
     _corridaBuildPicker(full);
+    _corridaBuildTop3Picker(full);
     const view = (_corridaState && _corridaState.view) || 'top';
     const topN = (_corridaState && _corridaState.topN) || 12;
     _corridaInit(full, view, topN);
@@ -12553,6 +12567,33 @@ function _corridaApplySel() {
   _corridaSetView('sel');
 }
 
+// ── Modo "Top 3 do Momento": realça o top 3 do instante + jogadores escolhidos ──
+let _corridaTop3Extra = null; // Set de uids extra a realçar (persiste na sessão)
+function _corridaBuildTop3Picker(full) {
+  const list = document.getElementById('corrida-top3-list'); if (!list) return;
+  if (!_corridaTop3Extra) _corridaTop3Extra = new Set();
+  list.innerHTML = full.uids.map(uid => {
+    const isMe = uid === full.meUid;
+    const checked = _corridaTop3Extra.has(uid) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:0.85rem;${isMe ? 'color:var(--gold);font-weight:700' : ''}">
+      <input type="checkbox" value="${esc(uid)}" ${checked} style="accent-color:var(--gold);width:16px;height:16px;flex:none">
+      <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isMe ? '★ ' : ''}${esc(full.apel[uid] || '(sem nome)')}</span></label>`;
+  }).join('');
+}
+function _corridaTop3TogglePicker() {
+  const p = document.getElementById('corrida-top3-picker'); if (!p) return;
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+}
+function _corridaTop3PickAll(v) { document.querySelectorAll('#corrida-top3-list input[type=checkbox]').forEach(b => b.checked = v); }
+function _corridaTop3ApplyExtra() {
+  const boxes = document.querySelectorAll('#corrida-top3-list input[type=checkbox]:checked');
+  _corridaTop3Extra = new Set(Array.from(boxes).map(b => b.value));
+  const p = document.getElementById('corrida-top3-picker'); if (p) p.style.display = 'none';
+  const st = _corridaState;
+  if (st) { st.top3Extra = _corridaTop3Extra; _corridaRenderSeg(st.seg); }
+  showToast(_corridaTop3Extra.size ? `${_corridaTop3Extra.size} jogador(es) realçado(s) junto com o Top 3.` : 'Apenas o Top 3 do momento realçado.', 'success');
+}
+
 function _corridaInit(full, view, topN) {
   const canvas = document.getElementById('corrida-canvas');
   if (!canvas) return;
@@ -12566,7 +12607,8 @@ function _corridaInit(full, view, topN) {
   const baseStepDur = Math.max(420, Math.min(1100, Math.round(34000 / Math.max(1, data.frames.length - 1))));
   const speed = _corridaSpeed || 1;
   _corridaState = {
-    full, data, view, topN: topN || 12, canvas, ctx: null, raf: null,
+    full, data, view, top3: view === 'top3', top3Extra: view === 'top3' ? (_corridaTop3Extra || new Set()) : null,
+    topN: topN || 12, canvas, ctx: null, raf: null,
     startTime: 0, seg: 0, playing: false, _scrubbing: false,
     padTop: 34, padBottom: 14, rowH: 42, cssW: 0, cssH: 0, baseStepDur, stepDur: baseStepDur / speed,
     _onResize: () => { _corridaSizeCanvas(); _corridaRenderSeg(_corridaState.seg); }
@@ -12574,6 +12616,9 @@ function _corridaInit(full, view, topN) {
   const _tn = topN || 12;
   document.querySelectorAll('.corrida-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view && (b.dataset.view !== 'top' || parseInt(b.dataset.topn) === _tn)));
   document.querySelectorAll('.corrida-speed-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.spd) === speed));
+  // Barra de "destacar também" só aparece no modo Top 3 do Momento.
+  const t3bar = document.getElementById('corrida-top3-bar'); if (t3bar) t3bar.style.display = (view === 'top3') ? '' : 'none';
+  const t3pick = document.getElementById('corrida-top3-picker'); if (t3pick && view !== 'top3') t3pick.style.display = 'none';
   window.addEventListener('resize', _corridaState._onResize);
   _corridaSizeCanvas();
   const vb = document.getElementById('corrida-video'); if (vb) vb.style.display = '';
@@ -12681,7 +12726,9 @@ function _corridaPaint(ctx, geo, data, arr, opts) {
   const drawRow = (o, top, fixedRank) => {
     const isMe = o.uid === meUid;
     const intRank = (fixedRank != null) ? fixedRank : Math.round(o.r);
-    const isHl = top3 ? (isMe || intRank < 3) : (hlSet ? hlSet.has(o.uid) : isMe); // realçado (brilho)
+    // Top 3 do Momento: realça os 3 primeiros do instante + você + os jogadores
+    // escolhidos para acompanhar (hlSet). Nos demais modos, hlSet ou só você.
+    const isHl = top3 ? (isMe || intRank < 3 || (hlSet && hlSet.has(o.uid))) : (hlSet ? hlSet.has(o.uid) : isMe);
     const strong = isHl && !isMe; // realce FORTE para os destacados (você já é dourado)
     const barW = Math.max(2, o.v / data.maxV * barMaxW);
     const color = data.colorByUid[o.uid]; // cor sempre preservada
@@ -12776,7 +12823,7 @@ function _corridaRenderSeg(seg) {
   const last = st.data.frames.length - 1;
   const li = Math.min(last, Math.round(seg));
   const f = st.data.frames[li];
-  _corridaPaint(st.ctx, _corridaGeo(st), st.data, arr, { header: false, date: f.date, gameNo: li + 1, gameTot: st.data.frames.length });
+  _corridaPaint(st.ctx, _corridaGeo(st), st.data, arr, { header: false, date: f.date, gameNo: li + 1, gameTot: st.data.frames.length, top3: st.top3, hl: st.top3Extra });
   const lbl = document.getElementById('corrida-label');
   if (lbl) lbl.innerHTML = `<b style="color:var(--gold)">${li + 1}/${st.data.frames.length}</b> · ${st.data.frames[li].label}`;
   const sc = document.getElementById('corrida-scrub');
