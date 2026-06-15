@@ -296,7 +296,7 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .gx-stack-name{flex:0 0 34%;max-width:34%;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gx-stack-bar{flex:1;height:16px;border-radius:8px;overflow:hidden;display:flex;background:rgba(255,255,255,.06)}
 .gx-stack-seg{height:100%}
-.gx-stack-pts{flex:0 0 auto;font-size:0.78rem;font-weight:800;color:var(--gold);min-width:34px;text-align:right}
+.gx-stack-pts{flex:0 0 auto;font-size:0.78rem;font-weight:800;color:var(--gold);min-width:34px;text-align:right;white-space:nowrap}
 .gx-legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px;font-size:0.74rem;color:var(--text-muted)}
 .gx-legend span{display:inline-flex;align-items:center;gap:5px}
 .gx-legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
@@ -3792,13 +3792,10 @@ async function renderDashboard() {
     </div>
     <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:2px 0 16px">
       <button onclick="navigateTo('corrida')" style="background:linear-gradient(135deg,#13294b,#1e4377);color:#fff;border:1px solid rgba(255,215,0,.45);border-radius:22px;padding:10px 20px;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 2px 14px rgba(0,0,0,.35)">🏁 Ver a Corrida do Ranking</button>
-    </div>
-    <div id="evo-chart-container"></div>`;
+    </div>`;
     cont.innerHTML = html;
     _runAnimNumbers(); // contagem animada dos KPIs e da premiação (a partir do valor anterior)
     _startCountdownTimer();
-    // Gráfico de evolução só renderiza quando allPals disponível (caminho completo)
-    if (allPals) _renderEvolutionChart(ranking, allPals, res, champPicks, document.getElementById('evo-chart-container'));
     _showNewResultsModal(res, _dashMyPals);
     setTimeout(_maybeShowPendingPalpitesAlert, 450); // lembrete de palpites pendentes (a cada entrada)
     setTimeout(_maybeShowSimuladorIntro, 900);       // pop-up de novidade Simulador (1x por navegador)
@@ -8197,15 +8194,16 @@ function renderGxAccuracyBreakdown(d) {
   if (!rows.length) return _gxCard('🎯 Precisão por Tipo de Acerto', _gxEmpty('Ainda não há palpites avaliados.'));
   const top = rows.slice(0, 12);
   const meUid = currentUser?.uid;
-  const seg = (n, total, color) => n > 0 ? `<div class="gx-stack-seg" style="width:${(n / total * 100).toFixed(1)}%;background:${color}" title="${n}"></div>` : '';
+  const seg = (n, total, color, label) => n > 0 ? `<div class="gx-stack-seg" style="width:${(n / total * 100).toFixed(1)}%;background:${color}" title="${label}: ${n}"></div>` : '';
   const body = top.map(r => {
     const t = r.exatos + r.venc_saldo + r.apenas_venc + r.erros || 1;
+    const disputados = r.jogos * CFG.pts_exato; // máximo possível (cravando todos)
     return `<div class="gx-stack-row"${r.u.uid === meUid ? ' style="background:rgba(255,215,0,.06);border-radius:8px"' : ''}>
       <div class="gx-stack-name">${_gxName(r.u)}</div>
       <div class="gx-stack-bar">
-        ${seg(r.exatos, t, '#00C851')}${seg(r.venc_saldo, t, '#FFD98A')}${seg(r.apenas_venc, t, '#1E90FF')}${seg(r.erros, t, 'rgba(140,160,190,.30)')}
+        ${seg(r.exatos, t, '#00C851', 'Placar exato')}${seg(r.venc_saldo, t, '#FFD98A', 'Vencedor + saldo')}${seg(r.apenas_venc, t, '#1E90FF', 'Apenas vencedor')}${seg(r.erros, t, 'rgba(140,160,190,.30)', 'Erros')}
       </div>
-      <div class="gx-stack-pts">${r.pontos}</div>
+      <div class="gx-stack-pts" title="Pontos feitos / máximo possível (cravando todos os ${r.jogos} jogos)">${r.pontos}<span style="color:var(--text-muted);font-weight:600">/${disputados}</span></div>
     </div>`;
   }).join('');
   const legend = `<div class="gx-legend">
@@ -8318,9 +8316,24 @@ function renderGxBoldness(d) {
   svg += `<text x="${padL + 4}" y="${padT + 12}" font-size="10" fill="#1E90FF" opacity=".75" font-weight="700">Eficiente</text>`;
   svg += `<text x="${W - padR - 4}" y="${H - padB - 6}" font-size="10" text-anchor="end" fill="#FF8C00" opacity=".75" font-weight="700">Maluco</text>`;
   svg += `<text x="${padL + 4}" y="${H - padB - 6}" font-size="10" fill="var(--text-muted)" opacity=".85" font-weight="700">Conservador</text>`;
-  // eixos
-  svg += `<text x="${(W) / 2}" y="${H - 6}" font-size="9" text-anchor="middle" fill="var(--text-muted)">Ousadia (% contra o consenso) →</text>`;
-  svg += `<text x="12" y="${H / 2}" font-size="9" text-anchor="middle" fill="var(--text-muted)" transform="rotate(-90 12 ${H / 2})">Pontos →</text>`;
+  // Eixos: linhas + escala numérica
+  svg += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="rgba(255,255,255,.25)"/>`;
+  svg += `<line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="rgba(255,255,255,.25)"/>`;
+  // Marcas do eixo X (ousadia 0–100%)
+  [0, 25, 50, 75, 100].forEach(o => {
+    const x = xFor(o);
+    svg += `<line x1="${x.toFixed(1)}" y1="${H - padB}" x2="${x.toFixed(1)}" y2="${H - padB + 4}" stroke="rgba(255,255,255,.3)"/>`;
+    svg += `<text x="${x.toFixed(1)}" y="${H - padB + 13}" font-size="8" text-anchor="middle" fill="var(--text-muted)">${o}%</text>`;
+  });
+  // Marcas do eixo Y (pontos 0–máx)
+  for (let i = 0; i <= 4; i++) {
+    const val = Math.round(maxP / 4 * i), y = yFor(val);
+    svg += `<line x1="${padL - 4}" y1="${y.toFixed(1)}" x2="${padL}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.3)"/>`;
+    svg += `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" font-size="8" text-anchor="end" fill="var(--text-muted)">${val}</text>`;
+  }
+  // Títulos dos eixos
+  svg += `<text x="${(padL + (W - padR)) / 2}" y="${H - 2}" font-size="9" text-anchor="middle" fill="var(--text-muted)">Ousadia (% contra o consenso) →</text>`;
+  svg += `<text x="9" y="${(padT + (H - padB)) / 2}" font-size="9" text-anchor="middle" fill="var(--text-muted)" transform="rotate(-90 9 ${((padT + (H - padB)) / 2).toFixed(1)})">Pontos →</text>`;
   rows.forEach(r => {
     const x = xFor(r.ousadia).toFixed(1), y = yFor(r.pontos).toFixed(1);
     const me = r.u.uid === meUid;
@@ -8591,15 +8604,16 @@ function _gxHeatBody(d, filter) {
   const { games, rows } = computeScoreHeatmapData(d, filter);
   if (!games.length) return _gxEmpty('Sem jogos nesta faixa ainda.');
   const meUid = currentUser?.uid;
-  // Guarda rótulos crus (jogo + data) e nomes para o tooltip de clique.
+  // Rótulos (times + data) por jogo — usados no cabeçalho, no tooltip e no clique.
+  const gLabels = games.map(g => { const t = _gxGameTeams(g.id, d.res); return `${t.h} × ${t.a}${g.date ? ' · ' + g.date : ''}`; });
   _gxHeatState = {
-    games: games.map(g => { const t = _gxGameTeams(g.id, d.res); return { id: g.id, label: `${t.h} × ${t.a}${g.date ? ' · ' + g.date : ''}` }; }),
+    games: games.map((g, ci) => ({ id: g.id, label: gLabels[ci] })),
     rows: rows.map(r => ({ name: (r.user.apelido || r.user.nome || '—'), me: r.user.uid === meUid, cells: r.cells }))
   };
-  const header = `<tr><td class="hn"></td>${games.map(g => { const t = _gxGameTeams(g.id, d.res); return `<td class="hh" title="${esc(t.h)} × ${esc(t.a)}">${esc(g.id)}</td>`; }).join('')}</tr>`;
+  const header = `<tr><td class="hn"></td>${games.map((g, ci) => `<td class="hh" title="${esc(gLabels[ci])}">${esc(g.id)}</td>`).join('')}</tr>`;
   const body = rows.map((r, i) => `<tr>
     <td class="hn"${r.user.uid === meUid ? ' style="color:var(--gold);font-weight:700"' : ''}><span class="gx-heat-rank">${i + 1}º</span>${_gxShortName(r.user, 14)}</td>
-    ${r.cells.map((pts, ci) => `<td><div class="hc" style="background:${_gxHeatColor(pts)};cursor:pointer" onclick="gxHeatShow(${i},${ci})" title="${pts == null ? 'sem palpite' : pts + ' pts'}"></div></td>`).join('')}
+    ${r.cells.map((pts, ci) => `<td><div class="hc" style="background:${_gxHeatColor(pts)};cursor:pointer" onclick="gxHeatShow(${i},${ci})" title="${esc(gLabels[ci])} — ${pts == null ? 'sem palpite' : pts + ' pts'}"></div></td>`).join('')}
   </tr>`).join('');
   const legend = `<div class="gx-legend">
     <span><i style="background:#00C851"></i>Exato (${CFG.pts_exato})</span>
