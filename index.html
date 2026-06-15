@@ -13270,7 +13270,13 @@ function _palcoLoadHorseImages() {
   _palcoHorseTried = true;
   for (let i = 1; i <= _PALCO_HORSE_MAX; i++) {
     const img = new Image();
-    img.onload = () => { if (img.naturalWidth) _palcoHorseImgs.push(img); };
+    img.onload = () => {
+      if (!img.naturalWidth) return;
+      // Detecta sprite sheet: nº de quadros = largura/altura arredondado (1 = PNG
+      // estático quadrado; 6 = tira horizontal de galope 6×). Limita a 1..12.
+      img._frames = Math.max(1, Math.min(12, Math.round(img.naturalWidth / img.naturalHeight)));
+      _palcoHorseImgs.push(img);
+    };
     img.onerror = () => {}; // arquivo ausente → ignora (fallback p/ emoji)
     img.src = `icons/horses/horse${i}.png`;
   }
@@ -13504,9 +13510,15 @@ function _palcoPaintHorses(ctx, st, arr, frame) {
     ctx.lineWidth = isMe ? 3 : 2; ctx.strokeStyle = isMe ? '#FFD700' : color; ctx.stroke(); ctx.shadowBlur = 0;
     const himg = _palcoHorseImgFor(o.uid);
     if (himg && himg.complete && himg.naturalWidth) {
+      const frames = himg._frames || 1;
+      const fw = himg.naturalWidth / frames;
+      // Galope: cicla os quadros pelo relógio enquanto corre (desfasado por raia
+      // para os cavalos não pisarem em sincronia). Parado → quadro 0.
+      let fi = 0;
+      if (frames > 1 && st.playing) fi = Math.floor(now / 90 + o.r * 2) % frames;
       ctx.save();
       ctx.beginPath(); ctx.arc(hx, hy, r - 1.5, 0, Math.PI * 2); ctx.clip();
-      ctx.drawImage(himg, hx - (r - 1), hy - (r - 1), (r - 1) * 2, (r - 1) * 2);
+      ctx.drawImage(himg, fi * fw, 0, fw, himg.naturalHeight, hx - (r - 1), hy - (r - 1), (r - 1) * 2, (r - 1) * 2);
       ctx.restore();
     } else {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `${Math.round(r * 1.2)}px Arial`;
