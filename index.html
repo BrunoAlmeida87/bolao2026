@@ -1533,6 +1533,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
       <button class="nav-btn" data-page="simulador" onclick="navigateTo('simulador')">🔮 Simulador</button>
       <button class="nav-btn" data-page="cardapio" onclick="navigateTo('cardapio')">🍽️ Cardápio</button>
       <button class="nav-btn" data-page="regras" onclick="navigateTo('regras')">📋 Regras</button>
+      <button class="nav-btn" data-page="palco" id="palco-nav" style="display:none" onclick="navigateTo('palco')">🎬 GP</button>
       <button class="nav-btn" data-page="admin" id="admin-nav" style="display:none" onclick="navigateTo('admin')">⚙️ Admin</button>
     </nav>
 
@@ -2697,7 +2698,10 @@ function showApp() {
   document.getElementById('admin-dropdown').style.display = isAdmin?'block':'none';
   const adminMais = document.getElementById('mais-admin');
   if (adminMais) adminMais.style.display = isAdmin?'block':'none';
-  // Palco "GP do Bolão" — recurso oculto, visível apenas para admin.
+  // Palco "GP do Bolão" — recurso oculto, visível apenas para admin
+  // (botão no desktop, item no dropdown mobile e na folha "Mais").
+  const palcoNav = document.getElementById('palco-nav');
+  if (palcoNav) palcoNav.style.display = isAdmin?'inline-block':'none';
   const palcoDrop = document.getElementById('palco-dropdown');
   if (palcoDrop) palcoDrop.style.display = isAdmin?'block':'none';
   const palcoMais = document.getElementById('mais-palco');
@@ -12327,7 +12331,9 @@ let _corridaVidScope = 'view'; // 'view' (como na tela) | 'all' (todos)
 let _corridaVidSpeed = 1; // velocidade do VÍDEO exportado (1 normal, 0.5 lenta, 0.25 bem lenta)
 let _corridaVidHighlight = 'all'; // 'all' (todos coloridos) | 'me' (só eu) | 'sel' (eu + escolhidos)
 let _corridaVidHlSet = null; // Set de uids escolhidos para destacar (modo 'sel')
-const _BRACE_PALETTE = ['#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA','#FBBF24','#34D399','#F87171','#60A5FA','#C084FC','#4ADE80','#FB923C','#38BDF8','#E879F9','#86EFAC','#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4'];
+// Paleta sóbria (tons joia, menos "neon/candy") para a Corrida e o Palco —
+// mantém boa distinção entre participantes. O dourado fica reservado ao "você".
+const _BRACE_PALETTE = ['#4F9DD6','#3FB8A0','#E08A5B','#8E7FD6','#5BB06E','#D45F77','#5FA8C9','#C9A24B','#7E9AA8','#B06B9C','#6FA86F','#D08A45','#549AA0','#A1657E','#8FA34E','#C56B6B','#6C7BB3','#CF9A55','#5FA89E','#A87CB0'];
 
 function _rrect(ctx, x, y, w, h, r) {
   r = Math.max(0, Math.min(r, h / 2, w / 2));
@@ -13044,7 +13050,7 @@ function _corridaStop() {
 let _palcoState = null;
 let _palcoMode = 'horses';   // 'horses' | 'lines'
 let _palcoTopN = null;       // número | 'all' | null (automático conforme a tela)
-let _palcoSpeed = 1;
+let _palcoSpeed = 0.15;      // padrão bem suave (cinematográfico) para os palcos
 let _palcoFull = null;       // dataset completo (cache do render atual)
 
 async function renderPalco() {
@@ -13069,10 +13075,10 @@ async function renderPalco() {
     </div>
     <div class="corrida-modes" style="margin:2px 0 4px">
       <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Velocidade:</span>
-      <button class="date-filter-btn palco-speed-btn" data-spd="0.15" onclick="_palcoSetSpeed(0.15)">0,15×</button>
+      <button class="date-filter-btn palco-speed-btn active" data-spd="0.15" onclick="_palcoSetSpeed(0.15)">0,15×</button>
       <button class="date-filter-btn palco-speed-btn" data-spd="0.25" onclick="_palcoSetSpeed(0.25)">0,25×</button>
       <button class="date-filter-btn palco-speed-btn" data-spd="0.5" onclick="_palcoSetSpeed(0.5)">0,5×</button>
-      <button class="date-filter-btn palco-speed-btn active" data-spd="1" onclick="_palcoSetSpeed(1)">1×</button>
+      <button class="date-filter-btn palco-speed-btn" data-spd="1" onclick="_palcoSetSpeed(1)">1×</button>
       <button class="date-filter-btn palco-speed-btn" data-spd="1.5" onclick="_palcoSetSpeed(1.5)">1,5×</button>
       <button class="date-filter-btn palco-speed-btn" data-spd="2" onclick="_palcoSetSpeed(2)">2×</button>
     </div>
@@ -13158,7 +13164,13 @@ function _palcoSizeCanvas() {
     cssH = Math.round(chrome + n * laneH);
     st.laneH = laneH;
   } else {
-    cssH = fs ? (window.innerHeight - 8) : (wide ? Math.min(560, Math.max(380, cssW * 0.5)) : Math.min(window.innerHeight * 0.62, 470));
+    // Linhas: a altura cresce com o nº de participantes para os nomes na ponta
+    // não se amontoarem. A página rola se precisar; teto de segurança fora do
+    // fullscreen para não explodir com "Todos".
+    const labelGap = wide ? 16 : 13;
+    const need = 46 + 32 + n * labelGap + 28; // padT + padB + rótulos + folga
+    const base = wide ? Math.min(560, Math.max(380, cssW * 0.5)) : Math.min(window.innerHeight * 0.62, 470);
+    cssH = fs ? (window.innerHeight - 8) : Math.min(1500, Math.max(base, need));
     cssH = Math.round(cssH);
   }
   st.cssW = cssW; st.cssH = cssH;
