@@ -11,12 +11,23 @@ Coloque aqui as imagens dos cavalos usadas na corrida de cavalos animada
 
 ## Especificação das imagens
 - **Formato:** PNG com **fundo transparente**.
-- **Proporção:** **quadrada** (a imagem é recortada num círculo).
-- **Tamanho recomendado:** **128×128 px** (pode usar 96×96 ou 256×256). Acima de
-  256×256 só aumenta o peso sem ganho visível.
-- **Peso:** idealmente **< 50 KB** por arquivo (PNG otimizado).
-- **Enquadramento:** deixe o cavalo **centralizado** e com uma pequena margem,
-  porque a imagem é recortada num círculo (cantos ficam de fora).
+- **Fundo transparente é obrigatório** (a imagem é recortada num círculo).
+- **Enquadramento:** cavalo **centralizado** em cada quadro, com uma pequena
+  margem (os cantos ficam de fora do círculo).
+- **Peso:** idealmente **< 80 KB** por arquivo (PNG otimizado).
+
+Você pode usar **dois tipos** de imagem (o app detecta sozinho pela proporção):
+
+### a) Estática (mais simples)
+- Imagem **quadrada**, ex.: **128×128 px** (96–256 ok).
+
+### b) Animada — sprite sheet de galope (recomendado: 6 quadros)
+- Uma **tira horizontal** com **6 poses** do cavalo, lado a lado.
+- Cada quadro **quadrado** (ex.: 128×128) → imagem final **768×128 px**.
+- Todos os quadros do **mesmo cavalo**, mesmo tamanho/posição, só mudando as
+  pernas (ciclo de galope). Espaçamento uniforme, sem moldura entre quadros.
+- O app detecta automaticamente: largura ≈ 6× a altura → anima os 6 quadros;
+  largura ≈ altura → trata como estática.
 
 ## Como funciona
 - Cada participante recebe **sempre o mesmo cavalo** (sorteio fixo pelo id).
