@@ -13080,12 +13080,22 @@ async function _corridaTryEncodeMp4(geo, data, totalFrames, fps, drawAt, onProg,
   const usPerFrame = Math.round(1e6 / fps);
   for (let i = 0; i < totalFrames; i++) {
     if (encErr) throw encErr;
+    // Backpressure: não submete novos quadros enquanto a fila do encoder estiver
+    // cheia. Sem isto, no Chrome desktop (1080×1920@60) a fila cresce sem limite →
+    // pico de memória/GPU faz a tela piscar (preto) e o flush final "trava" em 100%
+    // tendo que drenar milhares de quadros de uma vez. Esperar a fila baixar mantém
+    // a memória estável e o progresso real.
+    while (encoder.encodeQueueSize > 6) {
+      if (encErr) throw encErr;
+      await new Promise(r => setTimeout(r));
+    }
     drawAt(ctx, i);
     const frame = new VideoFrame(cv, { timestamp: i * usPerFrame, duration: usPerFrame });
     encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
     frame.close();
     if (i % 8 === 0) { if (onProg) onProg(i / totalFrames); await new Promise(r => setTimeout(r)); } // cede a thread → UI não congela
   }
+  if (onProg) onProg(0.99); // submissão concluída; o flush drena a fila (rápido com backpressure)
   await encoder.flush();
   if (encErr) throw encErr;
   muxer.finalize();
