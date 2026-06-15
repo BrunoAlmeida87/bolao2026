@@ -12326,7 +12326,7 @@ function _evoDraw() {
 // Inclui play/pausa, barra para percorrer (scrub) e exportar vídeo .webm.
 let _corridaState = null;
 let _corridaSel = null; // Set de uids escolhidos (modo "Escolher"); persiste na sessão
-let _corridaSpeed = 1;  // multiplicador de velocidade na TELA (0,25× … 2×)
+let _corridaSpeed = 0.15;  // multiplicador de velocidade na TELA — padrão bem suave
 let _corridaVidScope = 'view'; // 'view' (como na tela) | 'all' (todos)
 let _corridaVidSpeed = 1; // velocidade do VÍDEO exportado (1 normal, 0.5 lenta, 0.25 bem lenta)
 let _corridaVidHighlight = 'all'; // 'all' (todos coloridos) | 'me' (só eu) | 'sel' (eu + escolhidos)
@@ -12439,10 +12439,10 @@ async function renderCorrida() {
     </div>
     <div class="corrida-modes" style="margin:2px 0 4px">
       <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Velocidade:</span>
-      <button class="date-filter-btn corrida-speed-btn" data-spd="0.15" onclick="_corridaSetSpeed(0.15)">0,15×</button>
+      <button class="date-filter-btn corrida-speed-btn active" data-spd="0.15" onclick="_corridaSetSpeed(0.15)">0,15×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="0.25" onclick="_corridaSetSpeed(0.25)">0,25×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="0.5" onclick="_corridaSetSpeed(0.5)">0,5×</button>
-      <button class="date-filter-btn corrida-speed-btn active" data-spd="1" onclick="_corridaSetSpeed(1)">1×</button>
+      <button class="date-filter-btn corrida-speed-btn" data-spd="1" onclick="_corridaSetSpeed(1)">1×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="1.5" onclick="_corridaSetSpeed(1.5)">1,5×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="2" onclick="_corridaSetSpeed(2)">2×</button>
     </div>
