@@ -1,7 +1,7 @@
 // Detecta o caminho base automaticamente (funciona em /bolao2026/ e em /)
 const BASE = self.location.href.replace(/sw\.js(\?.*)?$/, '');
 
-const CACHE = 'bolao-icn-v1.12.49';
+const CACHE = 'bolao-icn-v1.12.50';
 const PRECACHE = [
   BASE,
   BASE + 'index.html',
@@ -48,8 +48,9 @@ self.addEventListener('fetch', (e) => {
   // Outros assets (ícones, manifest): cache primeiro
   e.respondWith(
     caches.match(request).then(cached => cached || fetch(request).then(res => {
-      const clone = res.clone();
-      caches.open(CACHE).then(c => c.put(request, clone));
+      // Só cacheia respostas OK — evita guardar 404 (ex.: cavalos PNG ainda não
+      // adicionados), que ficariam "presos" no cache mesmo após o arquivo existir.
+      if (res && res.ok) { const clone = res.clone(); caches.open(CACHE).then(c => c.put(request, clone)); }
       return res;
     }))
   );
