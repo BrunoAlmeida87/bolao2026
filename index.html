@@ -6867,41 +6867,70 @@ function _buildBumpChart(users, res, allPals) {
 }
 
 // Card de uma partida JÁ FINALIZADA (reabre a análise depois que ela sai de
-// "Próximas Partidas"). Reaproveita _gxGameStats (mesma base dos Gráficos).
+// "Próximas Partidas"). Mesmo visual dos cards de partida em andamento, com o
+// placar real e os pontos de cada um.
 function _statFinishedGameBody(gid, data) {
-  const s = _gxGameStats(gid, data);
-  if (!s) return '<p class="text-muted" style="margin-top:10px">Sem dados para esta partida.</p>';
-  const t = s.teams, oc = s.outcomeCounts, tot = s.nPals || 1;
-  const ocColor = { H: '#1E90FF', D: 'rgba(140,160,190,.6)', A: '#FF8C00' };
-  const ocLabel = { H: t.h, D: 'Empate', A: t.a };
-  const ocBar = o => `<div class="gx-bar-row"><div class="gx-bar-label">${esc(ocLabel[o])}${o === s.winnerOutcome ? ' ✅' : ''}</div>
-    <div class="gx-bar-track"><div class="gx-bar-fill" style="width:${(oc[o] / tot * 100).toFixed(1)}%;background:${o === s.winnerOutcome ? 'var(--green)' : ocColor[o]}"></div></div>
-    <div class="gx-bar-val">${oc[o]} (${Math.round(oc[o] / tot * 100)}%)</div></div>`;
-  const topScores = Object.entries(s.scoreFreq).map(([k, c]) => ({ k, c })).sort((a, b) => b.c - a.c).slice(0, 5);
-  const maxSc = topScores.length ? topScores[0].c : 1;
-  const scoreBars = topScores.map(x => `<div class="gx-bar-row"><div class="gx-bar-label">${esc(x.k)}${x.k === s.realScore ? ' ✅' : ''}</div>
-    <div class="gx-bar-track"><div class="gx-bar-fill" style="width:${(x.c / maxSc * 100).toFixed(1)}%;background:${x.k === s.realScore ? 'var(--green)' : 'var(--gold)'}"></div></div>
-    <div class="gx-bar-val">${x.c}</div></div>`).join('');
-  const ptsColor = p => p === CFG.pts_exato ? '#00C851' : p === (CFG.pts_vencedor_saldo ?? 7) ? '#FFD98A' : p === (CFG.pts_apenas_vencedor ?? 5) ? '#1E90FF' : 'var(--text-muted)';
-  const parts = data.users.map(u => { const p = data.allPals[u.uid]?.[gid]; if (!p || p.h === undefined || p.a === undefined) return null; const pts = calcPontos(p, data.res[gid]); return { u, ph: parseInt(p.h), pa: parseInt(p.a), pts }; })
-    .filter(Boolean).sort((a, b) => b.pts - a.pts || (a.u.apelido || '').localeCompare(b.u.apelido || ''));
+  const { users, res, allPals } = data;
+  const r = res[gid];
+  if (!r || r.h_real === undefined || r.a_real === undefined) return '<p class="text-muted" style="margin-top:10px">Sem dados para esta partida.</p>';
+  const g = ALL_GAMES.find(x => x.id === gid) || { date: '' };
+  const t = _gxGameTeams(gid, res);
+  const rh = parseInt(r.h_real), ra = parseInt(r.a_real);
+  const realOut = rh > ra ? 'H' : rh < ra ? 'A' : 'D';
+  const realScore = `${rh}×${ra}`;
+  const gPals = users.map(u => ({ u, p: allPals[u.uid]?.[gid] })).filter(x => x.p && x.p.h !== undefined && x.p.a !== undefined);
+  const tot = gPals.length || 1;
+  const hw = gPals.filter(x => parseInt(x.p.h) > parseInt(x.p.a)).length;
+  const dr = gPals.filter(x => parseInt(x.p.h) === parseInt(x.p.a)).length;
+  const aw = gPals.filter(x => parseInt(x.p.h) < parseInt(x.p.a)).length;
+  const phw = Math.round(hw / tot * 100), pdr = Math.round(dr / tot * 100), paw = Math.round(aw / tot * 100);
+  const avgH = (gPals.reduce((a, x) => a + (parseInt(x.p.h) || 0), 0) / tot).toFixed(1);
+  const avgA = (gPals.reduce((a, x) => a + (parseInt(x.p.a) || 0), 0) / tot).toFixed(1);
+  const sf = {}; gPals.forEach(x => { const k = `${parseInt(x.p.h) || 0}×${parseInt(x.p.a) || 0}`; sf[k] = (sf[k] || 0) + 1; });
+  const top3 = Object.entries(sf).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  let exatos = 0; gPals.forEach(x => { if (calcPontos(x.p, r) === CFG.pts_exato) exatos++; });
+  const distCol = (pct, n, lbl, out, baseColor) => {
+    const on = out === realOut;
+    return '<div style="text-align:center;background:' + (on ? 'rgba(0,200,81,.12)' : 'rgba(255,255,255,.04)') + ';border:1px solid ' + (on ? 'rgba(0,200,81,.5)' : 'transparent') + ';border-radius:8px;padding:8px">'
+      + '<div style="font-size:1.05rem;font-weight:800;color:' + (on ? 'var(--green)' : baseColor) + '">' + pct + '%</div>'
+      + '<div style="font-size:0.68rem;color:var(--text-muted)">' + esc(lbl) + (on ? ' ✅' : '') + '</div>'
+      + '<div style="font-size:0.68rem;color:var(--text-muted)">' + n + ' palpite(s)</div></div>';
+  };
   const meUid = currentUser?.uid;
-  const partList = parts.map(r => `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.05);font-size:0.82rem${r.u.uid === meUid ? ';background:rgba(255,215,0,.06);border-radius:6px' : ''}">
-    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap${r.u.uid === meUid ? ';color:var(--gold);font-weight:700' : ''}">${esc(r.u.apelido || r.u.nome || '—')}</span>
-    <span style="white-space:nowrap"><b>${r.ph}×${r.pa}</b> · <span style="color:${ptsColor(r.pts)};font-weight:800">${r.pts} pt${r.pts === 1 ? '' : 's'}</span></span></div>`).join('') || '<p class="text-muted">Ninguém palpitou nesta partida.</p>';
-  return `<div style="text-align:center;margin:4px 0 12px">
-      <div style="font-size:1.05rem;font-weight:800">${esc(t.h)} <span style="color:var(--green)">${esc(s.realScore)}</span> ${esc(t.a)}</div>
-    </div>
-    <div class="gx-hl-grid">
-      <div class="gx-hl"><div class="v">${s.exatos}</div><div class="l">Cravaram o placar</div></div>
-      <div class="gx-hl"><div class="v">${s.mediaPts.toFixed(1)}</div><div class="l">Média de pontos</div></div>
-      <div class="gx-hl"><div class="v">${Math.round(s.errPct)}%</div><div class="l">Erraram</div></div>
-      <div class="gx-hl"><div class="v">${s.nPals}</div><div class="l">Palpites</div></div>
-    </div>
-    <div style="font-weight:700;font-size:0.84rem;margin:12px 0 4px;color:var(--gold)">Resultado apostado</div>${['H', 'D', 'A'].map(ocBar).join('')}
-    <div style="font-weight:700;font-size:0.84rem;margin:14px 0 4px;color:var(--gold)">Placares mais apostados</div>${scoreBars}
-    <div style="font-weight:700;font-size:0.84rem;margin:14px 0 6px;color:var(--gold)">Palpite de cada um</div>
-    <div style="max-height:300px;overflow:auto">${partList}</div>`;
+  const rows = users.map(u => { const p = allPals[u.uid]?.[gid]; return { u, p, has: !!(p && p.h !== undefined && p.a !== undefined) }; })
+    .sort((a, b) => (a.has === b.has) ? (a.u.apelido || '').localeCompare(b.u.apelido || '') : (a.has ? -1 : 1));
+  const nPal = rows.filter(x => x.has).length, nMiss = rows.length - nPal;
+  const grid = rows.map(({ u, p, has }) => {
+    let val;
+    if (has) {
+      const pts = calcPontos(p, r);
+      const ps = (pts !== null) ? _ptsBadgeStyle(pts) : null;
+      const col = ps ? ps.color : 'var(--gold)';
+      const tag = (pts !== null) ? ' <span style="font-size:0.62rem;color:' + col + '">(' + (pts > 0 ? '+' + pts : '0') + ')</span>' : '';
+      val = '<span style="font-size:0.82rem;font-weight:700;color:' + col + ';white-space:nowrap">' + p.h + '×' + p.a + tag + '</span>';
+    } else {
+      val = '<span style="font-size:0.68rem;font-style:italic;color:#ff8a8a;white-space:nowrap">não palpitou</span>';
+    }
+    const me = u.uid === meUid;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;background:' + (me ? 'rgba(255,215,0,.10)' : (has ? 'rgba(255,255,255,.03)' : 'rgba(255,68,68,.06)')) + ';border-radius:6px;padding:4px 8px;min-width:0">'
+      + '<span style="font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + (me ? 'color:var(--gold);font-weight:700' : (has ? '' : 'color:var(--text-muted)')) + '" title="' + esc(u.apelido || '') + '">' + esc(u.apelido || '—') + '</span>'
+      + val + '</div>';
+  }).join('');
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;margin:2px 0 12px">'
+    + '<div><div style="font-size:1rem;font-weight:800">' + teamFlag(t.h) + ' ' + esc(t.h) + ' × ' + teamFlag(t.a) + ' ' + esc(t.a) + '</div>'
+    + '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:2px">' + esc(g.date || '') + '</div></div>'
+    + '<div style="text-align:center;background:var(--green);color:#06121f;border-radius:10px;padding:5px 12px;font-weight:900;font-size:1.05rem;min-width:60px">' + realScore + '</div></div>'
+    + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Como o bolão apostou</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">'
+    + distCol(phw, hw, t.h, 'H', 'var(--gold)') + distCol(pdr, dr, 'Empate', 'D', 'var(--accent)') + distCol(paw, aw, t.a, 'A', '#ff8a8a')
+    + '</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+    + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px"><div style="font-size:0.68rem;color:var(--text-muted)">🗳️ Palpite do Povo</div><div style="font-size:0.92rem;font-weight:700;color:var(--gold)">' + avgH + ' × ' + avgA + '</div><div style="font-size:0.6rem;color:var(--text-muted)">média de gols por time</div></div>'
+    + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px"><div style="font-size:0.68rem;color:var(--text-muted)">🎯 Top 3 placares</div><div style="font-size:0.86rem;font-weight:700;color:var(--green)">' + (top3.length ? top3.map((x, i) => (i ? ' · ' : '') + '<span style="opacity:' + (i === 0 ? '1' : i === 1 ? '.8' : '.6') + '">' + esc(x[0]) + (x[0] === realScore ? ' ✅' : '') + ' <span style="font-size:0.68rem;font-weight:400">(' + x[1] + 'x)</span></span>').join('') : '—') + '</div></div>'
+    + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px"><div style="font-size:0.68rem;color:var(--text-muted)">🎯 Cravaram o placar</div><div style="font-size:0.92rem;font-weight:700;color:#00C851">' + exatos + ' de ' + tot + '</div></div>'
+    + '</div>'
+    + '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Palpite de cada um (' + nPal + ' palpitaram' + (nMiss > 0 ? ' · ' + nMiss + ' não' : '') + ')</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px">' + grid + '</div>';
 }
 function statShowFinishedGame(gid) {
   const out = document.getElementById('stat-fin-out');
