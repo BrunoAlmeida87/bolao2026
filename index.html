@@ -471,6 +471,15 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .corrida-actions{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px}
 .corrida-hint{font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:8px;line-height:1.4}
 @media (max-width:600px){.corrida-actions .btn{flex:1 1 135px;padding:10px 8px}.corrida-hint{font-size:0.68rem}}
+/* Visual mais sóbrio/profissional da página Corrida */
+.corrida-head{text-align:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.corrida-head-title{font-weight:800;font-size:1.12rem;letter-spacing:.4px;color:var(--white);text-transform:uppercase}
+.corrida-head-sub{font-size:0.8rem;color:var(--text-muted);margin-top:4px}
+.corrida-controls{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:14px;padding:12px 12px 6px;margin-bottom:8px}
+body.light-theme .corrida-controls{background:rgba(0,0,0,.02)}
+.corrida-controls .corrida-modes{margin:0 0 8px;align-items:center}
+.corrida-controls .corrida-modes:last-child{margin-bottom:4px}
+.corrida-controls .corrida-modes>span{min-width:64px;text-align:right;opacity:.85}
 /* ── PALCO / GP DO BOLÃO (admin) ── */
 #palco-content{max-width:1320px}
 .palco-wrap{max-width:1280px;margin:0 auto;padding:0 4px}
@@ -12498,10 +12507,11 @@ async function renderCorrida() {
   const cont = document.getElementById('corrida-content');
   if (!cont) return;
   cont.innerHTML = `<div class="corrida-wrap">
-    <div style="text-align:center;margin-bottom:8px">
-      <div style="font-weight:800;color:var(--gold);font-size:1.18rem">🏁 Corrida do Ranking</div>
-      <div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px">A disputa jogo a jogo — pontos acumulados de cada participante</div>
+    <div class="corrida-head">
+      <div class="corrida-head-title">Corrida do Ranking</div>
+      <div class="corrida-head-sub">A disputa jogo a jogo — pontuação acumulada de cada participante</div>
     </div>
+    <div class="corrida-controls">
     <div class="corrida-modes">
       <span style="font-size:0.74rem;color:var(--text-muted);align-self:center;margin-right:2px">Na tela:</span>
       <button class="date-filter-btn corrida-mode-btn active" data-view="top" data-topn="12" onclick="_corridaSetView('top',12)">Top 12</button>
@@ -12544,7 +12554,8 @@ async function renderCorrida() {
       <button class="date-filter-btn corrida-speed-btn" data-spd="1.5" onclick="_corridaSetSpeed(1.5)">1,5×</button>
       <button class="date-filter-btn corrida-speed-btn" data-spd="2" onclick="_corridaSetSpeed(2)">2×</button>
     </div>
-    <div id="corrida-label" style="font-size:1.04rem;font-weight:700;color:var(--text);min-height:24px;text-align:center;margin:6px auto 10px;line-height:1.4;max-width:560px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:20px;padding:8px 14px"></div>
+    </div>
+    <div id="corrida-label" style="font-size:1rem;font-weight:700;color:var(--text);min-height:24px;text-align:center;margin:10px auto;line-height:1.4;max-width:560px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:8px 14px"></div>
     <div class="corrida-canvas-box"><canvas id="corrida-canvas"></canvas>
       <div id="corrida-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(7,20,40,.55)"><div class="spinner"></div></div>
     </div>
@@ -13248,9 +13259,33 @@ let _palcoTopN = null;       // número | 'all' | null (automático conforme a t
 let _palcoSpeed = 0.15;      // padrão bem suave (cinematográfico) para os palcos
 let _palcoFull = null;       // dataset completo (cache do render atual)
 
+// Cavalos em PNG (opcional). Coloque imagens em icons/horses/horse1.png …
+// horseN.png (PNG quadrado, fundo transparente, ~128×128). Se existirem, cada
+// participante recebe um cavalo fixo; se a pasta estiver vazia, cai no emoji 🐎.
+let _palcoHorseImgs = [];
+let _palcoHorseTried = false;
+const _PALCO_HORSE_MAX = 16; // tenta horse1.png … horse16.png
+function _palcoLoadHorseImages() {
+  if (_palcoHorseTried) return;
+  _palcoHorseTried = true;
+  for (let i = 1; i <= _PALCO_HORSE_MAX; i++) {
+    const img = new Image();
+    img.onload = () => { if (img.naturalWidth) _palcoHorseImgs.push(img); };
+    img.onerror = () => {}; // arquivo ausente → ignora (fallback p/ emoji)
+    img.src = `icons/horses/horse${i}.png`;
+  }
+}
+// Cavalo fixo por participante (hash estável do uid → mesmo cavalo sempre).
+function _palcoHorseImgFor(uid) {
+  if (!_palcoHorseImgs.length) return null;
+  let h = 0; for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
+  return _palcoHorseImgs[h % _palcoHorseImgs.length];
+}
+
 async function renderPalco() {
   const cont = document.getElementById('palco-content');
   if (!cont) return;
+  _palcoLoadHorseImages(); // tenta carregar PNGs de cavalo (fallback p/ emoji)
   cont.innerHTML = `<div class="palco-wrap">
     <div style="text-align:center;margin-bottom:10px">
       <div style="font-weight:800;color:var(--gold);font-size:1.2rem">🎬 GP do Bolão</div>
@@ -13467,8 +13502,16 @@ function _palcoPaintHorses(ctx, st, arr, frame) {
     ctx.beginPath(); ctx.arc(hx, hy, r, 0, Math.PI * 2); ctx.fillStyle = 'rgba(8,20,40,.92)'; ctx.fill();
     if (isMe || isLeader) { ctx.shadowColor = isMe ? '#FFD700' : color; ctx.shadowBlur = 12; }
     ctx.lineWidth = isMe ? 3 : 2; ctx.strokeStyle = isMe ? '#FFD700' : color; ctx.stroke(); ctx.shadowBlur = 0;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `${Math.round(r * 1.2)}px Arial`;
-    ctx.fillText('🐎', hx, hy + 1); ctx.textBaseline = 'alphabetic';
+    const himg = _palcoHorseImgFor(o.uid);
+    if (himg && himg.complete && himg.naturalWidth) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(hx, hy, r - 1.5, 0, Math.PI * 2); ctx.clip();
+      ctx.drawImage(himg, hx - (r - 1), hy - (r - 1), (r - 1) * 2, (r - 1) * 2);
+      ctx.restore();
+    } else {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `${Math.round(r * 1.2)}px Arial`;
+      ctx.fillText('🐎', hx, hy + 1); ctx.textBaseline = 'alphabetic';
+    }
     // Pontos perto do cavalo (clampado dentro da pista)
     const pv = String(Math.round(o.v)); ctx.font = `800 ${Math.max(10, Math.min(14, laneH * 0.24))}px Arial`;
     const tw = ctx.measureText(pv).width; let lx = hx + r + 6;
