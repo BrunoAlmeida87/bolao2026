@@ -12888,6 +12888,12 @@ function _corridaOpenVideoModal() {
   const st = _corridaState;
   if (!st || !st.data.frames.length) { showToast('Abra a corrida primeiro.', 'warning'); return; }
   const full = st.full;
+  // Preset "Top 3 do Momento": ao abrir o vídeo nesse modo, já vem com o realce
+  // top3 selecionado e os mesmos jogadores extras que você marcou na tela.
+  if (st.view === 'top3') {
+    _corridaVidHighlight = 'top3';
+    if (_corridaTop3Extra && _corridaTop3Extra.size) _corridaVidHlSet = new Set(_corridaTop3Extra);
+  }
   if (!_corridaVidHlSet) _corridaVidHlSet = new Set();
   const old = document.getElementById('modal-corrida-video'); if (old) old.remove();
   const others = full.uids.filter(uid => uid !== full.meUid);
@@ -12909,8 +12915,8 @@ function _corridaOpenVideoModal() {
     ${grp('cv-speed', 'Velocidade', [{ v: '1', t: 'Normal' }, { v: '0.5', t: 'Lenta (0,5×)' }, { v: '0.25', t: 'Bem lenta (0,25×)' }, { v: '0.15', t: 'Bem smooth (0,15×)' }], String(_corridaVidSpeed))}
     ${grp('cv-scope', 'Quem aparece', [{ v: 'view', t: 'Como na tela' }, { v: 'all', t: 'Todos' }], _corridaVidScope)}
     ${grp('cv-hl', 'Realçar', [{ v: 'all', t: 'Só eu' }, { v: 'top3', t: '🏅 Top 3 do momento' }, { v: 'sel', t: 'Eu + escolher' }], _corridaVidHighlight === 'me' ? 'all' : _corridaVidHighlight)}
-    <div id="cv-picklist" style="display:${_corridaVidHighlight === 'sel' ? 'grid' : 'none'};margin-top:6px;max-height:210px;overflow:auto;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px">${checklist}</div>
-    <div class="cv-foot-hint">Todos os jogadores aparecem coloridos; os realçados ganham brilho/ênfase para o olhar acompanhar quem você escolher.</div>
+    <div id="cv-picklist" style="display:${(_corridaVidHighlight === 'sel' || _corridaVidHighlight === 'top3') ? 'grid' : 'none'};margin-top:6px;max-height:210px;overflow:auto;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px">${checklist}</div>
+    <div class="cv-foot-hint">Todos os jogadores aparecem coloridos; os realçados ganham brilho. Em <b>🏅 Top 3 do momento</b>, além dos 3 primeiros (que mudam ao vivo) você pode marcar jogadores extras para destacar junto.</div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn btn-secondary" style="flex:1" onclick="_corridaCloseVideoModal()">Cancelar</button>
       <button class="btn btn-primary" style="flex:2" onclick="_corridaConfirmVideo()">🎬 Gerar vídeo</button>
@@ -12925,7 +12931,7 @@ function _corridaOpenVideoModal() {
         b.classList.add('active');
         if (group.id === 'cv-hl') {
           const pl = document.getElementById('cv-picklist');
-          if (pl) pl.style.display = b.dataset.v === 'sel' ? 'grid' : 'none';
+          if (pl) pl.style.display = (b.dataset.v === 'sel' || b.dataset.v === 'top3') ? 'grid' : 'none';
         }
       };
     });
@@ -12941,7 +12947,7 @@ function _corridaConfirmVideo() {
   _corridaVidScope = pick('#cv-scope') || 'view';
   _corridaVidHighlight = pick('#cv-hl') || 'all';
   const hlSet = new Set();
-  if (_corridaVidHighlight === 'sel') ov.querySelectorAll('#cv-picklist input:checked').forEach(c => hlSet.add(c.value));
+  if (_corridaVidHighlight === 'sel' || _corridaVidHighlight === 'top3') ov.querySelectorAll('#cv-picklist input:checked').forEach(c => hlSet.add(c.value));
   _corridaVidHlSet = hlSet;
   _corridaCloseVideoModal();
   _corridaDownloadVideo();
@@ -13046,14 +13052,14 @@ async function _corridaDownloadVideo() {
     // Realce (brilho/ênfase) — TODOS mantêm a cor. "me" → só você; "sel" → você +
     // escolhidos; "top3" → realça dinamicamente quem está em 1º/2º/3º naquele momento.
     let hl = null, top3 = false;
-    if (_corridaVidHighlight === 'top3') top3 = true;
+    if (_corridaVidHighlight === 'top3') { top3 = true; if (_corridaVidHlSet && _corridaVidHlSet.size) hl = new Set(_corridaVidHlSet); } // top3 dinâmico + extras escolhidos
     else if (_corridaVidHighlight === 'me') hl = new Set([data.meUid]);
     else if (_corridaVidHighlight === 'sel') { hl = new Set(_corridaVidHlSet || []); hl.add(data.meUid); }
     // Faixas FIXAS no modo Top: você + escolhidos continuam na tela mesmo fora do Top.
     let pinUids = [];
     if (pin) {
       pinUids = [data.meUid];
-      if (_corridaVidHighlight === 'sel' && _corridaVidHlSet) _corridaVidHlSet.forEach(u => { if (u !== data.meUid && data.uids.includes(u)) pinUids.push(u); });
+      if ((_corridaVidHighlight === 'sel' || _corridaVidHighlight === 'top3') && _corridaVidHlSet) _corridaVidHlSet.forEach(u => { if (u !== data.meUid && data.uids.includes(u)) pinUids.push(u); });
     }
     const geo = _corridaVideoGeo(slots, pin, maxH, W, pin ? pinUids.length : 0);
     const totalSeg = Math.max(1, data.frames.length - 1);
@@ -13191,6 +13197,7 @@ async function renderPalco() {
       <button id="palco-play" class="btn btn-primary" onclick="_palcoTogglePlay()" style="display:none">⏸️ Pausar</button>
       <button id="palco-replay" class="btn btn-secondary" onclick="_palcoReplay()" style="display:none">🔁 Repetir</button>
       <button id="palco-fs" class="btn btn-secondary" onclick="_palcoFullscreen()" style="display:none">⛶ Tela cheia</button>
+      <button id="palco-video" class="btn btn-secondary" onclick="_palcoOpenVideoModal()" style="display:none">🎬 Baixar vídeo</button>
     </div>
     <div class="corrida-hint">Use a barra para percorrer com calma. Em <b>Tela cheia</b> + gravador de tela vira vídeo. O ranking é o mesmo da Corrida oficial — aqui muda só a apresentação.</div>
   </div>`;
@@ -13338,7 +13345,7 @@ function _palcoPaintHorses(ctx, st, arr, frame) {
   // Separadores de raia
   ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1;
   for (let i = 1; i < n; i++) { const y = bandTop + i * laneH; ctx.beginPath(); ctx.moveTo(8, y); ctx.lineTo(finishX + 2 * sq, y); ctx.stroke(); }
-  const now = performance.now();
+  const now = (st._clock != null ? st._clock : performance.now()); // _clock = relógio determinístico no vídeo
   const curMax = Math.max(1, data.maxV);
   const sorted = arr.slice().sort((a, b) => a.r - b.r);
   sorted.forEach(o => {
@@ -13522,6 +13529,7 @@ function _palcoSyncButtons() {
   if (b) { b.style.display = ''; b.textContent = st.playing ? '⏸️ Pausar' : (st.seg >= last ? '▶️ Recomeçar' : '▶️ Continuar'); }
   const rp = document.getElementById('palco-replay'); if (rp) rp.style.display = '';
   const fb = document.getElementById('palco-fs'); if (fb) fb.style.display = '';
+  const vb = document.getElementById('palco-video'); if (vb) vb.style.display = '';
 }
 function _palcoSyncModeButtons() {
   document.querySelectorAll('.palco-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === _palcoMode));
@@ -13542,6 +13550,120 @@ function _palcoStop() {
   if (st.raf) cancelAnimationFrame(st.raf);
   st.raf = null; st.playing = false;
   if (st._onResize) { window.removeEventListener('resize', st._onResize); document.removeEventListener('fullscreenchange', st._onResize); }
+}
+
+// ── Export de vídeo do Palco (reusa o encoder MP4 e o diálogo de resultado da
+// Corrida). Renderiza em 720 de largura (s=1) para os painters do palco ficarem
+// proporcionais sem precisar de reescala. Vertical, bom para WhatsApp. ──────────
+let _palcoVidSpeed = 0.5;
+function _palcoVideoDims(mode, n, W, s, maxH) {
+  if (mode === 'horses') {
+    const chrome = Math.round(80 * s);
+    const targetH = Math.round(W * 16 / 9);
+    let laneH = Math.min(Math.round(96 * s), Math.max(Math.round(30 * s), Math.floor((targetH - chrome) / n)));
+    let H = chrome + n * laneH;
+    if (H > maxH) { laneH = Math.max(1, Math.floor((maxH - chrome) / n)); H = chrome + n * laneH; }
+    H = Math.max(Math.round(420 * s), Math.round(H / 2) * 2);
+    return { H, laneH };
+  }
+  // Linhas: altura cresce com o nº de participantes (espaço para os nomes na ponta).
+  const labelGap = (W >= 760 ? 16 : 13) * s;
+  const need = Math.round((46 + 32 + 28) * s) + n * labelGap;
+  let H = Math.max(Math.round(W * 1.15), need);
+  H = Math.min(H, maxH);
+  H = Math.round(H / 2) * 2;
+  return { H, laneH: 0 };
+}
+function _palcoOpenVideoModal() {
+  const st = _palcoState;
+  if (!st || !st.data.frames.length) { showToast('Abra o palco primeiro.', 'warning'); return; }
+  const old = document.getElementById('modal-palco-video'); if (old) old.remove();
+  const grp = (id, label, opts, cur) => `<div class="cv-group"><div class="cv-label">${label}</div><div class="cv-opts" id="${id}">${
+    opts.map(o => `<button class="date-filter-btn cv-btn${o.v === cur ? ' active' : ''}" data-v="${o.v}">${o.t}</button>`).join('')}</div></div>`;
+  const ov = document.createElement('div');
+  ov.id = 'modal-palco-video'; ov.className = 'modal-overlay';
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = `<div class="modal-box" style="max-width:480px;text-align:left">
+    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    <div style="font-weight:800;color:var(--gold);font-size:1.05rem;margin-bottom:6px">🎬 Baixar vídeo — ${_palcoMode === 'horses' ? '🐴 Cavalos' : '📈 Linhas'}</div>
+    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Gera um MP4 vertical (compatível com WhatsApp) com o modo e o filtro (Top) atuais.</div>
+    ${grp('pv-speed', 'Velocidade', [{ v: '1', t: 'Normal' }, { v: '0.5', t: 'Lenta (0,5×)' }, { v: '0.25', t: 'Bem lenta (0,25×)' }, { v: '0.15', t: 'Smooth (0,15×)' }], String(_palcoVidSpeed))}
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-secondary" style="flex:1" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+      <button class="btn btn-primary" style="flex:2" onclick="_palcoConfirmVideo()">🎬 Gerar vídeo</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelectorAll('.cv-opts').forEach(group => group.querySelectorAll('.cv-btn').forEach(b => b.onclick = () => {
+    group.querySelectorAll('.cv-btn').forEach(x => x.classList.remove('active')); b.classList.add('active');
+  }));
+}
+function _palcoConfirmVideo() {
+  const ov = document.getElementById('modal-palco-video'); if (!ov) return;
+  const b = ov.querySelector('#pv-speed .cv-btn.active');
+  _palcoVidSpeed = parseFloat(b ? b.dataset.v : '0.5') || 0.5;
+  ov.remove();
+  _palcoDownloadVideo();
+}
+async function _palcoDownloadVideo() {
+  const st = _palcoState;
+  if (!st || !st.data.frames.length) { showToast('Abra o palco primeiro.', 'warning'); return; }
+  const hasMR = !!(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
+  const hasWC = typeof window.VideoEncoder === 'function' && typeof window.VideoFrame === 'function' && typeof Mp4Muxer !== 'undefined';
+  if (!hasMR && !hasWC) { showToast('Seu navegador não permite gerar vídeo aqui. Tente Chrome/Edge no Android ou grave a tela no iPhone.', 'warning', 5200); return; }
+  const btn = document.getElementById('palco-video');
+  if (btn) { btn.disabled = true; btn.textContent = '🎬 Gerando…'; }
+  try {
+    const isMobile = (navigator.userAgentData && navigator.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || '');
+    const W = 720, s = 1; // 720 de largura → painters do palco ficam proporcionais (s=1)
+    const fps = isMobile ? 30 : 60;
+    const bitrate = isMobile ? 2400000 : 5000000;
+    const maxH = isMobile ? 1280 : 1920;
+    const maxFrames = isMobile ? 1400 : 3000;
+    const data = st.data;                 // respeita o filtro Top atual
+    const mode = _palcoMode;
+    const { H, laneH } = _palcoVideoDims(mode, data.n, W, s, maxH);
+    const vst = { data, cssW: W, cssH: H, laneH, playing: true, _clock: 0 };
+    const totalSeg = Math.max(1, data.frames.length - 1);
+    const spd = _palcoVidSpeed || 0.5;
+    const totalFrames = Math.min(maxFrames, Math.ceil(totalSeg * (0.85 / spd) * fps) + 1);
+    const drawAt = (ctx, i) => {
+      const seg = (i / Math.max(1, totalFrames - 1)) * totalSeg;
+      vst._clock = i / fps * 1000;
+      const last = data.frames.length - 1, li = Math.min(last, Math.round(seg));
+      if (mode === 'horses') _palcoPaintHorses(ctx, vst, _corridaInterp(data, seg), data.frames[li]);
+      else _palcoPaintLines(ctx, vst, seg, li);
+    };
+    const onProg = p => { if (btn) btn.textContent = `🎬 Gerando… ${Math.round(p * 100)}%`; };
+
+    let blob = null, ext = 'mp4';
+    try { blob = await _corridaTryEncodeMp4({ W, H }, data, totalFrames, fps, drawAt, onProg, bitrate); } catch (_) { blob = null; }
+
+    if (!blob && hasMR) {
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      const stream = cv.captureStream(fps);
+      const mp4mime = MediaRecorder.isTypeSupported('video/mp4;codecs=h264') ? 'video/mp4;codecs=h264'
+        : MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : null;
+      const mime = mp4mime || (MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm');
+      ext = mp4mime ? 'mp4' : 'webm';
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
+      const chunks = [];
+      rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      const recDone = new Promise((res, rej) => { rec.onstop = res; rec.onerror = rej; });
+      rec.start(250);
+      for (let i = 0; i < totalFrames; i++) { drawAt(ctx, i); if (i % 12 === 0) onProg(i / totalFrames); await new Promise(r => setTimeout(r, 1000 / fps)); }
+      rec.stop(); await recDone; stream.getTracks().forEach(t => t.stop());
+      blob = new Blob(chunks, { type: ext === 'mp4' ? 'video/mp4' : 'video/webm' });
+    }
+    if (!blob) throw new Error('Não foi possível gerar o vídeo neste navegador.');
+    const file = new File([blob], `gp-bolao-${mode}-${fmtDate()}.${ext}`, { type: blob.type });
+    _corridaShowResult(file, blob, ext);
+  } catch (e) {
+    showToast('Erro ao gerar vídeo: ' + errMsg(e), 'error', 6000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🎬 Baixar vídeo'; }
+  }
 }
 
 // ════════════════════════════════════════════
