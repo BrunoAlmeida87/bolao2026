@@ -262,6 +262,12 @@ select option{background:var(--mid-blue);color:var(--white)}
 .gx-subtab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .gx-subtab:hover:not(.active){border-color:var(--accent);color:var(--accent)}
 .gx-desc{font-size:0.78rem;color:var(--text-muted);margin:2px 0 14px;line-height:1.45}
+.gx-help{margin-top:12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.03)}
+.gx-help summary{cursor:pointer;padding:8px 12px;font-size:0.78rem;font-weight:700;color:var(--gold);list-style:none}
+.gx-help summary::-webkit-details-marker{display:none}
+.gx-help-body{padding:4px 12px 12px;display:flex;flex-direction:column;gap:7px;font-size:0.78rem;color:var(--text-muted);line-height:1.4}
+.gx-tag{display:inline-block;color:#06121f;font-weight:800;font-size:0.7rem;padding:1px 7px;border-radius:6px;margin-right:6px}
+.gx-bold-info{margin-top:10px;font-size:0.82rem;min-height:20px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:8px 12px;line-height:1.4}
 .gx-intro{font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;line-height:1.5}
 .gx-empty{text-align:center;padding:24px 14px;color:var(--text-muted);font-size:0.86rem;line-height:1.5}
 .gx-select{
@@ -8094,22 +8100,40 @@ function renderGraficos() {
 }
 
 // ── 0. Resumo geral ───────────────────────────────────────────────────────────
+// Glossário de pontuação reutilizável. Deixa claro que "acerto/cravada" = SÓ o
+// placar exato; os demais níveis têm nomes próprios e não são chamados de acerto.
+function _gxScoringGlossary() {
+  const ex = CFG.pts_exato, vs = CFG.pts_vencedor_saldo ?? 7, av = CFG.pts_apenas_vencedor ?? 5;
+  return `<details class="gx-help"><summary>ℹ️ Como contamos cada palpite</summary>
+    <div class="gx-help-body">
+      <div><span class="gx-tag" style="background:#00C851">Exato · ${ex} pts</span> cravou o placar. <b>É o único que chamamos de “acerto”/“cravada”.</b></div>
+      <div><span class="gx-tag" style="background:#FFD98A;color:#222">Vencedor + saldo · ${vs} pts</span> acertou quem venceu <b>e</b> o saldo de gols, mas não o placar.</div>
+      <div><span class="gx-tag" style="background:#1E90FF">Só o vencedor · ${av} pts</span> acertou apenas quem venceu (ou o empate).</div>
+      <div><span class="gx-tag" style="background:rgba(140,160,190,.5)">Erro · 0 pts</span> não pontuou.</div>
+    </div>
+  </details>`;
+}
+
 function renderGxResumoGeral(d) {
   const { jogosComResultado, ranking } = d;
-  let totalPts = 0, totalPals = 0, acertos = 0;
+  let totalPts = 0, totalPals = 0, pontuaram = 0, exatos = 0;
   jogosComResultado.forEach(jid => {
     const s = _gxGameStats(jid, d);
     if (!s) return;
-    totalPts += s.sumPts; totalPals += s.nPals; acertos += (s.nPals - s.erros);
+    totalPts += s.sumPts; totalPals += s.nPals; pontuaram += (s.nPals - s.erros); exatos += s.exatos;
   });
-  const taxa = totalPals ? Math.round(acertos / totalPals * 100) : 0;
+  const taxaPontuou = totalPals ? Math.round(pontuaram / totalPals * 100) : 0;
+  const taxaExato = totalPals ? Math.round(exatos / totalPals * 100) : 0;
   const lider = ranking[0];
-  return _gxCard('🧮 Resumo Geral', `<div class="stats-grid">
+  const body = `<div class="stats-grid">
     <div class="stat-card"><div class="val">${totalPts.toLocaleString('pt-BR')}</div><div class="lbl">Pontos distribuídos</div></div>
     <div class="stat-card"><div class="val">${totalPals.toLocaleString('pt-BR')}</div><div class="lbl">Palpites avaliados</div></div>
-    <div class="stat-card"><div class="val">${taxa}%</div><div class="lbl">Taxa de acerto do bolão</div></div>
+    <div class="stat-card" title="Palpites que fizeram ao menos 1 ponto (não é o mesmo que cravar o placar)"><div class="val">${taxaPontuou}%</div><div class="lbl">Pontuaram (≥1 pt)</div></div>
+    <div class="stat-card" title="Palpites que cravaram o placar exato"><div class="val">${taxaExato}%</div><div class="lbl">Cravaram o placar</div></div>
     <div class="stat-card"><div class="val" style="font-size:1.05rem">${lider ? _gxShortName(lider, 14) : '—'}</div><div class="lbl">Líder atual</div></div>
-  </div>`);
+  </div>`;
+  return _gxCard('🧮 Resumo Geral', body + _gxScoringGlossary(),
+    'Visão rápida do bolão. <b>Pontuaram</b> = palpites com pelo menos 1 ponto; <b>Cravaram</b> = placar exato. São coisas diferentes.');
 }
 
 // ── 6. Resumo / destaques da rodada ───────────────────────────────────────────
@@ -8263,6 +8287,19 @@ function computeBoldnessVsPoints(d) {
   const med = arr => { if (!arr.length) return 0; const s = arr.slice().sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
   return { rows, medOusadia: med(rows.map(r => r.ousadia)), medPontos: med(rows.map(r => r.pontos)) };
 }
+let _gxBoldnessMap = null; // uid → dados da bolinha (para o tooltip interativo)
+function _gxBoldnessQuadrant(ousadia, pontos, medOusadia, medPontos) {
+  const ousado = ousadia >= medOusadia, pontua = pontos >= medPontos;
+  return ousado ? (pontua ? 'Gênio 💡 (ousado e pontua)' : 'Maluco 🤪 (ousado e erra)')
+                : (pontua ? 'Eficiente ✅ (seguro e pontua)' : 'Conservador 🛡️ (seguro e poucos pontos)');
+}
+function gxBoldnessShow(uid) {
+  const el = document.getElementById('gx-bold-info'); if (!el) return;
+  const info = _gxBoldnessMap && _gxBoldnessMap[uid];
+  if (!info) { el.innerHTML = '<span style="color:var(--text-muted)">Toque numa bolinha para ver o participante.</span>'; return; }
+  el.innerHTML = `<b style="color:${info.me ? '#FFD700' : '#fff'}">${info.me ? '★ ' : ''}${info.name}</b> — ${info.quadrant}<br>
+    <span style="color:var(--text-muted)">ousadia ${info.ousadia}% · ${info.pontos} pts · ${info.n} palpite(s) avaliado(s)</span>`;
+}
 function renderGxBoldness(d) {
   const { rows, medOusadia, medPontos } = computeBoldnessVsPoints(d);
   if (rows.length < 3) return _gxCard('🎲 Ousadia × Pontos', _gxEmpty('Precisamos de mais palpites avaliados para este gráfico.'));
@@ -8272,6 +8309,7 @@ function renderGxBoldness(d) {
   const yFor = p => H - padB - (p / maxP) * (H - padT - padB);
   const mx = xFor(medOusadia), my = yFor(medPontos);
   const meUid = currentUser?.uid;
+  _gxBoldnessMap = {};
   let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:300px">`;
   // quadrantes
   svg += `<line x1="${mx}" y1="${padT}" x2="${mx}" y2="${H - padB}" stroke="rgba(255,255,255,.12)" stroke-dasharray="4,4"/>`;
@@ -8286,13 +8324,22 @@ function renderGxBoldness(d) {
   rows.forEach(r => {
     const x = xFor(r.ousadia).toFixed(1), y = yFor(r.pontos).toFixed(1);
     const me = r.u.uid === meUid;
-    svg += `<circle cx="${x}" cy="${y}" r="${me ? 5 : 3.4}" fill="${me ? '#FFD700' : 'rgba(30,144,255,.7)'}" stroke="rgba(0,0,0,.4)" stroke-width="1"><title>${_gxName(r.u)} · ${Math.round(r.ousadia)}% ousadia · ${r.pontos} pts</title></circle>`;
-    if (me) svg += `<text x="${x}" y="${(parseFloat(y) - 8).toFixed(1)}" font-size="9" text-anchor="middle" fill="#FFD700" font-weight="700">você</text>`;
+    const uid = r.u.uid;
+    _gxBoldnessMap[uid] = { name: _gxName(r.u), ousadia: Math.round(r.ousadia), pontos: r.pontos, n: r.n, me, quadrant: _gxBoldnessQuadrant(r.ousadia, r.pontos, medOusadia, medPontos) };
+    svg += `<circle cx="${x}" cy="${y}" r="${me ? 6 : 4.4}" fill="${me ? '#FFD700' : 'rgba(30,144,255,.78)'}" stroke="rgba(0,0,0,.45)" stroke-width="1" style="cursor:pointer" onclick="gxBoldnessShow('${esc(uid)}')" onmouseenter="gxBoldnessShow('${esc(uid)}')"><title>${_gxName(r.u)} · ${Math.round(r.ousadia)}% ousadia · ${r.pontos} pts</title></circle>`;
+    if (me) svg += `<text x="${x}" y="${(parseFloat(y) - 9).toFixed(1)}" font-size="9" text-anchor="middle" fill="#FFD700" font-weight="700">você</text>`;
   });
   svg += `</svg>`;
-  const legend = `<div class="gx-legend"><span><i style="background:#FFD700"></i>Você</span><span><i style="background:rgba(30,144,255,.7)"></i>Participantes</span><span>Linhas tracejadas = medianas do bolão</span></div>`;
-  return _gxCard('🎲 Ousadia × Pontos', svg + legend,
-    'Ousadia = % de palpites contra o resultado mais apostado. Quadrantes: Gênio (ousado e pontua), Maluco (ousado e erra), Eficiente (seguro e pontua), Conservador (seguro e poucos pontos).');
+  const legend = `<div class="gx-legend"><span><i style="background:#FFD700"></i>Você</span><span><i style="background:rgba(30,144,255,.78)"></i>Participantes</span><span>Tracejado = medianas do bolão</span></div>`;
+  const info = `<div id="gx-bold-info" class="gx-bold-info"><span style="color:var(--text-muted)">👆 Toque (ou passe o mouse) numa bolinha para ver de qual participante ela é.</span></div>`;
+  const help = `<details class="gx-help"><summary>ℹ️ Como é calculado</summary><div class="gx-help-body">
+    <div><b>Cada bolinha é um participante</b> (não um jogo).</div>
+    <div><b>Ousadia (eixo X)</b>: % dos palpites da pessoa em que o <b>resultado</b> escolhido (vitória do mandante, empate ou vitória do visitante) foi <b>diferente do mais escolhido pelo bolão</b> naquele jogo. Mais alto = aposta mais contra a maioria.</div>
+    <div><b>Pontos (eixo Y)</b>: total de pontos da pessoa no ranking.</div>
+    <div>As linhas tracejadas são as <b>medianas</b> do bolão, dividindo os 4 perfis: <b>Gênio</b> (ousado e pontua), <b>Maluco</b> (ousado e erra), <b>Eficiente</b> (seguro e pontua) e <b>Conservador</b> (seguro e poucos pontos).</div>
+  </div></details>`;
+  return _gxCard('🎲 Ousadia × Pontos', svg + legend + info + help,
+    'Quem arrisca contra a maioria — e se isso está dando pontos.');
 }
 
 // ── 1. Distribuição de placares por jogo ──────────────────────────────────────
@@ -8385,9 +8432,15 @@ function renderGxHardestGames(d) {
     <td style="text-align:center">${s.exatos}</td>
   </tr>`).join('');
   const body = `<div style="overflow-x:auto"><table class="gx-table">
-    <thead><tr><th>Jogo</th><th style="text-align:center">Real</th><th style="text-align:center">Média</th><th style="text-align:center">% Erros</th><th style="text-align:center">Exatos</th></tr></thead>
-    <tbody>${rows}</tbody></table></div>`;
-  return _gxCard('😤 Jogos Mais Difíceis', body, 'Menor média de pontos e maior taxa de erro — onde o bolão mais tropeçou.');
+    <thead><tr><th>Jogo</th><th style="text-align:center" title="Placar real da partida">Real</th><th style="text-align:center" title="Média de pontos por palpite neste jogo">Média</th><th style="text-align:center" title="% de palpites que zeraram (0 pts)">% Erros</th><th style="text-align:center" title="Quantos cravaram o placar exato">Cravados</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    <div class="gx-help" style="margin-top:12px"><div class="gx-help-body" style="padding:10px 12px">
+      <div><b style="color:var(--gold)">Como cada coluna é calculada:</b></div>
+      <div>• <b>Média</b>: soma dos pontos de todos os palpites do jogo ÷ nº de palpites. <b>Quanto menor, mais difícil foi o jogo.</b> A ordenação do ranking usa essa média (do menor para o maior).</div>
+      <div>• <b>% Erros</b>: percentual de palpites que zeraram (0 pts) naquele jogo.</div>
+      <div>• <b>Cravados</b>: quantos participantes acertaram o <b>placar exato</b> (a “cravada”) — não inclui vencedor+saldo nem só o vencedor.</div>
+    </div></div>`;
+  return _gxCard('😤 Jogos Mais Difíceis', body, 'Onde o bolão mais tropeçou: menor média de pontos e maior taxa de erro.');
 }
 
 // ── 7. Ranking de zebras ──────────────────────────────────────────────────────
@@ -8428,10 +8481,10 @@ function _gxZebraBody(z) {
     <td style="text-align:center">${Math.round(g.pctOnWinner * 100)}%</td>
     <td style="text-align:center">${g.outcomeCounts[g.winnerOutcome]}</td>
   </tr>`).join('');
-  return `<div style="font-weight:700;font-size:0.84rem;margin:4px 0;color:var(--gold)">Quem mais acertou zebras</div>${rank}
+  return `<div style="font-weight:700;font-size:0.84rem;margin:4px 0;color:var(--gold)">Quem mais acertou o vencedor em zebras</div>${rank}
     <div style="font-weight:700;font-size:0.84rem;margin:14px 0 6px;color:var(--gold)">Jogos zebra</div>
     <div style="overflow-x:auto"><table class="gx-table">
-      <thead><tr><th>Jogo</th><th style="text-align:center">Real</th><th style="text-align:center">% acertou</th><th style="text-align:center">Acertaram</th></tr></thead>
+      <thead><tr><th>Jogo</th><th style="text-align:center">Real</th><th style="text-align:center" title="% de participantes que acertaram quem venceu (não precisa ser o placar exato)">% no vencedor</th><th style="text-align:center" title="Quantos acertaram o vencedor real">Acertaram o venc.</th></tr></thead>
       <tbody>${games}</tbody></table></div>`;
 }
 function gxSetZebraThreshold(v) {
