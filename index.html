@@ -6629,6 +6629,9 @@ async function _dashStartAINews() {
   </div>`;
   _dashAiState.idx = 0; _dashAiState.n = cards.length;
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Cancela qualquer timer de uma chamada concorrente que tenha resolvido o await
+  // antes desta — evita vazar um setInterval órfão ao sobrescrever _dashAiState.timer.
+  _dashAiStop();
   if (cards.length > 1 && !reduce) _dashAiState.timer = setInterval(() => _dashAiNext(1, true), 5000);
 }
 
@@ -7022,14 +7025,6 @@ async function renderEstatisticas() {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u=>u.ativo!==false);
     const {allPals, champPicks} = await _fetchPalsCached(users);
-
-    // Carrega AI insights (1 leitura, sem cache — admin pode atualizar a qualquer momento)
-    if (!_aiInsightsCache) {
-      try {
-        const aiSnap = await db_.collection('config').doc('ai_insights').get();
-        _aiInsightsCache = aiSnap.exists ? aiSnap.data() : {};
-      } catch(_) { _aiInsightsCache = {}; }
-    }
 
     const jogosComResultado = Object.keys(res).filter(id=>_hasFullResult(res[id]));
     const totalJogos = jogosComResultado.length;
@@ -7565,24 +7560,7 @@ async function renderEstatisticas() {
       <div class="bump-chart-wrap">${bumpSvg}</div>
     </div>`;
 
-    // ── Análise IA (se o admin já enviou) ──
-    const aiCards = _aiInsightsCache?.cards;
-    if (Array.isArray(aiCards) && aiCards.length > 0) {
-      html += `<div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-          <div class="card-title" style="margin-bottom:0">🤖 Análise da IA</div>
-          <div id="ai-insights-ts" class="ai-updated" style="margin-top:0;font-size:0.75rem">${_fmtAITimestamp(_aiInsightsCache)}</div>
-        </div>
-        <div class="ai-cards-grid">
-          ${aiCards.map(c=>`<div class="ai-card">
-            <div class="ai-card-icon">${esc(c.icon||'🤖')}</div>
-            <div class="ai-card-title">${esc(c.title||'')}</div>
-            ${c.value?`<div class="ai-card-value">${esc(c.value)}</div>`:''}
-            <div class="ai-card-text">${esc(c.text||'')}</div>
-          </div>`).join('')}
-        </div>
-      </div>`;
-    }
+    // (A "Análise da IA" agora aparece só no carrossel do dashboard.)
 
     // ── Insights automáticos ──
     if (insights.length > 0) {
