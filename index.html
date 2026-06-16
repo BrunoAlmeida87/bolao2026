@@ -1111,6 +1111,25 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ai-card-text{font-size:0.8rem;color:var(--text-muted);line-height:1.45}
 .ai-updated{font-size:0.72rem;color:var(--text-muted);margin-top:10px;text-align:right}
 .light-theme .ai-card{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.09)}
+/* Carrossel "Análise da IA" no dashboard (estilo manchete de notícias) */
+.ai-news{background:linear-gradient(135deg,rgba(30,144,255,.08),rgba(255,215,0,.05));border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:24px}
+.ai-news-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.ai-news-badge{font-size:0.74rem;font-weight:800;color:var(--gold);letter-spacing:.03em}
+.ai-news-live{font-size:0.58rem;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.08em;display:inline-flex;align-items:center;gap:5px}
+.ai-news-live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green);animation:aiPulse 1.6s infinite}
+@keyframes aiPulse{0%{box-shadow:0 0 0 0 rgba(0,200,81,.5)}70%{box-shadow:0 0 0 6px rgba(0,200,81,0)}100%{box-shadow:0 0 0 0 rgba(0,200,81,0)}}
+.ai-news-car{position:relative;min-height:70px;overflow:hidden}
+.ai-news-slide{display:none;align-items:center;gap:12px}
+.ai-news-slide.active{display:flex;animation:aiNewsIn .45s ease}
+@keyframes aiNewsIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+.ai-news-icon{font-size:2rem;line-height:1;flex:none}
+.ai-news-title{font-size:0.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.ai-news-value{font-size:1.05rem;font-weight:800;color:var(--gold);line-height:1.2;margin:1px 0}
+.ai-news-text{font-size:0.82rem;color:var(--text);line-height:1.4}
+.ai-news-dots{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap}
+.ai-news-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);cursor:pointer;transition:all .2s}
+.ai-news-dot.active{background:var(--gold);width:18px;border-radius:4px}
+.light-theme .ai-news-dot{background:rgba(0,0,0,.18)}
 .prize-pool-item .ppi-val{font-size:1.2rem;font-weight:800;color:var(--gold)}
 .prize-pool-item .ppi-lbl{font-size:0.7rem;color:var(--text-muted);margin-top:2px}
 /* Paid checkbox in admin users */
@@ -2743,6 +2762,7 @@ function navigateTo(page, opts) {
   const _navUid = (page === 'ver-palpites') ? _pendingPalpitesUid : null;
   _currentPage = page;
   if (_countdownTimer && page !== 'dashboard') { clearInterval(_countdownTimer); _countdownTimer = null; }
+  if (page !== 'dashboard' && typeof _dashAiStop === 'function') _dashAiStop(); // para o carrossel da IA ao sair
   if (_cardapioTimer && page !== 'cardapio') { clearInterval(_cardapioTimer); _cardapioTimer = null; }
   if (page !== 'corrida' && typeof _corridaStop === 'function') _corridaStop(); // pausa a corrida ao sair da aba
   if (page !== 'palco' && typeof _palcoStop === 'function') _palcoStop(); // pausa o palco ao sair da aba
@@ -3674,6 +3694,9 @@ async function renderDashboard() {
         </div>
       </div>`;
 
+    // Manchetes da Análise da IA (carrossel animado) — preenchido após o render.
+    html += `<div id="dash-ai-news"></div>`;
+
     if (totalJogos === 0) {
       html += `<div class="card" style="text-align:center;padding:24px">
         <p style="color:var(--text-muted);margin:0">⏳ Nenhum resultado lançado ainda. O ranking será atualizado após o admin inserir os resultados dos jogos.</p>
@@ -3805,6 +3828,7 @@ async function renderDashboard() {
     cont.innerHTML = html;
     _runAnimNumbers(); // contagem animada dos KPIs e da premiação (a partir do valor anterior)
     _startCountdownTimer();
+    _dashStartAINews(); // manchetes da Análise da IA (carrossel) abaixo dos KPIs
     _showNewResultsModal(res, _dashMyPals);
     setTimeout(_maybeShowPendingPalpitesAlert, 450); // lembrete de palpites pendentes (a cada entrada)
     setTimeout(_maybeShowSimuladorIntro, 900);       // pop-up de novidade Simulador (1x por navegador)
@@ -6559,6 +6583,53 @@ function _momNext(dir, auto) {
   if (!car || !document.body.contains(car) || car.offsetParent === null) { _momStopAuto(); return; }
   if (!auto) _momStopAuto(); // navegação manual cancela o automático
   _momShow(_momState.idx + dir);
+}
+
+// ── Manchetes da Análise da IA no dashboard (carrossel automático) ────────────
+let _dashAiState = { idx: 0, n: 0, timer: null };
+function _dashAiStop() { if (_dashAiState.timer) { clearInterval(_dashAiState.timer); _dashAiState.timer = null; } }
+function _dashAiShow(i) {
+  const car = document.getElementById('dash-ai-car'); if (!car) return;
+  const slides = car.querySelectorAll('.ai-news-slide'); if (!slides.length) return;
+  _dashAiState.idx = (i + slides.length) % slides.length;
+  slides.forEach((s, k) => s.classList.toggle('active', k === _dashAiState.idx));
+  document.querySelectorAll('.ai-news-dot').forEach((d, k) => d.classList.toggle('active', k === _dashAiState.idx));
+}
+function _dashAiGo(i) { _dashAiStop(); _dashAiShow(i); }
+function _dashAiNext(dir, auto) {
+  const car = document.getElementById('dash-ai-car');
+  if (!car || !document.body.contains(car) || car.offsetParent === null) { _dashAiStop(); return; }
+  if (!auto) _dashAiStop();
+  _dashAiShow(_dashAiState.idx + dir);
+}
+async function _dashStartAINews() {
+  const host = document.getElementById('dash-ai-news'); if (!host) return;
+  _dashAiStop();
+  // Mesmo doc usado nas Estatísticas — carregado 1x por sessão (cache em memória).
+  if (!_aiInsightsCache) {
+    try { const snap = await db_.collection('config').doc('ai_insights').get(); _aiInsightsCache = snap.exists ? snap.data() : {}; }
+    catch (_) { _aiInsightsCache = {}; }
+  }
+  const host2 = document.getElementById('dash-ai-news');
+  if (!host2) return; // saiu do dashboard durante o await
+  const cards = _aiInsightsCache && _aiInsightsCache.cards;
+  if (!Array.isArray(cards) || !cards.length) { host2.innerHTML = ''; return; }
+  const slides = cards.map((c, i) => `<div class="ai-news-slide${i === 0 ? ' active' : ''}">
+      <div class="ai-news-icon">${esc(c.icon || '🤖')}</div>
+      <div>
+        <div class="ai-news-title">${esc(c.title || '')}</div>
+        ${c.value ? `<div class="ai-news-value">${esc(c.value)}</div>` : ''}
+        <div class="ai-news-text">${esc(c.text || '')}</div>
+      </div></div>`).join('');
+  const dots = cards.length > 1 ? `<div class="ai-news-dots">${cards.map((_, i) => `<span class="ai-news-dot${i === 0 ? ' active' : ''}" onclick="_dashAiGo(${i})"></span>`).join('')}</div>` : '';
+  host2.innerHTML = `<div class="ai-news">
+    <div class="ai-news-head"><span class="ai-news-badge">🤖 Análise da IA</span><span class="ai-news-live">ao vivo</span></div>
+    <div id="dash-ai-car" class="ai-news-car">${slides}</div>
+    ${dots}
+  </div>`;
+  _dashAiState.idx = 0; _dashAiState.n = cards.length;
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (cards.length > 1 && !reduce) _dashAiState.timer = setInterval(() => _dashAiNext(1, true), 5000);
 }
 
 function _calcHeadToHead(users, allPals, res) {
