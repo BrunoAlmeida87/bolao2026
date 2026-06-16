@@ -3237,7 +3237,7 @@ function _refreshDashMyPalCard(gameId) {
   const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
   if (hasPal) {
     el.className = 'ngc-mypalpite ngc-mypalpite-set';
-    el.innerHTML = `✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong>`;
+    el.innerHTML = `✅ Você palpitou: <strong>${parseInt(myPal.h)} × ${parseInt(myPal.a)}</strong>`;
   } else {
     el.className = 'ngc-mypalpite ngc-mypalpite-missing';
     el.innerHTML = _missingPalInner(gameId);
@@ -3346,7 +3346,7 @@ function _buildNextGamesHtml(group) {
     const myPal = _dashMyPals[game.id];
     const hasPal = myPal && myPal.h !== undefined && myPal.a !== undefined;
     const myPalHtml = hasPal
-      ? `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-set">✅ Você palpitou: <strong>${myPal.h} × ${myPal.a}</strong></div>`
+      ? `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-set">✅ Você palpitou: <strong>${parseInt(myPal.h)} × ${parseInt(myPal.a)}</strong></div>`
       : `<div id="ngc-mypalpite-${game.id}" class="ngc-mypalpite ngc-mypalpite-missing">${_missingPalInner(game.id)}</div>`;
     return `<div class="next-game-card" data-gid="${game.id}">
       <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
@@ -4671,8 +4671,10 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const time = (r && r.time_override) || GAME_TIMES[game.id] || '--:--';
   const displayDate = (r && r.date_override) ? _isoToGameDate(r.date_override) : (game.date || '');
   const hiddenBadge = !showPal && pal.h!==undefined ? `<span style="font-size:0.72rem;color:var(--text-muted)">🔒 oculto</span>` : '';
-  const hVal = showPal ? (pal.h!==undefined?pal.h:'') : '';
-  const aVal = showPal ? (pal.a!==undefined?pal.a:'') : '';
+  // Coage a inteiro: o palpite vem do doc do usuário e cai num value="" → evita XSS.
+  const _vNum = v => { const x = parseInt(v); return isNaN(x) ? '' : x; };
+  const hVal = showPal ? _vNum(pal.h) : '';
+  const aVal = showPal ? _vNum(pal.a) : '';
   const phaseLabel = game.r ? ` · <span style="font-size:0.7rem;opacity:0.65">${game.r}ª fase</span>` : '';
   const idBadge = `<span style="font-size:0.62rem;font-weight:800;background:rgba(255,255,255,.1);color:var(--text-muted);padding:1px 5px;border-radius:5px;letter-spacing:.03em">${esc(game.id)}</span> `;
   return `<div class="game-row" data-round="${game.r||''}">
@@ -5286,7 +5288,8 @@ async function renderVerTodos() {
         if (!pal||pal.h===undefined) { row += `<td style="color:var(--text-muted)">—</td>`; return; }
         if (!canSeePal) { row += `<td style="color:var(--text-muted);font-size:0.72rem">🔒</td>`; return; }
         const pts = calcPontos(pal, r);
-        const palStr = `${pal.h}-${pal.a}`;
+        const _ph = parseInt(pal.h), _pa = parseInt(pal.a); // coage a inteiro → sem XSS no innerHTML
+        const palStr = (isNaN(_ph) || isNaN(_pa)) ? '—' : `${_ph}-${_pa}`;
         const _ps = _ptsBadgeStyle(pts);
         const cellBg = _ps ? `background:${_ps.bg};` : '';
         const cellCol = _ps ? `color:${_ps.color};` : '';
@@ -6907,7 +6910,11 @@ function _statFinishedGameBody(gid, data) {
       const ps = (pts !== null) ? _ptsBadgeStyle(pts) : null;
       const col = ps ? ps.color : 'var(--gold)';
       const tag = (pts !== null) ? ' <span style="font-size:0.62rem;color:' + col + '">(' + (pts > 0 ? '+' + pts : '0') + ')</span>' : '';
-      val = '<span style="font-size:0.82rem;font-weight:700;color:' + col + ';white-space:nowrap">' + p.h + '×' + p.a + tag + '</span>';
+      // Segurança: o palpite vem do doc do próprio usuário — coage a inteiro para
+      // nunca injetar HTML (XSS) ao concatenar no innerHTML.
+      const _ph = parseInt(p.h), _pa = parseInt(p.a);
+      const _sc = (isNaN(_ph) || isNaN(_pa)) ? '—' : (_ph + '×' + _pa);
+      val = '<span style="font-size:0.82rem;font-weight:700;color:' + col + ';white-space:nowrap">' + _sc + tag + '</span>';
     } else {
       val = '<span style="font-size:0.68rem;font-style:italic;color:#ff8a8a;white-space:nowrap">não palpitou</span>';
     }
@@ -7241,7 +7248,10 @@ async function renderEstatisticas() {
                     const _ps = (_hasRes && _pts !== null) ? _ptsBadgeStyle(_pts) : null;
                     const _scoreCol = _ps ? _ps.color : 'var(--gold)';
                     const _ptsTag = (_hasRes && _pts !== null) ? ' <span style="font-size:0.62rem;color:' + (_ps ? _ps.color : 'var(--text-muted)') + '">(' + (_pts > 0 ? '+' + _pts : '0') + ')</span>' : '';
-                    _valHtml = '<span style="font-size:0.82rem;font-weight:700;color:' + _scoreCol + ';white-space:nowrap">' + p.h + '×' + p.a + _ptsTag + '</span>';
+                    // Segurança: coage o placar a inteiro (o palpite vem do doc do usuário) → sem XSS no innerHTML.
+                    const _ph = parseInt(p.h), _pa = parseInt(p.a);
+                    const _sc = (isNaN(_ph) || isNaN(_pa)) ? '—' : (_ph + '×' + _pa);
+                    _valHtml = '<span style="font-size:0.82rem;font-weight:700;color:' + _scoreCol + ';white-space:nowrap">' + _sc + _ptsTag + '</span>';
                   } else {
                     _valHtml = '<span style="font-size:0.68rem;font-style:italic;color:#ff8a8a;white-space:nowrap">não palpitou</span>';
                   }
@@ -12200,7 +12210,7 @@ function _showNewResultsModal(res, myPals) {
       const hFlag = teamFlag(teams.h)||'';
       const aFlag = teamFlag(teams.a)||'';
       const predStr = myPals[id] && myPals[id].h !== undefined
-        ? `Seu: ${myPals[id].h}–${myPals[id].a}`
+        ? `Seu: ${parseInt(myPals[id].h)}–${parseInt(myPals[id].a)}`
         : '—';
       return `<div class="new-res-row">
         <div>
@@ -14112,8 +14122,10 @@ function _renderH2HTabs(activeTab) {
     }
 
     const realScore = `${r.h_real}-${r.a_real}`;
-    const pal1Score = p1 && p1.h !== undefined ? `${p1.h}-${p1.a}` : '—';
-    const pal2Score = p2 && p2.h !== undefined ? `${p2.h}-${p2.a}` : '—';
+    const _n = v => { const x = parseInt(v); return isNaN(x) ? null : x; }; // coage placar a inteiro → sem XSS
+    const _sc = p => { if (!p || p.h === undefined) return '—'; const a = _n(p.h), b = _n(p.a); return (a === null || b === null) ? '—' : `${a}-${b}`; };
+    const pal1Score = _sc(p1);
+    const pal2Score = _sc(p2);
     const rowClass = v === 1 ? 'h2h-row-w1' : v === 2 ? 'h2h-row-w2' : '';
 
     const hName = r.h_team || g.h || '';
