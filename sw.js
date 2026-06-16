@@ -1,7 +1,7 @@
 // Detecta o caminho base automaticamente (funciona em /bolao2026/ e em /)
 const BASE = self.location.href.replace(/sw\.js(\?.*)?$/, '');
 
-const CACHE = 'bolao-icn-v1.12.56';
+const CACHE = 'bolao-icn-v1.12.57';
 const PRECACHE = [
   BASE,
   BASE + 'index.html',
