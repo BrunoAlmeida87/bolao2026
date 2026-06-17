@@ -341,7 +341,7 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 /* ══════════════════════════════════════════
    DASHBOARD KPI CARDS
 ══════════════════════════════════════════ */
-.dash-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+.dash-kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}
 .dash-kpi{
   background:rgba(255,255,255,.04);border:1px solid var(--border);
   border-radius:14px;padding:16px 10px 14px;text-align:center;
@@ -355,6 +355,11 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .dash-kpi.kpi-games::after{background:var(--green)}
 .dash-kpi.kpi-gap::after{background:var(--orange)}
 .dash-kpi.kpi-gap.kpi-leader::after{background:var(--gold)}
+.dash-kpi.kpi-pos.kpi-leader::after{background:var(--gold)}
+/* Ícone de "toque aqui" — leve pulsar/tap para sinalizar que o item é clicável */
+.tap-hint-ico{display:inline-block;font-size:1rem;line-height:1;animation:tapHint 1.8s ease-in-out infinite;transform-origin:70% 30%}
+@keyframes tapHint{0%,60%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(2px) scale(.86)}}
+@media (prefers-reduced-motion: reduce){.tap-hint-ico{animation:none}}
 .dash-kpi-icon{font-size:1.15rem;line-height:1;margin-bottom:6px}
 .dash-kpi-val{font-size:1.85rem;font-weight:800;line-height:1.1}
 .dash-kpi-sub{font-size:0.67rem;color:var(--text-muted);margin-top:5px;line-height:1.3}
@@ -962,9 +967,10 @@ body.light-theme .mais-sheet a.active{color:var(--accent)}
   .mini-bar{min-width:36px}
   .dashboard-stats-grid{grid-template-columns:1fr 1fr;gap:8px}
   .dashboard-stats-grid > div > div:first-child{font-size:1.5rem}
-  .prize-pool-bar{padding:12px 14px;gap:8px}
-  .prize-pool-item{min-width:0;flex:1 1 40%}
-  .prize-pool-item .ppi-val{font-size:1rem}
+  .prize-pool-bar{padding:8px 12px;gap:6px 8px}
+  .prize-pool-item{min-width:0;flex:1 1 22%}
+  .prize-pool-item .ppi-val{font-size:0.9rem}
+  .prize-pool-item .ppi-lbl{font-size:0.58rem}
   .prize-grid{grid-template-columns:1fr}
   .stats-alt-grid{grid-template-columns:1fr}
   .champ-stat-bar-wrap{width:80px}
@@ -1090,7 +1096,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .qr-code-img{width:180px;height:180px;border-radius:12px;object-fit:contain;border:2px solid var(--border);background:rgba(255,255,255,.05)}
 .qr-placeholder{width:180px;height:180px;border-radius:12px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--text-muted);font-size:0.78rem;background:rgba(255,255,255,.02)}
 /* Arrecadação no dashboard */
-.prize-pool-bar{background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,140,0,.06));border:1px solid rgba(255,215,0,.3);border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+.prize-pool-bar{background:linear-gradient(135deg,rgba(255,215,0,.1),rgba(255,140,0,.05));border:1px solid rgba(255,215,0,.26);border-radius:10px;padding:9px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
 .next-game-card{background:linear-gradient(135deg,rgba(0,180,255,.1),rgba(0,120,200,.06));border:1px solid rgba(0,180,255,.35);border-radius:12px;padding:16px 20px;margin-bottom:16px;text-align:center}
 .ngc-label{font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(0,180,255,.8);margin-bottom:8px}
 .ngc-teams{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
@@ -1121,7 +1127,7 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .next-game-card.in-progress .ngc-label{color:rgba(120,210,130,.95)}
 .next-game-card.in-progress .ngc-countdown{color:#5fd16b;font-size:1.15rem}
 .next-game-card.in-progress .ngc-note{color:#8fd99a;font-weight:700}
-.prize-pool-item{text-align:center;min-width:90px}
+.prize-pool-item{text-align:center;min-width:68px}
 .bump-chart-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .bump-chart-wrap svg text{font-family:inherit}
 .ai-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px}
@@ -1133,9 +1139,9 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ai-updated{font-size:0.72rem;color:var(--text-muted);margin-top:10px;text-align:right}
 .light-theme .ai-card{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.09)}
 /* Carrossel "Análise da IA" no dashboard (estilo manchete de notícias) */
-.ai-news{background:linear-gradient(135deg,rgba(30,144,255,.08),rgba(255,215,0,.05));border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:24px}
-.ai-news-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.ai-news-badge{font-size:0.74rem;font-weight:800;color:var(--gold);letter-spacing:.03em}
+.ai-news{position:relative;background:linear-gradient(135deg,rgba(30,144,255,.16),rgba(255,215,0,.09));border:1.5px solid rgba(255,215,0,.42);border-radius:16px;padding:15px 17px;margin-bottom:24px;box-shadow:0 6px 22px -8px rgba(255,200,40,.4),0 0 0 1px rgba(255,215,0,.06) inset}
+.ai-news-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;position:relative}
+.ai-news-badge{font-size:0.88rem;font-weight:900;color:var(--gold);letter-spacing:.02em;text-shadow:0 1px 8px rgba(255,200,40,.3)}
 .ai-news-live{font-size:0.58rem;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.08em;display:inline-flex;align-items:center;gap:5px}
 .ai-news-live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green);animation:aiPulse 1.6s infinite}
 @keyframes aiPulse{0%{box-shadow:0 0 0 0 rgba(0,200,81,.5)}70%{box-shadow:0 0 0 6px rgba(0,200,81,0)}100%{box-shadow:0 0 0 0 rgba(0,200,81,0)}}
@@ -1143,10 +1149,10 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ai-news-slide{display:none;align-items:center;gap:12px}
 .ai-news-slide.active{display:flex;animation:aiNewsIn .45s ease}
 @keyframes aiNewsIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
-.ai-news-icon{font-size:2rem;line-height:1;flex:none}
-.ai-news-title{font-size:0.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
-.ai-news-value{font-size:1.05rem;font-weight:800;color:var(--gold);line-height:1.2;margin:1px 0}
-.ai-news-text{font-size:0.82rem;color:var(--text);line-height:1.4}
+.ai-news-icon{font-size:2.3rem;line-height:1;flex:none}
+.ai-news-title{font-size:0.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.ai-news-value{font-size:1.18rem;font-weight:800;color:var(--gold);line-height:1.2;margin:1px 0}
+.ai-news-text{font-size:0.86rem;color:var(--text);line-height:1.42}
 .ai-news-dots{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap}
 .ai-news-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);cursor:pointer;transition:all .2s}
 .ai-news-dot.active{background:var(--gold);width:18px;border-radius:4px}
@@ -1182,8 +1188,8 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ot-details>summary::-webkit-details-marker{display:none}
 .ot-details ul{margin:6px 0 4px;padding-left:18px;font-size:0.76rem;color:var(--text-muted);line-height:1.5}
 @media (prefers-reduced-motion: reduce){.mini-slide.active{animation:none}}
-.prize-pool-item .ppi-val{font-size:1.2rem;font-weight:800;color:var(--gold)}
-.prize-pool-item .ppi-lbl{font-size:0.7rem;color:var(--text-muted);margin-top:2px}
+.prize-pool-item .ppi-val{font-size:0.98rem;font-weight:800;color:var(--gold)}
+.prize-pool-item .ppi-lbl{font-size:0.62rem;color:var(--text-muted);margin-top:1px}
 /* Paid checkbox in admin users */
 .paid-toggle{display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-muted)}
 .paid-toggle input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--green)}
@@ -3776,27 +3782,16 @@ async function renderDashboard() {
       </div>
 
       <div class="dash-kpi-grid">
-        <div class="dash-kpi kpi-pos">
-          <div class="dash-kpi-icon">🎯</div>
-          <div class="dash-kpi-val" style="color:var(--accent)">${myRank > 0 ? _animSpan('kpi_pos', myRank, 'pos') : '—'}</div>
+        <div class="dash-kpi kpi-pos${_kpiIsLeader?' kpi-leader':''}">
+          <div class="dash-kpi-icon">${_kpiIsLeader?'🏆':'🎯'}</div>
+          <div class="dash-kpi-val" style="color:${_kpiIsLeader?'var(--gold)':'var(--accent)'}">${myRank > 0 ? _animSpan('kpi_pos', myRank, 'pos') : '—'}</div>
           <div class="dash-kpi-sub">de ${ranking.length} jogador${ranking.length!==1?'es':''}</div>
           ${_kpiDeltaHtml}
         </div>
         <div class="dash-kpi kpi-pts">
           <div class="dash-kpi-icon">⭐</div>
           <div class="dash-kpi-val" style="color:var(--gold)">${_animSpan('kpi_pts', _myPontos, 'int')}</div>
-          <div class="dash-kpi-sub">${_myExatos} exato${_myExatos!==1?'s':''}</div>
-        </div>
-        <div class="dash-kpi kpi-games">
-          <div class="dash-kpi-icon">⚽</div>
-          <div class="dash-kpi-val" style="color:var(--green)">${_animSpan('kpi_games', totalJogos, 'int')}<span style="font-size:1rem;font-weight:600;color:var(--text-muted);opacity:.6">/${ALL_GAMES.length}</span></div>
-          <div class="dash-kpi-sub">jogos com resultado</div>
-          <div class="dash-kpi-bar"><div class="dash-kpi-bar-fill" style="width:${_kpiPct}%"></div></div>
-        </div>
-        <div class="dash-kpi kpi-gap${_kpiIsLeader?' kpi-leader':''}">
-          <div class="dash-kpi-icon">${_kpiIsLeader?'🏆':'📈'}</div>
-          <div class="dash-kpi-val" style="color:${_kpiIsLeader?'var(--gold)':'var(--orange)'}${_kpiIsLeader?';font-size:1.35rem':''}">${_kpiIsLeader?'Líder!':(_kpiGap>0?'-'+_kpiGap+' pts':'0 pts')}</div>
-          <div class="dash-kpi-sub">${_kpiIsLeader?'você está na frente':'pts para o 1º'}</div>
+          <div class="dash-kpi-sub">${_myExatos} exato${_myExatos!==1?'s':''} · ${_kpiIsLeader?'<b style="color:var(--gold)">Líder!</b>':(_kpiGap>0?'-'+_kpiGap+' pts p/ 1º':'0 pts p/ 1º')}</div>
         </div>
       </div>`;
 
@@ -3809,9 +3804,9 @@ async function renderDashboard() {
       </div>`;
     }
 
-    html += `<div style="display:flex;align-items:center;gap:9px;background:rgba(255,215,0,.07);border:1px solid rgba(255,215,0,.22);border-radius:10px;padding:9px 13px;margin-bottom:12px">
-      <span style="font-size:1.15rem;line-height:1">👆</span>
-      <span style="font-size:0.82rem;line-height:1.35"><b style="color:var(--gold)">Novidade:</b> toque no nome de qualquer participante para abrir o <b>perfil com estatísticas individuais</b> — acurácia, evolução, zebras, confrontos diretos e mais.</span>
+    html += `<div style="display:flex;align-items:center;justify-content:center;gap:7px;color:var(--text-muted);font-size:0.78rem;margin:2px 0 12px">
+      <span class="tap-hint-ico" aria-hidden="true">👆</span>
+      <span>Toque no nome de um participante para ver o <b style="color:var(--text)">perfil e estatísticas</b></span>
     </div>`;
 
     html += `<div class="rank-mode-toggle" role="group" aria-label="Tipo de classificação">
@@ -6825,7 +6820,8 @@ function _getStatNextGroupWave(res) {
     const started = x.start.getTime() <= now;
     if (started) return !_resolved(x.game.id);
     if (mode === 'show') return true;
-    return wave.has(x.game.id);
+    if (wave.has(x.game.id)) return true;              // leva automática por proximidade
+    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // mesma regra do dashboard: < 24h do início
   });
   return { items };
 }
@@ -12731,6 +12727,9 @@ function _maybeShowLock1hIntro() {
 function closeLock1hIntro() {
   const el = document.getElementById('modal-lock1h-intro');
   if (el) el.classList.add('hidden');
+  // Este modal abre cedo (400ms) e pode ter "engolido" o lembrete de palpites
+  // pendentes (que pula quando há outro modal aberto). Ao fechar, tenta de novo.
+  setTimeout(_maybeShowPendingPalpitesAlert, 250);
 }
 
 // Alerta de palpites pendentes: aparece sempre que o usuário ENTRA na página
