@@ -9007,9 +9007,18 @@ let _gxGapData = null;            // série calculada (cache p/ re-render rápid
 let _gxGapSel = null;             // Set de uids selecionados no gráfico
 function computeLeaderGapHistory(d) {
   const { users, res, allPals } = d;
+  // Ordena por horário de início (não só pela data): em jogos do mesmo dia,
+  // usa time_override/GAME_TIMES como desempate para acumular na ordem real.
+  const kickoff = g => {
+    const r = res[g.id] || {};
+    const dateStr = r.date_override ? _isoToGameDate(r.date_override) : g.date;
+    const base = _parseGameDate(dateStr).getTime();
+    const tm = String(r.time_override || GAME_TIMES[g.id] || '').match(/^(\d{1,2}):(\d{2})$/);
+    return base + (tm ? (parseInt(tm[1]) * 60 + parseInt(tm[2])) * 60000 : 0);
+  };
   const playedGames = ALL_GAMES
     .filter(g => _hasFullResult(res[g.id]))
-    .sort((a, b) => _parseGameDate(a.date) - _parseGameDate(b.date));
+    .sort((a, b) => kickoff(a) - kickoff(b));
   if (playedGames.length < 2) return null;
   let cum = [];
   const series = playedGames.map(g => {
@@ -9018,7 +9027,8 @@ function computeLeaderGapHistory(d) {
     const leaderPts = rk.length ? rk[0].pontos : 0;
     const gap = {}; rk.forEach(u => gap[u.uid] = leaderPts - u.pontos);
     const t = _gxGameTeams(g.id, res);
-    return { label: `${t.h} × ${t.a}`, gap };
+    const short = `${String(t.h || '').slice(0, 3).toUpperCase()}×${String(t.a || '').slice(0, 3).toUpperCase()}`;
+    return { label: `${t.h} × ${t.a}`, short, gap };
   });
   return { series };
 }
@@ -9055,30 +9065,47 @@ function _gxGapSvg(d) {
   const meUid = currentUser?.uid;
   const n = series.length;
   const maxGap = Math.max(1, ...series.flatMap(s => sel.map(uid => s.gap[uid] || 0)));
-  const W = 560, H = 280, padL = 36, padR = 120, padT = 16, padB = 48;
-  const xFor = i => padL + (n < 2 ? 0 : i / (n - 1) * (W - padL - padR));
-  const yFor = g => padT + (g / maxGap) * (H - padT - padB);
+  // viewBox amplo + margens generosas: como é viewBox, o conteúdo precisa caber
+  // inteiro nos limites (0..W, 0..H) p/ não "cortar" eixos no mobile.
+  const W = 560, H = 300, padL = 44, padR = 116, padT = 18, padB = 40;
+  const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+  const xFor = i => x0 + (n < 2 ? 0 : i / (n - 1) * (x1 - x0));
+  const yFor = g => y0 + (g / maxGap) * (y1 - y0);
   const palette = ['#FFD700', '#00C4FF', '#FF6B9D', '#00E5A0', '#FF9F45', '#A78BFA', '#F87171', '#38BDF8', '#FACC15', '#34D399'];
-  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:320px">`;
-  svg += `<line x1="${padL}" y1="${yFor(0).toFixed(1)}" x2="${(W - padR).toFixed(1)}" y2="${yFor(0).toFixed(1)}" stroke="rgba(255,215,0,.4)" stroke-dasharray="3,3"/><text x="${padL - 4}" y="${(yFor(0) + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="var(--gold)">líder</text>`;
-  // Rótulos do eixo X esparsos (evita poluir quando há muitos jogos).
-  const step = Math.max(1, Math.ceil(n / 7));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:300px">`;
+  // ── Eixo Y (vertical) + ticks de pontos: 0 = líder no topo, maxGap embaixo ──
+  svg += `<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="rgba(255,255,255,.25)" stroke-width="1"/>`;
+  const yTicks = [...new Set([0, Math.round(maxGap / 2), maxGap])].filter(v => v <= maxGap);
+  yTicks.forEach(v => {
+    const y = yFor(v);
+    const leader = v === 0;
+    svg += `<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="${leader ? 'rgba(255,215,0,.45)' : 'rgba(255,255,255,.07)'}"${leader ? ' stroke-dasharray="3,3"' : ''}/>`;
+    svg += `<text x="${x0 - 5}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${leader ? '#FFD700' : '#8BA8C8'}">${leader ? 'líder' : '-' + v}</text>`;
+  });
+  // Legenda do eixo Y (pontos atrás do líder).
+  svg += `<text x="12" y="${((y0 + y1) / 2).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="#8BA8C8" transform="rotate(-90 12 ${((y0 + y1) / 2).toFixed(1)})">pts atrás</text>`;
+  // ── Eixo X (horizontal) + rótulos esparsos (abreviados, sem rotação) ──
+  svg += `<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="rgba(255,255,255,.25)" stroke-width="1"/>`;
+  const step = Math.max(1, Math.ceil(n / 6));
   series.forEach((s, i) => {
     if (i % step !== 0 && i !== n - 1) return;
     const x = xFor(i);
-    svg += `<text x="${x.toFixed(1)}" y="${H - 6}" text-anchor="end" font-size="7.5" fill="var(--text-muted)" transform="rotate(-35 ${x.toFixed(1)} ${H - 6})">${esc(s.label.substring(0, 13))}</text>`;
+    svg += `<line x1="${x.toFixed(1)}" y1="${y1}" x2="${x.toFixed(1)}" y2="${(y1 + 3).toFixed(1)}" stroke="rgba(255,255,255,.25)"/>`;
+    svg += `<text x="${x.toFixed(1)}" y="${(y1 + 13).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="#8BA8C8">${esc(s.short || '')}</text>`;
   });
+  svg += `<text x="${((x0 + x1) / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="8" fill="#6E86A6">jogos (em ordem) →</text>`;
+  // ── Linhas dos participantes selecionados ──
   sel.forEach((uid, idx) => {
     const me = uid === meUid;
     const color = me ? '#FFD700' : palette[idx % palette.length];
     const pts = series.map((s, i) => ({ x: xFor(i), y: yFor(s.gap[uid] != null ? s.gap[uid] : maxGap) }));
     let path = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
     for (let i = 1; i < pts.length; i++) path += ` L ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)}`;
-    svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="${me ? 3 : 1.8}" opacity="${me ? 1 : .75}"/>`;
+    svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="${me ? 3 : 1.8}" opacity="${me ? 1 : .8}"/>`;
     if (n <= 24) pts.forEach(p => svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${me ? 3 : 2}" fill="${color}"/>`);
     const last = pts[pts.length - 1];
     const u = nameByUid[uid];
-    svg += `<text x="${(W - padR + 6).toFixed(1)}" y="${(last.y + 3).toFixed(1)}" font-size="${me ? 10 : 9}" fill="${color}" font-weight="${me ? 700 : 400}">${_gxShortName(u, 12)}${me ? ' (você)' : ''}</text>`;
+    svg += `<text x="${(x1 + 5).toFixed(1)}" y="${(last.y + 3).toFixed(1)}" font-size="${me ? 10 : 9}" fill="${color}" font-weight="${me ? 700 : 400}">${_gxShortName(u, 11)}${me ? ' (você)' : ''}</text>`;
   });
   svg += `</svg>`;
   return svg;
