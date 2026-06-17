@@ -384,6 +384,14 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 }
 .ranking-table tr:hover td{background:rgba(255,255,255,.03)}
 .ranking-table tr.is-me td{background:rgba(255,215,0,.06)}
+/* Destaque do pódio (top 3) na tabela do ranking (desktop) */
+.ranking-table tr.rank-row-gold td{background:linear-gradient(90deg,rgba(255,215,0,.22),rgba(255,215,0,.05) 55%,transparent)}
+.ranking-table tr.rank-row-silver td{background:linear-gradient(90deg,rgba(205,210,228,.22),rgba(205,210,228,.05) 55%,transparent)}
+.ranking-table tr.rank-row-bronze td{background:linear-gradient(90deg,rgba(205,127,50,.24),rgba(205,127,50,.06) 55%,transparent)}
+.ranking-table tr.rank-row-gold td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+.ranking-table tr.rank-row-silver td:first-child{box-shadow:inset 3px 0 0 #C0C0CC}
+.ranking-table tr.rank-row-bronze td:first-child{box-shadow:inset 3px 0 0 #CD7F32}
+.ranking-table tr.rank-row-gold:hover td,.ranking-table tr.rank-row-silver:hover td,.ranking-table tr.rank-row-bronze:hover td{filter:brightness(1.1)}
 /* ── Ver Todos os Palpites: rolagem com cabeçalho congelado (estilo Excel) ── */
 .vt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;max-height:88vh;position:relative}
 .vt-scroll-top{position:sticky;top:0;z-index:5;overflow-x:auto;overflow-y:hidden;height:15px;background:var(--mid-blue)}
@@ -397,9 +405,11 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
   display:inline-flex;align-items:center;justify-content:center;
   font-weight:800;font-size:0.85rem;background:var(--border);
 }
-.rank-pos.gold{background:var(--gold);color:var(--dark-blue)}
-.rank-pos.silver{background:#C0C0C0;color:var(--dark-blue)}
-.rank-pos.bronze{background:#CD7F32;color:var(--dark-blue)}
+.rank-pos.gold{background:linear-gradient(135deg,#FFE27A,#FFD700 55%,#E6B800);color:#5a4500;box-shadow:0 0 9px rgba(255,215,0,.6)}
+.rank-pos.silver{background:linear-gradient(135deg,#EDEDF5,#C0C0CC 55%,#9FA0AE);color:#34343f;box-shadow:0 0 9px rgba(200,205,225,.55)}
+.rank-pos.bronze{background:linear-gradient(135deg,#E5A266,#CD7F32 55%,#A4642A);color:#3a2208;box-shadow:0 0 9px rgba(205,127,50,.55)}
+.rank-medal{font-size:0.95rem;line-height:1;text-align:center;margin-bottom:2px}
+.rank-card-medal{font-size:1.15rem;line-height:1;margin-bottom:1px}
 /* Toggle de tipo de classificação (Oficial × Por Pontos) */
 .rank-mode-toggle{display:inline-flex;gap:4px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:22px;padding:3px;margin-bottom:10px}
 .rank-mode-btn{background:transparent;border:none;color:var(--text-muted);font-weight:700;font-size:0.82rem;padding:7px 16px;border-radius:18px;cursor:pointer;transition:all .15s}
@@ -423,9 +433,9 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .rank-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s}
 .rank-card:active{background:var(--light-blue)}
 .rank-card.is-me{background:rgba(255,215,0,.07);border-color:rgba(255,215,0,.4)}
-.rank-card-gold{border-width:2px;border-color:rgba(255,215,0,.85);background:linear-gradient(135deg,rgba(255,215,0,.18) 0%,var(--card) 65%)}
-.rank-card-silver{border-width:2px;border-color:rgba(210,210,220,.8);background:linear-gradient(135deg,rgba(200,200,215,.18) 0%,var(--card) 65%)}
-.rank-card-bronze{border-width:2px;border-color:rgba(205,127,50,.8);background:linear-gradient(135deg,rgba(205,127,50,.18) 0%,var(--card) 65%)}
+.rank-card-gold{border-width:2px;border-color:rgba(255,215,0,.9);background:linear-gradient(135deg,rgba(255,215,0,.24) 0%,var(--card) 62%);box-shadow:0 0 14px rgba(255,215,0,.22)}
+.rank-card-silver{border-width:2px;border-color:rgba(210,212,228,.85);background:linear-gradient(135deg,rgba(205,210,228,.22) 0%,var(--card) 62%);box-shadow:0 0 12px rgba(205,210,228,.18)}
+.rank-card-bronze{border-width:2px;border-color:rgba(205,127,50,.85);background:linear-gradient(135deg,rgba(205,127,50,.22) 0%,var(--card) 62%);box-shadow:0 0 12px rgba(205,127,50,.18)}
 .rank-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .rank-card-pos{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:34px}
 .rank-card-name{flex:1;min-width:0}
@@ -3787,6 +3797,7 @@ async function renderDashboard() {
         }
         const pos = dense ? _denseArr[i] : _posArr[i];
         const posClass = pos===1?'gold':pos===2?'silver':pos===3?'bronze':'';
+        const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':'';
         const isMe = u.uid===currentUser.uid;
         const pct = totalJogos>0 ? Math.round(u.jogos/totalJogos*100) : 0;
         const prevPos = dense ? denseDeltas[u.uid] : positionDeltas[u.uid];
@@ -3804,8 +3815,8 @@ async function renderDashboard() {
             : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`);
 
         // Tabela (desktop)
-        rows += `<tr class="${isMe?'is-me':''}"${_relegRow}>
-          <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}${_inReleg?'<span style="display:block;font-size:0.62rem;line-height:1" title="Zona de rebaixamento">🔻</span>':''}</td>
+        rows += `<tr class="${isMe?'is-me':''}${posClass?' rank-row-'+posClass:''}"${_relegRow}>
+          <td>${medal?`<div class="rank-medal">${medal}</div>`:''}<span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}${_inReleg?'<span style="display:block;font-size:0.62rem;line-height:1" title="Zona de rebaixamento">🔻</span>':''}</td>
           <td style="cursor:pointer" onclick="openUserProfile('${u.uid}')" title="Ver perfil e estatísticas"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
           <td><span class="pts-badge">${u.pontos}</span></td>
           <td class="text-green">${u.exatos}</td>
@@ -3825,7 +3836,7 @@ async function renderDashboard() {
                      `<span class="rank-mov-zero" title="${_deltaTitle}">—</span>`;
         cards += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="openUserProfile('${u.uid}')"${_inReleg?' style="border-color:rgba(255,68,68,.45);background:rgba(255,68,68,.06)"':''}>
           <div class="rank-card-top">
-            <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}${_inReleg?'<span style="font-size:0.7rem" title="Zona de rebaixamento">🔻</span>':''}</div>
+            <div class="rank-card-pos">${medal?`<span class="rank-card-medal">${medal}</span>`:''}<span class="rank-pos ${posClass}">${pos}</span>${movHtml}${_inReleg?'<span style="font-size:0.7rem" title="Zona de rebaixamento">🔻</span>':''}</div>
             <div class="rank-card-name"><div class="rk-apelido">${esc(u.apelido)}</div><div class="rk-nome">${esc(u.nome)}</div></div>
             <div class="rank-card-right"><span class="pts-badge">${u.pontos} pts</span><div style="font-size:0.72rem;margin-top:3px">${distLider}</div></div>
           </div>
@@ -9000,11 +9011,17 @@ function gxSetHeatFilter(f) {
   }
 }
 
-// ── 11. Histórico da distância para o líder (jogo a jogo) ─────────────────────
-// Para CADA jogo com resultado (em ordem cronológica) recalcula o ranking
-// acumulado e mede a distância de pontos de cada participante para o líder.
+// ── 11. Histórico da distância para o líder (por dia) ─────────────────────────
+// Agrupa os jogos por DIA (em ordem cronológica) e, ao fim de cada dia,
+// recalcula o ranking acumulado e mede a distância de pontos para o líder.
 let _gxGapData = null;            // série calculada (cache p/ re-render rápido)
 let _gxGapSel = null;             // Set de uids selecionados no gráfico
+function _gxDayLabel(dateStr) {
+  const m = String(dateStr || '').match(/([A-Za-z]+)\s+(\d+)/);
+  if (!m) return String(dateStr || '');
+  const PT = { Jan: 'Jan', Feb: 'Fev', Mar: 'Mar', Apr: 'Abr', May: 'Mai', Jun: 'Jun', Jul: 'Jul', Aug: 'Ago', Sep: 'Set', Oct: 'Out', Nov: 'Nov', Dec: 'Dez' };
+  return `${parseInt(m[2])} ${PT[m[1]] || m[1]}`;
+}
 function computeLeaderGapHistory(d) {
   const { users, res, allPals } = d;
   // Ordena por horário de início (não só pela data): em jogos do mesmo dia,
@@ -9020,21 +9037,25 @@ function computeLeaderGapHistory(d) {
     .filter(g => _hasFullResult(res[g.id]))
     .sort((a, b) => kickoff(a) - kickoff(b));
   if (playedGames.length < 2) return null;
+  // Agrupa por dia mantendo a ordem cronológica.
+  const dayKey = g => { const r = res[g.id] || {}; return r.date_override ? _isoToGameDate(r.date_override) : (g.date || '—'); };
+  const dayOrder = [], dayGames = {};
+  playedGames.forEach(g => { const k = dayKey(g); if (!dayGames[k]) { dayGames[k] = []; dayOrder.push(k); } dayGames[k].push(g.id); });
+  if (dayOrder.length < 2) return null;
   let cum = [];
-  const series = playedGames.map(g => {
-    cum = cum.concat(g.id);
+  const series = dayOrder.map(k => {
+    cum = cum.concat(dayGames[k]);
     const rk = _computeRankingForGameIds(users, res, allPals, cum);
     const leaderPts = rk.length ? rk[0].pontos : 0;
     const gap = {}; rk.forEach(u => gap[u.uid] = leaderPts - u.pontos);
-    const t = _gxGameTeams(g.id, res);
-    const short = `${String(t.h || '').slice(0, 3).toUpperCase()}×${String(t.a || '').slice(0, 3).toUpperCase()}`;
-    return { label: `${t.h} × ${t.a}`, short, gap };
+    const lbl = _gxDayLabel(k);
+    return { label: lbl, short: lbl, gap };
   });
   return { series };
 }
 function renderGxLeaderGap(d) {
   const data = computeLeaderGapHistory(d);
-  if (!data) return _gxCard('📉 Distância para o Líder', _gxEmpty('São necessários ao menos 2 jogos com resultado.'));
+  if (!data) return _gxCard('📉 Distância para o Líder', _gxEmpty('São necessários ao menos 2 dias com resultado.'));
   _gxGapData = data;
   // Seleção inicial: você + top 5 do ranking atual.
   const meUid = currentUser?.uid;
@@ -9047,7 +9068,7 @@ function renderGxLeaderGap(d) {
   const chips = `<div class="gx-gap-controls">${_gxGapChips(d)}</div>`;
   const svg = `<div id="gx-gap-svg">${_gxGapSvg(d)}</div>`;
   return _gxCard('📉 Distância para o Líder', actions + chips + svg,
-    'Diferença de pontos para o líder, jogo a jogo. Toque nos nomes para incluir ou remover participantes. Quanto mais perto da linha do líder, melhor.');
+    'Diferença de pontos para o líder, dia a dia. Toque nos nomes para incluir ou remover participantes. Quanto mais perto da linha do líder, melhor.');
 }
 function _gxGapChips(d) {
   const meUid = currentUser?.uid;
@@ -9093,7 +9114,7 @@ function _gxGapSvg(d) {
     svg += `<line x1="${x.toFixed(1)}" y1="${y1}" x2="${x.toFixed(1)}" y2="${(y1 + 3).toFixed(1)}" stroke="rgba(255,255,255,.25)"/>`;
     svg += `<text x="${x.toFixed(1)}" y="${(y1 + 13).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="#8BA8C8">${esc(s.short || '')}</text>`;
   });
-  svg += `<text x="${((x0 + x1) / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="8" fill="#6E86A6">jogos (em ordem) →</text>`;
+  svg += `<text x="${((x0 + x1) / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="8" fill="#6E86A6">dias (em ordem) →</text>`;
   // ── Linhas dos participantes selecionados ──
   sel.forEach((uid, idx) => {
     const me = uid === meUid;
