@@ -1917,6 +1917,26 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   </div>
 </div>
 
+<!-- MODAL NOVIDADE: Bloqueio 1h antes da partida (mostrado 1x por navegador) -->
+<div id="modal-lock1h-intro" class="modal-overlay hidden" onclick="if(event.target===this)closeLock1hIntro()">
+  <div class="modal-box" style="max-width:440px">
+    <button class="modal-close" onclick="closeLock1hIntro()">✕</button>
+    <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">🆕 Mudança importante</div>
+    <div style="font-size:2rem;margin-bottom:4px">⏰</div>
+    <h3 style="margin:0 0 6px;color:var(--gold)">Palpites agora travam 1h antes!</h3>
+    <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.55;margin:0 0 14px">Mudamos a regra de bloqueio dos palpites. Agora cada jogo trava <b>exatamente 1 hora (60 min) antes do apito inicial</b> — e não mais às 22h da véspera.</p>
+    <div style="text-align:left;display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>⚽</span><span style="font-size:0.85rem;line-height:1.45"><b>Exemplo:</b> jogo às <b>16h</b> → palpites travam às <b>15h</b>. Jogo às <b>21h</b> → travam às <b>20h</b>.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>⏳</span><span style="font-size:0.85rem;line-height:1.45">Os jogos aparecem na tela inicial <b>24h antes</b>, com a contagem regressiva <b>até o início</b> da partida (mesmo depois de travar).</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>🏁</span><span style="font-size:0.85rem;line-height:1.45">Após o resultado oficial, o card fica visível por mais <b>45 min</b> com o placar final.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>🔔</span><span style="font-size:0.85rem;line-height:1.45">Dica: palpite com antecedência para não perder o prazo de cada jogo!</span></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <button class="btn btn-primary" onclick="closeLock1hIntro()">Entendi! 👍</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PALPITES PENDENTES (próximos jogos com timer ativo) -->
 <div id="modal-pending-pal" class="modal-overlay hidden" onclick="if(event.target===this)closePendingPalModal()">
   <div class="modal-box" style="max-width:440px">
@@ -3349,6 +3369,9 @@ const TIMER_CLUSTER_GAP_MS = 8 * 3600000;
 // Tempo após o início em que a partida é exibida como "em andamento"; depois disso
 // (sem resultado lançado) passa para "aguardando oficialização".
 const MATCH_DURATION_MS = 120 * 60000;
+// Antecedência com que QUALQUER jogo aparece na tela inicial (com timer regressivo),
+// independentemente da "leva" automática por proximidade: 24h antes do início.
+const NEXT_SHOW_BEFORE_MS = 24 * 3600000;
 
 // Conjunto de partidas exibidas nos timers do dashboard.
 // Inclui: (a) jogos futuros da próxima "leva" (agrupados por proximidade, gap ≤ 8h)
@@ -3378,19 +3401,36 @@ function _nextGamesGroup() {
   }
 
   const items = all.filter(x => {
-    const mode = (_dashResults[x.game.id] || {}).timerMode;
+    const r = _dashResults[x.game.id] || {};
+    const mode = r.timerMode;
     if (mode === 'hide') return false;                 // oculto manualmente: nunca
+    if (_resolved(x.game.id)) {
+      // Resultado lançado: permanece por mais 45min (placar final + "sai em X min").
+      // Sem carimbo de tempo (dado antigo) o card não fica preso — some como antes.
+      const hideAfter = _resultHideAfterMs(r);
+      return hideAfter !== null && now < hideAfter;
+    }
     const started = x.start.getTime() <= now;
-    if (started) return !_resolved(x.game.id);         // em andamento/aguardando até ter resultado
+    if (started) return true;                          // em andamento/aguardando até ter resultado
     if (mode === 'show') return true;                  // futuro fixado manualmente
-    return wave.has(x.game.id);                        // futuro dentro da leva automática
+    if (wave.has(x.game.id)) return true;              // futuro dentro da leva automática
+    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // qualquer jogo a < 24h do início
   });
-  if (!items.length) return { key:'none', nextKickoff:null, items:[] };
+  if (!items.length) return { key:'none', nextRenderAt:null, items:[] };
 
-  // nextKickoff = início do próximo jogo futuro (gatilho de re-render do _tick para
-  // trazer um jogo de "futuro" para "em andamento" e re-ancorar a leva). null se não houver.
-  const nextKickoff = upcoming.length ? upcoming[0].start.getTime() : null;
-  return { key: items.map(x => x.game.id).join(','), nextKickoff, items };
+  // nextRenderAt = próximo instante que muda QUEM aparece (gatilho de re-render do
+  // _tick): início de um jogo futuro, entrada na janela de 24h, ou fim dos 45min
+  // pós-resultado. O menor instante futuro entre todas as transições. null se não houver.
+  let nextRenderAt = Infinity;
+  const _consider = t => { if (t !== null && t > now && t < nextRenderAt) nextRenderAt = t; };
+  all.forEach(x => {
+    const r = _dashResults[x.game.id] || {};
+    if (_resolved(x.game.id)) { _consider(_resultHideAfterMs(r)); return; }
+    _consider(x.start.getTime());                         // futuro → em andamento
+    _consider(x.start.getTime() - NEXT_SHOW_BEFORE_MS);   // entra na janela de 24h
+  });
+  if (nextRenderAt === Infinity) nextRenderAt = null;
+  return { key: items.map(x => x.game.id).join(','), nextRenderAt, items };
 }
 
 function _buildNextGamesHtml(group) {
@@ -3468,9 +3508,9 @@ function _startCountdownTimer() {
     const wrap2 = document.getElementById('next-games-wrap');
     if (!wrap2) { clearInterval(_countdownTimer); _countdownTimer = null; return; }
     const now = Date.now();
-    // Quando um jogo futuro chega ao seu início, re-renderiza para movê-lo de
-    // "contagem regressiva" para "em andamento" e re-ancorar a leva automática.
-    if (group.nextKickoff !== null && now >= group.nextKickoff) {
+    // Re-renderiza quando muda QUEM aparece: um futuro chega ao início, um jogo entra
+    // na janela de 24h, ou um resultado completa os 45min e deve sumir do card.
+    if (group.nextRenderAt !== null && now >= group.nextRenderAt) {
       group = _nextGamesGroup();
       wrap2.innerHTML = _buildNextGamesHtml(group);
     }
@@ -3482,35 +3522,46 @@ function _startCountdownTimer() {
       const note = document.getElementById(`ngc-note-${game.id}`);
       const distribWrap = document.getElementById(`ngc-prob-${game.id}`);
       const resData = _dashResults[game.id] || {};
+      const hasResult = resData.h_real !== undefined && resData.a_real !== undefined;
       const manualLocked = resData.locked === true;
       const lockAt    = _gameLockInstant(game, resData);
       const autoLockAt = _gameAutoLockInstant(game, resData);
-      const diffToLock = lockAt ? (lockAt.getTime() - now) : -1;
-      const lockedByTime = diffToLock <= 0;
-      const lockedSoon   = manualLocked || lockedByTime;
+      // Estado de bloqueio com a prioridade oficial (trava manual > liberação manual >
+      // auto-lock > horário). Respeita unlock_override do admin (não mostra "encerrados").
+      const lockedSoon = isPalpiteClosed(game, resData);
       const diff = start.getTime() - now;
 
-      // Auto-lock: quando 23h do dia anterior passou e o jogo ainda não está travado,
-      // grava locked:true no Firestore uma única vez por sessão.
+      // Auto-lock: ao cruzar o instante de auto-lock (1h antes do início) e o jogo
+      // ainda não travado, grava autoLocked:true no Firestore uma única vez por sessão.
       if (!manualLocked && !_autoLockApplied.has(game.id) && autoLockAt && now >= autoLockAt.getTime()) {
         _applyAutoLocks(_dashResults);
       }
 
-      if (diff > 0) {
-        // Jogo ainda não começou.
-        if (lockedSoon) {
-          // Palpites já encerrados (passou das 22h ou admin travou)
-          cd.textContent = '🔒 Palpites encerrados';
-        } else {
-          // Contagem regressiva até o bloqueio (22h do dia anterior)
-          cd.textContent = _fmtDiff(diffToLock);
-        }
-        if (card) { card.classList.toggle('locked-soon', lockedSoon); card.classList.remove('in-progress'); }
-        // Bloqueado: o countdown já mostra "🔒 Palpites encerrados" — esconde a
-        // nota para não duplicar o aviso (e reduzir a altura do card).
+      if (hasResult) {
+        // Resultado oficial lançado: mostra o placar final e por quanto tempo o card
+        // ainda fica visível (45min). Após isso o re-render (nextRenderAt) o remove.
+        const hideAfter = _resultHideAfterMs(resData);
+        const remMin = hideAfter ? Math.max(0, Math.ceil((hideAfter - now) / 60000)) : null;
+        let pen = '';
+        if (resData.h_pen !== undefined && resData.a_pen !== undefined) pen = ` (pên ${parseInt(resData.h_pen)}×${parseInt(resData.a_pen)})`;
+        cd.textContent = `⚽ Final: ${parseInt(resData.h_real)} × ${parseInt(resData.a_real)}${pen}`;
+        if (card) { card.classList.remove('locked-soon'); card.classList.add('in-progress'); }
         if (note) {
-          note.style.display = lockedSoon ? 'none' : '';
-          if (!lockedSoon) note.textContent = `Bloqueio: ${_lockDisplayStr(lockAt)}`;
+          note.style.display = '';
+          note.textContent = remMin !== null ? `🏁 Resultado oficial — sai em ${remMin} min` : '🏁 Resultado oficial';
+        }
+        if (distribWrap) {
+          if (!distribWrap.innerHTML) distribWrap.innerHTML = _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]);
+          if (distribWrap.innerHTML) distribWrap.style.display = 'block';
+        }
+      } else if (diff > 0) {
+        // Jogo ainda não começou: o timer sempre conta para o INÍCIO da partida —
+        // antes e depois do bloqueio (1h antes). O bloqueio só muda o visual/nota.
+        cd.textContent = _fmtDiff(diff);
+        if (card) { card.classList.toggle('locked-soon', lockedSoon); card.classList.remove('in-progress'); }
+        if (note) {
+          note.style.display = '';
+          note.textContent = lockedSoon ? '🔒 Palpites encerrados' : `Bloqueio: ${_lockDisplayStr(lockAt)}`;
         }
         if (distribWrap) {
           // Injeta as barras no momento em que a partida bloqueia (caso o dashboard já
@@ -3648,7 +3699,7 @@ async function renderDashboard() {
     const isAdminDash = currentUserDoc?.role === 'admin';
 
     _dashResults = Object.assign({}, res);
-    _applyAutoLocks(_dashResults); // verifica e grava auto-lock para jogos que já passaram das 23h
+    _applyAutoLocks(_dashResults); // verifica e grava auto-lock para jogos que já passaram de 1h antes do início
     _dashBolaoDistrib = {};
     if (allPals) {
       // Distribuição do bolão só disponível quando allPals carregado (caminho completo)
@@ -3878,9 +3929,10 @@ async function renderDashboard() {
     _startCountdownTimer();
     _dashStartAINews(); // manchetes da Análise da IA (carrossel) abaixo dos KPIs
     _showNewResultsModal(res, _dashMyPals);
-    setTimeout(_maybeShowPendingPalpitesAlert, 450); // lembrete de palpites pendentes (a cada entrada)
-    setTimeout(_maybeShowSimuladorIntro, 900);       // pop-up de novidade Simulador (1x por navegador)
-    setTimeout(_maybeShowGraficosIntro, 1300);       // pop-up de novidade Gráficos (1x por navegador)
+    setTimeout(_maybeShowLock1hIntro, 400);          // pop-up: nova regra de bloqueio 1h antes (1x por navegador)
+    setTimeout(_maybeShowPendingPalpitesAlert, 850); // lembrete de palpites pendentes (a cada entrada)
+    setTimeout(_maybeShowSimuladorIntro, 1300);      // pop-up de novidade Simulador (1x por navegador)
+    setTimeout(_maybeShowGraficosIntro, 1700);       // pop-up de novidade Gráficos (1x por navegador)
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao carregar ranking: ${esc(errMsg(e))}</div>`;
   }
@@ -4730,7 +4782,7 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   const r = res[game.id]||{};
   const teams = _getResolvedTeamsForGame(game, res);
   const hasResult = r.h_real!==undefined;
-  // Revela palpites quando: resultado lançado, trava manual, ou prazo de 22h passou
+  // Revela palpites quando: resultado lançado, trava manual, ou prazo (1h antes do início) passou
   const isLocked = r.locked===true || hasResult || isPalpiteClosed(game, r);
   const showPal = canReveal || isLocked;
   const pts = calcPontos(pal,r);
@@ -5725,54 +5777,58 @@ function _effectiveStartInstant(game, res) {
   return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, parseInt(dm[3]), parseInt(tm[1]) + 3, parseInt(tm[2])));
 }
 
-// Instante de bloqueio dos palpites: 22h Brasília do dia anterior à rodada.
-// Jogos de madrugada (00h–02h59) pertencem à rodada do dia anterior — mesmo cluster.
-// 22:00 Brasília (UTC-3) = 01:00 UTC do dia-calendário da rodada.
+// Janela em que o card permanece na tela inicial após o resultado oficial.
+const RESULT_LINGER_MS = 45 * 60000; // 45 min
+
+// Instante de bloqueio dos palpites: exatamente 1h (60min) antes do início efetivo
+// da partida (considerando date/time override do admin). Ex.: jogo às 16h → trava às 15h.
+// Jogos de madrugada continuam agrupados na véspera (ver _gameFilterISO), mas o
+// bloqueio é sempre 1h antes do kickoff real.
 function _gameLockInstant(game, res) {
   res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
-  const iso  = res.date_override || _gameDateToISO(game?.date);
-  const time = res.time_override || GAME_TIMES[game?.id] || '';
-  const dm = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const tm = time.match(/^(\d{1,2}):(\d{2})$/);
-  if (!dm || !tm) return null;
-  let day = parseInt(dm[3]);
-  const hh = parseInt(tm[1]);
-  // Madrugada (00h–02h59): pertence à rodada do dia anterior → mesmo deadline de bloqueio
-  if (hh < 3) day -= 1;
-  // 22:00 Brasília do dia (day-1) = 01:00 UTC do dia (day)
-  return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, day, 1, 0));
+  const start = _effectiveStartInstant(game, res);
+  return start ? new Date(start.getTime() - 3600000) : null;
 }
 
-// Instante do auto-lock: 23h Brasília do dia anterior à rodada (fallback se admin esquecer).
-// 23:00 Brasília (UTC-3) = 02:00 UTC do dia-calendário da rodada.
+// Instante do auto-lock (fallback se o admin esquecer de travar): mesmo instante do
+// bloqueio por horário — 1h antes do início efetivo.
 function _gameAutoLockInstant(game, res) {
-  res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
-  const iso  = res.date_override || _gameDateToISO(game?.date);
-  const time = res.time_override || GAME_TIMES[game?.id] || '';
-  const dm = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const tm = time.match(/^(\d{1,2}):(\d{2})$/);
-  if (!dm || !tm) return null;
-  let day = parseInt(dm[3]);
-  const hh = parseInt(tm[1]);
-  if (hh < 3) day -= 1;
-  // 23:00 Brasília do dia (day-1) = 02:00 UTC do dia (day)
-  return new Date(Date.UTC(parseInt(dm[1]), parseInt(dm[2])-1, day, 2, 0));
+  return _gameLockInstant(game, res);
+}
+
+// Quando o card deve sumir da tela inicial após o resultado oficial. Prefere o campo
+// explícito resultado_ocultar_apos (gravado no save); cai para updatedAt + 45min.
+function _resultHideAfterMs(res) {
+  res = res || {};
+  const ts = res.resultado_ocultar_apos;
+  if (ts) {
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  }
+  const up = res.updatedAt;
+  if (up) {
+    if (typeof up.toMillis === 'function') return up.toMillis() + RESULT_LINGER_MS;
+    if (typeof up.seconds === 'number') return up.seconds * 1000 + RESULT_LINGER_MS;
+  }
+  return null; // sem carimbo: mantém visível (não some)
 }
 
 // Formata o instante de bloqueio (UTC) como string legível em horário Brasília.
 function _lockDisplayStr(lockAt) {
-  if (!lockAt) return 'às 22h do dia anterior';
+  if (!lockAt) return '1h antes do início';
   // Brasília = UTC-3: subtrai 3h para obter a hora local correta via getUTC*
   const brt = new Date(lockAt.getTime() - 3 * 3600000);
   const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const d = brt.getUTCDate();
   const mon = months[brt.getUTCMonth()];
   const h = String(brt.getUTCHours()).padStart(2,'0');
-  return `${d} ${mon} às ${h}h (Brasília)`;
+  const mm = brt.getUTCMinutes();
+  const hm = mm ? `${h}h${String(mm).padStart(2,'0')}` : `${h}h`; // minutos só quando != 00
+  return `${d} ${mon} às ${hm} (Brasília)`;
 }
 
 // Palpites encerrados? Prioridade: resultado lançado > trava manual >
-// liberação manual (override) > regra automática (22h do dia anterior à rodada).
+// liberação manual (override) > auto-lock > regra por horário (1h antes do início).
 function isPalpiteClosed(game, res) {
   res = res || (typeof resultados !== 'undefined' && resultados[game?.id]) || {};
   if (res.h_real !== undefined && res.a_real !== undefined) return true;
@@ -5797,8 +5853,8 @@ function isPalpiteClosedForSave(game, res, adminEditing) {
 // Controle de auto-lock: evita disparar a gravação mais de uma vez por sessão.
 const _autoLockApplied = new Set();
 
-// Grava locked:true no Firestore para jogos que passaram das 23h do dia anterior
-// (fallback para quando o admin esquece de bloquear manualmente).
+// Grava autoLocked:true no Firestore para jogos que passaram do instante de
+// auto-lock (1h antes do início) — fallback para quando o admin esquece de travar.
 // Usa _autoLockApplied para nunca tentar o mesmo jogo duas vezes na mesma sessão.
 async function _applyAutoLocks(res) {
   // Só o admin persiste o auto-lock: as Firestore Rules bloqueiam escrita em
@@ -10146,6 +10202,14 @@ async function saveResultado(gameId) {
     if ('a'  in buf) patch.a_real = buf.a  === undefined ? FV.delete() : buf.a;
     if ('ph' in buf) patch.h_pen  = buf.ph === undefined ? FV.delete() : buf.ph;
     if ('pa' in buf) patch.a_pen  = buf.pa === undefined ? FV.delete() : buf.pa;
+    // Janela de permanência na tela inicial: o card fica +45min após o resultado.
+    // Grava (ou apaga) o instante de ocultação ao salvar/limpar o placar.
+    if ('h' in buf || 'a' in buf) {
+      const clearing = ('h' in buf && buf.h === undefined) || ('a' in buf && buf.a === undefined);
+      patch.resultado_ocultar_apos = clearing
+        ? FV.delete()
+        : firebase.firestore.Timestamp.fromMillis(Date.now() + RESULT_LINGER_MS);
+    }
     // Em eliminatórias: se estado final deixou de ser empate, apaga penaltis obsoletos
     if (_isElim(gameId)) {
       const snap = await db_.collection('resultados').doc(gameId).get();
@@ -10401,7 +10465,8 @@ async function _testeApplyBatch(games, mode) {
     const ref = db_.collection('resultados').doc(g.id);
     if (mode === 'fill') {
       const h = _randScore(), a = _randScore();
-      const data = { h_real: h, a_real: a, updatedAt: FV.serverTimestamp() };
+      const data = { h_real: h, a_real: a, updatedAt: FV.serverTimestamp(),
+        resultado_ocultar_apos: firebase.firestore.Timestamp.fromMillis(Date.now() + RESULT_LINGER_MS) };
       if (_isElim(g.id)) {
         // Evita "times presos" de simulações anteriores:
         // o encadeamento recalcula h_team/a_team após preencher os placares.
@@ -10429,6 +10494,7 @@ async function _testeApplyBatch(games, mode) {
         a_pen:  FV.delete(),
         h_team: FV.delete(),
         a_team: FV.delete(),
+        resultado_ocultar_apos: FV.delete(),
         updatedAt: FV.serverTimestamp()
       }, { merge: true });
     }
@@ -11124,7 +11190,7 @@ function renderAdminHistorico() {
       <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
         Compara o <b>updateTime real do servidor</b> de cada palpite (carimbo do Firestore,
         impossível de falsificar pelo navegador) com o <b>prazo regulamentar</b> do jogo
-        (22h de Brasília da véspera, considerando date/time override). Detecta gravações
+        (1h antes do início, considerando date/time override). Detecta gravações
         feitas <b>por fora do app</b> (ex.: console do navegador), mesmo sem registro no histórico.
         Jogos liberados manualmente (override) são ignorados. Custo: ~1 leitura por participante
         (jogo único) ou ~1 leitura por palpite existente (todos os jogos).
@@ -12314,19 +12380,21 @@ function _addStatShareButtons(cont) {
 
 // Lista de pendentes por jogo (preenchida ao renderizar Estatísticas).
 const _statPending = {};
-// Frase do prazo de bloqueio (22h da véspera) relativa a hoje/amanhã (fuso BR).
+// Frase do prazo de bloqueio (1h antes do início) relativa a hoje/amanhã (fuso BR).
 function _lockRelativePhrase(lockMs) {
   if (!lockMs) return '';
   if (Date.now() >= lockMs) return '🔒 Palpites já encerrados para esta partida';
   const brt = new Date(lockMs - 3 * 3600000); // Brasília = UTC-3
   const h = String(brt.getUTCHours()).padStart(2, '0');
+  const mm = brt.getUTCMinutes();
+  const hm = mm ? `${h}h${String(mm).padStart(2,'0')}` : `${h}h`; // mostra minutos só quando != 00
   const lockDay = `${brt.getUTCFullYear()}-${String(brt.getUTCMonth()+1).padStart(2,'0')}-${String(brt.getUTCDate()).padStart(2,'0')}`;
   const todaySP = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
   const tmrSP = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
   let quando;
-  if (lockDay === todaySP) quando = `hoje às ${h}h`;
-  else if (lockDay === tmrSP) quando = `amanhã às ${h}h`;
-  else { const M = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; quando = `${brt.getUTCDate()} ${M[brt.getUTCMonth()]} às ${h}h`; }
+  if (lockDay === todaySP) quando = `hoje às ${hm}`;
+  else if (lockDay === tmrSP) quando = `amanhã às ${hm}`;
+  else { const M = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; quando = `${brt.getUTCDate()} ${M[brt.getUTCMonth()]} às ${hm}`; }
   return `⏰ Os palpites serão bloqueados ${quando} (horário de Brasília)`;
 }
 function statTogglePending(gid) {
@@ -12644,6 +12712,25 @@ function openGraficosFromIntro() {
   // Abre direto na sub-aba Gráficos assim que a página renderizar.
   _graficosPendingTab = true;
   navigateTo('estatisticas');
+}
+
+// Pop-up de mudança de regra: palpites passam a travar 1h antes da partida.
+// Mostrado uma única vez por navegador (flag em localStorage). Mesmo padrão dos
+// demais intros: não empilha sobre outro modal aberto, reagendando até aparecer.
+function _maybeShowLock1hIntro() {
+  try {
+    const key = 'bolao_seen_lock1h_v1';
+    if (localStorage.getItem(key)) return;
+    if (document.querySelector('.modal-overlay:not(.hidden)')) return; // outro modal aberto
+    const el = document.getElementById('modal-lock1h-intro');
+    if (!el) return;
+    localStorage.setItem(key, '1');
+    el.classList.remove('hidden');
+  } catch(_) {}
+}
+function closeLock1hIntro() {
+  const el = document.getElementById('modal-lock1h-intro');
+  if (el) el.classList.add('hidden');
 }
 
 // Alerta de palpites pendentes: aparece sempre que o usuário ENTRA na página
