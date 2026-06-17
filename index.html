@@ -1130,6 +1130,37 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ai-news-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);cursor:pointer;transition:all .2s}
 .ai-news-dot.active{background:var(--gold);width:18px;border-radius:4px}
 .light-theme .ai-news-dot{background:rgba(0,0,0,.18)}
+/* Navegação manual do carrossel da IA (setas + bolinhas na mesma linha) */
+.ai-news-nav{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px}
+.ai-news-nav .ai-news-dots{margin-top:0}
+.ai-news-arw{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);width:26px;height:26px;border-radius:50%;font-size:1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;transition:background .2s;padding:0}
+.ai-news-arw:hover{background:rgba(255,255,255,.14)}
+.light-theme .ai-news-arw{background:rgba(0,0,0,.04)}
+/* Botão de minimizar cards (estado salvo na sessão) */
+.card-min-btn{float:right;background:transparent;border:1px solid var(--border);color:var(--text-muted);min-width:24px;height:24px;border-radius:6px;font-size:1rem;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:700;margin-left:8px;padding:0 6px}
+.card-min-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.light-theme .card-min-btn:hover{background:rgba(0,0,0,.04)}
+.card-min .card-min-body{display:none}
+.ai-news.card-min{padding-bottom:12px}
+/* Mini-carrossel interno (ex.: jogos empatados em consenso) */
+.mini-car-wrap{position:relative}
+.mini-slide{display:none}
+.mini-slide.active{display:block;animation:aiNewsIn .35s ease}
+.mini-car-nav{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px}
+.mini-arw{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:.9rem;line-height:1;display:flex;align-items:center;justify-content:center;flex:none;padding:0}
+.mini-arw:hover{background:rgba(255,255,255,.14)}
+.light-theme .mini-arw{background:rgba(0,0,0,.04)}
+.mini-dots{display:flex;gap:5px;flex-wrap:wrap;justify-content:center}
+.mini-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.22);cursor:pointer;transition:all .2s}
+.mini-dot.active{background:var(--gold);width:14px;border-radius:3px}
+.light-theme .mini-dot{background:rgba(0,0,0,.18)}
+.mini-count{font-size:0.7rem;color:var(--text-muted);text-align:center;margin-top:4px}
+/* Detalhes do cenário de ultrapassagem */
+.ot-details{margin-top:4px}
+.ot-details>summary{cursor:pointer;color:var(--accent);font-size:0.73rem;list-style:none}
+.ot-details>summary::-webkit-details-marker{display:none}
+.ot-details ul{margin:6px 0 4px;padding-left:18px;font-size:0.76rem;color:var(--text-muted);line-height:1.5}
+@media (prefers-reduced-motion: reduce){.mini-slide.active{animation:none}}
 .prize-pool-item .ppi-val{font-size:1.2rem;font-weight:800;color:var(--gold)}
 .prize-pool-item .ppi-lbl{font-size:0.7rem;color:var(--text-muted);margin-top:2px}
 /* Paid checkbox in admin users */
@@ -2939,11 +2970,14 @@ function _computePositionDeltas(users, res, allPals, champPicks) {
   const resPrev = {};
   Object.entries(res).forEach(([id, d]) => { if (id !== lastId) resPrev[id] = d; });
   const deltas = {}, denseDeltas = {};
-  // Posição tradicional (sequencial) e densa (empatados em pontos no mesmo nível).
-  let _lvl = 0, _last = null;
-  computeRanking(users, resPrev, allPals, champPicks).forEach((u, i) => {
+  // Posição tradicional (sequencial) e densa (adensada). Na densa, dois jogadores
+  // só dividem o mesmo nível se empatarem em TODOS os critérios de desempate
+  // oficiais (pontos, exatos, vencedor+saldo, apenas vencedor, acerto do campeão).
+  const _prevRank = computeRanking(users, resPrev, allPals, champPicks);
+  let _lvl = 0;
+  _prevRank.forEach((u, i) => {
     deltas[u.uid] = i + 1;
-    if (u.pontos !== _last) { _lvl++; _last = u.pontos; }
+    if (i === 0 || !_rankFullyTiedPair(_prevRank[i - 1], u)) _lvl++;
     denseDeltas[u.uid] = _lvl;
   });
   return { deltas, denseDeltas };
@@ -3710,14 +3744,14 @@ async function renderDashboard() {
 
     html += `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45">
       <b style="color:var(--text)">#</b> = posição geral (tradicional: nº à frente + 1; usada para pódio e prêmios) ·
-      <b style="color:var(--text)">≈ pos</b> = posição por pontuação (denso: empatados em pontos dividem o mesmo nível) — só informativo.
+      <b style="color:var(--text)">≈ pos</b> = posição adensada: empates reais ficam no mesmo nível após aplicar os critérios de desempate — só informativo.
     </div>`;
 
     html += `<div class="ranking-table-wrap"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
         <table class="ranking-table" style="min-width:660px">
           <thead><tr>
             <th title="Posição geral (ranking tradicional): nº de participantes à frente + 1. Usada para ordenação, pódio e prêmios.">#</th>
-            <th title="Posição por pontuação (ranking denso): conta apenas pontuações diferentes acima. Quem empata em pontos divide o mesmo nível. Apenas informativo." style="color:var(--text-muted)">≈ pos</th>
+            <th title="Posição adensada: empates reais ficam no mesmo nível após aplicar os critérios de desempate (pontos, exatos, vencedor+saldo, apenas vencedor, acerto do campeão). Apenas informativo." style="color:var(--text-muted)">≈ pos</th>
             <th style="min-width:110px">Participante</th><th>Pontos</th>
             <th>Exatos</th><th>V+Saldo</th><th>Vencedor</th>
             <th>Jogos</th><th title="Palpite de Campeão">🏆 Campeão</th><th>%</th><th title="Distância para o líder">Dist.</th>
@@ -3727,13 +3761,13 @@ async function renderDashboard() {
     // Posição com empate (ranking tradicional): empate total nos critérios
     // recebe a MESMA posição; a próxima pula (1,1,3). Mesmo helper da imagem.
     const _posArr = _rankPositionsTieAware(ranking);
-    // Posição DENSA (ranking denso) por pontuação: conta só pontuações diferentes
-    // acima — empatados em pontos dividem o mesmo nível (1,1,1,2,2,3...). Apenas
-    // informação complementar; ordenação/pódio/prêmios usam _posArr (geral). Como
-    // os pontos são não-crescentes no ranking ordenado, basta subir o nível a
-    // cada mudança de pontuação.
-    const _denseArr = []; let _dLvl = 0, _dLastPts = null;
-    ranking.forEach((u,i) => { if (u.pontos !== _dLastPts) { _dLvl++; _dLastPts = u.pontos; } _denseArr[i] = _dLvl; });
+    // Posição DENSA (adensada): empatados no mesmo nível (1,1,1,2,2,3...). Dois
+    // jogadores só dividem o nível se empatarem em TODOS os critérios oficiais de
+    // desempate (pontos, exatos, vencedor+saldo, apenas vencedor, acerto do
+    // campeão) — mesma regra do _posArr. Apenas informação complementar;
+    // ordenação/pódio/prêmios usam _posArr (geral).
+    const _denseArr = []; let _dLvl = 0;
+    ranking.forEach((u,i) => { if (i === 0 || !_rankFullyTiedPair(ranking[i-1], u)) _dLvl++; _denseArr[i] = _dLvl; });
     // 🔻 Zona de rebaixamento (alusão ao Brasileirão): marca os 4 últimos
     // colocados. Só faz sentido com gente suficiente e jogos lançados — exige
     // >=8 participantes para os 4 últimos serem minoria clara.
@@ -5499,10 +5533,11 @@ function _simRecompute() {
   });
   const simRank = computeRanking(_simUsers, merged, _simAllPals, _simChampPicks);
   const simPos = _rankPositionsTieAware(simRank);
-  // Posição por adensamento (ranking denso): empatados em pontos dividem o mesmo
-  // nível (1,1,1,2,2,3...). Igual ao "≈ pos" do ranking oficial.
-  const denseArr = []; let _dLvl = 0, _dLast = null;
-  simRank.forEach((u, i) => { if (u.pontos !== _dLast) { _dLvl++; _dLast = u.pontos; } denseArr[i] = _dLvl; });
+  // Posição por adensamento (ranking denso): empatados no mesmo nível
+  // (1,1,1,2,2,3...). Igual ao "≈ pos" do ranking oficial — só dividem o nível
+  // quem empata em TODOS os critérios de desempate.
+  const denseArr = []; let _dLvl = 0;
+  simRank.forEach((u, i) => { if (i === 0 || !_rankFullyTiedPair(simRank[i-1], u)) _dLvl++; denseArr[i] = _dLvl; });
   // Jogos simulados completos — base dos pontos ganhos por cada um "agora".
   const simGids = Object.keys(_simDraft).filter(gid => { const d = _simDraft[gid]; return d && d.h !== undefined && d.a !== undefined; });
   let rows = '';
@@ -5523,7 +5558,7 @@ function _simRecompute() {
     const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '';
     rows += `<tr class="${isMe ? 'is-me' : ''}" data-uid="${u.uid}">
       <td><span class="rank-pos ${posClass}">${pos}</span></td>
-      <td style="color:var(--text-muted);font-weight:600;font-size:0.82rem" title="Posição por adensamento (ranking denso)">${denseArr[i]}º</td>
+      <td style="color:var(--text-muted);font-weight:600;font-size:0.82rem" title="Posição adensada: empates reais ficam no mesmo nível após aplicar os critérios de desempate">${denseArr[i]}º</td>
       <td style="text-align:center;white-space:nowrap">${deltaHtml}${gainHtml}</td>
       <td><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.72rem;color:var(--text-muted)">${esc(u.nome || '')}</div></td>
       <td><span class="pts-badge">${u.pontos}</span></td>
@@ -5537,7 +5572,7 @@ function _simRecompute() {
 
   el.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
       <table class="ranking-table" style="min-width:380px">
-        <thead><tr><th>#</th><th title="Posição por adensamento (ranking denso): empatados em pontos dividem o mesmo nível" style="color:var(--text-muted)">≈ pos</th><th title="Variação de posição vs ranking oficial + pontos ganhos com os placares simulados">↑↓ / pts</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
+        <thead><tr><th>#</th><th title="Posição adensada: empates reais ficam no mesmo nível após aplicar os critérios de desempate" style="color:var(--text-muted)">≈ pos</th><th title="Variação de posição vs ranking oficial + pontos ganhos com os placares simulados">↑↓ / pts</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">${nSim > 0 ? ('🧪 ' + nSim + ' jogo(s) simulado(s) aplicado(s) ao ranking.') : 'Nenhum placar simulado ainda — ranking igual ao oficial.'}</div>`;
@@ -6621,11 +6656,22 @@ async function _dashStartAINews() {
         ${c.value ? `<div class="ai-news-value">${esc(c.value)}</div>` : ''}
         <div class="ai-news-text">${esc(c.text || '')}</div>
       </div></div>`).join('');
-  const dots = cards.length > 1 ? `<div class="ai-news-dots">${cards.map((_, i) => `<span class="ai-news-dot${i === 0 ? ' active' : ''}" onclick="_dashAiGo(${i})"></span>`).join('')}</div>` : '';
-  host2.innerHTML = `<div class="ai-news">
-    <div class="ai-news-head"><span class="ai-news-badge">🤖 Análise da IA</span><span class="ai-news-live">ao vivo</span></div>
-    <div id="dash-ai-car" class="ai-news-car">${slides}</div>
-    ${dots}
+  const dots = cards.map((_, i) => `<span class="ai-news-dot${i === 0 ? ' active' : ''}" onclick="_dashAiGo(${i})"></span>`).join('');
+  // Setas manuais (‹ ›) + bolinhas só quando há mais de um card. Clique manual
+  // usa _dashAiNext(dir,false), que já para o avanço automático (auto=false).
+  const nav = cards.length > 1 ? `<div class="ai-news-nav">
+      <button class="ai-news-arw" aria-label="Card anterior da análise da IA" onclick="_dashAiNext(-1,false)">‹</button>
+      <div class="ai-news-dots">${dots}</div>
+      <button class="ai-news-arw" aria-label="Próximo card da análise da IA" onclick="_dashAiNext(1,false)">›</button>
+    </div>` : '';
+  const cid = 'analise-ia-dashboard';
+  const min = _isCardMinimized(cid);
+  host2.innerHTML = `<div class="ai-news${min ? ' card-min' : ''}" data-card-id="${cid}">
+    <div class="ai-news-head"><span class="ai-news-badge">🤖 Análise da IA</span><span style="display:inline-flex;align-items:center;gap:10px"><span class="ai-news-live">ao vivo</span>${_minBtn(cid)}</span></div>
+    <div class="card-min-body">
+      <div id="dash-ai-car" class="ai-news-car">${slides}</div>
+      ${nav}
+    </div>
   </div>`;
   _dashAiState.idx = 0; _dashAiState.n = cards.length;
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -7420,36 +7466,46 @@ async function renderEstatisticas() {
       function _gameGainPairs(game, chalUid, tgtUid) {
         const palChal = allPals[chalUid]?.[game.id];
         const palTgt  = allPals[tgtUid]?.[game.id];
+        const hasChal = !!(palChal && palChal.h !== undefined);
+        const hasTgt  = !!(palTgt && palTgt.h !== undefined);
         const scenarios = _baseScenarios.slice();
-        if (palChal && palChal.h !== undefined)
-          scenarios.push({h_real: parseInt(palChal.h)||0, a_real: parseInt(palChal.a)||0});
-        if (palTgt && palTgt.h !== undefined)
-          scenarios.push({h_real: parseInt(palTgt.h)||0, a_real: parseInt(palTgt.a)||0});
+        if (hasChal) scenarios.push({h_real: parseInt(palChal.h)||0, a_real: parseInt(palChal.a)||0});
+        if (hasTgt)  scenarios.push({h_real: parseInt(palTgt.h)||0, a_real: parseInt(palTgt.a)||0});
         const seen = new Set();
         return scenarios
           .filter(sc => { const k=sc.h_real+'-'+sc.a_real; return seen.has(k)?false:(seen.add(k),true); })
           .map(sc => ({
-            gainChal: palChal && palChal.h !== undefined ? calcPontos(palChal, sc) : 0,
-            gainTgt:  palTgt  && palTgt.h  !== undefined ? calcPontos(palTgt,  sc) : 0
+            // Guarda o placar hipotético e o rótulo do jogo p/ explicar o cenário.
+            gameId: game.id, label: `${game.h} × ${game.a}`, relevant: hasChal || hasTgt,
+            score: { h: sc.h_real, a: sc.a_real },
+            gainChal: hasChal ? calcPontos(palChal, sc) : 0,
+            gainTgt:  hasTgt  ? calcPontos(palTgt,  sc) : 0
           }));
       }
-      // Checks all combinations of outcomes across all simultaneous games
+      // Checks all combinations of outcomes across all simultaneous games.
+      // Além de "é possível?", devolve o melhor cenário explicável (maior margem),
+      // com o placar de cada jogo e quanto cada um pontuaria.
       function _checkOvertake(chalUid, tgtUid, chalCur, tgtCur) {
         const perGame = _nextGames.map(g => _gameGainPairs(g, chalUid, tgtUid));
         if (!perGame.length) return { possible: false };
         // Cartesian product via iteration (avoids generator for compatibility)
-        let combos = [{ gainChal:0, gainTgt:0 }];
+        let combos = [{ gainChal:0, gainTgt:0, picks: [] }];
         for (const pairs of perGame) {
           const next = [];
           for (const c of combos)
             for (const p of pairs)
-              next.push({ gainChal: c.gainChal + p.gainChal, gainTgt: c.gainTgt + p.gainTgt });
+              next.push({ gainChal: c.gainChal + p.gainChal, gainTgt: c.gainTgt + p.gainTgt, picks: c.picks.concat(p) });
           combos = next;
         }
-        for (const { gainChal, gainTgt } of combos)
-          if (chalCur + gainChal > tgtCur + gainTgt)
-            return { possible: true, gainChal, gainTgt };
-        return { possible: false };
+        // Melhor cenário = maior margem final do desafiante (favorece "cravado" +
+        // alvo sem pontuar), que é o mais simples de explicar.
+        let best = null, bestMargin = 0;
+        for (const c of combos) {
+          const margin = (chalCur + c.gainChal) - (tgtCur + c.gainTgt);
+          if (margin > 0 && (!best || margin > bestMargin)) { best = c; bestMargin = margin; }
+        }
+        if (!best) return { possible: false };
+        return { possible: true, gainChal: best.gainChal, gainTgt: best.gainTgt, scenarios: best.picks.filter(p => p.relevant) };
       }
 
       // Who can overtake
@@ -7458,7 +7514,7 @@ async function renderEstatisticas() {
         if (idx === 0) return;
         for (let i = 0; i < idx; i++) {
           const r = _checkOvertake(u.uid, ranking[i].uid, u.pontos, ranking[i].pontos);
-          if (r.possible) _canOvertake.push({ u, target: ranking[i], gainChal: r.gainChal, gainTgt: r.gainTgt });
+          if (r.possible) _canOvertake.push({ u, target: ranking[i], gainChal: r.gainChal, gainTgt: r.gainTgt, scenarios: r.scenarios });
         }
       });
       // Points at stake in next group
@@ -7472,13 +7528,24 @@ async function renderEstatisticas() {
         return r.possible;
       });
 
-      const _overtakeRows = _canOvertake.slice(0, 6).map(({u, target, gainChal, gainTgt}) => {
-        const detail = gainTgt > 0
-          ? `(+${gainChal} pts vs +${gainTgt} pts do alvo)`
-          : `(+${gainChal} pts, alvo não pontua nesse cenário)`;
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:0.83rem">'
-          + '<span><b style="color:var(--gold)">' + esc(u.apelido||u.nome) + '</b> → pode ultrapassar <b>' + esc(target.apelido||target.nome) + '</b> '
-          + '<span style="font-size:0.73rem;color:var(--text-muted)">' + detail + '</span></span>'
+      const _fmtScore = s => `${s.score.h}×${s.score.a}`;
+      const _overtakeRows = _canOvertake.slice(0, 6).map(({u, target, gainChal, gainTgt, scenarios}) => {
+        const uName = esc(u.apelido||u.nome), tName = esc(target.apelido||target.nome);
+        let explain;
+        if (scenarios && scenarios.length === 1) {
+          const s = scenarios[0];
+          // Ex.: "se Brasil × Alemanha terminar 2×1: João faria +10 pts e Maria faria +0 pts."
+          explain = `se <b>${esc(s.label)}</b> terminar <b>${_fmtScore(s)}</b>: ${uName} faria <b>+${s.gainChal}</b> pts e ${tName} faria <b>+${s.gainTgt}</b> pts.`;
+        } else if (scenarios && scenarios.length > 1) {
+          const lis = scenarios.map(s => `<li><b>${esc(s.label)}</b> = <b>${_fmtScore(s)}</b> → ${uName} +${s.gainChal} / ${tName} +${s.gainTgt}</li>`).join('');
+          explain = `<details class="ot-details"><summary>ver cenário (${scenarios.length} jogos)</summary><ul>${lis}</ul>`
+            + `<div style="margin-top:2px">Total: ${uName} <b>+${gainChal}</b> pts vs ${tName} <b>+${gainTgt}</b> pts.</div></details>`;
+        } else {
+          explain = gainTgt > 0 ? `(+${gainChal} pts vs +${gainTgt} pts do alvo)` : `(+${gainChal} pts, alvo não pontua)`;
+        }
+        return '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:0.83rem;line-height:1.5">'
+          + '<b style="color:var(--gold)">' + uName + '</b> pode ultrapassar <b>' + tName + '</b> '
+          + '<span style="color:var(--text-muted)">' + explain + '</span>'
           + '</div>';
       }).join('');
 
@@ -7495,11 +7562,13 @@ async function renderEstatisticas() {
         + '💡 <b>Como é calculado:</b> '
         + '"Pontos máximos em disputa" = nº de palpites enviados × pontos do placar exato (' + _maxPts + ' pts). '
         + '"Podem alcançar a pontuação atual do líder" = participantes para quem existe algum resultado onde eles passam o líder, considerando o que ambos apostaram. '
-        + '"Pode ultrapassar" = existe pelo menos um resultado onde o saldo de pontos inverte — o detalhe entre parênteses mostra os pontos de cada um nesse cenário.'
+        + '"Pode ultrapassar" = existe pelo menos um resultado onde o saldo de pontos inverte — o cenário mostra qual placar favorece a ultrapassagem e quantos pontos cada um faria.'
         + '</div>';
 
-      _beforeHtml += '<div class="card">'
-        + '<div class="card-title">⚡ Impacto Potencial no Ranking</div>'
+      const _impCid = 'impacto-ranking';
+      _beforeHtml += '<div class="card' + (_isCardMinimized(_impCid) ? ' card-min' : '') + '" data-card-id="' + _impCid + '">'
+        + '<div class="card-title">⚡ Impacto Potencial no Ranking' + _minBtn(_impCid) + '</div>'
+        + '<div class="card-min-body">'
         + '<div class="stats-alt-grid" style="margin-top:12px">'
         + '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">'
         + '<div style="font-size:1.4rem;font-weight:800;color:var(--gold)">' + _totalAtStake + '</div>'
@@ -7516,6 +7585,7 @@ async function renderEstatisticas() {
         + '</div>'
         + _overtakeSection
         + _explainImpact
+        + '</div>'
         + '</div>';
     }
 
@@ -8148,8 +8218,73 @@ function _gxGameTeams(gid, res) {
   return _getResolvedTeamsForGame(g, res);
 }
 function _gxEmpty(msg) { return `<div class="gx-empty">${esc(msg)}</div>`; }
-function _gxCard(title, body, desc) {
-  return `<div class="card"><div class="card-title">${title}</div>${desc ? `<div class="gx-desc">${desc}</div>` : ''}<div>${body}</div></div>`;
+// ── Cards minimizáveis (estado salvo só na sessão atual) ──────────────────────
+const _MIN_CARDS_KEY = 'bolao_minimized_cards_v1';
+function _getMinimizedCards() {
+  try { return JSON.parse(sessionStorage.getItem(_MIN_CARDS_KEY)) || {}; } catch (_) { return {}; }
+}
+function _isCardMinimized(id) { return !!_getMinimizedCards()[id]; }
+function _setCardMinimized(id, v) {
+  const m = _getMinimizedCards();
+  if (v) m[id] = 1; else delete m[id];
+  try { sessionStorage.setItem(_MIN_CARDS_KEY, JSON.stringify(m)); } catch (_) {}
+}
+function _toggleMinCard(id) {
+  const willMin = !_isCardMinimized(id);
+  _setCardMinimized(id, willMin);
+  const card = document.querySelector('[data-card-id="' + id + '"]');
+  if (card) {
+    card.classList.toggle('card-min', willMin);
+    const btn = card.querySelector('.card-min-btn');
+    if (btn) { btn.textContent = willMin ? '＋' : '–'; btn.setAttribute('aria-label', (willMin ? 'Expandir' : 'Minimizar') + ' card'); btn.title = willMin ? 'Expandir' : 'Minimizar'; }
+  }
+}
+// Slug estável p/ id do card a partir do título (ignora emojis, contagens e sufixos "· …").
+function _cardSlug(title) {
+  return 'gx-' + String(title).replace(/[·(].*$/, '').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').toLowerCase();
+}
+// Botão de minimizar para inserir no .card-title de cards montados manualmente.
+function _minBtn(id) {
+  const min = _isCardMinimized(id);
+  return `<button class="card-min-btn" title="${min ? 'Expandir' : 'Minimizar'}" aria-label="${min ? 'Expandir' : 'Minimizar'} card" onclick="_toggleMinCard('${id}')">${min ? '＋' : '–'}</button>`;
+}
+
+// ── Mini-carrossel interno reutilizável (sem auto-play) ───────────────────────
+// slides: array de HTML (corpo de cada item). Mostra setas + bolinhas se >1.
+function _miniCarousel(slides, countLabel) {
+  if (!slides || !slides.length) return '';
+  if (slides.length === 1) return `<div class="mini-car-wrap"><div class="mini-car"><div class="mini-slide active">${slides[0]}</div></div></div>`;
+  const body = slides.map((s, i) => `<div class="mini-slide${i === 0 ? ' active' : ''}">${s}</div>`).join('');
+  const dots = slides.map((_, i) => `<span class="mini-dot${i === 0 ? ' active' : ''}" onclick="_miniCarGo(this,${i})"></span>`).join('');
+  return `<div class="mini-car-wrap"><div class="mini-car" data-idx="0">${body}</div>
+    <div class="mini-car-nav">
+      <button class="mini-arw" aria-label="Anterior" onclick="_miniCarNav(this,-1)">‹</button>
+      <div class="mini-dots">${dots}</div>
+      <button class="mini-arw" aria-label="Próximo" onclick="_miniCarNav(this,1)">›</button>
+    </div>${countLabel ? `<div class="mini-count">${countLabel}</div>` : ''}</div>`;
+}
+function _miniCarShow(car, i) {
+  const s = car.querySelectorAll('.mini-slide'); if (!s.length) return;
+  const n = (i + s.length) % s.length;
+  s.forEach((el, k) => el.classList.toggle('active', k === n));
+  car.dataset.idx = n;
+  const wrap = car.closest('.mini-car-wrap');
+  if (wrap) wrap.querySelectorAll('.mini-dot').forEach((d, k) => d.classList.toggle('active', k === n));
+}
+function _miniCarNav(el, dir) {
+  const wrap = el.closest('.mini-car-wrap'); if (!wrap) return;
+  const car = wrap.querySelector('.mini-car');
+  _miniCarShow(car, (parseInt(car.dataset.idx) || 0) + dir);
+}
+function _miniCarGo(el, i) {
+  const wrap = el.closest('.mini-car-wrap'); if (!wrap) return;
+  _miniCarShow(wrap.querySelector('.mini-car'), i);
+}
+
+function _gxCard(title, body, desc, id) {
+  const cid = id || _cardSlug(title);
+  const min = _isCardMinimized(cid);
+  return `<div class="card${min ? ' card-min' : ''}" data-card-id="${cid}"><div class="card-title">${title}${_minBtn(cid)}</div><div class="card-min-body">${desc ? `<div class="gx-desc">${desc}</div>` : ''}<div>${body}</div></div></div>`;
 }
 // Barras horizontais simples. rows: [{label(jáEscapado), value, sub, color}]
 function _gxBars(rows, fallback) {
@@ -8295,6 +8430,13 @@ function renderGxResumoGeral(d) {
 }
 
 // ── 6. Resumo / destaques da rodada ───────────────────────────────────────────
+// Retorna todos os itens empatados no valor extremo (máx ou mín) de valueFn.
+function _gxTiedBy(list, valueFn, dir) {
+  if (!list || !list.length) return [];
+  const vals = list.map(valueFn);
+  const target = dir === 'min' ? Math.min(...vals) : Math.max(...vals);
+  return list.filter((_, i) => vals[i] === target);
+}
 function computeRoundSummary(d) {
   const { users, res, allPals } = d;
   const cps = _gxPhaseCheckpoints(res);
@@ -8319,23 +8461,44 @@ function computeRoundSummary(d) {
   }
   const gameStats = last.playedIds.map(id => _gxGameStats(id, d)).filter(Boolean);
   const maisDificil = gameStats.slice().sort((a, b) => a.mediaPts - b.mediaPts)[0] || null;
-  const maisConsensual = gameStats.slice().sort((a, b) => b.consensusPct - a.consensusPct)[0] || null;
+  // Consenso: maior % no mesmo resultado. Dissenso: menor % (jogo mais dividido).
+  // Em empate de percentual (mesmo valor arredondado), guardamos TODOS os jogos.
+  const _consVal = g => Math.round(g.consensusPct * 100);
+  const maisConsensuais = _gxTiedBy(gameStats, _consVal, 'max');
+  const maisConsensual = maisConsensuais[0] || null;
+  const maisDivididos = _gxTiedBy(gameStats, _consVal, 'min');
+  // Só faz sentido mostrar "mais dividido" se for de fato menos consensual.
+  const maisDividido = (maisDividido => maisDividido && maisConsensual && _consVal(maisDividido) < _consVal(maisConsensual) ? maisDividido : null)(maisDivididos[0]);
   // zebra = menor % no vencedor real (com ao menos 1 palpiteiro acertando o lado)
   const zebra = gameStats.filter(g => g.outcomeCounts[g.winnerOutcome] > 0)
     .sort((a, b) => a.pctOnWinner - b.pctOnWinner)[0] || null;
   const totalPts = rankPhase.reduce((s, u) => s + u.pontos, 0);
-  return { phase: last, topScorer, sniper, bestUp, bestDown, maisDificil, maisConsensual, zebra, totalPts };
+  return { phase: last, topScorer, sniper, bestUp, bestDown, maisDificil,
+    maisConsensual, maisConsensuais, maisDividido, maisDivididos: maisDividido ? maisDivididos : [], zebra, totalPts };
 }
 function renderGxRoundSummary(d) {
   const r = computeRoundSummary(d);
   if (!r) return _gxCard('🏟️ Resumo da Rodada', _gxEmpty('Aguardando resultados da primeira rodada.'));
   const item = (l, v, s) => `<div class="gx-round-item"><div class="ri-l">${l}</div><div class="ri-v">${v}</div>${s ? `<div class="ri-s">${s}</div>` : ''}</div>`;
+  // Item de consenso/dissenso ciente de empates: 1 jogo → item normal;
+  // vários jogos com o mesmo % → mini-carrossel dentro de um item largo.
+  const tiedItem = (label, list, suffix) => {
+    if (!list || !list.length) return '';
+    const pct = Math.round(list[0].consensusPct * 100);
+    if (list.length === 1) return item(label, esc(list[0].label), `${pct}% ${suffix}`);
+    const slides = list.map(g => `<div class="ri-v" style="text-align:center;padding:4px 0">${esc(g.label)}</div>`);
+    return `<div class="gx-round-item" style="grid-column:1/-1">`
+      + `<div class="ri-l">${label} — ${list.length} jogos empatados</div>`
+      + _miniCarousel(slides, `todos com ${pct}% ${suffix}`)
+      + `</div>`;
+  };
   let body = `<div class="gx-round-grid">`;
   if (r.topScorer) body += item('👑 Maior pontuador', _gxName(r.topScorer), `${r.topScorer.pontos} pts na rodada`);
   if (r.sniper && r.sniper.exatos > 0) body += item('🎯 Sniper da rodada', _gxName(r.sniper), `${r.sniper.exatos} placar(es) exato(s)`);
   if (r.bestUp) body += item('📈 Maior subida', _gxName(r.bestUp.u), `subiu ${r.bestUp.delta} posição(ões)`);
   if (r.bestDown) body += item('📉 Maior queda', _gxName(r.bestDown.u), `caiu ${Math.abs(r.bestDown.delta)} posição(ões)`);
-  if (r.maisConsensual) body += item('🤝 Jogo mais consensual', esc(r.maisConsensual.label), `${Math.round(r.maisConsensual.consensusPct * 100)}% no mesmo resultado`);
+  body += tiedItem('🤝 Jogo mais consensual', r.maisConsensuais, 'no mesmo resultado');
+  body += tiedItem('🌪️ Jogo mais dividido', r.maisDivididos, 'no resultado mais escolhido');
   if (r.maisDificil) body += item('😤 Jogo mais difícil', esc(r.maisDificil.label), `média ${r.maisDificil.mediaPts.toFixed(1)} pts`);
   if (r.zebra && r.zebra.pctOnWinner < 0.5) body += item('🦓 Zebra da rodada', esc(r.zebra.label), `só ${Math.round(r.zebra.pctOnWinner * 100)}% acertaram o vencedor`);
   body += item('💰 Pontos distribuídos', `${r.totalPts}`, 'na rodada');
@@ -11834,9 +11997,10 @@ async function shareTop5RelegImage() {
   const ranking = _cachedRanking;
   const positions = _rankPositionsTieAware(ranking); // posição tradicional (com empate)
 
-  // Classificação densa: 1,1,1,2,2,3... — pega todos com nível denso <= 3.
-  const dense = []; let lvl = 0, lastPts = null;
-  ranking.forEach((u,i) => { if (u.pontos !== lastPts) { lvl++; lastPts = u.pontos; } dense[i] = lvl; });
+  // Classificação densa: 1,1,1,2,2,3... — pega todos com nível denso <= 3. Só
+  // dividem o nível quem empata em TODOS os critérios oficiais de desempate.
+  const dense = []; let lvl = 0;
+  ranking.forEach((u,i) => { if (i === 0 || !_rankFullyTiedPair(ranking[i-1], u)) lvl++; dense[i] = lvl; });
   const topIdx = ranking.map((_,i)=>i).filter(i => dense[i] <= 3);
 
   // Zona de rebaixamento: 4 últimos, só com gente suficiente e sem sobrepor o topo.
