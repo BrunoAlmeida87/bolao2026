@@ -9666,7 +9666,10 @@ async function renderAdminIA() {
           <div class="card-title">🤖 Análise IA — Painel do Admin</div>
           <p style="font-size:0.85rem;color:var(--text-muted);margin:8px 0 14px;line-height:1.5">
             Exporte os dados do bolão, cole no Claude com o prompt gerado, receba um JSON de cards
-            e salve aqui. Os cards aparecerão automaticamente na página de Estatísticas.
+            e salve aqui. Os cards aparecerão no carrossel do dashboard e na página de Estatísticas.
+            O pacote agora inclui <b>precisão de placar, estilo de aposta, placar coringa, caçadores de
+            zebra, rivalidades, corrida pelo topo, torcida do campeão</b> e mais — para a IA gerar cards
+            mais variados e divertidos.
           </p>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
             <button class="btn btn-primary" onclick="exportAIData()">📋 Copiar dados + prompt para IA</button>
@@ -9803,10 +9806,15 @@ async function exportAIData() {
     const hasG2 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2)).some(gm=>res[gm.id]&&_hasFullResult(res[gm.id]));
     const fase = hasFinal?'Final / 3º lugar':hasSemi?'Semifinais':hasQuartas?'Quartas de Final':hasR16?'Oitavas de Final':hasR32?'Round of 32':hasG3?'Grupos — Rodada 3 concluída':hasG2?'Grupos — Rodada 2 concluída':'Grupos — Rodada 1';
 
+    // Apelido curto e cache de estatísticas de acurácia por usuário (reaproveitado).
+    const nm = u => u.apelido || u.nome;
+    const accMap = {};
+    users.forEach(u => { accMap[u.uid] = calcUserAccuracyStats(u.uid, allPals, res); });
+
     // Ranking lines
     const rankingLines = ranking.map((u,i)=>{
-      const acc = calcUserAccuracyStats(u.uid, allPals, res);
-      return `${i+1}. ${u.apelido||u.nome} — ${u.pontos}pts | ${u.exatos} exatos | ${u.jogos} jogos | ${acc.acertoPct}% aproveit.`;
+      const acc = accMap[u.uid] || {};
+      return `${i+1}. ${nm(u)} — ${u.pontos}pts | ${u.exatos} exatos | ${u.venc_saldo} venc+saldo | ${u.apenas_venc} só venc | ${u.jogos} jogos | ${acc.acertoPct}% aproveit. | erro médio ${acc.erroMedio} gols${u.campeao?` | campeão: ${u.campeao}${u.acertou_campeao?' ✅':''}`:''}`;
     }).join('\n');
 
     // Top 3 jogos mais difíceis
@@ -9825,6 +9833,68 @@ async function exportAIData() {
       .filter(t=>t.count>0).sort((a,b)=>b.delta-a.delta);
     const emAlta = trendLines.slice(0,3).map(t=>`  • ${t.u.apelido||t.u.nome}: Δ${t.delta>=0?'+':''}${t.delta.toFixed(1)}pp`).join('\n');
     const emQueda = trendLines.slice(-3).reverse().map(t=>`  • ${t.u.apelido||t.u.nome}: Δ${t.delta>=0?'+':''}${t.delta.toFixed(1)}pp`).join('\n');
+
+    // ── ESTILO DE PALPITE (ousadia) — média de gols e tendência ao empate ──
+    const alt = calcAltRankings(users, allPals).filter(a=>a.totalPals>0);
+    const goleadores = alt.slice().sort((x,y)=>y.mediaGols-x.mediaGols).slice(0,3)
+      .map(a=>`  • ${nm(a)}: ${a.mediaGols.toFixed(2)} gols/palpite`).join('\n');
+    const cautelosos = alt.slice().sort((x,y)=>x.mediaGols-y.mediaGols).slice(0,3)
+      .map(a=>`  • ${nm(a)}: ${a.mediaGols.toFixed(2)} gols/palpite`).join('\n');
+    const reisEmpate = alt.slice().sort((x,y)=>y.empates-x.empates).slice(0,3)
+      .filter(a=>a.empates>0).map(a=>`  • ${nm(a)}: ${a.empates} palpites de empate`).join('\n');
+
+    // ── PRECISÃO DE PLACAR (erro médio de gols) e REIS DO EXATO ──
+    const accArr = users.map(u=>({u, ...accMap[u.uid]})).filter(a=>a.count>0 && a.erroMedio!=='-');
+    const maisPrecisos = accArr.slice().sort((x,y)=>parseFloat(x.erroMedio)-parseFloat(y.erroMedio)).slice(0,3)
+      .map(a=>`  • ${nm(a.u)}: erro médio ${a.erroMedio} gols/jogo (${a.exatoPct}% exatos)`).join('\n');
+    const menosPrecisos = accArr.slice().sort((x,y)=>parseFloat(y.erroMedio)-parseFloat(x.erroMedio)).slice(0,3)
+      .map(a=>`  • ${nm(a.u)}: erro médio ${a.erroMedio} gols/jogo`).join('\n');
+    const reisExato = accArr.filter(a=>a.count>=3).sort((x,y)=>parseFloat(y.exatoPct)-parseFloat(x.exatoPct)).slice(0,3)
+      .map(a=>`  • ${nm(a.u)}: ${a.exatoPct}% de placares exatos (${a.count} jogos)`).join('\n');
+
+    // ── TORCIDA DO CAMPEÃO (distribuição dos palpites de campeão) ──
+    const champCount = {};
+    ranking.forEach(u=>{ if(u.campeao) champCount[u.campeao]=(champCount[u.campeao]||0)+1; });
+    const champDistrib = Object.entries(champCount).sort((a,b)=>b[1]-a[1])
+      .map(([t,c])=>`  • ${t}: ${c} palpite${c>1?'s':''}`).join('\n');
+
+    // ── CORRIDA PELO TOPO (distância para o líder) ──
+    const _lider = ranking[0];
+    const _gap12 = ranking[1] ? (_lider.pontos - ranking[1].pontos) : null;
+    const _gap13 = ranking[2] ? (_lider.pontos - ranking[2].pontos) : null;
+    const _dentro10 = ranking.filter(u=>_lider.pontos - u.pontos <= 10).length;
+    const corrida = [
+      `Líder: ${nm(_lider)} com ${_lider.pontos}pts`,
+      _gap12!=null?`Vantagem p/ o 2º: ${_gap12} pts`:'',
+      _gap13!=null?`Vantagem p/ o 3º: ${_gap13} pts`:'',
+      `Participantes a até 10 pts do líder: ${_dentro10}`
+    ].filter(Boolean).map(s=>`  ${s}`).join('\n');
+
+    // ── ZONA DE REBAIXAMENTO (4 últimos, se >= 8 participantes) ──
+    const _relegStart = ranking.length>=8 ? ranking.length-4 : -1;
+    const zonaReb = _relegStart>=0
+      ? ranking.slice(_relegStart).map((u,i)=>`  ${_relegStart+i+1}. ${nm(u)} — ${u.pontos}pts`).join('\n')
+      : '  (poucos participantes para zona de rebaixamento)';
+
+    // ── RIVALIDADE DO BOLÃO (confronto mais divergente) ──
+    const h2h = _calcHeadToHead(users, allPals, res);
+    const rivalidade = h2h
+      ? `  ${nm(h2h.a)} vs ${nm(h2h.b)} — ${h2h.duelGames} jogos em comum, divergência total ${h2h.divergence} gols.\n  Quem pontuou mais vezes no duelo: ${nm(h2h.a)} ${h2h.winA} x ${h2h.winB} ${nm(h2h.b)} (${h2h.ties} empates).`
+      : '  (sem dados ainda)';
+
+    // ── PLACAR CORINGA (placares mais palpitados em todo o bolão) ──
+    const scoreCount = {};
+    users.forEach(u=>{ const ps=allPals[u.uid]||{}; Object.values(ps).forEach(p=>{ if(p&&p.h!==undefined&&p.a!==undefined){ const k=`${parseInt(p.h)}-${parseInt(p.a)}`; scoreCount[k]=(scoreCount[k]||0)+1; } }); });
+    const _totalScored = Object.values(scoreCount).reduce((s,v)=>s+v,0);
+    const placaresTop = Object.entries(scoreCount).sort((a,b)=>b[1]-a[1]).slice(0,5)
+      .map(([k,c])=>`  • ${k}: ${c} vezes (${_totalScored?Math.round(c/_totalScored*100):0}%)`).join('\n');
+
+    // ── CAÇADORES DE ZEBRA (quem pontuou nos jogos que poucos acertaram) ──
+    const cacadores = jogosComp.filter(j=>j.pct<=30).slice(0,3).map(j=>{
+      const acert = users.filter(u=>{ const p=allPals[u.uid]?.[j.id]; return p && calcPontos(p,res[j.id])>0; }).map(nm);
+      const nomes = acert.length ? acert.slice(0,6).join(', ')+(acert.length>6?` +${acert.length-6}`:'') : 'ninguém pontuou';
+      return `  • ${j.label} (${j.result}, só ${j.pct}% pontuaram): ${nomes}`;
+    }).join('\n');
 
     const data = `=== BOLÃO COPA 2026 — DADOS PARA ANÁLISE IA ===
 Data: ${today}
@@ -9849,12 +9919,48 @@ ${emQueda||'  (sem dados ainda)'}
 
 == SEQUÊNCIAS & HAT-TRICKS ==
 ${(()=>{
-  const accAll = users.map(u=>({u,...calcUserAccuracyStats(u.uid,allPals,res)}));
+  const accAll = users.map(u=>({u,...accMap[u.uid]}));
   const ativo = accAll.filter(a=>a.currentStreak>0).sort((a,b)=>b.currentStreak-a.currentStreak).slice(0,3).map(a=>`  • ${a.u.apelido||a.u.nome}: ${a.currentStreak} acertos seguidos${a.currentExactStreak>=3?' 🎩 HAT-TRICK ATIVO!':''}`).join('\n');
   const hats = accAll.filter(a=>a.maxExactStreak>=3).sort((a,b)=>b.maxExactStreak-a.maxExactStreak).map(a=>`  • ${a.u.apelido||a.u.nome}: ${a.maxExactStreak} exatos seguidos${a.currentExactStreak>=3?' (ativo!)':''}`).join('\n');
   const record = accAll.sort((a,b)=>b.maxStreak-a.maxStreak)[0];
   return [ativo?`Sequências ativas:\n${ativo}`:'',hats?`Hat-tricks (3+ exatos seguidos):\n${hats}`:'Nenhum hat-trick ainda.',record&&record.maxStreak>0?`Maior sequência histórica: ${record.u.apelido||record.u.nome} com ${record.maxStreak} acertos seguidos`:'' ].filter(Boolean).join('\n\n');
 })()}
+
+== PRECISÃO DE PLACAR (menor erro médio de gols/jogo) ==
+${maisPrecisos||'  (sem dados ainda)'}
+
+== CHUTÔMETRO (maior erro médio — mais longe do placar real) ==
+${menosPrecisos||'  (sem dados ainda)'}
+
+== REIS DO PLACAR EXATO (maior % de cravadas, mín. 3 jogos) ==
+${reisExato||'  (sem dados ainda)'}
+
+== ESTILO: GOLEADORES (maior média de gols por palpite) ==
+${goleadores||'  (sem dados ainda)'}
+
+== ESTILO: CAUTELOSOS (menor média de gols por palpite) ==
+${cautelosos||'  (sem dados ainda)'}
+
+== REIS DO EMPATE (mais palpites de empate) ==
+${reisEmpate||'  (sem dados ainda)'}
+
+== PLACAR CORINGA (placares mais palpitados no bolão) ==
+${placaresTop||'  (sem dados ainda)'}
+
+== CAÇADORES DE ZEBRA (quem pontuou nos jogos que poucos acertaram) ==
+${cacadores||'  (sem dados ainda)'}
+
+== RIVALIDADE DO BOLÃO (confronto mais divergente entre dois participantes) ==
+${rivalidade}
+
+== CORRIDA PELO TOPO (distância para o líder) ==
+${corrida}
+
+== ZONA DE REBAIXAMENTO (4 últimos) ==
+${zonaReb}
+
+== TORCIDA DO CAMPEÃO (distribuição dos palpites de campeão) ==
+${champDistrib||'  (campeão ainda não palpitado/oculto)'}
 
 ==========================================================
 INSTRUÇÕES PARA A IA (não inclua este bloco na resposta)
@@ -9870,13 +9976,25 @@ REGRAS OBRIGATÓRIAS:
    - Em alta (quem mais subiu recentemente, com contexto)
    - Em queda (quem mais caiu recentemente, com empatia — não seja cruel)
    - Zebra do bolão (jogo que menos pessoas acertaram, contexto)
-4. Depois dos fixos, gere de 3 a 5 cards dinâmicos baseados na fase atual (${fase}):
-   - Fase de grupos: explore padrões de palpites, goleadas esperadas, apostas ousadas
-   - Oitavas/Quartas: quem está melhor posicionado para virar, rivalidades no ranking
-   - Semis/Final: drama final, quem pode virar, quem acertou o campeão
-5. Use emojis relevantes, títulos criativos e textos que despertem curiosidade.
-6. Tom: animado, levemente irreverente, como um comentarista esportivo descontraído.
-7. Não cite nomes completos na descrição — use apenas o apelido/primeiro nome.
+4. Depois dos fixos, gere de 6 a 9 cards dinâmicos VARIADOS — cada um sobre um tema/ângulo DIFERENTE.
+   Use os blocos de dados acima para criar cards criativos e inéditos, por exemplo:
+   - 🎯 "Rei do Placar Exato" (maior % de cravadas) ou 📏 "Mais Preciso" (menor erro médio de gols)
+   - 🎲 "Chutômetro" (quem erra mais o placar, com bom humor e sem crueldade)
+   - 💣 "Goleador" (quem sempre aposta muitos gols) vs 🛡️ "Cauteloso" (placares magros)
+   - 🤝 "Rei do Empate" (mais palpites de empate)
+   - 🃏 "Placar Coringa" (o placar mais palpitado do bolão e quem abusa dele)
+   - 🕵️ "Caçador de Zebra" (quem pontuou nos jogos que quase ninguém acertou)
+   - ⚔️ "Rivalidade do Bolão" (a dupla mais divergente — narre como uma briga particular)
+   - 🏁 "Corrida pelo Topo" (quão apertada está a liderança, quantos ainda sonham)
+   - 🔻 "Zona de Perigo" (os últimos, com leveza e incentivo à virada)
+   - 👑 "Torcida do Campeão" (qual seleção o bolão mais escolheu como campeã)
+   - 🔥 "Sequência Quente" (maior sequência de acertos ativa / hat-trick de exatos)
+5. Ajuste os ângulos à fase atual (${fase}): em grupos foque em estilos/padrões de aposta e goleadas;
+   em mata-mata foque em quem pode virar, rivalidades no ranking, e acerto do campeão.
+6. NÃO repita o mesmo participante como protagonista em mais de 2 cards — espalhe os holofotes.
+7. Use emojis relevantes, títulos criativos e textos curtos que despertem curiosidade (no máx. 2 frases).
+8. Tom: animado, levemente irreverente, como um comentarista esportivo descontraído.
+9. Não cite nomes completos na descrição — use apenas o apelido/primeiro nome.
 ==========================================================`;
 
     await navigator.clipboard.writeText(data);
