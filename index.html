@@ -7443,12 +7443,14 @@ async function renderEstatisticas() {
     // ── SEÇÃO: IMPACTO POTENCIAL NO RANKING ───────────────────────────────────
     if (ranking.length >= 2) {
       const _maxPts = CFG.pts_exato || 10;
-      // Para a simulação usamos apenas jogos futuros (não iniciados), limitados a 6,
-      // evitando explosão combinatória (5^N por par) com muitos jogos sem resultado.
+      // Para a simulação usamos apenas jogos JÁ BLOQUEADOS (palpites públicos) e
+      // que ainda não começaram — "prestes a acontecer". Nunca jogos abertos, pois
+      // o cenário revelaria palpites que ainda estão ocultos para os participantes.
+      // Limitados a 6, evitando explosão combinatória (5^N por par).
       const _SIM_MAX = 6;
       const _nowForSim = Date.now();
       const _nextGames = _statNextGrp.items
-        .filter(x => x.start.getTime() > _nowForSim)
+        .filter(x => x.start.getTime() > _nowForSim && isPalpiteClosed(x.game, res[x.game.id]))
         .slice(0, _SIM_MAX)
         .map(x => x.game);
       // Max pts each user can gain from next group
