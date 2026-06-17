@@ -395,6 +395,12 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .rank-pos.gold{background:var(--gold);color:var(--dark-blue)}
 .rank-pos.silver{background:#C0C0C0;color:var(--dark-blue)}
 .rank-pos.bronze{background:#CD7F32;color:var(--dark-blue)}
+/* Toggle de tipo de classificação (Oficial × Por Pontos) */
+.rank-mode-toggle{display:inline-flex;gap:4px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:22px;padding:3px;margin-bottom:10px}
+.rank-mode-btn{background:transparent;border:none;color:var(--text-muted);font-weight:700;font-size:0.82rem;padding:7px 16px;border-radius:18px;cursor:pointer;transition:all .15s}
+.rank-mode-btn.active{background:var(--accent);color:#fff}
+.rank-mode-btn:hover:not(.active){color:var(--text)}
+.light-theme .rank-mode-toggle{background:rgba(0,0,0,.04)}
 .pts-badge{
   background:rgba(255,215,0,.12);color:var(--gold);
   font-weight:800;padding:3px 8px;border-radius:6px;font-size:0.85rem;
@@ -3742,113 +3748,105 @@ async function renderDashboard() {
       <span style="font-size:0.82rem;line-height:1.35"><b style="color:var(--gold)">Novidade:</b> toque no nome de qualquer participante para abrir o <b>perfil com estatísticas individuais</b> — acurácia, evolução, zebras, confrontos diretos e mais.</span>
     </div>`;
 
-    html += `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45">
-      <b style="color:var(--text)">#</b> = posição geral (tradicional: nº à frente + 1; usada para pódio e prêmios) ·
-      <b style="color:var(--text)">≈ pos</b> = posição adensada: empates reais ficam no mesmo nível após aplicar os critérios de desempate — só informativo.
+    html += `<div class="rank-mode-toggle" role="group" aria-label="Tipo de classificação">
+      <button class="rank-mode-btn${_rankMode==='oficial'?' active':''}" data-mode="oficial" onclick="setRankMode('oficial')">🏆 Ranking Oficial</button>
+      <button class="rank-mode-btn${_rankMode==='pontos'?' active':''}" data-mode="pontos" onclick="setRankMode('pontos')">📊 Por Pontos</button>
+    </div>
+    <div style="font-size:0.72rem;color:var(--text-muted);margin:0 0 12px;line-height:1.45">
+      <b style="color:var(--text)">Oficial:</b> usado para pódio e prêmios (empates pulam: 1º, 2º, 2º, 4º). ·
+      <b style="color:var(--text)">Por Pontos:</b> mostra empates sem pular posições (1º, 2º, 2º, 3º).
     </div>`;
 
+    // Posições: oficial (tradicional — empate pula: 1,2,2,4) e por pontos (densa
+    // — empate não pula: 1,2,2,3). Só dividem nível/posição quem empata em TODOS
+    // os critérios oficiais de desempate (_rankFullyTiedPair). A ordenação/pódio/
+    // prêmios sempre usam a oficial (_posArr).
+    const _posArr = _rankPositionsTieAware(ranking);
+    const _denseArr = []; let _dLvl = 0;
+    ranking.forEach((u,i) => { if (i === 0 || !_rankFullyTiedPair(ranking[i-1], u)) _dLvl++; _denseArr[i] = _dLvl; });
+    // 🔻 Zona de rebaixamento: 4 últimos (>=8 participantes e jogos lançados).
+    const _relegStart = (totalJogos > 0 && ranking.length >= 8) ? ranking.length - 4 : -1;
+    const _deltaTitle = 'Variação de posição por causa do último resultado lançado';
+
+    // Monta linhas (tabela) e cards (mobile) para o modo escolhido — uma única
+    // posição por linha. Reaproveitado pelo toggle (setRankMode) sem re-render geral.
+    const _buildRankBody = (mode) => {
+      const dense = mode === 'pontos';
+      let rows = '', cards = '';
+      ranking.forEach((u,i)=>{
+        const _inReleg = _relegStart >= 0 && i >= _relegStart;
+        const _relegRow = _inReleg ? ' style="background:rgba(255,68,68,.07)"' : '';
+        if (_inReleg && i === _relegStart) {
+          rows += `<tr><td colspan="10" style="background:rgba(255,68,68,.14);color:#ff6b6b;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 12px;text-align:center">🔻 Zona de Rebaixamento</td></tr>`;
+          cards += `<div style="background:rgba(255,68,68,.14);color:#ff6b6b;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 12px;text-align:center;border-radius:8px;margin:6px 0 8px">🔻 Zona de Rebaixamento</div>`;
+        }
+        const pos = dense ? _denseArr[i] : _posArr[i];
+        const posClass = pos===1?'gold':pos===2?'silver':pos===3?'bronze':'';
+        const isMe = u.uid===currentUser.uid;
+        const pct = totalJogos>0 ? Math.round(u.jogos/totalJogos*100) : 0;
+        const prevPos = dense ? denseDeltas[u.uid] : positionDeltas[u.uid];
+        const delta = prevPos ? prevPos - pos : null;
+        const deltaBadge = delta === null ? '' :
+          delta > 0 ? `<span title="${_deltaTitle}" style="font-size:0.65rem;font-weight:700;color:var(--green);display:block;line-height:1">↑${delta}</span>` :
+          delta < 0 ? `<span title="${_deltaTitle}" style="font-size:0.65rem;font-weight:700;color:#ff6b6b;display:block;line-height:1">↓${Math.abs(delta)}</span>` :
+          `<span title="${_deltaTitle}" style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
+        const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
+        const canSeeChampRow = champRevealed || isMe;
+        const champCell = !canSeeChampRow
+          ? `<span style="color:var(--text-muted);font-size:0.78rem">🔒</span>`
+          : (u.campeao
+            ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${teamFlag(u.campeao)} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
+            : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`);
+
+        // Tabela (desktop)
+        rows += `<tr class="${isMe?'is-me':''}"${_relegRow}>
+          <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}${_inReleg?'<span style="display:block;font-size:0.62rem;line-height:1" title="Zona de rebaixamento">🔻</span>':''}</td>
+          <td style="cursor:pointer" onclick="openUserProfile('${u.uid}')" title="Ver perfil e estatísticas"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
+          <td><span class="pts-badge">${u.pontos}</span></td>
+          <td class="text-green">${u.exatos}</td>
+          <td class="text-gold">${u.venc_saldo}</td>
+          <td class="text-gold">${u.apenas_venc}</td>
+          <td class="text-muted">${u.jogos}</td>
+          <td style="font-size:0.8rem">${champCell}</td>
+          <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${maxPts>0?Math.round(u.pontos/maxPts*100):0}%"></div></div>
+            <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
+          <td>${distLider}</td>
+        </tr>`;
+
+        // Card (mobile)
+        const movHtml = delta===null ? '' :
+          delta>0  ? `<span class="rank-mov-pos" title="${_deltaTitle}">↑${delta}</span>` :
+          delta<0  ? `<span class="rank-mov-neg" title="${_deltaTitle}">↓${Math.abs(delta)}</span>` :
+                     `<span class="rank-mov-zero" title="${_deltaTitle}">—</span>`;
+        cards += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="openUserProfile('${u.uid}')"${_inReleg?' style="border-color:rgba(255,68,68,.45);background:rgba(255,68,68,.06)"':''}>
+          <div class="rank-card-top">
+            <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}${_inReleg?'<span style="font-size:0.7rem" title="Zona de rebaixamento">🔻</span>':''}</div>
+            <div class="rank-card-name"><div class="rk-apelido">${esc(u.apelido)}</div><div class="rk-nome">${esc(u.nome)}</div></div>
+            <div class="rank-card-right"><span class="pts-badge">${u.pontos} pts</span><div style="font-size:0.72rem;margin-top:3px">${distLider}</div></div>
+          </div>
+          <div class="rank-card-chips">
+            <span class="rank-chip exact">🎯 ${u.exatos} Exatos</span>
+            <span class="rank-chip vsaldo">⚡ ${u.venc_saldo} V+Saldo</span>
+            <span class="rank-chip venc">✓ ${u.apenas_venc} Venc.</span>
+          </div>
+        </div>`;
+      });
+      return { rows, cards };
+    };
+    _rankBuildBody = _buildRankBody;
+    const _rb = _buildRankBody(_rankMode);
+
     html += `<div class="ranking-table-wrap"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
-        <table class="ranking-table" style="min-width:660px">
+        <table class="ranking-table" style="min-width:620px">
           <thead><tr>
-            <th title="Posição geral (ranking tradicional): nº de participantes à frente + 1. Usada para ordenação, pódio e prêmios.">#</th>
-            <th title="Posição adensada: empates reais ficam no mesmo nível após aplicar os critérios de desempate (pontos, exatos, vencedor+saldo, apenas vencedor, acerto do campeão). Apenas informativo." style="color:var(--text-muted)">≈ pos</th>
+            <th title="Posição na classificação selecionada (Oficial ou Por Pontos)">#</th>
             <th style="min-width:110px">Participante</th><th>Pontos</th>
             <th>Exatos</th><th>V+Saldo</th><th>Vencedor</th>
             <th>Jogos</th><th title="Palpite de Campeão">🏆 Campeão</th><th>%</th><th title="Distância para o líder">Dist.</th>
-          </tr></thead><tbody>`;
+          </tr></thead><tbody id="rank-tbody">${_rb.rows}</tbody></table></div></div>
+    <div class="ranking-cards" id="rank-cards">${_rb.cards}</div>`;
 
-    let cardsHtml = `<div class="ranking-cards">`;
-    // Posição com empate (ranking tradicional): empate total nos critérios
-    // recebe a MESMA posição; a próxima pula (1,1,3). Mesmo helper da imagem.
-    const _posArr = _rankPositionsTieAware(ranking);
-    // Posição DENSA (adensada): empatados no mesmo nível (1,1,1,2,2,3...). Dois
-    // jogadores só dividem o nível se empatarem em TODOS os critérios oficiais de
-    // desempate (pontos, exatos, vencedor+saldo, apenas vencedor, acerto do
-    // campeão) — mesma regra do _posArr. Apenas informação complementar;
-    // ordenação/pódio/prêmios usam _posArr (geral).
-    const _denseArr = []; let _dLvl = 0;
-    ranking.forEach((u,i) => { if (i === 0 || !_rankFullyTiedPair(ranking[i-1], u)) _dLvl++; _denseArr[i] = _dLvl; });
-    // 🔻 Zona de rebaixamento (alusão ao Brasileirão): marca os 4 últimos
-    // colocados. Só faz sentido com gente suficiente e jogos lançados — exige
-    // >=8 participantes para os 4 últimos serem minoria clara.
-    const _relegStart = (totalJogos > 0 && ranking.length >= 8) ? ranking.length - 4 : -1;
-    ranking.forEach((u,i)=>{
-      const _inReleg = _relegStart >= 0 && i >= _relegStart;
-      const _relegRow = _inReleg ? ' style="background:rgba(255,68,68,.07)"' : '';
-      // Faixa divisória antes do 1º rebaixado (tabela e cards).
-      if (_inReleg && i === _relegStart) {
-        html += `<tr><td colspan="11" style="background:rgba(255,68,68,.14);color:#ff6b6b;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 12px;text-align:center">🔻 Zona de Rebaixamento</td></tr>`;
-        cardsHtml += `<div style="background:rgba(255,68,68,.14);color:#ff6b6b;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 12px;text-align:center;border-radius:8px;margin:6px 0 8px">🔻 Zona de Rebaixamento</div>`;
-      }
-      const _isTiedPos = (i>0 && _posArr[i]===_posArr[i-1]) || (i<_posArr.length-1 && _posArr[i+1]===_posArr[i]);
-      const pos=_posArr[i];
-      const _dense=_denseArr[i];
-      const pct = totalJogos>0 ? Math.round(u.jogos/totalJogos*100) : 0;
-      const posClass = pos===1?'gold':pos===2?'silver':pos===3?'bronze':'';
-      const isMe = u.uid===currentUser.uid;
-      const prevPos = positionDeltas[u.uid];
-      const delta = prevPos ? prevPos - pos : null;
-      const _deltaTitle = 'Variação de posição por causa do último resultado lançado';
-      const deltaBadge = delta === null ? '' :
-        delta > 0 ? `<span title="${_deltaTitle}" style="font-size:0.65rem;font-weight:700;color:var(--green);display:block;line-height:1">↑${delta}</span>` :
-        delta < 0 ? `<span title="${_deltaTitle}" style="font-size:0.65rem;font-weight:700;color:#ff6b6b;display:block;line-height:1">↓${Math.abs(delta)}</span>` :
-        `<span title="${_deltaTitle}" style="font-size:0.65rem;color:var(--text-muted);display:block;line-height:1">=</span>`;
-      // Variação no ranking por ADENSAMENTO (denso) por causa do último resultado.
-      const prevDense = denseDeltas[u.uid];
-      const denseDelta = prevDense ? prevDense - _dense : null;
-      const _denseDeltaTitle = 'Variação na posição por adensamento por causa do último resultado lançado';
-      const denseDeltaBadge = denseDelta === null ? '' :
-        denseDelta > 0 ? `<span title="${_denseDeltaTitle}" style="font-size:0.6rem;font-weight:700;color:var(--green)">↑${denseDelta}</span>` :
-        denseDelta < 0 ? `<span title="${_denseDeltaTitle}" style="font-size:0.6rem;font-weight:700;color:#ff6b6b">↓${Math.abs(denseDelta)}</span>` :
-        `<span title="${_denseDeltaTitle}" style="font-size:0.6rem;color:var(--text-muted)">=</span>`;
-      const distLider = pos===1 ? '<span style="color:var(--gold)">👑</span>' : `<span style="font-size:0.8rem;color:var(--text-muted)">-${ranking[0].pontos - u.pontos}</span>`;
-      const isOwnRow = u.uid === currentUser.uid;
-      const tiedMark = _isTiedPos ? `<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1;cursor:help" title="Empate total: mesma posição (empatados em todos os critérios)">=</span>` : '';
-      const canSeeChampRow = champRevealed || isOwnRow;
-      const champCell = !canSeeChampRow
-        ? `<span style="color:var(--text-muted);font-size:0.78rem">🔒</span>`
-        : (u.campeao
-          ? `<span title="${esc(u.campeao)}" style="${u.acertou_campeao?'color:var(--green);font-weight:700':'color:var(--text-muted)'}">${teamFlag(u.campeao)} ${esc(u.campeao.split(' ')[0])}${u.acertou_campeao?` ✅ <small>+${u.bonus_campeao}</small>`:''}</span>`
-          : `<span style="color:var(--text-muted);font-size:0.78rem">—</span>`);
-
-      // Tabela (desktop)
-      html += `<tr class="${isMe?'is-me':''}"${_relegRow}>
-        <td><span class="rank-pos ${posClass}">${pos}</span>${deltaBadge}${tiedMark}${_inReleg?'<span style="display:block;font-size:0.62rem;line-height:1" title="Zona de rebaixamento">🔻</span>':''}</td>
-        <td style="color:var(--text-muted);font-weight:600;font-size:0.85rem" title="Posição por pontuação (ranking denso)">${_dense}º pos ${denseDeltaBadge}</td>
-        <td style="cursor:pointer" onclick="openUserProfile('${u.uid}')" title="Ver perfil e estatísticas"><div class="fw-bold" style="color:var(--gold)">${esc(u.apelido)}</div><div style="font-size:0.75rem;color:var(--text-muted)">${esc(u.nome)}</div></td>
-        <td><span class="pts-badge">${u.pontos}</span></td>
-        <td class="text-green">${u.exatos}</td>
-        <td class="text-gold">${u.venc_saldo}</td>
-        <td class="text-gold">${u.apenas_venc}</td>
-        <td class="text-muted">${u.jogos}</td>
-        <td style="font-size:0.8rem">${champCell}</td>
-        <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${maxPts>0?Math.round(u.pontos/maxPts*100):0}%"></div></div>
-          <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
-        <td>${distLider}</td>
-      </tr>`;
-
-      // Card (mobile)
-      const movHtml = delta===null ? '' :
-        delta>0  ? `<span class="rank-mov-pos" title="${_deltaTitle}">↑${delta}</span>` :
-        delta<0  ? `<span class="rank-mov-neg" title="${_deltaTitle}">↓${Math.abs(delta)}</span>` :
-                   `<span class="rank-mov-zero" title="${_deltaTitle}">—</span>`;
-      cardsHtml += `<div class="rank-card${posClass?' rank-card-'+posClass:''}${isMe?' is-me':''}" onclick="openUserProfile('${u.uid}')"${_inReleg?' style="border-color:rgba(255,68,68,.45);background:rgba(255,68,68,.06)"':''}>
-        <div class="rank-card-top">
-          <div class="rank-card-pos"><span class="rank-pos ${posClass}">${pos}</span>${movHtml}${_inReleg?'<span style="font-size:0.7rem" title="Zona de rebaixamento">🔻</span>':''}<span style="font-size:0.58rem;color:var(--text-muted);display:block;line-height:1.1;margin-top:2px" title="Posição por pontuação (ranking denso)">≈ ${_dense}º pos ${denseDeltaBadge}</span></div>
-          <div class="rank-card-name"><div class="rk-apelido">${esc(u.apelido)}</div><div class="rk-nome">${esc(u.nome)}</div></div>
-          <div class="rank-card-right"><span class="pts-badge">${u.pontos} pts</span><div style="font-size:0.72rem;margin-top:3px">${distLider}</div></div>
-        </div>
-        <div class="rank-card-chips">
-          <span class="rank-chip exact">🎯 ${u.exatos} Exatos</span>
-          <span class="rank-chip vsaldo">⚡ ${u.venc_saldo} V+Saldo</span>
-          <span class="rank-chip venc">✓ ${u.apenas_venc} Venc.</span>
-        </div>
-      </div>`;
-    });
-    cardsHtml += `</div>`;
-
-    html += `</tbody></table></div></div>${cardsHtml}
-    <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
+    html += `<p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
       ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>
     <div class="ranking-share-row">
       <button class="btn-share" onclick="shareMyRankingCard()">📸 Gerar imagem — Minha posição</button>
@@ -6586,6 +6584,23 @@ function _calcMomentum(ranking, allPals, res, n = 5) {
     });
   });
   return { slides, recentGamesCount };
+}
+
+// ── Modo de classificação do ranking (Oficial × Por Pontos) ───────────────────
+// 'oficial' = tradicional (empate pula posição); 'pontos' = denso (não pula).
+// Padrão Oficial; mantém a escolha durante a sessão (sem persistir após reload).
+let _rankMode = 'oficial';
+let _rankBuildBody = null; // closure setada pelo renderDashboard com os dados atuais
+function setRankMode(mode) {
+  if (mode !== 'oficial' && mode !== 'pontos') return;
+  _rankMode = mode;
+  document.querySelectorAll('.rank-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  if (!_rankBuildBody) return;
+  const { rows, cards } = _rankBuildBody(mode);
+  const tb = document.getElementById('rank-tbody');
+  const cc = document.getElementById('rank-cards');
+  if (tb) tb.innerHTML = rows;
+  if (cc) cc.innerHTML = cards;
 }
 
 // Controle do carrossel do card "Momento dos Participantes": auto-avança, navegação
