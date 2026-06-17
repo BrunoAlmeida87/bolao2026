@@ -9037,8 +9037,9 @@ function computeLeaderGapHistory(d) {
     .filter(g => _hasFullResult(res[g.id]))
     .sort((a, b) => kickoff(a) - kickoff(b));
   if (playedGames.length < 2) return null;
-  // Agrupa por dia mantendo a ordem cronológica.
-  const dayKey = g => { const r = res[g.id] || {}; return r.date_override ? _isoToGameDate(r.date_override) : (g.date || '—'); };
+  // Agrupa por dia mantendo a ordem cronológica. Usa _gameFilterISO p/ respeitar
+  // a regra de madrugada (00h–02h59 pertence à leva da véspera), igual ao resto do app.
+  const dayKey = g => _gameFilterISO(g, res[g.id]);
   const dayOrder = [], dayGames = {};
   playedGames.forEach(g => { const k = dayKey(g); if (!dayGames[k]) { dayGames[k] = []; dayOrder.push(k); } dayGames[k].push(g.id); });
   if (dayOrder.length < 2) return null;
@@ -9048,7 +9049,7 @@ function computeLeaderGapHistory(d) {
     const rk = _computeRankingForGameIds(users, res, allPals, cum);
     const leaderPts = rk.length ? rk[0].pontos : 0;
     const gap = {}; rk.forEach(u => gap[u.uid] = leaderPts - u.pontos);
-    const lbl = _gxDayLabel(k);
+    const lbl = _gxDayLabel(_isoToGameDate(k));
     return { label: lbl, short: lbl, gap };
   });
   return { series };
