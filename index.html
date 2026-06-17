@@ -7540,7 +7540,7 @@ async function renderEstatisticas() {
           explain = `se <b>${esc(s.label)}</b> terminar <b>${_fmtScore(s)}</b>: ${uName} faria <b>+${s.gainChal}</b> pts e ${tName} faria <b>+${s.gainTgt}</b> pts.`;
         } else if (scenarios && scenarios.length > 1) {
           const lis = scenarios.map(s => `<li><b>${esc(s.label)}</b> = <b>${_fmtScore(s)}</b> → ${uName} +${s.gainChal} / ${tName} +${s.gainTgt}</li>`).join('');
-          explain = `<details class="ot-details"><summary>ver cenário (${scenarios.length} jogos)</summary><ul>${lis}</ul>`
+          explain = `<details class="ot-details" open><summary>ver cenário (${scenarios.length} jogos)</summary><ul>${lis}</ul>`
             + `<div style="margin-top:2px">Total: ${uName} <b>+${gainChal}</b> pts vs ${tName} <b>+${gainTgt}</b> pts.</div></details>`;
         } else {
           explain = gainTgt > 0 ? `(+${gainChal} pts vs +${gainTgt} pts do alvo)` : `(+${gainChal} pts, alvo não pontua)`;
@@ -7677,6 +7677,9 @@ async function renderEstatisticas() {
       </div>`;
     }
 
+    // Buffer da sub-aba "Outras Stats" (estatísticas menos vistas).
+    let _outrasHtml = '';
+
     // ── Rankings alternativos ──
     if (totalJogos > 0 && ranking.length > 0) {
       const mkAward = (emoji, title, color, user, sub) => user ? `
@@ -7686,7 +7689,7 @@ async function renderEstatisticas() {
           <div style="font-size:1rem;font-weight:700;color:${color}">${esc(user.apelido||user.nome)}</div>
           <div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">${sub}</div>
         </div>` : '';
-      html += `<div class="card">
+      _outrasHtml += `<div class="card">
         <div class="card-title">🏅 Rankings Alternativos</div>
         <div class="stats-alt-grid">
           ${mkAward('🎯','Melhor Sniper','var(--gold)',melhorSniper,`${melhorSniper?.exatos||0} placares exatos`)}
@@ -7768,7 +7771,7 @@ async function renderEstatisticas() {
       }
 
       if (seqHtml) {
-        html += `<div class="card">
+        _outrasHtml += `<div class="card">
           <div class="card-title">🏆 Sequências & Recordes</div>
           <div style="margin-top:14px">${seqHtml}</div>
         </div>`;
@@ -7789,7 +7792,7 @@ async function renderEstatisticas() {
         return { u, profile, icon, color, avgGols, empPct };
       }).filter(Boolean);
       if (profiles.length) {
-        html += `<div class="card">
+        _outrasHtml += `<div class="card">
           <div class="card-title">🎭 Perfis de Apostador</div>
           <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Estilo de jogo baseado na média de gols palpitados — não tem a ver com acertos.</div>
           <div style="display:flex;flex-direction:column;gap:6px">
@@ -7859,7 +7862,7 @@ async function renderEstatisticas() {
     }).filter(Boolean).sort((a,b)=>b.count/b.total-a.count/a.total);
 
     if (favPlacares.length >= 3) {
-      html += `<div class="card">
+      _outrasHtml += `<div class="card">
         <div class="card-title">🔁 Placar Favorito</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">O placar que cada um mais aposta — revela o "palpite padrão" de cada participante.</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -7969,7 +7972,7 @@ async function renderEstatisticas() {
     const topPlacares = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1]).slice(0, 12);
     if (topPlacares.length > 0) {
       const maxFreq = topPlacares[0][1] || 1;
-      html += `<div class="card">
+      _outrasHtml += `<div class="card">
         <div class="card-title">🧠 Ranking de Placares (Top 12)</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px">
           ${topPlacares.map(([placar, qtd])=>`
@@ -8103,8 +8106,8 @@ async function renderEstatisticas() {
       html += `</tbody></table></div></div>`;
     }
 
-    // ── Cards originais ──
-    html += `<div class="card">
+    // ── Cards originais (movidos para "Outras Stats") ──
+    _outrasHtml += `<div class="card">
         <div class="card-title">🏆 Jogo Mais Acertado (Placar Exato)</div>
         ${maiorAcerto.id ? `
           <div style="margin-top:12px">
@@ -8142,14 +8145,14 @@ async function renderEstatisticas() {
     const isAdminEst = currentUserDoc?.role === 'admin';
     const champEstRevealed = isAdminEst || CFG.campeao_locked === true || !!finalChampionEst;
     if (!champEstRevealed) {
-      html += `<div class="card" style="text-align:center;padding:20px">
+      _outrasHtml += `<div class="card" style="text-align:center;padding:20px">
         <div style="font-size:1.5rem;margin-bottom:8px">🔒</div>
         <div style="font-weight:700;color:var(--gold);margin-bottom:4px">Estatísticas de Campeão</div>
         <div style="font-size:0.85rem;color:var(--text-muted)">Visível após o bloqueio das escolhas de campeão pelo admin</div>
       </div>`;
     } else if (champVotesArr.length > 0) {
       const maxVotes = champVotesArr[0][1] || 1;
-      html += `<div class="card">
+      _outrasHtml += `<div class="card">
         <div class="card-title" style="margin-bottom:14px">🏆 Palpites de Campeão (${totalVotes} escolha${totalVotes!==1?'s':''})</div>
         ${finalChampionEst?`<div class="alert alert-success" style="margin-bottom:12px;font-size:0.82rem">🏆 Campeã definida: <b>${teamFlag(finalChampionEst)} ${esc(finalChampionEst)}</b></div>`:''}
         ${champVotesArr.map(([team,count])=>{
@@ -8168,8 +8171,12 @@ async function renderEstatisticas() {
       </div>`;
     }
 
-    // Fecha a sub-aba clássica e prepara a sub-aba "Gráficos" (renderizada sob demanda).
-    html += '</div><div id="stats-tab-graficos" style="display:none"></div>';
+    // Fecha a sub-aba clássica, monta "Outras Stats" e prepara "Gráficos" (sob demanda).
+    html += '</div>'
+      + '<div id="stats-tab-outras" style="display:none"><div class="section-title">🏅 Outras Stats</div>'
+      + (_outrasHtml || '<div class="card"><div class="gx-empty">Sem estatísticas para mostrar ainda.</div></div>')
+      + '</div>'
+      + '<div id="stats-tab-graficos" style="display:none"></div>';
     // Guarda em memória todos os dados já carregados para os Gráficos reusarem
     // (zero leituras Firestore adicionais).
     _graficosData = { users, res, allPals, champPicks, ranking, analiseJogos, jogosComResultado, userAccStats };
@@ -8197,6 +8204,7 @@ let _graficosPendingTab = false;// abrir já na aba Gráficos (ex.: deep-link)
 function _gxSubTabsBar() {
   return `<div class="gx-subtabs">
     <button class="gx-subtab active" data-gxtab="classic" onclick="switchStatsSubTab('classic')">📈 Estatísticas</button>
+    <button class="gx-subtab" data-gxtab="outras" onclick="switchStatsSubTab('outras')">🏅 Outras Stats</button>
     <button class="gx-subtab" data-gxtab="graficos" onclick="switchStatsSubTab('graficos')">📊 Gráficos</button>
   </div>`;
 }
@@ -8206,8 +8214,10 @@ function switchStatsSubTab(tab) {
   if (!cont) return;
   cont.querySelectorAll('.gx-subtab').forEach(b => b.classList.toggle('active', b.dataset.gxtab === tab));
   const classic = document.getElementById('stats-tab-classic');
+  const outras = document.getElementById('stats-tab-outras');
   const graf = document.getElementById('stats-tab-graficos');
   if (classic) classic.style.display = (tab === 'classic') ? '' : 'none';
+  if (outras) outras.style.display = (tab === 'outras') ? '' : 'none';
   if (graf) graf.style.display = (tab === 'graficos') ? '' : 'none';
   if (tab === 'graficos' && !_graficosRendered) { renderGraficos(); _graficosRendered = true; }
 }
