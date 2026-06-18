@@ -3377,8 +3377,8 @@ const TIMER_CLUSTER_GAP_MS = 8 * 3600000;
 // (sem resultado lançado) passa para "aguardando oficialização".
 const MATCH_DURATION_MS = 120 * 60000;
 // Antecedência com que QUALQUER jogo aparece na tela inicial (com timer regressivo),
-// independentemente da "leva" automática por proximidade: 24h antes do início.
-const NEXT_SHOW_BEFORE_MS = 24 * 3600000;
+// independentemente da "leva" automática por proximidade: 30h antes do início.
+const NEXT_SHOW_BEFORE_MS = 30 * 3600000;
 
 // Conjunto de partidas exibidas nos timers do dashboard.
 // Inclui: (a) jogos futuros da próxima "leva" (agrupados por proximidade, gap ≤ 8h)
@@ -3421,7 +3421,7 @@ function _nextGamesGroup() {
     if (started) return true;                          // em andamento/aguardando até ter resultado
     if (mode === 'show') return true;                  // futuro fixado manualmente
     if (wave.has(x.game.id)) return true;              // futuro dentro da leva automática
-    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // qualquer jogo a < 24h do início
+    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // qualquer jogo a < 30h do início
   });
   if (!items.length) return { key:'none', nextRenderAt:null, items:[] };
 
@@ -3434,7 +3434,7 @@ function _nextGamesGroup() {
     const r = _dashResults[x.game.id] || {};
     if (_resolved(x.game.id)) { _consider(_resultHideAfterMs(r)); return; }
     _consider(x.start.getTime());                         // futuro → em andamento
-    _consider(x.start.getTime() - NEXT_SHOW_BEFORE_MS);   // entra na janela de 24h
+    _consider(x.start.getTime() - NEXT_SHOW_BEFORE_MS);   // entra na janela de 30h
   });
   if (nextRenderAt === Infinity) nextRenderAt = null;
   return { key: items.map(x => x.game.id).join(','), nextRenderAt, items };
@@ -6853,7 +6853,7 @@ function _getStatNextGroupWave(res) {
     if (started) return !_resolved(x.game.id);
     if (mode === 'show') return true;
     if (wave.has(x.game.id)) return true;              // leva automática por proximidade
-    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // mesma regra do dashboard: < 24h do início
+    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // mesma regra do dashboard: < 30h do início
   });
   return { items };
 }
