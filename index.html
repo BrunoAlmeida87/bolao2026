@@ -1934,7 +1934,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.55;margin:0 0 14px">Mudamos a regra de bloqueio dos palpites. Agora cada jogo trava <b>exatamente 1 hora (60 min) antes do apito inicial</b> — e não mais às 22h da véspera.</p>
     <div style="text-align:left;display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
       <div style="display:flex;gap:9px;align-items:flex-start"><span>⚽</span><span style="font-size:0.85rem;line-height:1.45"><b>Exemplo:</b> jogo às <b>16h</b> → palpites travam às <b>15h</b>. Jogo às <b>21h</b> → travam às <b>20h</b>.</span></div>
-      <div style="display:flex;gap:9px;align-items:flex-start"><span>⏳</span><span style="font-size:0.85rem;line-height:1.45">Os jogos aparecem na tela inicial <b>24h antes</b>, com a contagem regressiva <b>até o início</b> da partida (mesmo depois de travar).</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>⏳</span><span style="font-size:0.85rem;line-height:1.45">Os jogos aparecem na tela inicial <b>30h antes</b>, com a contagem regressiva <b>até o início</b> da partida (mesmo depois de travar).</span></div>
       <div style="display:flex;gap:9px;align-items:flex-start"><span>🏁</span><span style="font-size:0.85rem;line-height:1.45">Após o resultado oficial, o card fica visível por mais <b>45 min</b> com o placar final.</span></div>
       <div style="display:flex;gap:9px;align-items:flex-start"><span>🔔</span><span style="font-size:0.85rem;line-height:1.45">Dica: palpite com antecedência para não perder o prazo de cada jogo!</span></div>
     </div>
@@ -3426,7 +3426,7 @@ function _nextGamesGroup() {
   if (!items.length) return { key:'none', nextRenderAt:null, items:[] };
 
   // nextRenderAt = próximo instante que muda QUEM aparece (gatilho de re-render do
-  // _tick): início de um jogo futuro, entrada na janela de 24h, ou fim dos 45min
+  // _tick): início de um jogo futuro, entrada na janela de 30h, ou fim dos 45min
   // pós-resultado. O menor instante futuro entre todas as transições. null se não houver.
   let nextRenderAt = Infinity;
   const _consider = t => { if (t !== null && t > now && t < nextRenderAt) nextRenderAt = t; };
@@ -3516,7 +3516,7 @@ function _startCountdownTimer() {
     if (!wrap2) { clearInterval(_countdownTimer); _countdownTimer = null; return; }
     const now = Date.now();
     // Re-renderiza quando muda QUEM aparece: um futuro chega ao início, um jogo entra
-    // na janela de 24h, ou um resultado completa os 45min e deve sumir do card.
+    // na janela de 30h, ou um resultado completa os 45min e deve sumir do card.
     if (group.nextRenderAt !== null && now >= group.nextRenderAt) {
       group = _nextGamesGroup();
       wrap2.innerHTML = _buildNextGamesHtml(group);
