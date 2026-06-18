@@ -4898,7 +4898,7 @@ function renderRegras() {
             <span style="font-size:1.5rem;min-width:32px">5️⃣</span>
             <div>
               <div style="font-weight:700;color:var(--white);margin-bottom:4px">Explore as estatísticas</div>
-              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">A aba <strong>📈 Estatísticas</strong> traz precisão de acerto, sequências, rankings alternativos (🎯 Melhor Sniper, 💀 Mais Zicado, 🤝 Rei dos Empates) e insights automáticos sobre o bolão.</p>
+              <p class="text-muted" style="font-size:0.88rem;line-height:1.6">A aba <strong>📈 Estatísticas</strong> traz precisão de acerto, sequências, rankings alternativos (🎯 Melhor Sniper, 💀 Mais Zicado, 🤝 Rei dos Empates) e a evolução do ranking.</p>
             </div>
           </div>
         </div>
@@ -6488,35 +6488,6 @@ function closePerfilModal() {
   if(_perfilEscHandler){document.removeEventListener('keydown',_perfilEscHandler);_perfilEscHandler=null;}
 }
 
-function generateInsights(ranking, userAccStats, analiseJogos, res) {
-  const insights = [];
-  ranking.forEach(u => {
-    const s = userAccStats[u.uid];
-    if (s && s.currentStreak >= 3)
-      insights.push(`🔥 <b>${esc(u.apelido || u.nome)}</b> está em alta com ${s.currentStreak} acertos seguidos!`);
-  });
-  if (ranking.length >= 2 && ranking[0].pontos > 0) {
-    const diff = ranking[0].pontos - ranking[1].pontos;
-    if (diff > 0) insights.push(`👑 <b>${esc(ranking[0].apelido || ranking[0].nome)}</b> lidera com ${diff} pts de vantagem`);
-    else insights.push(`⚔️ Empate na liderança entre <b>${esc(ranking[0].apelido || ranking[0].nome)}</b> e <b>${esc(ranking[1].apelido || ranking[1].nome)}</b>!`);
-  }
-  const withCount = ranking.filter(u => userAccStats[u.uid] && userAccStats[u.uid].count > 0);
-  if (withCount.length > 0) {
-    const best = withCount.slice().sort((a,b) => parseFloat(userAccStats[b.uid].acertoPct) - parseFloat(userAccStats[a.uid].acertoPct))[0];
-    insights.push(`💎 <b>${esc(best.apelido || best.nome)}</b> tem o melhor aproveitamento: ${userAccStats[best.uid].acertoPct}%`);
-  }
-  Object.entries(analiseJogos).forEach(([jid, data]) => {
-    if (data.palpites.length > 0 && data.exatos === 0 && data.venc_saldo === 0 && data.apenas_venc === 0)
-      insights.push(`😱 Ninguém acertou o resultado de <b>${esc(data.game?.h||jid)} × ${esc(data.game?.a||'')}</b>`);
-  });
-  if (withCount.length > 0) {
-    const sniper = withCount.slice().sort((a,b) => b.exatos - a.exatos)[0];
-    if (sniper.exatos > 0)
-      insights.push(`🎯 <b>${esc(sniper.apelido || sniper.nome)}</b> é o melhor sniper com ${sniper.exatos} placares exatos!`);
-  }
-  return insights;
-}
-
 function _computeRankingForGameIds(users, resultados, allPalpites, gameIds) {
   const gameSet = new Set(gameIds || []);
   return users
@@ -7045,23 +7016,19 @@ function _fmtAITimestamp(cache) {
 
 function _buildBumpChart(users, res, allPals) {
   if (!users.length) return '';
-  const grR1 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id));
-  const grR2 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id));
-  const grR3 = Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id));
-  const phases = [
-    { label:'Rodada 1', newIds: grR1 },
-    { label:'Rodada 2', newIds: grR2 },
-    { label:'Rodada 3', newIds: grR3 },
-    ...Object.values(ELIM_DATA).map(d=>({ label: d.label, newIds: d.games.map(g=>g.id) }))
-  ];
+  // Checkpoints por DIA (Brasília): cada dia com pelo menos um resultado vira um
+  // ponto no eixo X (mais granular que por rodada). _gameFilterISO cola jogos de
+  // madrugada no dia anterior.
+  const resGames = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
+  const dayOf = g => _gameFilterISO(g, res[g.id]);
+  const days = [...new Set(resGames.map(dayOf))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
   let cumIds = [];
   const checkpoints = [];
-  phases.forEach(ph => {
-    const hasNew = ph.newIds.some(id => res[id] && _hasFullResult(res[id]));
-    cumIds = [...cumIds, ...ph.newIds];
-    if (hasNew) checkpoints.push({ label: ph.label, gameIds: [...cumIds] });
+  days.forEach(d => {
+    cumIds = cumIds.concat(resGames.filter(g => dayOf(g) === d).map(g => g.id));
+    checkpoints.push({ label: _isoToGameDate(d), gameIds: [...cumIds] });
   });
-  if (checkpoints.length < 2) return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem">São necessárias pelo menos 2 rodadas com resultados para exibir o gráfico</div>`;
+  if (checkpoints.length < 2) return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem">São necessários pelo menos 2 dias com resultados para exibir o gráfico</div>`;
   const rankingsAtCp = checkpoints.map(cp => _computeRankingForGameIds(users, res, allPals, cp.gameIds));
   const finalRanking = rankingsAtCp[rankingsAtCp.length - 1];
   const n = users.length, numCp = checkpoints.length;
@@ -7078,7 +7045,8 @@ function _buildBumpChart(users, res, allPals) {
   let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:320px">`;
   // Grid
   for (let r=1;r<=n;r++) { const y=yFor(r); svg+=`<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="rgba(255,255,255,.05)" stroke-width="1"/><text x="${padL-4}" y="${y+3.5}" text-anchor="end" font-size="9" fill="rgba(255,255,255,.3)">${r}°</text>`; }
-  checkpoints.forEach((cp,i) => { const x=xFor(i); svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.1)" stroke-width="1" stroke-dasharray="3,4"/><text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.45)">${esc(cp.label)}</text>`; });
+  const xLblStep = Math.ceil(numCp/8); // afina os rótulos quando há muitos dias
+  checkpoints.forEach((cp,i) => { const x=xFor(i); const showLbl=(i%xLblStep===0||i===numCp-1); svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.1)" stroke-width="1" stroke-dasharray="3,4"/>${showLbl?`<text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.45)">${esc(cp.label)}</text>`:''}`; });
   // Lines per user
   users.forEach(u => {
     const color = uidColor[u.uid]||'#888';
@@ -7264,9 +7232,6 @@ async function renderEstatisticas() {
 
     // Head-to-head mais "quente"
     const rivalidade = _calcHeadToHead(users, allPals, res);
-
-    // Insights automáticos
-    const insights = generateInsights(ranking, userAccStats, analiseJogos, res);
 
     // ── SEÇÃO: PRÓXIMA(S) PARTIDA(S) ──────────────────────────────────────────
     const _statNextGrp = _getStatNextGroupWave(res);
@@ -7737,21 +7702,11 @@ async function renderEstatisticas() {
     const bumpSvg = _buildBumpChart(users, res, allPals);
     html += `<div class="card">
       <div class="card-title">📈 Evolução do Ranking</div>
-      <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Posição de cada participante ao longo das rodadas. Linha dourada = líder atual.</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Posição de cada participante ao longo dos dias. Linha dourada = líder atual.</div>
       <div class="bump-chart-wrap">${bumpSvg}</div>
     </div>`;
 
     // (A "Análise da IA" agora aparece só no carrossel do dashboard.)
-
-    // ── Insights automáticos ──
-    if (insights.length > 0) {
-      html += `<div class="card">
-        <div class="card-title">💡 Insights do Bolão</div>
-        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
-          ${insights.map(i=>`<div style="background:rgba(255,255,255,0.04);border-left:3px solid var(--gold);border-radius:6px;padding:10px 14px;font-size:0.88rem;line-height:1.4">${i}</div>`).join('')}
-        </div>
-      </div>`;
-    }
 
     // ── Momento dos Participantes (carrossel de destaques) ──
     {
