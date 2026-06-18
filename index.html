@@ -7083,8 +7083,8 @@ function _buildBumpChart(users, res, allPals) {
     return `<span class="bump-chip" data-uid="${u.uid}" data-color="${color}" onclick="_bumpToggle('${u.uid}')"><span class="bump-chip-dot" style="background:${color}"></span>${nm}</span>`;
   }).join('');
   return svg
-    + `<div style="font-size:0.72rem;color:var(--text-muted);margin:10px 0 6px">👆 Toque num nome (no gráfico ou abaixo) para <b>destacar</b>. Pode escolher vários.</div>`
-    + `<div id="bump-chips" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow:auto">`
+    + `<div class="no-capture" style="font-size:0.72rem;color:var(--text-muted);margin:10px 0 6px">👆 Toque num nome (no gráfico ou abaixo) para <b>destacar</b>. Pode escolher vários.</div>`
+    + `<div id="bump-chips" class="no-capture" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow:auto">`
     + `<span id="bump-clear" class="bump-chip" style="display:none;border-style:dashed" onclick="_bumpClear()">✕ limpar</span>`
     + chips + `</div>`;
 }
@@ -12495,7 +12495,7 @@ async function shareStatCard(btn) {
   try {
     btn.disabled = true; btn.textContent = '⏳';
     await _loadHtml2Canvas();
-    hidden.forEach(el => { el.dataset._vis = el.style.visibility; el.style.visibility = 'hidden'; });
+    hidden.forEach(el => { el.dataset._disp = el.style.display; el.style.display = 'none'; });
     const bg = getComputedStyle(document.body).backgroundColor || '#0A1628';
     const canvas = await html2canvas(card, { scale: 2, backgroundColor: bg, useCORS: true });
     const title = (card.querySelector('.card-title')?.textContent
@@ -12505,7 +12505,7 @@ async function shareStatCard(btn) {
   } catch(e) {
     showToast('Erro ao gerar imagem: ' + (e.message || e), 'error');
   } finally {
-    hidden.forEach(el => { el.style.visibility = el.dataset._vis || ''; delete el.dataset._vis; });
+    hidden.forEach(el => { el.style.display = el.dataset._disp || ''; delete el.dataset._disp; });
     btn.disabled = false; btn.textContent = prevTxt;
   }
 }
