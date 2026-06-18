@@ -1931,8 +1931,8 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.55;margin:0 0 14px">Mudamos a regra de bloqueio dos palpites. Agora cada jogo trava <b>exatamente 1 hora (60 min) antes do apito inicial</b> — e não mais às 22h da véspera.</p>
     <div style="text-align:left;display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
       <div style="display:flex;gap:9px;align-items:flex-start"><span>⚽</span><span style="font-size:0.85rem;line-height:1.45"><b>Exemplo:</b> jogo às <b>16h</b> → palpites travam às <b>15h</b>. Jogo às <b>21h</b> → travam às <b>20h</b>.</span></div>
-      <div style="display:flex;gap:9px;align-items:flex-start"><span>⏳</span><span style="font-size:0.85rem;line-height:1.45">Os jogos aparecem na tela inicial <b>30h antes</b>, com a contagem regressiva <b>até o início</b> da partida (mesmo depois de travar).</span></div>
-      <div style="display:flex;gap:9px;align-items:flex-start"><span>🏁</span><span style="font-size:0.85rem;line-height:1.45">Após o resultado oficial, o card fica visível por mais <b>45 min</b> com o placar final.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>⏳</span><span style="font-size:0.85rem;line-height:1.45">Os jogos aparecem na tela inicial <b>30h antes</b>. A contagem regressiva vai <b>até o bloqueio</b> dos palpites; quando trava, ela passa a contar <b>até o início</b> da partida.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>🏁</span><span style="font-size:0.85rem;line-height:1.45">Depois do placar final, o card fica mais <b>45 min</b> na tela e mostra a contagem para <b>sair</b>.</span></div>
       <div style="display:flex;gap:9px;align-items:flex-start"><span>🔔</span><span style="font-size:0.85rem;line-height:1.45">Dica: palpite com antecedência para não perder o prazo de cada jogo!</span></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
@@ -3532,20 +3532,30 @@ function _startCountdownTimer() {
         if (card) { card.classList.remove('locked-soon'); card.classList.add('in-progress'); }
         if (note) {
           note.style.display = '';
-          note.textContent = remMin !== null ? `🏁 Resultado oficial — sai em ${remMin} min` : '🏁 Resultado oficial';
+          note.textContent = remMin !== null ? `🏁 Placar final — o card sai em ${remMin} min` : '🏁 Placar final';
         }
         if (distribWrap) {
           if (!distribWrap.innerHTML) distribWrap.innerHTML = _bolaoDistribBarsHtml(game, _dashBolaoDistrib[game.id]);
           if (distribWrap.innerHTML) distribWrap.style.display = 'block';
         }
       } else if (diff > 0) {
-        // Jogo ainda não começou: o timer sempre conta para o INÍCIO da partida —
-        // antes e depois do bloqueio (1h antes). O bloqueio só muda o visual/nota.
-        cd.textContent = _fmtDiff(diff);
-        if (card) { card.classList.toggle('locked-soon', lockedSoon); card.classList.remove('in-progress'); }
-        if (note) {
-          note.style.display = '';
-          note.textContent = lockedSoon ? '🔒 Palpites encerrados' : `Bloqueio: ${_lockDisplayStr(lockAt)}`;
+        // Jogo ainda não começou. O timer tem DUAS fases, ancoradas no bloqueio:
+        //  (1) palpites ABERTOS → conta a regressiva até o BLOQUEIO (1h antes do início);
+        //  (2) ao TRAVAR → passa a contar até o INÍCIO da partida.
+        const lockDiff = lockAt ? (lockAt.getTime() - now) : -1;
+        if (!lockedSoon && lockDiff > 0) {
+          // Fase 1: ainda aberto e o bloqueio está no futuro → conta até travar.
+          cd.textContent = _fmtDiff(lockDiff);
+          if (card) { card.classList.remove('locked-soon'); card.classList.remove('in-progress'); }
+          if (note) { note.style.display = ''; note.textContent = `🔓 Bloqueio dos palpites: ${_lockDisplayStr(lockAt)}`; }
+        } else {
+          // Fase 2: já travou (ou o bloqueio já passou) → conta até o início do jogo.
+          cd.textContent = _fmtDiff(diff);
+          if (card) { card.classList.toggle('locked-soon', lockedSoon); card.classList.remove('in-progress'); }
+          if (note) {
+            note.style.display = '';
+            note.textContent = lockedSoon ? '🔒 Palpites encerrados · falta para o início' : `Bloqueio: ${_lockDisplayStr(lockAt)}`;
+          }
         }
         if (distribWrap) {
           // Injeta as barras no momento em que a partida bloqueia (caso o dashboard já
