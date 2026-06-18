@@ -1369,9 +1369,6 @@ body.light-theme .new-res-footer{border-color:rgba(0,0,0,.1)}
 /* ══════════════════════════════════════════
    MODAL PAGAMENTO PENDENTE
 ══════════════════════════════════════════ */
-.payment-pix-box{background:rgba(255,215,0,.07);border:2px dashed var(--gold);border-radius:12px;padding:14px 18px;margin:14px 0;display:flex;flex-direction:column;gap:5px}
-.payment-pix-key{font-size:1.15rem;font-weight:800;color:var(--gold);letter-spacing:.5px;word-break:break-all}
-body.light-theme .payment-pix-box{background:rgba(255,215,0,.05)}
 body.light-theme .perfil-pred-row{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07)}
 
 /* ══════════════════════════════════════════
@@ -1958,26 +1955,6 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     </div>
   </div>
 </div>
-
-<!-- MODAL PAGAMENTO PENDENTE -->
-<div id="modal-payment" class="modal-overlay hidden" onclick="if(event.target===this)closePaymentModal()">
-  <div class="modal-box" style="max-width:400px">
-    <button class="modal-close" onclick="closePaymentModal()">✕</button>
-    <div style="font-size:1.4rem;margin-bottom:8px">💰</div>
-    <h3 style="margin-bottom:6px">Pagamento Pendente</h3>
-    <p style="font-size:0.87rem;color:var(--text-muted);line-height:1.5;margin-bottom:4px">Seu pagamento ainda não foi confirmado. Realize o PIX abaixo e aguarde a confirmação do administrador.</p>
-    <div class="payment-pix-box">
-      <span style="font-size:0.72rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Chave Pix · CPF</span>
-      <span class="payment-pix-key" id="payment-pix-key-value"></span>
-      <span style="font-size:0.85rem;color:var(--text-muted)">Valor: <strong id="payment-valor" style="color:var(--gold)"></strong> por participante</span>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-primary" style="flex:1" onclick="copyPixKeyPayment()">📋 Copiar Chave Pix</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="closePaymentModal()">Lembrar depois</button>
-    </div>
-  </div>
-</div>
-
 
 <!-- OFFLINE BANNER -->
 <div id="offline-banner" role="alert" style="display:none;position:fixed;bottom:68px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,.96);color:#fff;border:1px solid var(--orange);padding:7px 18px;border-radius:20px;font-size:0.82rem;font-weight:600;z-index:200;white-space:nowrap;pointer-events:none">📵 Sem conexão — exibindo dados em cache</div>
@@ -12942,37 +12919,13 @@ function goToPalpitesFromPending() {
 }
 
 // ════════════════════════════════════════════
-// MODAL PAGAMENTO PENDENTE
+// LEMBRETE PÓS-RESULTADOS
+// (o pop-up de cobrança de pagamento Pix foi removido a pedido;
+//  esta função mantém apenas o encadeamento para o lembrete de
+//  palpites pendentes que antes vinha após o modal de pagamento.)
 // ════════════════════════════════════════════
 function _checkAndShowPaymentReminder() {
-  try {
-    if (currentUserDoc?.role === 'admin') return;
-    if (currentUserDoc?.pago === true) return;
-    const sessKey = 'bolao_payment_shown';
-    if (sessionStorage.getItem(sessKey)) return;
-    sessionStorage.setItem(sessKey, '1');
-
-    const pixKey = CFG.chave_pix || '128.712.527-18';
-    const valor = CFG.valor_participacao || 50;
-    document.getElementById('payment-pix-key-value').textContent = pixKey;
-    document.getElementById('payment-valor').textContent =
-      `R$ ${valor.toFixed ? valor.toFixed(2).replace('.',',') : valor},00`;
-    document.getElementById('modal-payment').classList.remove('hidden');
-  } catch(_) {}
-}
-
-function closePaymentModal() {
-  const el = document.getElementById('modal-payment');
-  if (el) el.classList.add('hidden');
-  // Estava bloqueando o lembrete de palpites pendentes? Tenta exibi-lo agora.
   setTimeout(_maybeShowPendingPalpitesAlert, 250);
-}
-
-function copyPixKeyPayment() {
-  const key = CFG.chave_pix || '128.712.527-18';
-  navigator.clipboard.writeText(key)
-    .then(()=>showToast('Chave Pix copiada! ✓', 'success'))
-    .catch(()=>showToast('Não foi possível copiar — copie manualmente.', 'warning'));
 }
 
 // ════════════════════════════════════════════
