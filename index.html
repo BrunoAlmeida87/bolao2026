@@ -12740,7 +12740,6 @@ function _showNewResultsModal(res, myPals) {
     localStorage.setItem(key, JSON.stringify(updated));
 
     if (!newGames.length) {
-      _checkAndShowPaymentReminder();
       return;
     }
 
@@ -12774,18 +12773,14 @@ function _showNewResultsModal(res, myPals) {
     }
 
     document.getElementById('modal-new-results').classList.remove('hidden');
-  } catch(e) {
-    _checkAndShowPaymentReminder();
-  }
+  } catch(e) {}
 }
 
 function closeNewResultsModal() {
   const el = document.getElementById('modal-new-results');
   if (el) el.classList.add('hidden');
-  setTimeout(_checkAndShowPaymentReminder, 400);
   // Se este modal estava bloqueando o lembrete de palpites pendentes, tenta de
-  // novo após o eventual lembrete de pagamento abrir (e, se abrir, o fechamento
-  // dele reagenda outra vez).
+  // novo agora que ele foi fechado.
   setTimeout(_maybeShowPendingPalpitesAlert, 550);
 }
 
@@ -12916,16 +12911,6 @@ function goToPalpitesFromPending() {
   _pendingPalpiteNext = true; // já abre a tela de Palpites filtrada nos próximos jogos
   closePendingPalModal();
   navigateTo('palpites');
-}
-
-// ════════════════════════════════════════════
-// LEMBRETE PÓS-RESULTADOS
-// (o pop-up de cobrança de pagamento Pix foi removido a pedido;
-//  esta função mantém apenas o encadeamento para o lembrete de
-//  palpites pendentes que antes vinha após o modal de pagamento.)
-// ════════════════════════════════════════════
-function _checkAndShowPaymentReminder() {
-  setTimeout(_maybeShowPendingPalpitesAlert, 250);
 }
 
 // ════════════════════════════════════════════
