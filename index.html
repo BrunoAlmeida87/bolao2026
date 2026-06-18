@@ -5404,7 +5404,7 @@ async function renderVerTodos() {
       shown.forEach(u=>{
         const pal = allPals[u.uid]?.[g.id];
         const isOwn = u.uid === currentUser.uid;
-        const isGameLocked = r.locked===true || _isAutoLockedEffective(g, r) || hasResult;
+        const isGameLocked = isPalpiteClosed(g, r) || hasResult;
         const canSeePal = isAdminView || isOwn || isGameLocked;
         if (!pal||pal.h===undefined) { row += `<td style="color:var(--text-muted)">—</td>`; return; }
         if (!canSeePal) { row += `<td style="color:var(--text-muted);font-size:0.72rem">🔒</td>`; return; }
