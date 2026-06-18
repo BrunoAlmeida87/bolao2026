@@ -2339,7 +2339,7 @@ async function _fetchPals(users, force) {
     allPals[u.uid]={};
     ps.docs.forEach(d=>{allPals[u.uid][d.id]=d.data();});
     const pdata=pdoc.exists?pdoc.data():{};
-    champPicks[u.uid]=pdata?.campeao||null;
+    champPicks[u.uid]=_canonTeam(pdata?.campeao||null);
   }));
   const data={allPals,champPicks};
   _forcePalsFresh = false; // qualquer busca completa consome o pedido de atualização
@@ -2914,6 +2914,13 @@ function _getAllTeams() {
   return Object.values(GRUPOS_DATA).flatMap(g=>g.teams).sort((a,b)=>a.localeCompare(b,'pt'));
 }
 
+// Apelidos de seleções cujo nome mudou DEPOIS que palpites já podiam estar salvos.
+// Mapeia o nome ANTIGO (como pode estar gravado em palpites/{uid}.campeao) → nome ATUAL
+// (igual ao de GRUPOS_DATA). Sem isso, um palpite de campeão antigo deixaria de casar
+// com a opção do seletor e perderia o bônus na comparação exata do computeRanking().
+const TEAM_ALIASES = { 'Rep. Tcheca': 'Tchéquia' };
+function _canonTeam(name){ return (name && TEAM_ALIASES[name]) || name; }
+
 // Retorna o nome da seleção campeã (vencedora da Final FIN1) ou null.
 function _getFinalChampion(res) {
   const r = (res||{})['FIN1'];
@@ -2927,7 +2934,7 @@ async function loadAllChampionPicks() {
   try {
     const snap = await db_.collection('palpites').get();
     const map = {};
-    snap.docs.forEach(d=>{ const data=d.data()||{}; if (data.campeao) map[d.id]=data.campeao; });
+    snap.docs.forEach(d=>{ const data=d.data()||{}; if (data.campeao) map[d.id]=_canonTeam(data.campeao); });
     return map;
   } catch(_) { return {}; }
 }
@@ -2935,7 +2942,7 @@ async function loadAllChampionPicks() {
 async function loadChampionPick(uid) {
   try {
     const snap = await db_.collection('palpites').doc(uid).get();
-    return snap.exists ? (snap.data()?.campeao || null) : null;
+    return snap.exists ? _canonTeam(snap.data()?.campeao || null) : null;
   } catch(_) { return null; }
 }
 
@@ -3669,7 +3676,7 @@ async function renderDashboard() {
         const sAll = {}; Object.keys(_rankCache.pals.allPals).forEach(k => { sAll[k] = _rankCache.pals.allPals[k] || {}; });
         sAll[currentUser.uid] = Object.assign({}, _dashMyPals);
         const sChamp = Object.assign({}, _rankCache.pals.champPicks || {});
-        const _myChamp = _myPDoc.exists ? (_myPDoc.data()?.campeao ?? null) : null;
+        const _myChamp = _myPDoc.exists ? _canonTeam(_myPDoc.data()?.campeao ?? null) : null;
         if (_myChamp != null) sChamp[currentUser.uid] = _myChamp;
         allPals = sAll;
         champPicks = sChamp;
@@ -3939,7 +3946,7 @@ async function renderPalpites(editUid=null) {
     pSnap.docs.forEach(d=>{ myPalpites[d.id]=d.data(); });
     _palpitesSalvosSet = new Set(pSnap.docs.map(d=>d.id));
     resultados = resCache;
-    myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
+    myChampion = pDoc.exists ? _canonTeam(pDoc.data()?.campeao || null) : null;
 
 
     let who = '';
@@ -4686,7 +4693,7 @@ async function renderVerPalpites(selectedUid=null) {
       ]);
       const userPals = {};
       pSnap.docs.forEach(d=>{ userPals[d.id]=d.data(); });
-      const userChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
+      const userChampion = pDoc.exists ? _canonTeam(pDoc.data()?.campeao || null) : null;
       const finalChampion = _getFinalChampion(res);
       const champUnlocked = canReveal || CFG.campeao_locked === true || !!finalChampion;
       const hitCampeao = !!(finalChampion && userChampion && userChampion===finalChampion);
@@ -11100,7 +11107,7 @@ async function renderAdminPalpitesInline(uid) {
     myPalpites = {};
     pSnap.docs.forEach(d=>{ myPalpites[d.id]=d.data(); });
     resultados = resCache;
-    myChampion = pDoc.exists ? (pDoc.data()?.campeao || null) : null;
+    myChampion = pDoc.exists ? _canonTeam(pDoc.data()?.campeao || null) : null;
 
     let html = buildChampionPickerCard();
     html += `<div class="phase-tabs">`;
@@ -11795,7 +11802,7 @@ async function exportBackupJSON() {
       ]);
       const jogos = {}; jogosSnap.docs.forEach(d=>{ jogos[d.id]=d.data(); });
       const historico = histSnap.docs.map(d=>({_id:d.id,...d.data()}));
-      palpites[u.uid] = {campeao: pDoc.exists?(pDoc.data()?.campeao||null):null, jogos, historico};
+      palpites[u.uid] = {campeao: pDoc.exists?_canonTeam(pDoc.data()?.campeao||null):null, jogos, historico};
     }));
     const backup = {
       _info: {
