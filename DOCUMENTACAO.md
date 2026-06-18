@@ -170,13 +170,13 @@ Dropdown do usuário (canto superior direito): apelido clicável para editar, ba
 
 **Próximos jogos (hero card):**
 - Lista os próximos jogos com countdown timer (atualiza a cada segundo)
-- Qualquer jogo a **menos de 24h do início** aparece automaticamente (além da "leva" por proximidade ≤ 8h); todos em ordem cronológica
+- Qualquer jogo a **menos de 30h do início** aparece automaticamente (além da "leva" por proximidade ≤ 8h); todos em ordem cronológica
 - O timer sempre conta **regressivamente para o início** da partida — antes e depois do bloqueio
 - **Bloqueio dos palpites: 1h (60 min) antes do apito inicial** (ex.: jogo às 16h trava às 15h). Após travar, o card continua mostrando a contagem para o início (não "🔒 Palpites encerrados" no timer)
 - **Auto-lock (fallback):** grava `autoLocked` no mesmo instante (1h antes) se o admin não travar manualmente
 - Prioridade de bloqueio: resultado lançado > trava manual > liberação manual > auto-lock > horário (1h antes)
 - Após o **resultado oficial**, o card fica visível por mais **45 min** com o placar final ("🏁 Resultado oficial — sai em X min"); depois some. Controlado pelo campo `resultado_ocultar_apos` (= momento do save + 45min)
-- Overrides do admin (`timerMode` `show`/`hide`) continuam válidos e sobrepõem a regra de 24h
+- Overrides do admin (`timerMode` `show`/`hide`) continuam válidos e sobrepõem a regra de 30h
 - Mostra se o usuário já tem palpite para cada jogo (✅ ou ⚠️)
 - Barra de progresso: % de palpites preenchidos no total do torneio
 
