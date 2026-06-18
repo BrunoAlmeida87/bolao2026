@@ -12453,30 +12453,45 @@ function _loadHtml2Canvas() {
   return _h2cPromise;
 }
 
-// Troca cada <svg> inline do card por um <img> pré-rasterizado antes da captura.
-// Motivo: o html2canvas 1.4.1 quebra ("URL malformed") ao serializar SVG inline
-// com cores hex (#...), pois não escapa o # no data URI. encodeURIComponent
-// resolve. Renderiza o SVG em 'scale'× e exibe em 1× para sair nítido na foto.
+// Rasteriza um <svg> para um data URI PNG (via <canvas>), em 'scale'×.
+// O html2canvas (sobretudo no Safari/iOS) quebra com "URL malformed" ao tentar
+// processar SVG inline ou data URI de SVG. Convertendo nós mesmos para PNG,
+// o html2canvas recebe só um bitmap — caminho 100% suportado.
+async function _svgToPngDataUrl(svg, scale) {
+  const rect = svg.getBoundingClientRect();
+  const w = Math.max(1, Math.round(rect.width)), h = Math.max(1, Math.round(rect.height));
+  const clone = svg.cloneNode(true);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', w);
+  clone.setAttribute('height', h);
+  const str = new XMLSerializer().serializeToString(clone);
+  // base64 (não URL-encoded): evita o "#" das cores hex e o parser de URL.
+  const svgUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(str)));
+  const tmp = new Image();
+  await new Promise((resolve, reject) => { tmp.onload = resolve; tmp.onerror = reject; tmp.src = svgUrl; });
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(w * (scale || 1)); cv.height = Math.round(h * (scale || 1));
+  cv.getContext('2d').drawImage(tmp, 0, 0, cv.width, cv.height);
+  return { png: cv.toDataURL('image/png'), w, h };
+}
+
+// Troca cada <svg> inline do card por um <img> PNG pré-rasterizado antes da
+// captura (ver _svgToPngDataUrl). Retorna uma função para restaurar os <svg>.
 async function _swapSvgsForCapture(card, scale) {
-  const restores = [], imgs = [];
-  card.querySelectorAll('svg').forEach(svg => {
-    const rect = svg.getBoundingClientRect();
-    const w = Math.max(1, Math.round(rect.width)), h = Math.max(1, Math.round(rect.height));
-    const clone = svg.cloneNode(true);
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('width', w * (scale || 1));
-    clone.setAttribute('height', h * (scale || 1));
-    const str = new XMLSerializer().serializeToString(clone);
-    const img = new Image(w, h);
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str);
-    img.style.cssText = `width:${w}px;height:${h}px;max-width:100%;display:block`;
-    const prevDisp = svg.style.display;
-    svg.parentNode.insertBefore(img, svg);
-    svg.style.display = 'none';
-    imgs.push(img);
-    restores.push(() => { img.remove(); svg.style.display = prevDisp; });
-  });
-  await Promise.all(imgs.map(im => (im.decode ? im.decode().catch(() => {}) : Promise.resolve())));
+  const restores = [];
+  const svgs = [...card.querySelectorAll('svg')];
+  for (const svg of svgs) {
+    try {
+      const { png, w, h } = await _svgToPngDataUrl(svg, scale);
+      const img = new Image(w, h);
+      img.src = png;
+      img.style.cssText = `width:${w}px;height:${h}px;max-width:100%;display:block`;
+      const prevDisp = svg.style.display;
+      svg.parentNode.insertBefore(img, svg);
+      svg.style.display = 'none';
+      restores.push(() => { img.remove(); svg.style.display = prevDisp; });
+    } catch (_) { /* se falhar, mantém o <svg> original */ }
+  }
   return () => restores.forEach(fn => fn());
 }
 
