@@ -4604,7 +4604,8 @@ async function savePalpite(gameId) {
 
 function showPalpiteClosedReason(gameId) {
   const res = resultados[gameId] || {};
-  if (res.locked===true || res.autoLocked===true) {
+  const _gameDef0 = ALL_GAMES.find(g=>g.id===gameId);
+  if (res.locked===true || _isAutoLockedEffective(_gameDef0, res)) {
     showToast('Este jogo está bloqueado. Não é mais possível alterar palpites.','warning');
     return;
   }
@@ -5403,7 +5404,7 @@ async function renderVerTodos() {
       shown.forEach(u=>{
         const pal = allPals[u.uid]?.[g.id];
         const isOwn = u.uid === currentUser.uid;
-        const isGameLocked = r.locked===true || r.autoLocked===true || hasResult;
+        const isGameLocked = r.locked===true || _isAutoLockedEffective(g, r) || hasResult;
         const canSeePal = isAdminView || isOwn || isGameLocked;
         if (!pal||pal.h===undefined) { row += `<td style="color:var(--text-muted)">—</td>`; return; }
         if (!canSeePal) { row += `<td style="color:var(--text-muted);font-size:0.72rem">🔒</td>`; return; }
@@ -5792,6 +5793,16 @@ function _gameAutoLockInstant(game, res) {
   return _gameLockInstant(game, res);
 }
 
+// autoLocked EFETIVO: a flag persistida só vale a partir do instante de bloqueio real
+// (1h antes do início). Isso neutraliza flags antigas gravadas pela regra anterior
+// (22h/23h da véspera), que travavam o jogo cedo demais. Se não há horário calculável
+// (lockAt nulo), a flag é honrada como fallback.
+function _isAutoLockedEffective(game, res) {
+  if (!res || res.autoLocked !== true) return false;
+  const lockAt = _gameLockInstant(game, res);
+  return !lockAt || Date.now() >= lockAt.getTime();
+}
+
 // Quando o card deve sumir da tela inicial após o resultado oficial. Prefere o campo
 // explícito resultado_ocultar_apos (gravado no save); cai para updatedAt + 45min.
 function _resultHideAfterMs(res) {
@@ -5830,7 +5841,7 @@ function isPalpiteClosed(game, res) {
   if (res.h_real !== undefined && res.a_real !== undefined) return true;
   if (res.locked === true) return true;
   if (res.unlock_override === true) return false;
-  if (res.autoLocked === true) return true;
+  if (_isAutoLockedEffective(game, res)) return true;
   const lockAt = _gameLockInstant(game, res);
   return lockAt ? (Date.now() >= lockAt.getTime()) : false;
 }
@@ -5842,12 +5853,14 @@ function isPalpiteClosedForSave(game, res, adminEditing) {
   if (res.h_real !== undefined) return true;
   if (res.locked === true) return true;
   if (adminEditing) return false;
-  if (res.autoLocked === true) return true;
+  if (_isAutoLockedEffective(game, res)) return true;
   return isPalpiteClosed(game, res);
 }
 
 // Controle de auto-lock: evita disparar a gravação mais de uma vez por sessão.
 const _autoLockApplied = new Set();
+// Controle da limpeza de flags antigas (regra 22h/23h): evita reescrever toda sessão.
+const _autoStaleCleared = new Set();
 
 // Grava autoLocked:true no Firestore para jogos que passaram do instante de
 // auto-lock (1h antes do início) — fallback para quando o admin esquece de travar.
@@ -5868,13 +5881,29 @@ async function _applyAutoLocks(res) {
       const autoLockAt = _gameAutoLockInstant(game, r);
       return autoLockAt && now >= autoLockAt.getTime();
     });
-    if (!toAutoLock.length) return;
+    // Limpeza de flags antigas: jogos com autoLocked=true gravado pela regra anterior
+    // (22h/23h da véspera), mas que ainda estão a MAIS de 1h do início → remove a flag.
+    const toUnlock = ALL_GAMES.filter(game => {
+      const r = res[game.id] || {};
+      if (r.autoLocked !== true) return false;
+      if (r.locked === true || r.h_real !== undefined) return false; // travas legítimas
+      if (_autoStaleCleared.has(game.id)) return false;
+      const lockAt = _gameLockInstant(game, r);
+      return lockAt && now < lockAt.getTime(); // ainda falta >1h → flag antiga
+    });
+    if (!toAutoLock.length && !toUnlock.length) return;
     // Marca antes do await para evitar duplo disparo caso o timer chame novamente
     toAutoLock.forEach(g => _autoLockApplied.add(g.id));
+    toUnlock.forEach(g => _autoStaleCleared.add(g.id));
     const batch = db_.batch();
     toAutoLock.forEach(game => {
       batch.set(db_.collection('resultados').doc(game.id),
         { autoLocked: true, updatedAt: FV.serverTimestamp() },
+        { merge: true });
+    });
+    toUnlock.forEach(game => {
+      batch.set(db_.collection('resultados').doc(game.id),
+        { autoLocked: FV.delete(), updatedAt: FV.serverTimestamp() },
         { merge: true });
     });
     await batch.commit();
@@ -5884,7 +5913,7 @@ async function _applyAutoLocks(res) {
   } catch(e) {
     console.error('_applyAutoLocks:', e);
     // Reverte para permitir nova tentativa em caso de falha transitória
-    ALL_GAMES.forEach(g => _autoLockApplied.delete(g.id));
+    ALL_GAMES.forEach(g => { _autoLockApplied.delete(g.id); _autoStaleCleared.delete(g.id); });
   }
 }
 
@@ -7264,7 +7293,7 @@ async function renderEstatisticas() {
         let _statusHtml;
         if (_gr.locked === true) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado pelo admin</span>';
-        } else if (_gr.autoLocked === true) {
+        } else if (_isAutoLockedEffective(game, _gr)) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado automaticamente</span>';
         } else if (_closed) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Palpites encerrados</span>';
