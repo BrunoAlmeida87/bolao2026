@@ -487,6 +487,15 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .evo-line-anim{stroke-dasharray:1;stroke-dashoffset:1;animation:evoDraw .9s ease forwards}
 .evo-fade{animation:evoFade .7s ease both}
 @media (prefers-reduced-motion: reduce){.evo-line-anim,.evo-fade{animation:none!important;stroke-dashoffset:0!important;opacity:1!important}}
+/* Bump chart (Estatísticas): seleção/realce de participantes */
+.bump-line{cursor:pointer;transition:opacity .18s ease,stroke-width .18s ease,filter .18s ease}
+.bump-dot{transition:opacity .18s ease,r .18s ease}
+.bump-label{cursor:pointer;transition:opacity .18s ease,font-weight .1s ease}
+.bump-line.bump-sel{filter:drop-shadow(0 0 3px currentColor) drop-shadow(0 0 7px currentColor)}
+.bump-chip{cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;padding:3px 9px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text-muted);white-space:nowrap;transition:all .15s ease}
+.bump-chip:hover{border-color:rgba(255,255,255,.3)}
+.bump-chip .bump-chip-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.bump-chip.on{color:#06121f;font-weight:800;border-color:transparent}
 /* Corrida do ranking (bar chart race em canvas) */
 #corrida-content{max-width:1320px}
 .corrida-wrap{max-width:1280px;margin:0 auto;padding:0 4px}
@@ -7042,12 +7051,14 @@ function _buildBumpChart(users, res, allPals) {
     '#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4','#BAE6FD','#DDD6FE','#BBF7D0','#FED7AA','#BFDBFE'];
   const uidColor = {};
   finalRanking.forEach((u,i) => { uidColor[u.uid] = palette[i % palette.length]; });
-  let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:320px">`;
+  // Nova seleção sempre começa limpa (os data-uid do DOM anterior já não existem).
+  _bumpSel = new Set();
+  let svg = `<svg id="bump-svg" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:320px">`;
   // Grid
   for (let r=1;r<=n;r++) { const y=yFor(r); svg+=`<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="rgba(255,255,255,.05)" stroke-width="1"/><text x="${padL-4}" y="${y+3.5}" text-anchor="end" font-size="9" fill="rgba(255,255,255,.3)">${r}°</text>`; }
   const xLblStep = Math.ceil(numCp/8); // afina os rótulos quando há muitos dias
   checkpoints.forEach((cp,i) => { const x=xFor(i); const showLbl=(i%xLblStep===0||i===numCp-1); svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.1)" stroke-width="1" stroke-dasharray="3,4"/>${showLbl?`<text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.45)">${esc(cp.label)}</text>`:''}`; });
-  // Lines per user
+  // Lines per user — cada série num <g> clicável (data-uid) para destacar/realçar.
   users.forEach(u => {
     const color = uidColor[u.uid]||'#888';
     const isLeader = u.uid === finalRanking[0]?.uid;
@@ -7056,14 +7067,59 @@ function _buildBumpChart(users, res, allPals) {
     if (!pts.length) return;
     let d = `M ${pts[0].x} ${pts[0].y}`;
     for (let i=1;i<pts.length;i++) { const cp2=(pts[i-1].x+pts[i].x)/2; d+=` C ${cp2} ${pts[i-1].y},${cp2} ${pts[i].y},${pts[i].x} ${pts[i].y}`; }
-    svg += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${isLeader?3:1.8}" opacity="${isLeader?1:.6}"/>`;
-    pts.forEach(pt => { svg+=`<circle cx="${pt.x}" cy="${pt.y}" r="${isLeader?4:2.8}" fill="${color}" stroke="rgba(0,0,0,.35)" stroke-width="1"/>`; });
+    svg += `<g class="bump-series" data-uid="${u.uid}" data-leader="${isLeader?'1':'0'}" style="color:${color}" onclick="_bumpToggle('${u.uid}')">`;
+    svg += `<path class="bump-line" d="${d}" fill="none" stroke="${color}" stroke-width="${isLeader?3:1.8}" opacity="${isLeader?1:.6}"/>`;
+    pts.forEach(pt => { svg+=`<circle class="bump-dot" cx="${pt.x}" cy="${pt.y}" r="${isLeader?4:2.8}" fill="${color}" stroke="rgba(0,0,0,.35)" stroke-width="1" opacity="${isLeader?1:.85}"/>`; });
     const last=pts[pts.length-1], finalPos=positions[positions.length-1];
     const name=esc((u.apelido||u.nome||'').substring(0,12));
-    svg+=`<text x="${svgW-padR+8}" y="${last.y+4}" font-size="${isLeader?12:10}" fill="${color}" font-weight="${isLeader?700:400}" opacity="${isLeader?1:.75}">${finalPos}° ${name}</text>`;
+    svg+=`<text class="bump-label" x="${svgW-padR+8}" y="${last.y+4}" font-size="${isLeader?12:10}" fill="${color}" font-weight="${isLeader?700:400}" opacity="${isLeader?1:.75}">${finalPos}° ${name}</text>`;
+    svg += `</g>`;
   });
   svg += '</svg>';
-  return svg;
+  // Chips de seleção (ordenados pela colocação final) + botão limpar.
+  const chips = finalRanking.map(u => {
+    const color = uidColor[u.uid]||'#888';
+    const nm = esc((u.apelido||u.nome||'').substring(0,14));
+    return `<span class="bump-chip" data-uid="${u.uid}" data-color="${color}" onclick="_bumpToggle('${u.uid}')"><span class="bump-chip-dot" style="background:${color}"></span>${nm}</span>`;
+  }).join('');
+  return svg
+    + `<div style="font-size:0.72rem;color:var(--text-muted);margin:10px 0 6px">👆 Toque num nome (no gráfico ou abaixo) para <b>destacar</b>. Pode escolher vários.</div>`
+    + `<div id="bump-chips" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow:auto">`
+    + `<span id="bump-clear" class="bump-chip" style="display:none;border-style:dashed" onclick="_bumpClear()">✕ limpar</span>`
+    + chips + `</div>`;
+}
+
+// Estado e realce do bump chart (seleção de participantes). Mantido em módulo
+// para os onclick inline (_bumpToggle/_bumpClear) acessarem entre renders.
+let _bumpSel = new Set();
+function _bumpToggle(uid){ if(_bumpSel.has(uid)) _bumpSel.delete(uid); else _bumpSel.add(uid); _bumpApply(); }
+function _bumpClear(){ _bumpSel.clear(); _bumpApply(); }
+function _bumpApply(){
+  const svg = document.getElementById('bump-svg'); if(!svg) return;
+  const any = _bumpSel.size > 0;
+  svg.querySelectorAll('.bump-series').forEach(g => {
+    const uid = g.getAttribute('data-uid');
+    const leader = g.getAttribute('data-leader') === '1';
+    const sel = _bumpSel.has(uid);
+    const line = g.querySelector('.bump-line');
+    const label = g.querySelector('.bump-label');
+    const dots = g.querySelectorAll('.bump-dot');
+    let op, sw, lblOp, lblW, dotOp, glow;
+    if (!any)      { op=leader?1:.6;  sw=leader?3:1.8;   lblOp=leader?1:.75; lblW=leader?700:400; dotOp=leader?1:.85; glow=false; }
+    else if (sel)  { op=1;            sw=leader?3.4:2.6; lblOp=1;            lblW=800;            dotOp=1;            glow=true;  }
+    else           { op=.1;           sw=leader?3:1.8;   lblOp=.16;          lblW=leader?700:400; dotOp=.1;           glow=false; }
+    if (line){ line.setAttribute('opacity',op); line.setAttribute('stroke-width',sw); line.classList.toggle('bump-sel',glow); }
+    if (label){ label.setAttribute('opacity',lblOp); label.setAttribute('font-weight',lblW); }
+    dots.forEach(dt => dt.setAttribute('opacity',dotOp));
+    if (sel) g.parentNode.appendChild(g); // traz a série destacada para a frente
+  });
+  document.querySelectorAll('#bump-chips .bump-chip').forEach(ch => {
+    const uid = ch.getAttribute('data-uid'); if(!uid) return;
+    const sel = _bumpSel.has(uid);
+    ch.classList.toggle('on', sel);
+    ch.style.background = sel ? (ch.getAttribute('data-color')||'') : '';
+  });
+  const clr = document.getElementById('bump-clear'); if(clr) clr.style.display = any ? '' : 'none';
 }
 
 // Card de uma partida JÁ FINALIZADA (reabre a análise depois que ela sai de
