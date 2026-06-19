@@ -3965,10 +3965,19 @@ async function renderDashboard() {
     </div>`;
 
     // ── Evolução do Ranking abaixo do ranking (mesmo gráfico das Estatísticas) ──
-    // Só quando todos os palpites estão disponíveis (snapshot do cache ou busca
-    // completa) — o cálculo é local, sem leituras extras no Firestore.
-    if (allPals) {
-      _bumpData = { users, res, allPals, champPicks };
+    // O gráfico é histórico, então pode usar o snapshot do cache de ranking
+    // (0 leituras) mesmo quando allPals está null porque o usuário deu refresh
+    // (_forcePalsFresh) — caso em que o caminho normal não popula allPals e o
+    // gráfico sumiria. Sobrepõe os palpites frescos do próprio usuário.
+    let _evoPals = allPals, _evoChamp = champPicks;
+    if (!_evoPals && _rankCache && _rankCache.pals && _rankCache.pals.allPals) {
+      const sAll = {}; Object.keys(_rankCache.pals.allPals).forEach(k => { sAll[k] = _rankCache.pals.allPals[k] || {}; });
+      sAll[currentUser.uid] = Object.assign({}, _dashMyPals);
+      _evoPals = sAll;
+      _evoChamp = Object.assign({}, _rankCache.pals.champPicks || {});
+    }
+    if (_evoPals) {
+      _bumpData = { users, res, allPals: _evoPals, champPicks: _evoChamp };
       _bumpGran = 'dia';
       const _dashBumpBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos'],['jogo','Por jogo']]
         .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
@@ -3976,7 +3985,7 @@ async function renderDashboard() {
         <div class="card-title">📈 Evolução do Ranking</div>
         <div style="font-size:0.8rem;color:var(--text);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
         <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_dashBumpBar}</div>
-        <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false, champPicks)}</div>
+        <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, _evoPals, 'dia', false, _evoChamp)}</div>
       </div>`;
     }
     cont.innerHTML = html;
