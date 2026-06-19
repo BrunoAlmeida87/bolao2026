@@ -3970,9 +3970,9 @@ async function renderDashboard() {
     if (allPals) {
       _bumpData = { users, res, allPals, champPicks };
       _bumpGran = 'dia';
-      const _dashBumpBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos']]
+      const _dashBumpBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos'],['jogo','Por jogo']]
         .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
-      html += `<div class="card">
+      html += `<div class="card" style="margin-top:28px">
         <div class="card-title">📈 Evolução do Ranking</div>
         <div style="font-size:0.8rem;color:var(--text);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
         <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_dashBumpBar}</div>
@@ -7095,6 +7095,27 @@ function _fmtAITimestamp(cache) {
 function _bumpCheckpoints(res, gran) {
   const resGames = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
   const dayOf = g => _gameFilterISO(g, res[g.id]);
+  // Horário de início real (data + time_override/GAME_TIMES) para ordenar jogos do
+  // mesmo dia na ordem de disputa — ALL_GAMES está agrupado por grupo/chave, não
+  // pelo calendário. Mesmo padrão de computeLeaderGapHistory.
+  const kickoff = g => {
+    const r = res[g.id] || {};
+    const dateStr = r.date_override ? _isoToGameDate(r.date_override) : g.date;
+    const base = _parseGameDate(dateStr).getTime();
+    const tm = String(r.time_override || GAME_TIMES[g.id] || '').match(/^(\d{1,2}):(\d{2})$/);
+    return base + (tm ? (parseInt(tm[1]) * 60 + parseInt(tm[2])) * 60000 : 0);
+  };
+  if (gran === 'jogo') {
+    // Um ponto por jogo, na ordem real de disputa (cumulativo).
+    const ordered = resGames.slice().sort((a,b) => kickoff(a) - kickoff(b));
+    let cum = []; const cps = [];
+    ordered.forEach(g => {
+      cum = cum.concat([g.id]);
+      const iso = dayOf(g);
+      cps.push({ label: iso ? _isoToGameDate(iso) : (cum.length + 'j'), gameIds: [...cum] });
+    });
+    return cps;
+  }
   if (gran === 'rodada') {
     // Fases na ordem cronológica: Grupos R1, R2, R3, depois cada fase eliminatória.
     const phases = [];
@@ -7111,17 +7132,6 @@ function _bumpCheckpoints(res, gran) {
     return cps;
   }
   if (gran === '2jogos') {
-    // Ordena por HORÁRIO DE INÍCIO (não só pela data): jogos do mesmo dia têm o
-    // mesmo _parseGameDate, e ALL_GAMES está agrupado por grupo/chave (não pela
-    // ordem do calendário). Usa time_override/GAME_TIMES como desempate, igual a
-    // computeLeaderGapHistory, para acumular os jogos na ordem real de disputa.
-    const kickoff = g => {
-      const r = res[g.id] || {};
-      const dateStr = r.date_override ? _isoToGameDate(r.date_override) : g.date;
-      const base = _parseGameDate(dateStr).getTime();
-      const tm = String(r.time_override || GAME_TIMES[g.id] || '').match(/^(\d{1,2}):(\d{2})$/);
-      return base + (tm ? (parseInt(tm[1]) * 60 + parseInt(tm[2])) * 60000 : 0);
-    };
     const ordered = resGames.slice().sort((a,b) => kickoff(a) - kickoff(b));
     let cum = []; const cps = [];
     for (let i = 0; i < ordered.length; i += 2) {
@@ -7149,6 +7159,7 @@ function _buildBumpChart(users, res, allPals, gran, keepSel, champPicks) {
   if (checkpoints.length < 2) {
     const minMsg = gran === 'rodada' ? 'São necessárias pelo menos 2 rodadas/fases com resultados para exibir o gráfico.'
       : gran === '2jogos' ? 'São necessários pelo menos 4 jogos com resultado para exibir o gráfico nesta granularidade.'
+      : gran === 'jogo' ? 'São necessários pelo menos 2 jogos com resultado para exibir o gráfico nesta granularidade.'
       : 'São necessários pelo menos 2 dias com resultados para exibir o gráfico.';
     return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem">${minMsg}</div>`;
   }
@@ -7176,7 +7187,10 @@ function _buildBumpChart(users, res, allPals, gran, keepSel, champPicks) {
   // Grid
   for (let r=1;r<=n;r++) { const y=yFor(r); _rowsM.push({y,label:`${r}°`}); svg+=`<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="rgba(255,255,255,.09)" stroke-width="1"/><text x="${padL-4}" y="${y+3.5}" text-anchor="end" font-size="10" font-weight="700" fill="rgba(255,255,255,.7)">${r}°</text>`; }
   const xLblStep = Math.ceil(numCp/8); // afina os rótulos quando há muitos pontos
-  checkpoints.forEach((cp,i) => { const x=xFor(i); const showLbl=(i%xLblStep===0||i===numCp-1); _cpsM.push({x,label:cp.label,show:showLbl}); svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.13)" stroke-width="1" stroke-dasharray="3,4"/>${showLbl?`<text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="10" font-weight="600" fill="rgba(255,255,255,.78)">${esc(cp.label)}</text>`:''}`; });
+  // Com muitos checkpoints (ex.: "Por jogo"), desenha a linha vertical só nos
+  // pontos rotulados para não poluir; com poucos, mantém todas.
+  const denseCps = numCp > 24;
+  checkpoints.forEach((cp,i) => { const x=xFor(i); const showLbl=(i%xLblStep===0||i===numCp-1); const showGrid=!denseCps||showLbl; _cpsM.push({x,label:cp.label,show:showLbl,grid:showGrid}); svg+=`${showGrid?`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.13)" stroke-width="1" stroke-dasharray="3,4"/>`:''}${showLbl?`<text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="10" font-weight="600" fill="rgba(255,255,255,.78)">${esc(cp.label)}</text>`:''}`; });
   // Lines per user — cada série num <g> clicável (data-uid) para destacar/realçar.
   users.forEach(u => {
     const color = uidColor[u.uid]||'#888';
@@ -7226,7 +7240,7 @@ function _bumpScope(){ return document.querySelector('.page.active') || document
 // Troca a granularidade do gráfico e re-renderiza sem recarregar a página,
 // preservando os participantes destacados (keepSel=true).
 function setBumpGran(gran){
-  if (!['dia','rodada','2jogos'].includes(gran) || !_bumpData) return;
+  if (!['dia','rodada','2jogos','jogo'].includes(gran) || !_bumpData) return;
   _bumpGran = gran;
   const scope = _bumpScope();
   scope.querySelectorAll('.bump-gran-btn').forEach(b => b.classList.toggle('active', b.dataset.gran === gran));
@@ -7284,9 +7298,11 @@ function _bumpRenderCanvas(scale) {
   });
   // Linhas verticais tracejadas (checkpoints) + rótulos.
   m.cps.forEach(cp => {
-    ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
-    ctx.beginPath(); ctx.moveTo(cp.x, m.padT); ctx.lineTo(cp.x, m.H - m.padB); ctx.stroke();
-    ctx.setLineDash([]);
+    if (cp.grid !== false) {
+      ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(cp.x, m.padT); ctx.lineTo(cp.x, m.H - m.padB); ctx.stroke();
+      ctx.setLineDash([]);
+    }
     if (cp.show) { ctx.fillStyle = 'rgba(255,255,255,.78)'; ctx.textAlign = 'center'; ctx.fillText(cp.label, cp.x, m.H - 6); }
   });
   // Séries — não-selecionadas primeiro, selecionadas por cima (igual ao realce).
@@ -7939,7 +7955,7 @@ async function renderEstatisticas() {
     // da seção (ver _bumpCard, anexado logo antes de fechar a sub-aba clássica). ──
     _bumpData = { users, res, allPals, champPicks };
     _bumpGran = 'dia';
-    const _bumpGranBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos']]
+    const _bumpGranBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos'],['jogo','Por jogo']]
       .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
     const _bumpCard = `<div class="card">
       <div class="card-title">📈 Evolução do Ranking</div>
