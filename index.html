@@ -3974,7 +3974,11 @@ async function renderDashboard() {
         .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
       html += `<div class="card" style="margin-top:28px">
         <div class="card-title">📈 Evolução do Ranking</div>
-        <div style="font-size:0.8rem;color:var(--text);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
+        <div class="bump-hint" style="display:flex;gap:9px;align-items:flex-start;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.4);border-radius:10px;padding:10px 13px;margin:8px 0 10px;line-height:1.45">
+          <span style="font-size:1.25rem;line-height:1.1">👆</span>
+          <span style="font-size:0.86rem;color:var(--text);font-weight:600"><b style="color:var(--gold)">Toque ou clique em uma linha ou nome</b> para destacar participantes no gráfico. Você pode comparar a evolução de mais de uma pessoa.</span>
+        </div>
+        <div class="bump-sub" style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
         <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_dashBumpBar}</div>
         <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false, champPicks)}</div>
       </div>`;
@@ -7219,7 +7223,7 @@ function _buildBumpChart(users, res, allPals, gran, keepSel, champPicks) {
     return `<span class="bump-chip" data-uid="${u.uid}" data-color="${color}" onclick="_bumpToggle('${u.uid}')"><span class="bump-chip-dot" style="background:${color}"></span>${nm}</span>`;
   }).join('');
   return svg
-    + `<div class="no-capture" style="font-size:0.76rem;color:var(--text);margin:10px 0 6px;line-height:1.45">👆 Toque ou clique em uma linha/nome para <b>destacar</b> participantes no gráfico. Você pode comparar a evolução de mais de uma pessoa.</div>`
+    + `<div class="no-capture" style="font-size:0.72rem;color:var(--text-muted);margin:10px 0 6px;line-height:1.4">Destaque participantes (toque nos nomes):</div>`
     + `<div id="bump-chips" class="no-capture" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow:auto">`
     + `<span id="bump-clear" class="bump-chip" style="display:none;border-style:dashed" onclick="_bumpClear()">✕ limpar</span>`
     + chips + `</div>`;
@@ -7959,7 +7963,11 @@ async function renderEstatisticas() {
       .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
     const _bumpCard = `<div class="card">
       <div class="card-title">📈 Evolução do Ranking</div>
-      <div style="font-size:0.8rem;color:var(--text);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
+      <div class="bump-hint" style="display:flex;gap:9px;align-items:flex-start;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.4);border-radius:10px;padding:10px 13px;margin:8px 0 10px;line-height:1.45">
+        <span style="font-size:1.25rem;line-height:1.1">👆</span>
+        <span style="font-size:0.86rem;color:var(--text);font-weight:600"><b style="color:var(--gold)">Toque ou clique em uma linha ou nome</b> para destacar participantes no gráfico. Você pode comparar a evolução de mais de uma pessoa.</span>
+      </div>
+      <div class="bump-sub" style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
       <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_bumpGranBar}</div>
       <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false, champPicks)}</div>
     </div>`;
@@ -12727,7 +12735,7 @@ async function _shareBumpChartImage(card, btn) {
     if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') bg = getComputedStyle(document.body).backgroundColor || '#0e1b2e';
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
     const title = (card.querySelector('.card-title')?.textContent || '📈 Evolução do Ranking').trim().replace(/\s+/g, ' ');
-    const sub = (card.querySelector('.card-title')?.nextElementSibling?.textContent || '').trim().replace(/\s+/g, ' ');
+    const sub = ((card.querySelector('.bump-sub') || card.querySelector('.card-title')?.nextElementSibling)?.textContent || '').trim().replace(/\s+/g, ' ');
     ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
     ctx.fillStyle = '#FFD700'; ctx.font = '800 20px Arial'; ctx.fillText(title, padX, 32);
     if (sub) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = '12px Arial'; ctx.fillText(sub.substring(0, 92), padX, 52); }
