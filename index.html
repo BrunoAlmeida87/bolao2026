@@ -3962,9 +3962,6 @@ async function renderDashboard() {
       <button class="btn-share" onclick="shareTop5RelegImage()">📸 Gerar imagem — Top 3 + Rebaixamento (classificação por densidade)</button>
       <button class="btn-share" onclick="shareRankingImage(10)">📸 Gerar imagem — Top 10</button>
       <button class="btn-share" onclick="shareRankingImage(0)">📸 Gerar imagem — Todos</button>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:2px 0 16px">
-      <button onclick="navigateTo('corrida')" style="background:linear-gradient(135deg,#13294b,#1e4377);color:#fff;border:1px solid rgba(255,215,0,.45);border-radius:22px;padding:10px 20px;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 2px 14px rgba(0,0,0,.35)">🏁 Ver a Corrida do Ranking</button>
     </div>`;
     cont.innerHTML = html;
     _runAnimNumbers(); // contagem animada dos KPIs e da premiação (a partir do valor anterior)
