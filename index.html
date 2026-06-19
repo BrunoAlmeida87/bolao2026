@@ -3968,7 +3968,7 @@ async function renderDashboard() {
     // Só quando todos os palpites estão disponíveis (snapshot do cache ou busca
     // completa) — o cálculo é local, sem leituras extras no Firestore.
     if (allPals) {
-      _bumpData = { users, res, allPals };
+      _bumpData = { users, res, allPals, champPicks };
       _bumpGran = 'dia';
       const _dashBumpBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos']]
         .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
@@ -3976,7 +3976,7 @@ async function renderDashboard() {
         <div class="card-title">📈 Evolução do Ranking</div>
         <div style="font-size:0.8rem;color:var(--text);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
         <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_dashBumpBar}</div>
-        <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false)}</div>
+        <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false, champPicks)}</div>
       </div>`;
     }
     cont.innerHTML = html;
@@ -6553,8 +6553,15 @@ function closePerfilModal() {
   if(_perfilEscHandler){document.removeEventListener('keydown',_perfilEscHandler);_perfilEscHandler=null;}
 }
 
-function _computeRankingForGameIds(users, resultados, allPalpites, gameIds) {
+// championPicks (opcional): quando informado, soma o bônus de campeão SÓ se a
+// Final (FIN1) estiver neste recorte de jogos e já tiver campeã decretada —
+// mantendo o gráfico/corrida coerentes com a tabela de ranking, que soma
+// CFG.pts_campeao após a Final. Callers que não passam championPicks ficam
+// inalterados (nenhum bônus e o desempate por campeão vira no-op).
+function _computeRankingForGameIds(users, resultados, allPalpites, gameIds, championPicks) {
   const gameSet = new Set(gameIds || []);
+  const champion = gameSet.has('FIN1') ? _getFinalChampion(resultados) : null;
+  const ptsCampeao = CFG.pts_campeao ?? 0;
   return users
     .filter(u=>u.ativo!==false)
     .map(u=>{
@@ -6573,9 +6580,12 @@ function _computeRankingForGameIds(users, resultados, allPalpites, gameIds) {
         else if (pts===(CFG.pts_apenas_vencedor ?? 5)) apenas_venc++;
         else if (pts===0) erros++;
       });
-      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros };
+      const userChampion = (championPicks||{})[u.uid] || null;
+      const acertou_campeao = !!(champion && userChampion && userChampion===champion);
+      if (acertou_campeao) pontos += ptsCampeao;
+      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros, acertou_campeao };
     })
-    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc);
+    .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc||((b.acertou_campeao?1:0)-(a.acertou_campeao?1:0)));
 }
 
 function _calcRecentTrend(uid, allPals, res, n=5) {
@@ -7133,7 +7143,7 @@ function _bumpCheckpoints(res, gran) {
   return cps;
 }
 
-function _buildBumpChart(users, res, allPals, gran, keepSel) {
+function _buildBumpChart(users, res, allPals, gran, keepSel, champPicks) {
   if (!users.length) return '';
   const checkpoints = _bumpCheckpoints(res, gran || 'dia');
   if (checkpoints.length < 2) {
@@ -7142,7 +7152,7 @@ function _buildBumpChart(users, res, allPals, gran, keepSel) {
       : 'São necessários pelo menos 2 dias com resultados para exibir o gráfico.';
     return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem">${minMsg}</div>`;
   }
-  const rankingsAtCp = checkpoints.map(cp => _computeRankingForGameIds(users, res, allPals, cp.gameIds));
+  const rankingsAtCp = checkpoints.map(cp => _computeRankingForGameIds(users, res, allPals, cp.gameIds, champPicks));
   const finalRanking = rankingsAtCp[rankingsAtCp.length - 1];
   const n = users.length, numCp = checkpoints.length;
   const svgW=700, padL=30, padR=130, padT=18, padB=28, rowH=Math.max(18, Math.min(26, Math.floor(420/n)));
@@ -7221,7 +7231,7 @@ function setBumpGran(gran){
   const scope = _bumpScope();
   scope.querySelectorAll('.bump-gran-btn').forEach(b => b.classList.toggle('active', b.dataset.gran === gran));
   const host = scope.querySelector('#bump-chart-host');
-  if (host) { host.innerHTML = _buildBumpChart(_bumpData.users, _bumpData.res, _bumpData.allPals, gran, true); _bumpApply(); }
+  if (host) { host.innerHTML = _buildBumpChart(_bumpData.users, _bumpData.res, _bumpData.allPals, gran, true, _bumpData.champPicks); _bumpApply(); }
 }
 function _bumpApply(){
   const scope = _bumpScope();
@@ -7927,7 +7937,7 @@ async function renderEstatisticas() {
 
     // ── Bump Chart: evolução do ranking — montado abaixo e posicionado no FIM
     // da seção (ver _bumpCard, anexado logo antes de fechar a sub-aba clássica). ──
-    _bumpData = { users, res, allPals };
+    _bumpData = { users, res, allPals, champPicks };
     _bumpGran = 'dia';
     const _bumpGranBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos']]
       .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
@@ -7935,7 +7945,7 @@ async function renderEstatisticas() {
       <div class="card-title">📈 Evolução do Ranking</div>
       <div style="font-size:0.8rem;color:var(--text);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
       <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_bumpGranBar}</div>
-      <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false)}</div>
+      <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false, champPicks)}</div>
     </div>`;
 
     // (A "Análise da IA" agora aparece só no carrossel do dashboard.)
