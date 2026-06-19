@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.12.24">
+<meta name="app-version" content="v1.13.0">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -915,7 +915,7 @@ body.light-theme .mais-sheet a.active{color:var(--accent)}
 .mom-slide{display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:16px 46px;text-align:center}
 .mom-slide.active{display:block;animation:momFade .4s ease}
 @keyframes momFade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-.mom-slide-head{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.mom-slide-head{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;font-family:'Segoe UI',system-ui,sans-serif,"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji"}
 .mom-tag{font-size:.66rem;font-weight:700;color:var(--text-muted);text-transform:none;letter-spacing:0;background:rgba(255,255,255,.08);padding:2px 9px;border-radius:11px}
 .mom-name{font-size:1.15rem;font-weight:800;margin-top:9px}
 .mom-main{font-size:1.5rem;font-weight:900;margin-top:4px;line-height:1.15}
@@ -1150,10 +1150,10 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ai-news-slide{display:none;align-items:center;gap:12px}
 .ai-news-slide.active{display:flex;animation:aiNewsIn .45s ease}
 @keyframes aiNewsIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
-.ai-news-icon{font-size:2.3rem;line-height:1;flex:none}
-.ai-news-title{font-size:0.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
-.ai-news-value{font-size:1.18rem;font-weight:800;color:var(--gold);line-height:1.2;margin:1px 0}
-.ai-news-text{font-size:0.86rem;color:var(--text);line-height:1.42}
+.ai-news-icon{font-size:2.3rem;line-height:1.2;flex:none;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",system-ui,sans-serif;overflow:visible}
+.ai-news-title{font-size:0.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-family:'Segoe UI',system-ui,sans-serif,"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji"}
+.ai-news-value{font-size:1.18rem;font-weight:800;color:var(--gold);line-height:1.2;margin:1px 0;font-family:'Segoe UI',system-ui,sans-serif,"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji"}
+.ai-news-text{font-size:0.86rem;color:var(--text);line-height:1.42;font-family:'Segoe UI',system-ui,sans-serif,"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji"}
 .ai-news-dots{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap}
 .ai-news-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);cursor:pointer;transition:all .2s}
 .ai-news-dot.active{background:var(--gold);width:18px;border-radius:4px}
@@ -1778,7 +1778,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.12.24</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.0</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2170,7 +2170,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.12.2',
+  app_version:'v1.13.0',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -2415,6 +2415,71 @@ function _stopVersionListener() {
   _versionInit = false; _versionRev = null;
 }
 
+// ── Reload remoto forçado pelo admin ─────────────────────────────────────────
+// Documento único (config/app_reload) observado por todos os clientes logados.
+// Quando o admin clica em "Forçar atualização para todos", forceAppReloadAll()
+// incrementa 'rev'. Cada cliente que JÁ carregou uma versão com este listener
+// detecta a mudança e recarrega a página (window.location.reload()) — passando a
+// usar o script/app mais recente. Quem estiver numa versão antiga demais (sem este
+// listener) precisa atualizar manualmente uma vez. Ignora o primeiro snapshot para
+// não recarregar logo ao abrir.
+let _appReloadUnsub = null;
+let _appReloadRev = null;
+let _appReloadInit = false;
+
+function _startAppReloadListener() {
+  if (_appReloadUnsub) return; // já ativo
+  try {
+    _appReloadUnsub = db_.collection('config').doc('app_reload').onSnapshot(snap => {
+      const rev = snap.exists ? (snap.data()?.rev ?? null) : null;
+      if (!_appReloadInit) { _appReloadInit = true; _appReloadRev = rev; return; }
+      if (rev === _appReloadRev) return;
+      _appReloadRev = rev;
+      _toastIfPossible('🔄 Nova versão disponível — atualizando…','success');
+      // Pequeno atraso para o toast aparecer antes do reload.
+      setTimeout(() => { try { window.location.reload(); } catch(_) {} }, 1500);
+    }, _err => { /* listener falhou (offline/permissão) — segue por atualização manual */ });
+  } catch(_) { /* best-effort */ }
+}
+
+function _stopAppReloadListener() {
+  if (_appReloadUnsub) { try { _appReloadUnsub(); } catch(_){} _appReloadUnsub = null; }
+  _appReloadInit = false; _appReloadRev = null;
+}
+
+// Admin força todos os clientes logados a recarregar (incrementa config/app_reload.rev).
+async function forceAppReloadAll() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin pode forçar atualização.','error'); return; }
+  if (!confirm('Forçar atualização para TODOS os usuários logados?\n\nQuem já carregou uma versão com esse recurso vai recarregar a página automaticamente em alguns segundos. Quem estiver numa versão muito antiga precisará atualizar manualmente uma vez.')) return;
+  const btn = document.getElementById('btn-force-reload');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando…'; }
+  try {
+    const FV = firebase.firestore.FieldValue;
+    const appVersion = document.querySelector('meta[name="app-version"]')?.content || CFG.app_version || '';
+    await db_.collection('config').doc('app_reload').set({
+      rev: FV.increment(1),
+      requestedAt: FV.serverTimestamp(),
+      requestedBy: currentUserDoc?.nome || currentUser?.uid || null,
+      requestedByEmail: currentUser?.email || null,
+      appVersion
+    }, { merge: true });
+    try {
+      await db_.collection('audit').add({
+        type: 'force_app_reload',
+        adminUid: currentUser?.uid || null,
+        adminEmail: currentUser?.email || null,
+        appVersion,
+        at: FV.serverTimestamp()
+      });
+    } catch(_) {}
+    showToast('✅ Atualização enviada! Os usuários logados vão recarregar em instantes.','success');
+  } catch(e) {
+    showToast('Erro ao forçar atualização: '+e.message,'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Forçar atualização para todos'; }
+  }
+}
+
 // Atualização vinda de outro cliente (admin lançou/alterou um resultado).
 // Invalida apenas o cache de resultados e re-renderiza páginas de visualização —
 // não interrompe quem está preenchendo palpites nem o admin trabalhando.
@@ -2570,6 +2635,7 @@ async function handleAuthState(user) {
       await loadCFG();
       showApp();
       _startVersionListener();
+      _startAppReloadListener();
       _restorePageFromHash();
     } catch(e) {
       showToast('Erro ao carregar dados: '+e.message,'error');
@@ -2578,6 +2644,7 @@ async function handleAuthState(user) {
   } else {
     currentUser = null; currentUserDoc = null;
     _stopVersionListener();
+    _stopAppReloadListener();
     showLoading(false); showAuth();
   }
 }
@@ -3820,7 +3887,11 @@ async function renderDashboard() {
         const posClass = pos===1?'gold':pos===2?'silver':pos===3?'bronze':'';
         const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':'';
         const isMe = u.uid===currentUser.uid;
-        const pct = totalJogos>0 ? Math.round(u.jogos/totalJogos*100) : 0;
+        // % de acerto = palpites que pontuaram ÷ jogos avaliados com palpite.
+        // u.jogos = jogos com palpite e resultado; u.erros = palpites que zeraram.
+        // Equivale ao acertoPct das estatísticas (acertos / count).
+        const acertoNum = u.jogos>0 ? Math.round((u.jogos - u.erros)/u.jogos*100) : null;
+        const pctTxt = acertoNum===null ? '—' : acertoNum+'%';
         const prevPos = dense ? denseDeltas[u.uid] : positionDeltas[u.uid];
         const delta = prevPos ? prevPos - pos : null;
         const deltaBadge = delta === null ? '' :
@@ -3845,8 +3916,8 @@ async function renderDashboard() {
           <td class="text-gold">${u.apenas_venc}</td>
           <td class="text-muted">${u.jogos}</td>
           <td style="font-size:0.8rem">${champCell}</td>
-          <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${maxPts>0?Math.round(u.pontos/maxPts*100):0}%"></div></div>
-            <div style="font-size:0.68rem;color:var(--text-muted)">${pct}%</div></td>
+          <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${acertoNum||0}%"></div></div>
+            <div style="font-size:0.68rem;color:var(--text-muted)">${pctTxt}</div></td>
           <td>${distLider}</td>
         </tr>`;
 
@@ -3865,6 +3936,7 @@ async function renderDashboard() {
             <span class="rank-chip exact">🎯 ${u.exatos} Exatos</span>
             <span class="rank-chip vsaldo">⚡ ${u.venc_saldo} V+Saldo</span>
             <span class="rank-chip venc">✓ ${u.apenas_venc} Venc.</span>
+            <span class="rank-chip" title="% de acerto: palpites que pontuaram ÷ jogos com palpite">✅ ${pctTxt} acerto</span>
           </div>
         </div>`;
       });
@@ -3879,7 +3951,7 @@ async function renderDashboard() {
             <th title="Posição na classificação selecionada (Oficial ou Por Pontos)">#</th>
             <th style="min-width:110px">Participante</th><th>Pontos</th>
             <th>Exatos</th><th>V+Saldo</th><th>Vencedor</th>
-            <th>Jogos</th><th title="Palpite de Campeão">🏆 Campeão</th><th>%</th><th title="Distância para o líder">Dist.</th>
+            <th>Jogos</th><th title="Palpite de Campeão">🏆 Campeão</th><th title="% de acerto: palpites que pontuaram ÷ jogos com palpite">% Acerto</th><th title="Distância para o líder">Dist.</th>
           </tr></thead><tbody id="rank-tbody">${_rb.rows}</tbody></table></div></div>
     <div class="ranking-cards" id="rank-cards">${_rb.cards}</div>`;
 
@@ -6994,21 +7066,61 @@ function _fmtAITimestamp(cache) {
   return `Atualizado em ${str}${cache.updatedBy ? ' · ' + esc(cache.updatedBy) : ''}`;
 }
 
-function _buildBumpChart(users, res, allPals) {
-  if (!users.length) return '';
-  // Checkpoints por DIA (Brasília): cada dia com pelo menos um resultado vira um
-  // ponto no eixo X (mais granular que por rodada). _gameFilterISO cola jogos de
-  // madrugada no dia anterior.
+// Monta os checkpoints (pontos do eixo X) do gráfico de evolução conforme a
+// granularidade escolhida. Cada checkpoint guarda o conjunto CUMULATIVO de jogos
+// até ali, para recalcular a posição de cada participante naquele momento.
+function _bumpCheckpoints(res, gran) {
   const resGames = ALL_GAMES.filter(g => _hasFullResult(res[g.id]));
   const dayOf = g => _gameFilterISO(g, res[g.id]);
-  const days = [...new Set(resGames.map(dayOf))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
-  let cumIds = [];
-  const checkpoints = [];
+  if (gran === 'rodada') {
+    // Fases na ordem cronológica: Grupos R1, R2, R3, depois cada fase eliminatória.
+    const phases = [];
+    [1,2,3].forEach(r => phases.push({ label: 'Rod ' + r, ids: Object.values(GRUPOS_DATA).flatMap(g => g.games.filter(gm => gm.r === r).map(gm => gm.id)) }));
+    Object.values(ELIM_DATA).forEach(d => phases.push({ label: d.label, ids: d.games.map(g => g.id) }));
+    const resSet = new Set(resGames.map(g => g.id));
+    let cum = []; const cps = [];
+    phases.forEach(ph => {
+      const withRes = ph.ids.filter(id => resSet.has(id));
+      if (!withRes.length) return;
+      cum = cum.concat(withRes);
+      cps.push({ label: ph.label, gameIds: [...cum] });
+    });
+    return cps;
+  }
+  if (gran === '2jogos') {
+    const ordered = resGames.slice().sort((a,b) => {
+      const da = dayOf(a) || '', dbb = dayOf(b) || '';
+      return da !== dbb ? da.localeCompare(dbb) : _parseGameDate(a.date) - _parseGameDate(b.date);
+    });
+    let cum = []; const cps = [];
+    for (let i = 0; i < ordered.length; i += 2) {
+      const chunk = ordered.slice(i, i + 2);
+      cum = cum.concat(chunk.map(g => g.id));
+      const iso = dayOf(chunk[chunk.length - 1]);
+      cps.push({ label: iso ? _isoToGameDate(iso) : (cum.length + 'j'), gameIds: [...cum] });
+    }
+    return cps;
+  }
+  // 'dia' (padrão): cada dia (Brasília) com pelo menos um resultado vira um ponto.
+  // _gameFilterISO cola jogos de madrugada no dia anterior.
+  const days = [...new Set(resGames.map(dayOf))].filter(Boolean).sort((a,b) => a.localeCompare(b));
+  let cum = []; const cps = [];
   days.forEach(d => {
-    cumIds = cumIds.concat(resGames.filter(g => dayOf(g) === d).map(g => g.id));
-    checkpoints.push({ label: _isoToGameDate(d), gameIds: [...cumIds] });
+    cum = cum.concat(resGames.filter(g => dayOf(g) === d).map(g => g.id));
+    cps.push({ label: _isoToGameDate(d), gameIds: [...cum] });
   });
-  if (checkpoints.length < 2) return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem">São necessários pelo menos 2 dias com resultados para exibir o gráfico</div>`;
+  return cps;
+}
+
+function _buildBumpChart(users, res, allPals, gran, keepSel) {
+  if (!users.length) return '';
+  const checkpoints = _bumpCheckpoints(res, gran || 'dia');
+  if (checkpoints.length < 2) {
+    const minMsg = gran === 'rodada' ? 'São necessárias pelo menos 2 rodadas/fases com resultados para exibir o gráfico.'
+      : gran === '2jogos' ? 'São necessários pelo menos 4 jogos com resultado para exibir o gráfico nesta granularidade.'
+      : 'São necessários pelo menos 2 dias com resultados para exibir o gráfico.';
+    return `<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.85rem">${minMsg}</div>`;
+  }
   const rankingsAtCp = checkpoints.map(cp => _computeRankingForGameIds(users, res, allPals, cp.gameIds));
   const finalRanking = rankingsAtCp[rankingsAtCp.length - 1];
   const n = users.length, numCp = checkpoints.length;
@@ -7022,17 +7134,18 @@ function _buildBumpChart(users, res, allPals) {
     '#FCA5A5','#93C5FD','#FDE68A','#6EE7B7','#F9A8D4','#BAE6FD','#DDD6FE','#BBF7D0','#FED7AA','#BFDBFE'];
   const uidColor = {};
   finalRanking.forEach((u,i) => { uidColor[u.uid] = palette[i % palette.length]; });
-  // Nova seleção sempre começa limpa (os data-uid do DOM anterior já não existem).
-  _bumpSel = new Set();
+  // Render inicial limpa a seleção; troca de granularidade (keepSel) preserva os
+  // participantes destacados (os uids continuam válidos entre granularidades).
+  if (!keepSel) _bumpSel = new Set();
   // Modelo paralelo para redesenhar o gráfico em <canvas> com PRIMITIVAS na hora
   // de exportar (sem passar SVG pelo canvas, que no iOS deixa o canvas "tainted"
   // e quebra o toDataURL). Ver _bumpRenderCanvas.
   const _rowsM = [], _cpsM = [], _seriesM = [];
   let svg = `<svg id="bump-svg" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:320px">`;
   // Grid
-  for (let r=1;r<=n;r++) { const y=yFor(r); _rowsM.push({y,label:`${r}°`}); svg+=`<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="rgba(255,255,255,.05)" stroke-width="1"/><text x="${padL-4}" y="${y+3.5}" text-anchor="end" font-size="9" fill="rgba(255,255,255,.3)">${r}°</text>`; }
-  const xLblStep = Math.ceil(numCp/8); // afina os rótulos quando há muitos dias
-  checkpoints.forEach((cp,i) => { const x=xFor(i); const showLbl=(i%xLblStep===0||i===numCp-1); _cpsM.push({x,label:cp.label,show:showLbl}); svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.1)" stroke-width="1" stroke-dasharray="3,4"/>${showLbl?`<text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.45)">${esc(cp.label)}</text>`:''}`; });
+  for (let r=1;r<=n;r++) { const y=yFor(r); _rowsM.push({y,label:`${r}°`}); svg+=`<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="rgba(255,255,255,.09)" stroke-width="1"/><text x="${padL-4}" y="${y+3.5}" text-anchor="end" font-size="10" font-weight="700" fill="rgba(255,255,255,.7)">${r}°</text>`; }
+  const xLblStep = Math.ceil(numCp/8); // afina os rótulos quando há muitos pontos
+  checkpoints.forEach((cp,i) => { const x=xFor(i); const showLbl=(i%xLblStep===0||i===numCp-1); _cpsM.push({x,label:cp.label,show:showLbl}); svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${svgH-padB}" stroke="rgba(255,255,255,.13)" stroke-width="1" stroke-dasharray="3,4"/>${showLbl?`<text x="${x}" y="${svgH-6}" text-anchor="middle" font-size="10" font-weight="600" fill="rgba(255,255,255,.78)">${esc(cp.label)}</text>`:''}`; });
   // Lines per user — cada série num <g> clicável (data-uid) para destacar/realçar.
   users.forEach(u => {
     const color = uidColor[u.uid]||'#888';
@@ -7046,10 +7159,10 @@ function _buildBumpChart(users, res, allPals) {
     const rawName=(u.apelido||u.nome||'').substring(0,12);
     _seriesM.push({ uid:u.uid, color, isLeader, pts:pts.map(p=>({x:p.x,y:p.y})), name:rawName, finalPos, endX:svgW-padR+8, endY:last.y+4 });
     svg += `<g class="bump-series" data-uid="${u.uid}" data-leader="${isLeader?'1':'0'}" style="color:${color}" onclick="_bumpToggle('${u.uid}')">`;
-    svg += `<path class="bump-line" d="${d}" fill="none" stroke="${color}" stroke-width="${isLeader?3:1.8}" opacity="${isLeader?1:.6}"/>`;
-    pts.forEach(pt => { svg+=`<circle class="bump-dot" cx="${pt.x}" cy="${pt.y}" r="${isLeader?4:2.8}" fill="${color}" stroke="rgba(0,0,0,.35)" stroke-width="1" opacity="${isLeader?1:.85}"/>`; });
+    svg += `<path class="bump-line" d="${d}" fill="none" stroke="${color}" stroke-width="${isLeader?3:2.2}" opacity="${isLeader?1:.82}"/>`;
+    pts.forEach(pt => { svg+=`<circle class="bump-dot" cx="${pt.x}" cy="${pt.y}" r="${isLeader?4:3}" fill="${color}" stroke="rgba(0,0,0,.45)" stroke-width="1" opacity="${isLeader?1:.95}"/>`; });
     const name=esc(rawName);
-    svg+=`<text class="bump-label" x="${svgW-padR+8}" y="${last.y+4}" font-size="${isLeader?12:10}" fill="${color}" font-weight="${isLeader?700:400}" opacity="${isLeader?1:.75}">${finalPos}° ${name}</text>`;
+    svg+=`<text class="bump-label" x="${svgW-padR+8}" y="${last.y+4}" font-size="${isLeader?12:10.5}" fill="${color}" font-weight="${isLeader?800:700}" opacity="${isLeader?1:.95}" paint-order="stroke" stroke="rgba(0,0,0,.55)" stroke-width="0.6">${finalPos}° ${name}</text>`;
     svg += `</g>`;
   });
   svg += '</svg>';
@@ -7061,7 +7174,7 @@ function _buildBumpChart(users, res, allPals) {
     return `<span class="bump-chip" data-uid="${u.uid}" data-color="${color}" onclick="_bumpToggle('${u.uid}')"><span class="bump-chip-dot" style="background:${color}"></span>${nm}</span>`;
   }).join('');
   return svg
-    + `<div class="no-capture" style="font-size:0.72rem;color:var(--text-muted);margin:10px 0 6px">👆 Toque num nome (no gráfico ou abaixo) para <b>destacar</b>. Pode escolher vários.</div>`
+    + `<div class="no-capture" style="font-size:0.76rem;color:var(--text);margin:10px 0 6px;line-height:1.45">👆 Toque ou clique em uma linha/nome para <b>destacar</b> participantes no gráfico. Você pode comparar a evolução de mais de uma pessoa.</div>`
     + `<div id="bump-chips" class="no-capture" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow:auto">`
     + `<span id="bump-clear" class="bump-chip" style="display:none;border-style:dashed" onclick="_bumpClear()">✕ limpar</span>`
     + chips + `</div>`;
@@ -7071,8 +7184,19 @@ function _buildBumpChart(users, res, allPals) {
 // para os onclick inline (_bumpToggle/_bumpClear) acessarem entre renders.
 let _bumpSel = new Set();
 let _bumpExport = null; // modelo de desenho do gráfico (para exportar em canvas)
+let _bumpGran = 'dia'; // granularidade do eixo X: 'dia' | 'rodada' | '2jogos'
+let _bumpData = null;  // { users, res, allPals } guardado para re-render no filtro
 function _bumpToggle(uid){ if(_bumpSel.has(uid)) _bumpSel.delete(uid); else _bumpSel.add(uid); _bumpApply(); }
 function _bumpClear(){ _bumpSel.clear(); _bumpApply(); }
+// Troca a granularidade do gráfico e re-renderiza sem recarregar a página,
+// preservando os participantes destacados (keepSel=true).
+function setBumpGran(gran){
+  if (!['dia','rodada','2jogos'].includes(gran) || !_bumpData) return;
+  _bumpGran = gran;
+  document.querySelectorAll('.bump-gran-btn').forEach(b => b.classList.toggle('active', b.dataset.gran === gran));
+  const host = document.getElementById('bump-chart-host');
+  if (host) { host.innerHTML = _buildBumpChart(_bumpData.users, _bumpData.res, _bumpData.allPals, gran, true); _bumpApply(); }
+}
 function _bumpApply(){
   const svg = document.getElementById('bump-svg'); if(!svg) return;
   const any = _bumpSel.size > 0;
@@ -7084,9 +7208,9 @@ function _bumpApply(){
     const label = g.querySelector('.bump-label');
     const dots = g.querySelectorAll('.bump-dot');
     let op, sw, lblOp, lblW, dotOp, glow;
-    if (!any)      { op=leader?1:.6;  sw=leader?3:1.8;   lblOp=leader?1:.75; lblW=leader?700:400; dotOp=leader?1:.85; glow=false; }
-    else if (sel)  { op=1;            sw=leader?3.4:2.6; lblOp=1;            lblW=800;            dotOp=1;            glow=true;  }
-    else           { op=.1;           sw=leader?3:1.8;   lblOp=.16;          lblW=leader?700:400; dotOp=.1;           glow=false; }
+    if (!any)      { op=leader?1:.82; sw=leader?3:2.2;   lblOp=leader?1:.95; lblW=leader?800:700; dotOp=leader?1:.95; glow=false; }
+    else if (sel)  { op=1;            sw=leader?3.4:2.8; lblOp=1;            lblW=800;            dotOp=1;            glow=true;  }
+    else           { op=.12;          sw=leader?3:2.2;   lblOp=.18;          lblW=leader?700:600; dotOp=.12;          glow=false; }
     if (line){ line.setAttribute('opacity',op); line.setAttribute('stroke-width',sw); line.classList.toggle('bump-sel',glow); }
     if (label){ label.setAttribute('opacity',lblOp); label.setAttribute('font-weight',lblW); }
     dots.forEach(dt => dt.setAttribute('opacity',dotOp));
@@ -7114,19 +7238,19 @@ function _bumpRenderCanvas(scale) {
   ctx.scale(s, s);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   // Grade horizontal + rótulos das posições.
-  ctx.font = '9px Arial';
+  ctx.font = 'bold 10px Arial';
   m.rows.forEach(r => {
-    ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,.09)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(m.padL, r.y); ctx.lineTo(m.xRight, r.y); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
     ctx.fillText(r.label, m.padL - 4, r.y + 3.5);
   });
-  // Linhas verticais tracejadas (dias) + rótulos.
+  // Linhas verticais tracejadas (checkpoints) + rótulos.
   m.cps.forEach(cp => {
-    ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
     ctx.beginPath(); ctx.moveTo(cp.x, m.padT); ctx.lineTo(cp.x, m.H - m.padB); ctx.stroke();
     ctx.setLineDash([]);
-    if (cp.show) { ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.textAlign = 'center'; ctx.fillText(cp.label, cp.x, m.H - 6); }
+    if (cp.show) { ctx.fillStyle = 'rgba(255,255,255,.78)'; ctx.textAlign = 'center'; ctx.fillText(cp.label, cp.x, m.H - 6); }
   });
   // Séries — não-selecionadas primeiro, selecionadas por cima (igual ao realce).
   const any = _bumpSel.size > 0;
@@ -7134,9 +7258,9 @@ function _bumpRenderCanvas(scale) {
   order.forEach(o => {
     const leader = o.isLeader, sel = _bumpSel.has(o.uid);
     let op, sw, lblOp, lblBold, dotOp, dotR;
-    if (!any)     { op=leader?1:.6;  sw=leader?3:1.8;   lblOp=leader?1:.75; lblBold=leader; dotOp=leader?1:.85; dotR=leader?4:2.8; }
-    else if (sel) { op=1;            sw=leader?3.4:2.6; lblOp=1;            lblBold=true;   dotOp=1;            dotR=leader?4:2.8; }
-    else          { op=.1;           sw=leader?3:1.8;   lblOp=.16;          lblBold=leader; dotOp=.1;           dotR=leader?4:2.8; }
+    if (!any)     { op=leader?1:.82; sw=leader?3:2.2;   lblOp=leader?1:.95; lblBold=true;   dotOp=leader?1:.95; dotR=leader?4:3; }
+    else if (sel) { op=1;            sw=leader?3.4:2.8; lblOp=1;            lblBold=true;   dotOp=1;            dotR=leader?4:3; }
+    else          { op=.12;          sw=leader?3:2.2;   lblOp=.18;          lblBold=leader; dotOp=.12;          dotR=leader?4:3; }
     const pts = o.pts;
     ctx.globalAlpha = op; ctx.strokeStyle = o.color; ctx.lineWidth = sw;
     ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
@@ -7305,16 +7429,6 @@ async function renderEstatisticas() {
 
     // Momento dos participantes — destaques editoriais (últimos 5 jogos com resultado)
     const momentum = _calcMomentum(ranking, allPals, res, 5);
-
-    // Ranking por fase
-    const phaseGameIds = {
-      grupos: Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(x=>x.id)),
-      eliminatorias: Object.values(ELIM_DATA).flatMap(g=>g.games.map(x=>x.id))
-    };
-    const rankGrupos = _computeRankingForGameIds(users, res, allPals, phaseGameIds.grupos);
-    const rankElim = _computeRankingForGameIds(users, res, allPals, phaseGameIds.eliminatorias);
-    const liderGrupos = rankGrupos[0];
-    const liderElim = rankElim[0];
 
     // Head-to-head mais "quente"
     const rivalidade = _calcHeadToHead(users, allPals, res);
@@ -7784,12 +7898,17 @@ async function renderEstatisticas() {
       </div>`;
     }
 
-    // ── Bump Chart: evolução do ranking ──
-    const bumpSvg = _buildBumpChart(users, res, allPals);
-    html += `<div class="card">
+    // ── Bump Chart: evolução do ranking — montado abaixo e posicionado no FIM
+    // da seção (ver _bumpCard, anexado logo antes de fechar a sub-aba clássica). ──
+    _bumpData = { users, res, allPals };
+    _bumpGran = 'dia';
+    const _bumpGranBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos']]
+      .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
+    const _bumpCard = `<div class="card">
       <div class="card-title">📈 Evolução do Ranking</div>
-      <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Posição de cada participante ao longo dos dias. Linha dourada = líder atual.</div>
-      <div class="bump-chart-wrap">${bumpSvg}</div>
+      <div style="font-size:0.8rem;color:var(--text);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
+      <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_bumpGranBar}</div>
+      <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false)}</div>
     </div>`;
 
     // (A "Análise da IA" agora aparece só no carrossel do dashboard.)
@@ -8171,25 +8290,6 @@ async function renderEstatisticas() {
       </div>`;
     }
 
-    // ── Ranking por fase ──
-    if ((liderGrupos && liderGrupos.jogos > 0) || (liderElim && liderElim.jogos > 0)) {
-      html += `<div class="card">
-        <div class="card-title">🗂️ Ranking por Fase</div>
-        <div class="stats-alt-grid">
-          <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:14px">
-            <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase">Fase de Grupos</div>
-            <div style="margin-top:6px;font-size:1rem;font-weight:800;color:var(--gold)">${esc(liderGrupos?.apelido||liderGrupos?.nome||'—')}</div>
-            <div style="font-size:.8rem;color:var(--text-muted)">${liderGrupos?.pontos||0} pts · ${liderGrupos?.jogos||0} jogos</div>
-          </div>
-          <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:14px">
-            <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase">Mata-mata</div>
-            <div style="margin-top:6px;font-size:1rem;font-weight:800;color:var(--green)">${esc(liderElim?.apelido||liderElim?.nome||'—')}</div>
-            <div style="font-size:.8rem;color:var(--text-muted)">${liderElim?.pontos||0} pts · ${liderElim?.jogos||0} jogos</div>
-          </div>
-        </div>
-      </div>`;
-    }
-
     // ── Jogo mais difícil e mais fácil ──
     if (maisDificil || maisFacil) {
       const fmtGame = (g) => g?.game ? `${esc(g.game.h)} × ${esc(g.game.a)}` : '—';
@@ -8323,6 +8423,9 @@ async function renderEstatisticas() {
 
     // ── Completude dos palpites (movida dos Gráficos para "Outras Stats") ──
     _outrasHtml += renderGxCompleteness({ users, res, allPals });
+
+    // Card de evolução do ranking posicionado no FIM da seção clássica.
+    html += _bumpCard;
 
     // Fecha a sub-aba clássica, monta "Outras Stats" e prepara "Gráficos" (sob demanda).
     html += '</div>'
@@ -10054,10 +10157,11 @@ REGRAS OBRIGATÓRIAS:
    - ⚔️ "Rivalidade do Bolão" (a dupla mais divergente — narre como uma briga particular)
    - 🏁 "Corrida pelo Topo" (quão apertada está a liderança, quantos ainda sonham)
    - 🔻 "Zona de Perigo" (os últimos, com leveza e incentivo à virada)
-   - 👑 "Torcida do Campeão" (qual seleção o bolão mais escolheu como campeã)
+   - 🪜 "Disputa por Posição" (quem está coladíssimo em alguém à frente e pode ultrapassar no próximo jogo)
    - 🔥 "Sequência Quente" (maior sequência de acertos ativa / hat-trick de exatos)
 5. Ajuste os ângulos à fase atual (${fase}): em grupos foque em estilos/padrões de aposta e goleadas;
-   em mata-mata foque em quem pode virar, rivalidades no ranking, e acerto do campeão.
+   em mata-mata foque em quem pode virar e nas rivalidades por posição no ranking.
+   NÃO crie cards sobre o palpite de campeão (ele é fixo após o bloqueio e não muda durante o torneio).
 6. NÃO repita o mesmo participante como protagonista em mais de 2 cards — espalhe os holofotes.
 7. Use emojis relevantes, títulos criativos e textos curtos que despertem curiosidade (no máx. 2 frases).
 8. Tom: animado, levemente irreverente, como um comentarista esportivo descontraído.
@@ -11270,6 +11374,16 @@ async function renderAdminConfig() {
         <button class="btn btn-secondary" onclick="massLock('grupos',false)">🔓 Desbloquear Grupos</button>
         <button class="btn btn-secondary" onclick="massLock('elim',true)">🔒 Bloquear Eliminatórias</button>
         <button class="btn btn-secondary" onclick="massLock('elim',false)">🔓 Desbloquear Elim.</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:8px">🔄 Forçar atualização do app</div>
+      <p class="text-muted" style="font-size:0.85rem;margin-bottom:10px">Recarrega a página de todos os usuários logados para que passem a usar a versão mais recente do app.</p>
+      <div class="alert alert-info" style="margin-bottom:14px;font-size:0.82rem">
+        💡 Funciona para quem já carregou uma versão do app com esse recurso — esses usuários recarregam automaticamente em alguns segundos. Quem estiver numa versão antiga demais precisará atualizar manualmente <b>uma vez</b>.
+      </div>
+      <div class="btn-group">
+        <button id="btn-force-reload" class="btn btn-primary" onclick="forceAppReloadAll()">🔄 Forçar atualização para todos</button>
       </div>
     </div>`;
 }
