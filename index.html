@@ -12540,12 +12540,49 @@ async function _swapSvgsForCapture(card, scale) {
   return () => restores.forEach(fn => fn());
 }
 
+// Exporta o card "Evolução do Ranking" como imagem SEM html2canvas: monta tudo
+// num <canvas> próprio (fundo + título + gráfico via _bumpRenderCanvas, que usa
+// só primitivas). Evita de vez o "URL malformed" do html2canvas com SVG inline
+// (acontece em PC e celular) e o canvas "tainted" do iOS.
+async function _shareBumpChartImage(card, btn) {
+  const prev = btn.textContent;
+  try {
+    btn.disabled = true; btn.textContent = '⏳';
+    const chart = _bumpRenderCanvas(2);
+    if (!chart) throw new Error('Gráfico indisponível — abra a aba Estatísticas novamente.');
+    const S = 2, W = 700, chartH = chart.height / S;
+    const headerH = 64, footerH = 30, padX = 18;
+    const H = headerH + chartH + footerH;
+    const cv = document.createElement('canvas');
+    cv.width = W * S; cv.height = Math.round(H * S);
+    const ctx = cv.getContext('2d'); ctx.scale(S, S);
+    let bg = getComputedStyle(card).backgroundColor;
+    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') bg = getComputedStyle(document.body).backgroundColor || '#0e1b2e';
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    const title = (card.querySelector('.card-title')?.textContent || '📈 Evolução do Ranking').trim().replace(/\s+/g, ' ');
+    const sub = (card.querySelector('.card-title')?.nextElementSibling?.textContent || '').trim().replace(/\s+/g, ' ');
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#FFD700'; ctx.font = '800 20px Arial'; ctx.fillText(title, padX, 32);
+    if (sub) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = '12px Arial'; ctx.fillText(sub.substring(0, 92), padX, 52); }
+    ctx.drawImage(chart, 0, headerH, W, chartH); // canvas→canvas: não contamina
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.font = '11px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(CFG.nome_bolao || 'Bolão ICN Copa 2026', W / 2, H - 10);
+    await _downloadOrShareCanvas(cv, 'evolucao-ranking.png', `📈 Evolução do Ranking — ${CFG.nome_bolao || 'Bolão ICN Copa 2026'}`);
+  } catch (e) {
+    showToast('Erro ao gerar imagem: ' + (e.message || e), 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = prev;
+  }
+}
+
 // Compartilha o card individual mais próximo do botão. Sub-cards (partidas
 // dentro de um card maior) são marcados com [data-share-card] e têm prioridade
 // sobre o .card externo — assim a imagem sai só da partida, não do bloco todo.
 async function shareStatCard(btn) {
   const card = btn.closest('[data-share-card]') || btn.closest('.card');
   if (!card) return;
+  // O card do bump chart é exportado por um caminho dedicado (sem html2canvas).
+  if (card.querySelector('#bump-svg') && _bumpExport) return _shareBumpChartImage(card, btn);
   const prevTxt = btn.textContent;
   // Esconde da foto os controles de UI (botões 📸/Ver mais e o próprio btn).
   const hidden = [...card.querySelectorAll('.no-capture, .stat-share-btn')];
