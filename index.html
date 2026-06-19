@@ -3963,6 +3963,22 @@ async function renderDashboard() {
       <button class="btn-share" onclick="shareRankingImage(10)">📸 Gerar imagem — Top 10</button>
       <button class="btn-share" onclick="shareRankingImage(0)">📸 Gerar imagem — Todos</button>
     </div>`;
+
+    // ── Evolução do Ranking abaixo do ranking (mesmo gráfico das Estatísticas) ──
+    // Só quando todos os palpites estão disponíveis (snapshot do cache ou busca
+    // completa) — o cálculo é local, sem leituras extras no Firestore.
+    if (allPals) {
+      _bumpData = { users, res, allPals };
+      _bumpGran = 'dia';
+      const _dashBumpBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos']]
+        .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
+      html += `<div class="card">
+        <div class="card-title">📈 Evolução do Ranking</div>
+        <div style="font-size:0.8rem;color:var(--text);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
+        <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_dashBumpBar}</div>
+        <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false)}</div>
+      </div>`;
+    }
     cont.innerHTML = html;
     _runAnimNumbers(); // contagem animada dos KPIs e da premiação (a partir do valor anterior)
     _startCountdownTimer();
@@ -7185,17 +7201,23 @@ let _bumpGran = 'dia'; // granularidade do eixo X: 'dia' | 'rodada' | '2jogos'
 let _bumpData = null;  // { users, res, allPals } guardado para re-render no filtro
 function _bumpToggle(uid){ if(_bumpSel.has(uid)) _bumpSel.delete(uid); else _bumpSel.add(uid); _bumpApply(); }
 function _bumpClear(){ _bumpSel.clear(); _bumpApply(); }
+// O gráfico aparece no Dashboard E nas Estatísticas — ambas as páginas ficam no
+// DOM. Limita as buscas por id (#bump-svg/#bump-chart-host) à página visível para
+// não colidir com a cópia oculta da outra página.
+function _bumpScope(){ return document.querySelector('.page.active') || document; }
 // Troca a granularidade do gráfico e re-renderiza sem recarregar a página,
 // preservando os participantes destacados (keepSel=true).
 function setBumpGran(gran){
   if (!['dia','rodada','2jogos'].includes(gran) || !_bumpData) return;
   _bumpGran = gran;
-  document.querySelectorAll('.bump-gran-btn').forEach(b => b.classList.toggle('active', b.dataset.gran === gran));
-  const host = document.getElementById('bump-chart-host');
+  const scope = _bumpScope();
+  scope.querySelectorAll('.bump-gran-btn').forEach(b => b.classList.toggle('active', b.dataset.gran === gran));
+  const host = scope.querySelector('#bump-chart-host');
   if (host) { host.innerHTML = _buildBumpChart(_bumpData.users, _bumpData.res, _bumpData.allPals, gran, true); _bumpApply(); }
 }
 function _bumpApply(){
-  const svg = document.getElementById('bump-svg'); if(!svg) return;
+  const scope = _bumpScope();
+  const svg = scope.querySelector('#bump-svg'); if(!svg) return;
   const any = _bumpSel.size > 0;
   svg.querySelectorAll('.bump-series').forEach(g => {
     const uid = g.getAttribute('data-uid');
@@ -7213,13 +7235,13 @@ function _bumpApply(){
     dots.forEach(dt => dt.setAttribute('opacity',dotOp));
     if (sel) g.parentNode.appendChild(g); // traz a série destacada para a frente
   });
-  document.querySelectorAll('#bump-chips .bump-chip').forEach(ch => {
+  scope.querySelectorAll('#bump-chips .bump-chip').forEach(ch => {
     const uid = ch.getAttribute('data-uid'); if(!uid) return;
     const sel = _bumpSel.has(uid);
     ch.classList.toggle('on', sel);
     ch.style.background = sel ? (ch.getAttribute('data-color')||'') : '';
   });
-  const clr = document.getElementById('bump-clear'); if(clr) clr.style.display = any ? '' : 'none';
+  const clr = scope.querySelector('#bump-clear'); if(clr) clr.style.display = any ? '' : 'none';
 }
 
 // Redesenha o bump chart num <canvas> usando só primitivas (linhas/arcos/texto),
