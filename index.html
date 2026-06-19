@@ -7101,10 +7101,18 @@ function _bumpCheckpoints(res, gran) {
     return cps;
   }
   if (gran === '2jogos') {
-    const ordered = resGames.slice().sort((a,b) => {
-      const da = dayOf(a) || '', dbb = dayOf(b) || '';
-      return da !== dbb ? da.localeCompare(dbb) : _parseGameDate(a.date) - _parseGameDate(b.date);
-    });
+    // Ordena por HORÁRIO DE INÍCIO (não só pela data): jogos do mesmo dia têm o
+    // mesmo _parseGameDate, e ALL_GAMES está agrupado por grupo/chave (não pela
+    // ordem do calendário). Usa time_override/GAME_TIMES como desempate, igual a
+    // computeLeaderGapHistory, para acumular os jogos na ordem real de disputa.
+    const kickoff = g => {
+      const r = res[g.id] || {};
+      const dateStr = r.date_override ? _isoToGameDate(r.date_override) : g.date;
+      const base = _parseGameDate(dateStr).getTime();
+      const tm = String(r.time_override || GAME_TIMES[g.id] || '').match(/^(\d{1,2}):(\d{2})$/);
+      return base + (tm ? (parseInt(tm[1]) * 60 + parseInt(tm[2])) * 60000 : 0);
+    };
+    const ordered = resGames.slice().sort((a,b) => kickoff(a) - kickoff(b));
     let cum = []; const cps = [];
     for (let i = 0; i < ordered.length; i += 2) {
       const chunk = ordered.slice(i, i + 2);
