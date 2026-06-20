@@ -100,13 +100,14 @@ a:hover{text-decoration:underline}
 }
 .app-brand{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
 .app-logo{font-size:1.1rem;font-weight:800;color:var(--gold);white-space:nowrap}
-.header-premio{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:0.6rem;line-height:1}
-.header-premio .hp-lbl{text-transform:uppercase;letter-spacing:.05em;color:var(--gold);font-weight:800;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.32);border-radius:999px;padding:2px 7px}
-.header-premio .hp-val{display:inline-flex;align-items:center;gap:2px;color:var(--text-muted);font-weight:600;white-space:nowrap}
-.header-premio .hp-val b{font-weight:800}
-.header-premio .hp-val.gold b{color:var(--gold)}
-.header-premio .hp-val.silver b{color:#C0C0C0}
-.header-premio .hp-val.bronze b{color:#CD7F32}
+.premio-bar{display:none;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;padding:6px 20px;background:linear-gradient(90deg,rgba(255,215,0,.07),rgba(255,140,0,.04));border-bottom:1px solid rgba(255,215,0,.18);font-size:0.8rem;line-height:1}
+.premio-bar .pb-lbl{text-transform:uppercase;letter-spacing:.06em;color:var(--gold);font-weight:800;font-size:0.65rem;opacity:.8;margin-right:4px}
+.premio-bar .pb-sep{color:rgba(255,255,255,.15)}
+.premio-bar .pb-val{display:inline-flex;align-items:center;gap:4px;font-weight:600;white-space:nowrap}
+.premio-bar .pb-val b{font-weight:800}
+.premio-bar .pb-val.gold b{color:var(--gold)}
+.premio-bar .pb-val.silver b{color:#C0C0C0}
+.premio-bar .pb-val.bronze b{color:#CD7F32}
 .app-nav{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto}
 .app-nav::-webkit-scrollbar{display:none}
 .nav-btn{
@@ -1620,12 +1621,6 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <header class="app-header">
     <div class="app-brand">
       <div class="app-logo">🏆 <span id="bolao-nome">Bolão ICN Copa 2026</span></div>
-      <div id="header-premio" class="header-premio" style="display:none">
-        <span class="hp-lbl" title="Prêmio acumulado">Prêmio</span>
-        <span class="hp-val gold">🥇 <b id="hp-1">—</b></span>
-        <span class="hp-val silver">🥈 <b id="hp-2">—</b></span>
-        <span class="hp-val bronze">🥉 <b id="hp-3">—</b></span>
-      </div>
     </div>
     <nav class="app-nav">
       <button class="nav-btn active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠 Ranking</button>
@@ -1669,6 +1664,16 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
       <button class="btn-logout" onclick="doLogout()">Sair</button>
     </div>
   </header>
+
+  <!-- Barra de prêmios — exibida abaixo do header quando o ranking é calculado -->
+  <div id="header-premio" class="premio-bar">
+    <span class="pb-lbl">Prêmio</span>
+    <span class="pb-val gold">🥇 <b id="hp-1">—</b></span>
+    <span class="pb-sep">·</span>
+    <span class="pb-val silver">🥈 <b id="hp-2">—</b></span>
+    <span class="pb-sep">·</span>
+    <span class="pb-val bronze">🥉 <b id="hp-3">—</b></span>
+  </div>
 
   <!-- Bottom Navigation (Mobile) -->
   <nav class="bottom-nav" id="bottom-nav">
@@ -12640,7 +12645,7 @@ function _updateHeaderPremio(totalArr, premios) {
   const el = document.getElementById('header-premio');
   if (!el) return;
   const _brl = v => 'R$ ' + Math.round(Number(v) || 0).toLocaleString('pt-BR');
-  const lbl = el.querySelector('.hp-lbl');
+  const lbl = el.querySelector('.pb-lbl');
   if (lbl) lbl.title = 'Total arrecadado: ' + formatBRL(totalArr);
   const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = _brl(v); };
   set('hp-1', premios.primeiro);
