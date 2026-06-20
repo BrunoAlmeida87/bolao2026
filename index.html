@@ -100,14 +100,15 @@ a:hover{text-decoration:underline}
 }
 .app-brand{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
 .app-logo{font-size:1.1rem;font-weight:800;color:var(--gold);white-space:nowrap}
-.premio-bar{display:none;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;padding:6px 20px;background:linear-gradient(90deg,rgba(255,215,0,.07),rgba(255,140,0,.04));border-bottom:1px solid rgba(255,215,0,.18);font-size:0.8rem;line-height:1}
-.premio-bar .pb-lbl{text-transform:uppercase;letter-spacing:.06em;color:var(--gold);font-weight:800;font-size:0.65rem;opacity:.8;margin-right:4px}
-.premio-bar .pb-sep{color:rgba(255,255,255,.15)}
-.premio-bar .pb-val{display:inline-flex;align-items:center;gap:4px;font-weight:600;white-space:nowrap}
-.premio-bar .pb-val b{font-weight:800}
-.premio-bar .pb-val.gold b{color:var(--gold)}
-.premio-bar .pb-val.silver b{color:#C0C0C0}
-.premio-bar .pb-val.bronze b{color:#CD7F32}
+.premio-bar-card{background:linear-gradient(135deg,rgba(255,215,0,.08) 0%,rgba(255,140,0,.03) 100%);border:1px solid rgba(255,215,0,.28);border-radius:12px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:10px 20px}
+.premio-bar-card .pbc-ttl{font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);white-space:nowrap}
+.premio-bar-card .pbc-total{font-size:0.68rem;color:var(--text-muted);margin-left:auto}
+.premio-bar-card .pbc-prizes{display:flex;gap:0;flex:1;min-width:0;justify-content:space-around}
+.premio-bar-card .pbc-item{text-align:center;padding:4px 12px;flex:1}
+.premio-bar-card .pbc-item+.pbc-item{border-left:1px solid var(--border)}
+.premio-bar-card .pbc-medal{font-size:1.2rem;display:block}
+.premio-bar-card .pbc-val{font-weight:800;font-size:0.95rem;display:block;line-height:1.2}
+.premio-bar-card .pbc-lbl{font-size:0.62rem;color:var(--text-muted);display:block}
 .app-nav{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto}
 .app-nav::-webkit-scrollbar{display:none}
 .nav-btn{
@@ -1664,16 +1665,6 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
       <button class="btn-logout" onclick="doLogout()">Sair</button>
     </div>
   </header>
-
-  <!-- Barra de prêmios — exibida abaixo do header quando o ranking é calculado -->
-  <div id="header-premio" class="premio-bar">
-    <span class="pb-lbl">Prêmio</span>
-    <span class="pb-val gold">🥇 <b id="hp-1">—</b></span>
-    <span class="pb-sep">·</span>
-    <span class="pb-val silver">🥈 <b id="hp-2">—</b></span>
-    <span class="pb-sep">·</span>
-    <span class="pb-val bronze">🥉 <b id="hp-3">—</b></span>
-  </div>
 
   <!-- Bottom Navigation (Mobile) -->
   <nav class="bottom-nav" id="bottom-nav">
@@ -3814,14 +3805,23 @@ async function renderDashboard() {
 
     const _totalArr = calcTotalArrecadado(allUsers);
     const _premios = calcPremios(_totalArr);
-    // O painel de arrecadação saiu do dashboard e virou um selo compacto no header,
-    // ao lado do nome do bolão (ver _updateHeaderPremio).
-    _updateHeaderPremio(_totalArr, _premios);
+    const _fmtBrl = v => 'R$ ' + Math.round(Number(v)||0).toLocaleString('pt-BR');
+    const _premioCard = _totalArr > 0 ? `
+      <div class="premio-bar-card">
+        <span class="pbc-ttl">💰 Premiação</span>
+        <span class="pbc-total">Total arrecadado: ${formatBRL(_totalArr)}</span>
+        <div class="pbc-prizes">
+          <div class="pbc-item"><span class="pbc-medal">🥇</span><span class="pbc-val" style="color:var(--gold)">${_fmtBrl(_premios.primeiro)}</span><span class="pbc-lbl">1º lugar</span></div>
+          <div class="pbc-item"><span class="pbc-medal">🥈</span><span class="pbc-val" style="color:#C0C0C0">${_fmtBrl(_premios.segundo)}</span><span class="pbc-lbl">2º lugar</span></div>
+          <div class="pbc-item"><span class="pbc-medal">🥉</span><span class="pbc-val" style="color:#CD7F32">${_fmtBrl(_premios.terceiro)}</span><span class="pbc-lbl">3º lugar</span></div>
+        </div>
+      </div>` : '';
 
     // _dashResults e _dashBolaoDistrib já foram populados acima.
 
     let html = `
       <div class="section-title">🏆 ${esc(CFG.nome_bolao)}${_refreshBtn()}</div>
+      ${_premioCard}
 
       ${_roundReminderBanner()}
       <div style="font-size:0.95rem;font-weight:700;color:var(--text-muted);margin:4px 0 10px">Jogos da próxima rodada:</div>
@@ -12639,20 +12639,7 @@ function calcPremios(total) {
   };
 }
 
-// Atualiza o selo "Prêmio" no header (ao lado do nome do bolão). Mostra os valores
-// do pódio em formato compacto (sem centavos) e o total arrecadado no tooltip.
-function _updateHeaderPremio(totalArr, premios) {
-  const el = document.getElementById('header-premio');
-  if (!el) return;
-  const _brl = v => 'R$ ' + Math.round(Number(v) || 0).toLocaleString('pt-BR');
-  const lbl = el.querySelector('.pb-lbl');
-  if (lbl) lbl.title = 'Total arrecadado: ' + formatBRL(totalArr);
-  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = _brl(v); };
-  set('hp-1', premios.primeiro);
-  set('hp-2', premios.segundo);
-  set('hp-3', premios.terceiro);
-  el.style.display = 'flex';
-}
+function _updateHeaderPremio() {}
 
 function _renderQRCode(containerId) {
   const el = document.getElementById(containerId);
