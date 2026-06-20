@@ -100,15 +100,16 @@ a:hover{text-decoration:underline}
 }
 .app-brand{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
 .app-logo{font-size:1.1rem;font-weight:800;color:var(--gold);white-space:nowrap}
-.premio-bar-card{background:linear-gradient(135deg,rgba(255,215,0,.08) 0%,rgba(255,140,0,.03) 100%);border:1px solid rgba(255,215,0,.28);border-radius:12px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:10px 20px}
-.premio-bar-card .pbc-ttl{font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);white-space:nowrap}
-.premio-bar-card .pbc-total{font-size:0.68rem;color:var(--text-muted);margin-left:auto}
-.premio-bar-card .pbc-prizes{display:flex;gap:0;flex:1;min-width:0;justify-content:space-around}
-.premio-bar-card .pbc-item{text-align:center;padding:4px 12px;flex:1}
+.premio-bar-card{background:linear-gradient(135deg,rgba(255,215,0,.08) 0%,rgba(255,140,0,.03) 100%);border:1px solid rgba(255,215,0,.28);border-radius:12px;padding:10px 16px;margin-bottom:14px}
+.premio-bar-card .pbc-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:2px 8px}
+.premio-bar-card .pbc-ttl{font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold)}
+.premio-bar-card .pbc-total{font-size:0.68rem;color:var(--text-muted)}
+.premio-bar-card .pbc-prizes{display:flex;justify-content:space-around;width:100%}
+.premio-bar-card .pbc-item{text-align:center;flex:1;padding:4px 0}
 .premio-bar-card .pbc-item+.pbc-item{border-left:1px solid var(--border)}
-.premio-bar-card .pbc-medal{font-size:1.2rem;display:block}
-.premio-bar-card .pbc-val{font-weight:800;font-size:0.95rem;display:block;line-height:1.2}
-.premio-bar-card .pbc-lbl{font-size:0.62rem;color:var(--text-muted);display:block}
+.premio-bar-card .pbc-medal{font-size:1.2rem;display:block;line-height:1.4}
+.premio-bar-card .pbc-val{font-weight:800;font-size:0.9rem;display:block;line-height:1.2}
+.premio-bar-card .pbc-lbl{font-size:0.62rem;color:var(--text-muted);display:block;margin-top:1px}
 .app-nav{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto}
 .app-nav::-webkit-scrollbar{display:none}
 .nav-btn{
@@ -950,6 +951,7 @@ body.light-theme .mais-sheet a.active{color:var(--accent)}
 @media(max-width:820px){
   .bottom-nav{display:flex}
   .app-nav{display:none}
+  .nav-dropdown{display:none}
   .container{padding-bottom:calc(84px + env(safe-area-inset-bottom));padding-left:12px;padding-right:12px}
   .grid2{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
@@ -3808,8 +3810,10 @@ async function renderDashboard() {
     const _fmtBrl = v => 'R$ ' + Math.round(Number(v)||0).toLocaleString('pt-BR');
     const _premioCard = _totalArr > 0 ? `
       <div class="premio-bar-card">
-        <span class="pbc-ttl">💰 Premiação</span>
-        <span class="pbc-total">Total arrecadado: ${formatBRL(_totalArr)}</span>
+        <div class="pbc-header">
+          <span class="pbc-ttl">💰 Premiação</span>
+          <span class="pbc-total">Total arrecadado: ${formatBRL(_totalArr)}</span>
+        </div>
         <div class="pbc-prizes">
           <div class="pbc-item"><span class="pbc-medal">🥇</span><span class="pbc-val" style="color:var(--gold)">${_fmtBrl(_premios.primeiro)}</span><span class="pbc-lbl">1º lugar</span></div>
           <div class="pbc-item"><span class="pbc-medal">🥈</span><span class="pbc-val" style="color:#C0C0C0">${_fmtBrl(_premios.segundo)}</span><span class="pbc-lbl">2º lugar</span></div>
