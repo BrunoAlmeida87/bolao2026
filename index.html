@@ -9911,6 +9911,7 @@ function renderAdmin() {
       <button class="admin-tab" data-tab="export" onclick="switchAdminTab('export')">⬇️ Exportar</button>
       <button class="admin-tab" data-tab="ia" onclick="switchAdminTab('ia')">🤖 IA</button>
       <button class="admin-tab" data-tab="uso" onclick="switchAdminTab('uso')">📊 Uso</button>
+      <button class="admin-tab" data-tab="relatorio" onclick="switchAdminTab('relatorio')">📈 Relatório</button>
     </div>
     <div id="admin-resultados" class="admin-content active"></div>
     <div id="admin-usuarios" class="admin-content"></div>
@@ -9920,7 +9921,8 @@ function renderAdmin() {
     <div id="admin-historico" class="admin-content"></div>
     <div id="admin-export" class="admin-content"></div>
     <div id="admin-ia" class="admin-content"></div>
-    <div id="admin-uso" class="admin-content"></div>`;
+    <div id="admin-uso" class="admin-content"></div>
+    <div id="admin-relatorio" class="admin-content"></div>`;
   renderAdminResultados();
 }
 
@@ -10323,6 +10325,7 @@ function switchAdminTab(tab) {
     case 'export': renderAdminExport(); break;
     case 'ia': renderAdminIA(); break;
     case 'uso': renderAdminUso(); break;
+    case 'relatorio': renderAdminRelatorio(); break;
   }
 }
 
@@ -11957,6 +11960,285 @@ async function integRun(mode) {
     if (out) out.innerHTML = `<div class="alert alert-error">Erro na verificação: ${esc(errMsg(e))}</div>`;
   } finally {
     btns.forEach(b => { if (b) b.disabled = false; });
+  }
+}
+
+// ════════════════════════════════════════════
+// RELATÓRIO DE ALTERAÇÕES (Admin → Relatório)
+// ════════════════════════════════════════════
+
+function renderAdminRelatorio() {
+  const cont = document.getElementById('admin-relatorio');
+  if (!cont) return;
+  cont.innerHTML = `
+    <div class="card">
+      <div class="card-header"><span class="card-title">📈 Relatório de Alterações de Palpites</span></div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
+        Relatório completo das alterações de palpite de cada participante —
+        quando alterou, quanto tempo antes do bloqueio cada mudança foi feita,
+        e se houve edição após o bloqueio (somente via admin).
+        <br><b>Custo:</b> ~1 leitura por participante (subcoleção historico). Use com moderação.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <button class="btn btn-primary" id="rel-gerar-btn" onclick="gerarRelatorioAlteracoes()">📈 Gerar Relatório Completo</button>
+        <span id="rel-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
+      </div>
+      <div id="rel-result"></div>
+    </div>`;
+}
+
+function _relFmtMs(ms) {
+  const abs = Math.abs(ms);
+  const d = Math.floor(abs / 86400000);
+  const h = Math.floor((abs % 86400000) / 3600000);
+  const m = Math.floor((abs % 3600000) / 60000);
+  const s = Math.floor((abs % 60000) / 1000);
+  if (d > 0) return h > 0 ? `${d}d ${h}h ${m}min` : `${d}d ${m}min`;
+  if (h > 0) return `${h}h ${m}min`;
+  if (m > 0) return `${m}min ${s}s`;
+  return `${s}s`;
+}
+
+function _relToggle(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const willOpen = el.style.display === 'none';
+  el.style.display = willOpen ? '' : 'none';
+  const arrow = document.querySelector('[data-rel-toggle="' + id + '"] .rel-arrow');
+  if (arrow) arrow.textContent = willOpen ? '▲ recolher' : '▼ ver detalhes';
+}
+
+async function gerarRelatorioAlteracoes() {
+  const btn = document.getElementById('rel-gerar-btn');
+  const status = document.getElementById('rel-status');
+  const out = document.getElementById('rel-result');
+  if (btn) btn.disabled = true;
+  if (out) out.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  if (status) status.textContent = 'Carregando dados…';
+  try {
+    const [users, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const participantes = users.filter(u => u.ativo !== false && u.role !== 'admin');
+    if (status) status.textContent = 'Buscando histórico de ' + participantes.length + ' participante(s)…';
+
+    const histData = await Promise.all(participantes.map(async u => {
+      try {
+        const snap = await db_.collection('palpites').doc(u.uid).collection('historico')
+          .orderBy('at', 'asc').limit(1000).get();
+        return { user: u, entries: snap.docs.map(d => d.data()), err: null };
+      } catch(e) { return { user: u, entries: [], err: errMsg(e) }; }
+    }));
+
+    const tsDate = ts => ts?.toDate ? ts.toDate() : (ts?.seconds ? new Date(ts.seconds * 1000) : null);
+
+    const stats = histData.map(({ user, entries, err }) => {
+      const name = user.apelido || user.nome || user.email || user.uid;
+      const byGame = new Map();
+      let totalPrimeiros = 0, totalAlteracoes = 0, totalDeletes = 0, totalAdminEdits = 0;
+      let mosOusado = null, maisAntecipado = null;
+      const afterLock = [];
+      let sumDiff = 0, countDiff = 0;
+
+      entries.forEach(entry => {
+        if (!entry.at) return;
+        const entryTime = tsDate(entry.at);
+        if (!entryTime) return;
+        if (entry.adminEdit) totalAdminEdits++;
+        if (entry.action === 'delete') totalDeletes++;
+        else if (!entry.edit) totalPrimeiros++;
+        else totalAlteracoes++;
+
+        const game = ALL_GAMES.find(g => g.id === entry.gameId);
+        const lockAt = game ? _gameLockInstant(game, res[entry.gameId] || {}) : null;
+        const diffMs = lockAt ? lockAt.getTime() - entryTime.getTime() : null;
+        const item = { entry, entryTime, lockAt, diffMs };
+
+        if (lockAt) {
+          if (diffMs < 0) {
+            afterLock.push(item);
+          } else if (!entry.adminEdit && entry.action !== 'delete') {
+            if (!mosOusado || diffMs < mosOusado.diffMs) mosOusado = item;
+            if (!maisAntecipado || diffMs > maisAntecipado.diffMs) maisAntecipado = item;
+            sumDiff += diffMs; countDiff++;
+          }
+        }
+        let ge = byGame.get(entry.gameId);
+        if (!ge) { ge = { gameId: entry.gameId, edits: 0, deletes: 0, items: [] }; byGame.set(entry.gameId, ge); }
+        ge.items.push(item);
+        if (entry.action === 'delete') ge.deletes++;
+        else if (entry.edit && !entry.adminEdit) ge.edits++;
+      });
+
+      return {
+        user, name, entries, err,
+        byGame: [...byGame.values()].sort((a, b) => b.edits - a.edits),
+        totalPrimeiros, totalAlteracoes, totalDeletes, totalAdminEdits,
+        totalEntries: entries.length,
+        mosOusado, maisAntecipado, afterLock,
+        avgDiff: countDiff > 0 ? sumDiff / countDiff : null
+      };
+    });
+
+    stats.sort((a, b) => b.totalAlteracoes - a.totalAlteracoes || b.totalEntries - a.totalEntries);
+
+    const maisIndeciso = stats.find(s => s.totalAlteracoes > 0);
+    const globalOusado = stats.reduce((best, s) => {
+      if (!s.mosOusado) return best;
+      if (!best || s.mosOusado.diffMs < best.item.diffMs) return { s, item: s.mosOusado };
+      return best;
+    }, null);
+    const globalAntecipado = stats.reduce((best, s) => {
+      if (!s.maisAntecipado) return best;
+      if (!best || s.maisAntecipado.diffMs > best.item.diffMs) return { s, item: s.maisAntecipado };
+      return best;
+    }, null);
+    const totalAfterLock = stats.reduce((sum, s) => sum + s.afterLock.length, 0);
+    const totalAllChanges = stats.reduce((sum, s) => sum + s.totalAlteracoes, 0);
+    const semAlteracoes = stats.filter(s => s.totalAlteracoes === 0 && s.totalPrimeiros > 0).length;
+    const semHistorico = stats.filter(s => s.totalEntries === 0).length;
+
+    const gameChangeCounts = new Map();
+    stats.forEach(s => s.byGame.forEach(ge => {
+      gameChangeCounts.set(ge.gameId, (gameChangeCounts.get(ge.gameId) || 0) + ge.edits);
+    }));
+    const mostChangedEntry = [...gameChangeCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+    const mostChangedGameDef = mostChangedEntry ? ALL_GAMES.find(g => g.id === mostChangedEntry[0]) : null;
+
+    const fmtTime = dt => dt ? dt.toLocaleString('pt-BR') : '—';
+    const diffBadge = diffMs => {
+      if (diffMs === null || diffMs === undefined) return '<span style="color:var(--text-muted)">sem horário</span>';
+      const color = diffMs < 0 ? '#e74c3c' : diffMs < 300000 ? '#e74c3c' : diffMs < 3600000 ? '#e67e22' : 'var(--green)';
+      const label = diffMs < 0
+        ? '⚠️ ' + _relFmtMs(diffMs) + ' APÓS bloqueio'
+        : _relFmtMs(diffMs) + ' antes do bloqueio';
+      return '<span style="color:' + color + ';font-weight:600">' + label + '</span>';
+    };
+
+    const tiles = [
+      ['✏️', totalAllChanges, 'Total de alterações'],
+      ['👥', participantes.length, 'Participantes'],
+      [totalAfterLock > 0 ? '⚠️' : '✅', totalAfterLock, 'Após bloqueio'],
+      ['😌', semAlteracoes, 'Nunca alteraram'],
+      ['🚫', semHistorico, 'Sem histórico'],
+    ].map(function(t) {
+      return '<div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">' +
+        '<div style="font-size:1.4rem">' + t[0] + '</div>' +
+        '<div style="font-size:1.3rem;font-weight:700;line-height:1.2">' + t[1] + '</div>' +
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">' + t[2] + '</div></div>';
+    }).join('');
+
+    const globalInsights = [
+      maisIndeciso ? '🏆 <b>Mais indeciso:</b> ' + esc(maisIndeciso.name) + ' <span style="color:var(--text-muted)">(' + maisIndeciso.totalAlteracoes + ' alteração(ões))</span>' : '',
+      globalOusado ? '⚡ <b>Alteração mais ousada:</b> ' + esc(globalOusado.s.name) + ' no jogo <b>' + esc(globalOusado.item.entry.gameId) + '</b> — ' + diffBadge(globalOusado.item.diffMs) : '',
+      globalAntecipado ? '📅 <b>Mais antecipado:</b> ' + esc(globalAntecipado.s.name) + ' no jogo <b>' + esc(globalAntecipado.item.entry.gameId) + '</b> — ' + diffBadge(globalAntecipado.item.diffMs) : '',
+      mostChangedEntry && mostChangedEntry[1] > 0 ? '🎯 <b>Jogo mais alterado:</b> <b>' + esc(mostChangedEntry[0]) + '</b>' + (mostChangedGameDef ? ' <span style="color:var(--text-muted)">(' + esc(mostChangedGameDef.h) + ' × ' + esc(mostChangedGameDef.a) + ')</span>' : '') + ' — ' + mostChangedEntry[1] + ' alteração(ões) no total' : '',
+      totalAfterLock > 0 ? '<span style="color:#e74c3c">⚠️ <b>Atenção:</b> ' + totalAfterLock + ' alteração(ões) registrada(s) APÓS o bloqueio (edições de admin).</span>' : '',
+    ].filter(Boolean).map(function(line) { return '<div>' + line + '</div>'; }).join('');
+
+    const globalCard = '<div class="card" style="margin-bottom:16px">' +
+      '<div class="card-header"><span class="card-title">🌍 Visão Geral</span></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px">' + tiles + '</div>' +
+      (globalInsights ? '<div style="display:flex;flex-direction:column;gap:9px;font-size:0.84rem;border-top:1px solid var(--border);padding-top:14px">' + globalInsights + '</div>' : '') +
+      '</div>';
+
+    const userCards = stats.map(function(s) {
+      const safeId = 'rel-u-' + s.user.uid.replace(/[^a-zA-Z0-9]/g, '_');
+
+      const badges = [];
+      if (s === maisIndeciso) badges.push('<span style="background:rgba(243,156,18,.15);color:#f39c12;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">🏆 Mais indeciso</span>');
+      if (s.afterLock.length > 0) badges.push('<span style="background:rgba(231,76,60,.15);color:#e74c3c;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">⚠️ Após bloqueio</span>');
+      if (s.mosOusado && s.mosOusado.diffMs < 300000) badges.push('<span style="background:rgba(231,76,60,.12);color:#e74c3c;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">⚡ Ousado (< 5min)</span>');
+      else if (s.mosOusado && s.mosOusado.diffMs < 3600000) badges.push('<span style="background:rgba(230,126,34,.12);color:#e67e22;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">⏱️ Última hora</span>');
+      if (s.totalAlteracoes === 0 && s.totalPrimeiros > 0) badges.push('<span style="background:rgba(46,204,113,.12);color:var(--green);padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">✅ Nunca alterou</span>');
+      if (s.totalEntries === 0) badges.push('<span style="background:rgba(127,127,127,.12);color:var(--text-muted);padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">🚫 Sem histórico</span>');
+      if (s.totalAdminEdits > 0) badges.push('<span style="background:rgba(155,89,182,.15);color:#9b59b6;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">🛡️ Editado por admin ×' + s.totalAdminEdits + '</span>');
+
+      const timingHtml = s.totalEntries > 0 ? (
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:8px;margin-top:12px">' +
+          '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px"><div style="color:var(--text-muted);font-size:0.72rem;margin-bottom:3px">Alteração mais ousada</div>' +
+            '<div style="font-size:0.82rem">' + (s.mosOusado ? '<b>' + esc(s.mosOusado.entry.gameId) + '</b> — ' + diffBadge(s.mosOusado.diffMs) : '<span style="color:var(--text-muted)">—</span>') + '</div></div>' +
+          '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px"><div style="color:var(--text-muted);font-size:0.72rem;margin-bottom:3px">Mais antecipado</div>' +
+            '<div style="font-size:0.82rem">' + (s.maisAntecipado ? '<b>' + esc(s.maisAntecipado.entry.gameId) + '</b> — ' + diffBadge(s.maisAntecipado.diffMs) : '<span style="color:var(--text-muted)">—</span>') + '</div></div>' +
+          '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px"><div style="color:var(--text-muted);font-size:0.72rem;margin-bottom:3px">Antecedência média</div>' +
+            '<div style="font-size:0.82rem">' + (s.avgDiff !== null ? diffBadge(s.avgDiff) : '<span style="color:var(--text-muted)">—</span>') + '</div></div>' +
+          '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px"><div style="color:var(--text-muted);font-size:0.72rem;margin-bottom:3px">Resumo de ações</div>' +
+            '<div style="font-size:0.82rem">' + s.totalPrimeiros + ' 1ºs · <b>' + s.totalAlteracoes + '</b> alt. · ' + s.totalDeletes + ' del.</div></div>' +
+        '</div>'
+      ) : '';
+
+      const afterLockHtml = s.afterLock.length ? (
+        '<div style="margin-top:12px;background:rgba(231,76,60,.07);border:1px solid rgba(231,76,60,.3);border-radius:10px;padding:10px">' +
+          '<div style="font-weight:700;color:#e74c3c;margin-bottom:8px;font-size:0.84rem">⚠️ ' + s.afterLock.length + ' alteração(ões) APÓS o bloqueio:</div>' +
+          s.afterLock.map(function(item) {
+            const gdef = ALL_GAMES.find(function(g) { return g.id === item.entry.gameId; });
+            const pl = item.entry.action === 'delete' ? '<i>apagou</i>' : (item.entry.h != null ? item.entry.h : '?') + ' × ' + (item.entry.a != null ? item.entry.a : '?');
+            const lockStr = item.lockAt ? item.lockAt.toLocaleString('pt-BR') : '—';
+            return '<div style="font-size:0.79rem;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(231,76,60,.15)">' +
+              '<b style="color:var(--white)">' + esc(item.entry.gameId) + '</b>' + (gdef ? ' <span style="color:var(--text-muted)">(' + esc(gdef.h) + ' × ' + esc(gdef.a) + ')</span>' : '') +
+              ' — palpite: <b style="color:var(--white)">' + pl + '</b>' +
+              ' — em <b style="color:var(--white)">' + fmtTime(item.entryTime) + '</b>' +
+              ' — bloqueio era ' + esc(lockStr) + ' — ' + diffBadge(item.diffMs) +
+              (item.entry.adminEdit ? ' <span style="color:#9b59b6">· admin (' + esc(item.entry.byEmail || item.entry.by || '') + ')</span>' : '') +
+              '</div>';
+          }).join('') +
+        '</div>'
+      ) : '';
+
+      const gamesWithEdits = s.byGame.filter(function(ge) { return ge.edits > 0; });
+      const topGamesHtml = gamesWithEdits.length > 0 ? (
+        '<div style="margin-top:14px">' +
+          '<div style="font-weight:600;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Jogos com alterações</div>' +
+          '<div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">' +
+            '<table style="width:100%;border-collapse:collapse;font-size:0.79rem">' +
+              '<thead><tr style="background:rgba(255,255,255,.04)">' +
+                '<th style="padding:6px 10px;text-align:left">Jogo</th>' +
+                '<th style="padding:6px 10px;text-align:center">Qtd. alt.</th>' +
+                '<th style="padding:6px 10px;text-align:left">Última alteração</th>' +
+                '<th style="padding:6px 10px;text-align:left">Tempo antes do bloqueio</th>' +
+              '</tr></thead><tbody>' +
+              gamesWithEdits.map(function(ge) {
+                const lastEdit = ge.items.slice().reverse().find(function(i) { return i.entry.edit && !i.entry.adminEdit; });
+                const gdef = ALL_GAMES.find(function(g) { return g.id === ge.gameId; });
+                return '<tr style="border-top:1px solid rgba(255,255,255,.05)">' +
+                  '<td style="padding:6px 10px"><b>' + esc(ge.gameId) + '</b>' + (gdef ? ' <span style="color:var(--text-muted)">' + esc(gdef.h) + ' × ' + esc(gdef.a) + '</span>' : '') + '</td>' +
+                  '<td style="padding:6px 10px;text-align:center;font-weight:700;color:#e67e22">' + ge.edits + '</td>' +
+                  '<td style="padding:6px 10px;color:var(--text-muted)">' + (lastEdit ? fmtTime(lastEdit.entryTime) : '—') + '</td>' +
+                  '<td style="padding:6px 10px">' + (lastEdit && lastEdit.diffMs !== null ? diffBadge(lastEdit.diffMs) : '—') + '</td>' +
+                '</tr>';
+              }).join('') +
+            '</tbody></table></div></div>'
+      ) : '';
+
+      const headerRight = '<div style="text-align:right;flex-shrink:0;font-size:0.8rem;color:var(--text-muted)">' +
+        '<div><b style="color:var(--white)">' + s.totalAlteracoes + '</b> alt. · ' + s.totalPrimeiros + ' 1ºs · ' +
+          (s.afterLock.length > 0 ? '<b style="color:#e74c3c">' + s.afterLock.length + ' após bloq.</b>' : '0 após bloq.') + '</div>' +
+        '<div style="margin-top:6px" class="rel-arrow">▼ ver detalhes</div></div>';
+
+      const body = (s.err ? '<div style="color:var(--red);font-size:0.82rem;margin-top:10px">Erro ao buscar histórico: ' + esc(s.err) + '</div>' : '') +
+        timingHtml + afterLockHtml + topGamesHtml +
+        (s.totalEntries === 0 && !s.err ? '<div style="color:var(--text-muted);font-size:0.82rem;margin-top:12px">Sem registro de histórico para este participante. (Histórico só existe a partir da v1.9.0.)</div>' : '');
+
+      return '<div class="card" style="margin-top:10px;padding:0;overflow:hidden">' +
+        '<div style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:10px" data-rel-toggle="' + safeId + '" onclick="_relToggle(\'' + safeId + '\')">' +
+          '<div style="min-width:0;flex:1">' +
+            '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:8px">' +
+              '<span style="font-weight:700;font-size:0.93rem">' + esc(s.name) + '</span>' +
+              (s.user.email ? '<span style="color:var(--text-muted);font-size:0.76rem">' + esc(s.user.email) + '</span>' : '') +
+            '</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + badges.join('') + '</div>' +
+          '</div>' +
+          headerRight +
+        '</div>' +
+        '<div id="' + safeId + '" style="display:none;padding:0 16px 16px;border-top:1px solid var(--border)">' + body + '</div>' +
+      '</div>';
+    }).join('');
+
+    if (status) status.textContent = 'Relatório gerado em ' + new Date().toLocaleString('pt-BR') + ' · ' + participantes.length + ' participantes.';
+    if (out) out.innerHTML = globalCard + userCards;
+  } catch(e) {
+    if (status) status.textContent = 'Erro: ' + errMsg(e);
+    if (out) out.innerHTML = '<div class="alert" style="background:rgba(231,76,60,.1);border:1px solid var(--red);border-radius:10px;padding:12px">Erro ao gerar relatório: ' + esc(errMsg(e)) + '</div>';
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
