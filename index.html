@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.2">
+<meta name="app-version" content="v1.13.3">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1794,7 +1794,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.2</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.3</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2186,7 +2186,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.2',
+  app_version:'v1.13.3',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -7990,22 +7990,8 @@ async function renderEstatisticas() {
         <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
       </div>`;
 
-    // ── Bump Chart: evolução do ranking — montado abaixo e posicionado no FIM
-    // da seção (ver _bumpCard, anexado logo antes de fechar a sub-aba clássica). ──
-    _bumpData = { users, res, allPals, champPicks };
-    _bumpGran = 'dia';
-    const _bumpGranBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos'],['jogo','Por jogo']]
-      .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
-    const _bumpCard = `<div class="card">
-      <div class="card-title">📈 Evolução do Ranking</div>
-      <div class="bump-hint" style="display:flex;gap:9px;align-items:flex-start;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.4);border-radius:10px;padding:10px 13px;margin:8px 0 10px;line-height:1.45">
-        <span style="font-size:1.25rem;line-height:1.1">👆</span>
-        <span style="font-size:0.86rem;color:var(--text);font-weight:600"><b style="color:var(--gold)">Toque ou clique em uma linha ou nome</b> para destacar participantes no gráfico. Você pode comparar a evolução de mais de uma pessoa.</span>
-      </div>
-      <div class="bump-sub" style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
-      <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_bumpGranBar}</div>
-      <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false, champPicks)}</div>
-    </div>`;
+    // ── Evolução do Ranking: movido para a sub-aba "📊 Gráficos" (logo abaixo do
+    // Resumo da Rodada). Ver renderGraficos(). ──
 
     // (A "Análise da IA" agora aparece só no carrossel do dashboard.)
 
@@ -8520,8 +8506,7 @@ async function renderEstatisticas() {
     // ── Completude dos palpites (movida dos Gráficos para "Outras Stats") ──
     _outrasHtml += renderGxCompleteness({ users, res, allPals });
 
-    // Card de evolução do ranking posicionado no FIM da seção clássica.
-    html += _bumpCard;
+    // (Evolução do Ranking agora vive na sub-aba Gráficos — ver renderGraficos.)
 
     // Fecha a sub-aba clássica, monta "Outras Stats" e prepara "Gráficos" (sob demanda).
     html += '</div>'
@@ -8737,6 +8722,7 @@ function renderGraficos() {
   try {
     html += renderGxResumoGeral(d);
     html += renderGxRoundSummary(d);
+    html += renderGxBumpCard(d);
     html += renderGxAccuracyBreakdown(d);
     html += renderGxStreaks(d);
     html += renderGxBoldness(d);
@@ -8866,6 +8852,27 @@ function renderGxRoundSummary(d) {
   body += item('💰 Pontos distribuídos', `${r.totalPts}`, 'na rodada');
   body += `</div>`;
   return _gxCard(`🏟️ Resumo da Rodada · ${esc(r.phase.label)}`, body, 'Os principais destaques da fase mais recente com resultados.');
+}
+
+// ── Evolução do Ranking (bump chart) — mesmo gráfico do Ranking/Dashboard, agora
+// também nos Gráficos, logo abaixo do Resumo da Rodada. Guarda os dados em
+// _bumpData para o filtro de granularidade re-renderizar sem recarregar a página.
+function renderGxBumpCard(d) {
+  const { users, res, allPals, champPicks } = d;
+  _bumpData = { users, res, allPals, champPicks };
+  _bumpGran = 'dia';
+  const granBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos'],['jogo','Por jogo']]
+    .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
+  return `<div class="card">
+      <div class="card-title">📈 Evolução do Ranking</div>
+      <div class="bump-hint" style="display:flex;gap:9px;align-items:flex-start;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.4);border-radius:10px;padding:10px 13px;margin:8px 0 10px;line-height:1.45">
+        <span style="font-size:1.25rem;line-height:1.1">👆</span>
+        <span style="font-size:0.86rem;color:var(--text);font-weight:600"><b style="color:var(--gold)">Toque ou clique em uma linha ou nome</b> para destacar participantes no gráfico. Você pode comparar a evolução de mais de uma pessoa.</span>
+      </div>
+      <div class="bump-sub" style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
+      <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${granBar}</div>
+      <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false, champPicks)}</div>
+    </div>`;
 }
 
 // ── 3. Precisão por tipo de acerto ────────────────────────────────────────────
