@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.0">
+<meta name="app-version" content="v1.13.1">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1778,7 +1778,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.0</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.1</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -1922,7 +1922,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <div style="text-align:left;display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
       <div style="display:flex;gap:9px;align-items:flex-start"><span>⚽</span><span style="font-size:0.85rem;line-height:1.45"><b>Exemplo:</b> jogo às <b>16h</b> → palpites travam às <b>15h</b>. Jogo às <b>21h</b> → travam às <b>20h</b>.</span></div>
       <div style="display:flex;gap:9px;align-items:flex-start"><span>⏳</span><span style="font-size:0.85rem;line-height:1.45">Os jogos aparecem na tela inicial <b>30h antes</b>. A contagem regressiva vai <b>até o bloqueio</b> dos palpites; quando trava, ela passa a contar <b>até o início</b> da partida.</span></div>
-      <div style="display:flex;gap:9px;align-items:flex-start"><span>🏁</span><span style="font-size:0.85rem;line-height:1.45">Depois do placar final, o card fica mais <b>45 min</b> na tela e mostra a contagem para <b>sair</b>.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>🏁</span><span style="font-size:0.85rem;line-height:1.45">Depois do placar final, o card fica mais <b>60 min</b> na tela e mostra a contagem para <b>sair</b>.</span></div>
       <div style="display:flex;gap:9px;align-items:flex-start"><span>🔔</span><span style="font-size:0.85rem;line-height:1.45">Dica: palpite com antecedência para não perder o prazo de cada jogo!</span></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
@@ -2170,7 +2170,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.0',
+  app_version:'v1.13.1',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3443,7 +3443,7 @@ function _nextGamesGroup() {
     const mode = r.timerMode;
     if (mode === 'hide') return false;                 // oculto manualmente: nunca
     if (_resolved(x.game.id)) {
-      // Resultado lançado: permanece por mais 45min (placar final + "sai em X min").
+      // Resultado lançado: permanece por mais 60min (placar final + "sai em X min").
       // Sem carimbo de tempo (dado antigo) o card não fica preso — some como antes.
       const hideAfter = _resultHideAfterMs(r);
       return hideAfter !== null && now < hideAfter;
@@ -3457,7 +3457,7 @@ function _nextGamesGroup() {
   if (!items.length) return { key:'none', nextRenderAt:null, items:[] };
 
   // nextRenderAt = próximo instante que muda QUEM aparece (gatilho de re-render do
-  // _tick): início de um jogo futuro, entrada na janela de 30h, ou fim dos 45min
+  // _tick): início de um jogo futuro, entrada na janela de 30h, ou fim dos 60min
   // pós-resultado. O menor instante futuro entre todas as transições. null se não houver.
   let nextRenderAt = Infinity;
   const _consider = t => { if (t !== null && t > now && t < nextRenderAt) nextRenderAt = t; };
@@ -3577,7 +3577,7 @@ function _startCountdownTimer() {
 
       if (hasResult) {
         // Resultado oficial lançado: mostra o placar final e por quanto tempo o card
-        // ainda fica visível (45min). Após isso o re-render (nextRenderAt) o remove.
+        // ainda fica visível (60min). Após isso o re-render (nextRenderAt) o remove.
         const hideAfter = _resultHideAfterMs(resData);
         const remMin = hideAfter ? Math.max(0, Math.ceil((hideAfter - now) / 60000)) : null;
         let pen = '';
@@ -5847,7 +5847,7 @@ function _effectiveStartInstant(game, res) {
 }
 
 // Janela em que o card permanece na tela inicial após o resultado oficial.
-const RESULT_LINGER_MS = 45 * 60000; // 45 min
+const RESULT_LINGER_MS = 60 * 60000; // 60 min
 
 // Instante de bloqueio dos palpites: exatamente 1h (60min) antes do início efetivo
 // da partida (considerando date/time override do admin). Ex.: jogo às 16h → trava às 15h.
@@ -5876,7 +5876,7 @@ function _isAutoLockedEffective(game, res) {
 }
 
 // Quando o card deve sumir da tela inicial após o resultado oficial. Prefere o campo
-// explícito resultado_ocultar_apos (gravado no save); cai para updatedAt + 45min.
+// explícito resultado_ocultar_apos (gravado no save); cai para updatedAt + 60min.
 function _resultHideAfterMs(res) {
   res = res || {};
   const ts = res.resultado_ocultar_apos;
@@ -6900,10 +6900,18 @@ function _getStatNextGroupWave(res) {
     }
   }
   const items = all.filter(x => {
-    const mode = ((res||{})[x.game.id] || {}).timerMode;
+    const r = (res||{})[x.game.id] || {};
+    const mode = r.timerMode;
     if (mode === 'hide') return false;
+    // Resolvido: continua em "Próximas Partidas" durante a janela de permanência
+    // (mesma do dashboard), para que dê pra ver as estatísticas ao vivo do jogo
+    // recém-encerrado. Depois disso ele só aparece em "Partidas Realizadas".
+    if (_resolved(x.game.id)) {
+      const hideAfter = _resultHideAfterMs(r);
+      return hideAfter !== null && now < hideAfter;
+    }
     const started = x.start.getTime() <= now;
-    if (started) return !_resolved(x.game.id);
+    if (started) return true;
     if (mode === 'show') return true;
     if (wave.has(x.game.id)) return true;              // leva automática por proximidade
     return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // mesma regra do dashboard: < 30h do início
@@ -7502,7 +7510,9 @@ async function renderEstatisticas() {
     // ── SEÇÃO: PRÓXIMA(S) PARTIDA(S) ──────────────────────────────────────────
     const _statNextGrp = _getStatNextGroupWave(res);
     const _nowMs = Date.now();
-    let _beforeHtml = '';
+    // Seções da aba clássica, montadas separadamente para controlar a ordem:
+    // Próximas Partidas → divisor "Histórico" → Partidas Realizadas → Impacto.
+    let _proximasHtml = '', _campeaoHtml = '', _impactoHtml = '';
 
     if (_statNextGrp.items.length > 0) {
       const _isPlural = _statNextGrp.items.length > 1;
@@ -7513,10 +7523,17 @@ async function renderEstatisticas() {
         const _diff = start.getTime() - _nowMs;
         const _lockAtInst = _gameLockInstant(game, _gr);
         const _diffToLock = _lockAtInst ? (_lockAtInst.getTime() - _nowMs) : -1;
+        // Jogo já encerrado mas ainda dentro da janela de permanência (60min): mostra
+        // o placar final e quanto falta para sair de "Próximas Partidas".
+        const _hasFinal = _gr.h_real !== undefined && _gr.a_real !== undefined;
+        const _hideAfterMs = _hasFinal ? _resultHideAfterMs(_gr) : null;
+        const _leaveMin = _hideAfterMs !== null ? Math.max(0, Math.ceil((_hideAfterMs - _nowMs) / 60000)) : null;
 
         // Status badge
         let _statusHtml;
-        if (_gr.locked === true) {
+        if (_hasFinal) {
+          _statusHtml = '<span style="color:var(--green);font-weight:700">🏁 Encerrado · ' + (parseInt(_gr.h_real) || 0) + '×' + (parseInt(_gr.a_real) || 0) + '</span>';
+        } else if (_gr.locked === true) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado pelo admin</span>';
         } else if (_isAutoLockedEffective(game, _gr)) {
           _statusHtml = '<span style="color:var(--red);font-weight:700">🔒 Bloqueado automaticamente</span>';
@@ -7542,7 +7559,10 @@ async function renderEstatisticas() {
           return _parts.join(' ');
         };
         let _cdHtml;
-        if (!_closed && _diffToLock > 0) {
+        if (_hasFinal) {
+          _cdHtml = '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">🏁 Placar final</div>'
+                  + (_leaveMin !== null ? '<div style="font-size:0.62rem;color:var(--text-muted)">sai de Próximas em ' + _leaveMin + 'min</div>' : '');
+        } else if (!_closed && _diffToLock > 0) {
           _cdHtml = '<div style="font-size:0.78rem;color:var(--orange);margin-top:3px">🔒 ' + _fmtDur(_diffToLock) + '</div>'
                   + '<div style="font-size:0.62rem;color:var(--text-muted)">para travar os palpites</div>';
         } else if (_diff <= 0) {
@@ -7753,7 +7773,7 @@ async function renderEstatisticas() {
           + '</div>';
       }).join('');
 
-      _beforeHtml += '<div class="card" data-no-share>'
+      _proximasHtml += '<div class="card" data-no-share>'
         + '<div class="card-title">⚽ Próximas Partidas</div>'
         + '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">' + _gameCards + '</div>'
         + '</div>';
@@ -7764,7 +7784,7 @@ async function renderEstatisticas() {
     // bloqueado pelo admin, OU a campeã já foi definida.
     const _semCampeao = users.filter(u => !champPicks[u.uid]);
     if (_semCampeao.length > 0 && CFG.campeao_locked !== true && !_getFinalChampion(res)) {
-      _beforeHtml += '<div class="card" style="border-color:rgba(255,140,0,.45);background:rgba(255,140,0,.05)">'
+      _campeaoHtml += '<div class="card" style="border-color:rgba(255,140,0,.45);background:rgba(255,140,0,.05)">'
         + '<div class="card-title">🏆 Falta escolher o Campeão!</div>'
         + '<div style="font-size:0.82rem;color:var(--text-muted);margin:8px 0 12px">'
         + _semCampeao.length + ' participante(s) ainda não escolheram o palpite de campeão. '
@@ -7908,7 +7928,7 @@ async function renderEstatisticas() {
         + '</div>';
 
       const _impCid = 'impacto-ranking';
-      _beforeHtml += '<div class="card' + (_isCardMinimized(_impCid) ? ' card-min' : '') + '" data-card-id="' + _impCid + '">'
+      _impactoHtml += '<div class="card' + (_isCardMinimized(_impCid) ? ' card-min' : '') + '" data-card-id="' + _impCid + '">'
         + '<div class="card-title">⚡ Impacto Potencial no Ranking' + _minBtn(_impCid) + '</div>'
         + '<div class="card-min-body">'
         + '<div class="stats-alt-grid" style="margin-top:12px">'
@@ -7937,32 +7957,38 @@ async function renderEstatisticas() {
       + '<div style="flex:1;height:1px;background:var(--border)"></div>'
       + '</div>';
 
-    let html = _gxSubTabsBar()
-      + '<div id="stats-tab-classic">'
-      + '<div class="section-title">📈 Estatísticas & Curiosidades</div>'
-      + _beforeHtml
-      + _sectionDivider
-      + `<div class="stats-grid">
-        <div class="stat-card"><div class="val">${users.length}</div><div class="lbl">Participantes</div></div>
-        <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos Resultado</div></div>
-        <div class="stat-card"><div class="val">${Object.values(analiseJogos).reduce((a,b)=>a+b.exatos,0)}</div><div class="lbl">Placares Exatos</div></div>
-        <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
-      </div>`;
-
     // ── Partidas já realizadas: reabre o card de qualquer jogo finalizado ──
+    // Montado aqui (antes do html) para posicionar logo após "Próximas Partidas",
+    // abrindo a seção "Histórico & Retrospectiva" acima do "Impacto Potencial".
+    let _finishedHtml = '';
     const _finGames = jogosComResultado
       .map(id => ALL_GAMES.find(g => g.id === id)).filter(Boolean)
       .sort((a, b) => _parseGameDate(b.date) - _parseGameDate(a.date));
     if (_finGames.length) {
       const _finDef = _finGames[0].id;
       const _finOpts = _finGames.map(g => { const tt = _getResolvedTeamsForGame(g, res); const r = res[g.id]; return `<option value="${esc(g.id)}"${g.id === _finDef ? ' selected' : ''}>${esc(tt.h)} ${r.h_real}×${r.a_real} ${esc(tt.a)} · ${esc(g.date)}</option>`; }).join('');
-      html += `<div class="card">
+      _finishedHtml = `<div class="card">
         <div class="card-title">🏁 Partidas Realizadas</div>
-        <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 10px">Reveja o card de qualquer jogo já finalizado — eles saem de “Próximas Partidas” depois de terminar.</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 10px">Reveja o card de qualquer jogo já finalizado — eles ficam em “Próximas Partidas” por até 60min após o resultado e depois passam para cá.</div>
         <select class="gx-select" onchange="statShowFinishedGame(this.value)">${_finOpts}</select>
         <div id="stat-fin-out">${_statFinishedGameBody(_finDef, { users, res, allPals })}</div>
       </div>`;
     }
+
+    let html = _gxSubTabsBar()
+      + '<div id="stats-tab-classic">'
+      + '<div class="section-title">📈 Estatísticas & Curiosidades</div>'
+      + _proximasHtml
+      + _campeaoHtml
+      + _sectionDivider
+      + _finishedHtml
+      + _impactoHtml
+      + `<div class="stats-grid">
+        <div class="stat-card"><div class="val">${users.length}</div><div class="lbl">Participantes</div></div>
+        <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos Resultado</div></div>
+        <div class="stat-card"><div class="val">${Object.values(analiseJogos).reduce((a,b)=>a+b.exatos,0)}</div><div class="lbl">Placares Exatos</div></div>
+        <div class="stat-card"><div class="val">${maiorAcerto.exatos}</div><div class="lbl">Máx Acertos 1 Jogo</div></div>
+      </div>`;
 
     // ── Bump Chart: evolução do ranking — montado abaixo e posicionado no FIM
     // da seção (ver _bumpCard, anexado logo antes de fechar a sub-aba clássica). ──
@@ -10557,7 +10583,7 @@ async function saveResultado(gameId) {
     if ('a'  in buf) patch.a_real = buf.a  === undefined ? FV.delete() : buf.a;
     if ('ph' in buf) patch.h_pen  = buf.ph === undefined ? FV.delete() : buf.ph;
     if ('pa' in buf) patch.a_pen  = buf.pa === undefined ? FV.delete() : buf.pa;
-    // Janela de permanência na tela inicial: o card fica +45min após o resultado.
+    // Janela de permanência na tela inicial: o card fica +60min após o resultado.
     // Grava (ou apaga) o instante de ocultação ao salvar/limpar o placar.
     if ('h' in buf || 'a' in buf) {
       const clearing = ('h' in buf && buf.h === undefined) || ('a' in buf && buf.a === undefined);
