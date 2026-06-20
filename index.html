@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.1">
+<meta name="app-version" content="v1.13.2">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -98,7 +98,15 @@ a:hover{text-decoration:underline}
   display:flex;align-items:center;justify-content:space-between;
   position:sticky;top:0;z-index:100;gap:12px;
 }
+.app-brand{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
 .app-logo{font-size:1.1rem;font-weight:800;color:var(--gold);white-space:nowrap}
+.header-premio{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:0.6rem;line-height:1}
+.header-premio .hp-lbl{text-transform:uppercase;letter-spacing:.05em;color:var(--gold);font-weight:800;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.32);border-radius:999px;padding:2px 7px}
+.header-premio .hp-val{display:inline-flex;align-items:center;gap:2px;color:var(--text-muted);font-weight:600;white-space:nowrap}
+.header-premio .hp-val b{font-weight:800}
+.header-premio .hp-val.gold b{color:var(--gold)}
+.header-premio .hp-val.silver b{color:#C0C0C0}
+.header-premio .hp-val.bronze b{color:#CD7F32}
 .app-nav{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto}
 .app-nav::-webkit-scrollbar{display:none}
 .nav-btn{
@@ -1610,7 +1618,15 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 ══════════════════════════════════════════ -->
 <div id="screen-app" class="hidden">
   <header class="app-header">
-    <div class="app-logo">🏆 <span id="bolao-nome">Bolão ICN Copa 2026</span></div>
+    <div class="app-brand">
+      <div class="app-logo">🏆 <span id="bolao-nome">Bolão ICN Copa 2026</span></div>
+      <div id="header-premio" class="header-premio" style="display:none">
+        <span class="hp-lbl" title="Prêmio acumulado">Prêmio</span>
+        <span class="hp-val gold">🥇 <b id="hp-1">—</b></span>
+        <span class="hp-val silver">🥈 <b id="hp-2">—</b></span>
+        <span class="hp-val bronze">🥉 <b id="hp-3">—</b></span>
+      </div>
+    </div>
     <nav class="app-nav">
       <button class="nav-btn active" data-page="dashboard" onclick="navigateTo('dashboard')">🏠 Ranking</button>
       <button class="nav-btn" data-page="palpites" onclick="navigateTo('palpites')">⚽ Palpites</button>
@@ -1778,7 +1794,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.1</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.2</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -1921,7 +1937,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.55;margin:0 0 14px">Mudamos a regra de bloqueio dos palpites. Agora cada jogo trava <b>exatamente 1 hora (60 min) antes do apito inicial</b> — e não mais às 22h da véspera.</p>
     <div style="text-align:left;display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
       <div style="display:flex;gap:9px;align-items:flex-start"><span>⚽</span><span style="font-size:0.85rem;line-height:1.45"><b>Exemplo:</b> jogo às <b>16h</b> → palpites travam às <b>15h</b>. Jogo às <b>21h</b> → travam às <b>20h</b>.</span></div>
-      <div style="display:flex;gap:9px;align-items:flex-start"><span>⏳</span><span style="font-size:0.85rem;line-height:1.45">Os jogos aparecem na tela inicial <b>30h antes</b>. A contagem regressiva vai <b>até o bloqueio</b> dos palpites; quando trava, ela passa a contar <b>até o início</b> da partida.</span></div>
+      <div style="display:flex;gap:9px;align-items:flex-start"><span>⏳</span><span style="font-size:0.85rem;line-height:1.45">Os jogos aparecem na tela inicial <b>24h antes</b>. A contagem regressiva vai <b>até o bloqueio</b> dos palpites; quando trava, ela passa a contar <b>até o início</b> da partida.</span></div>
       <div style="display:flex;gap:9px;align-items:flex-start"><span>🏁</span><span style="font-size:0.85rem;line-height:1.45">Depois do placar final, o card fica mais <b>60 min</b> na tela e mostra a contagem para <b>sair</b>.</span></div>
       <div style="display:flex;gap:9px;align-items:flex-start"><span>🔔</span><span style="font-size:0.85rem;line-height:1.45">Dica: palpite com antecedência para não perder o prazo de cada jogo!</span></div>
     </div>
@@ -2170,7 +2186,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.1',
+  app_version:'v1.13.2',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3408,8 +3424,8 @@ const TIMER_CLUSTER_GAP_MS = 8 * 3600000;
 // (sem resultado lançado) passa para "aguardando oficialização".
 const MATCH_DURATION_MS = 120 * 60000;
 // Antecedência com que QUALQUER jogo aparece na tela inicial (com timer regressivo),
-// independentemente da "leva" automática por proximidade: 30h antes do início.
-const NEXT_SHOW_BEFORE_MS = 30 * 3600000;
+// independentemente da "leva" automática por proximidade: 24h antes do início.
+const NEXT_SHOW_BEFORE_MS = 24 * 3600000;
 
 // Conjunto de partidas exibidas nos timers do dashboard.
 // Inclui: (a) jogos futuros da próxima "leva" (agrupados por proximidade, gap ≤ 8h)
@@ -3452,12 +3468,12 @@ function _nextGamesGroup() {
     if (started) return true;                          // em andamento/aguardando até ter resultado
     if (mode === 'show') return true;                  // futuro fixado manualmente
     if (wave.has(x.game.id)) return true;              // futuro dentro da leva automática
-    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // qualquer jogo a < 30h do início
+    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // qualquer jogo a < 24h do início
   });
   if (!items.length) return { key:'none', nextRenderAt:null, items:[] };
 
   // nextRenderAt = próximo instante que muda QUEM aparece (gatilho de re-render do
-  // _tick): início de um jogo futuro, entrada na janela de 30h, ou fim dos 60min
+  // _tick): início de um jogo futuro, entrada na janela de 24h, ou fim dos 60min
   // pós-resultado. O menor instante futuro entre todas as transições. null se não houver.
   let nextRenderAt = Infinity;
   const _consider = t => { if (t !== null && t > now && t < nextRenderAt) nextRenderAt = t; };
@@ -3465,7 +3481,7 @@ function _nextGamesGroup() {
     const r = _dashResults[x.game.id] || {};
     if (_resolved(x.game.id)) { _consider(_resultHideAfterMs(r)); return; }
     _consider(x.start.getTime());                         // futuro → em andamento
-    _consider(x.start.getTime() - NEXT_SHOW_BEFORE_MS);   // entra na janela de 30h
+    _consider(x.start.getTime() - NEXT_SHOW_BEFORE_MS);   // entra na janela de 24h
   });
   if (nextRenderAt === Infinity) nextRenderAt = null;
   return { key: items.map(x => x.game.id).join(','), nextRenderAt, items };
@@ -3547,7 +3563,7 @@ function _startCountdownTimer() {
     if (!wrap2) { clearInterval(_countdownTimer); _countdownTimer = null; return; }
     const now = Date.now();
     // Re-renderiza quando muda QUEM aparece: um futuro chega ao início, um jogo entra
-    // na janela de 30h, ou um resultado completa os 45min e deve sumir do card.
+    // na janela de 24h, ou um resultado completa os 60min e deve sumir do card.
     if (group.nextRenderAt !== null && now >= group.nextRenderAt) {
       group = _nextGamesGroup();
       wrap2.innerHTML = _buildNextGamesHtml(group);
@@ -3793,6 +3809,9 @@ async function renderDashboard() {
 
     const _totalArr = calcTotalArrecadado(allUsers);
     const _premios = calcPremios(_totalArr);
+    // O painel de arrecadação saiu do dashboard e virou um selo compacto no header,
+    // ao lado do nome do bolão (ver _updateHeaderPremio).
+    _updateHeaderPremio(_totalArr, _premios);
 
     // _dashResults e _dashBolaoDistrib já foram populados acima.
 
@@ -3803,25 +3822,6 @@ async function renderDashboard() {
       <div style="font-size:0.95rem;font-weight:700;color:var(--text-muted);margin:4px 0 10px">Jogos da próxima rodada:</div>
       <div id="next-games-wrap"></div>
 
-      <!-- Painel de arrecadação e premiação -->
-      <div class="prize-pool-bar">
-        <div class="prize-pool-item">
-          <div class="ppi-val">${_animSpan('prize_total', _totalArr, 'brl')}</div>
-          <div class="ppi-lbl">💰 Total Arrecadado</div>
-        </div>
-        <div class="prize-pool-item">
-          <div class="ppi-val" style="color:var(--gold)">🥇 ${_animSpan('prize_1', _premios.primeiro, 'brl')}</div>
-          <div class="ppi-lbl">1º lugar (50%)</div>
-        </div>
-        <div class="prize-pool-item">
-          <div class="ppi-val" style="color:#C0C0C0">🥈 ${_animSpan('prize_2', _premios.segundo, 'brl')}</div>
-          <div class="ppi-lbl">2º lugar (30%)</div>
-        </div>
-        <div class="prize-pool-item">
-          <div class="ppi-val" style="color:#CD7F32">🥉 ${_animSpan('prize_3', _premios.terceiro, 'brl')}</div>
-          <div class="ppi-lbl">3º lugar (20%)</div>
-        </div>
-      </div>
 
       <div class="dash-kpi-grid">
         <div class="dash-kpi kpi-pos${_kpiIsLeader?' kpi-leader':''}">
@@ -6914,7 +6914,7 @@ function _getStatNextGroupWave(res) {
     if (started) return true;
     if (mode === 'show') return true;
     if (wave.has(x.game.id)) return true;              // leva automática por proximidade
-    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // mesma regra do dashboard: < 30h do início
+    return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // mesma regra do dashboard: < 24h do início
   });
   return { items };
 }
@@ -12343,6 +12343,21 @@ function calcPremios(total) {
     segundo:  total * 0.3,
     terceiro: total * 0.2
   };
+}
+
+// Atualiza o selo "Prêmio" no header (ao lado do nome do bolão). Mostra os valores
+// do pódio em formato compacto (sem centavos) e o total arrecadado no tooltip.
+function _updateHeaderPremio(totalArr, premios) {
+  const el = document.getElementById('header-premio');
+  if (!el) return;
+  const _brl = v => 'R$ ' + Math.round(Number(v) || 0).toLocaleString('pt-BR');
+  const lbl = el.querySelector('.hp-lbl');
+  if (lbl) lbl.title = 'Total arrecadado: ' + formatBRL(totalArr);
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = _brl(v); };
+  set('hp-1', premios.primeiro);
+  set('hp-2', premios.segundo);
+  set('hp-3', premios.terceiro);
+  el.style.display = 'flex';
 }
 
 function _renderQRCode(containerId) {
