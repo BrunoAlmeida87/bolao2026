@@ -8562,11 +8562,12 @@ let _3dHistorico = null;        // historico de todos os usuários (carregado so
 let _3dGraficosRendered = false;// evita re-render dos gráficos 3D
 
 function _gxSubTabsBar() {
+  const isAdmin = currentUserDoc?.role === 'admin';
   return `<div class="gx-subtabs">
     <button class="gx-subtab active" data-gxtab="classic" onclick="switchStatsSubTab('classic')">📈 Estatísticas</button>
     <button class="gx-subtab" data-gxtab="outras" onclick="switchStatsSubTab('outras')">🏅 Outras Stats</button>
     <button class="gx-subtab" data-gxtab="graficos" onclick="switchStatsSubTab('graficos')">📊 Gráficos</button>
-    <button class="gx-subtab" data-gxtab="3d" onclick="switchStatsSubTab('3d')">🧊 3D</button>
+    ${isAdmin ? `<button class="gx-subtab" data-gxtab="3d" onclick="switchStatsSubTab('3d')">🧊 3D</button>` : ''}
   </div>`;
 }
 
@@ -8583,7 +8584,10 @@ function switchStatsSubTab(tab) {
   if (graf) graf.style.display = (tab === 'graficos') ? '' : 'none';
   if (d3) d3.style.display = (tab === '3d') ? '' : 'none';
   if (tab === 'graficos' && !_graficosRendered) { renderGraficos(); _graficosRendered = true; }
-  if (tab === '3d' && !_3dGraficosRendered) { renderGx3D(); _3dGraficosRendered = true; }
+  if (tab === '3d') {
+    if (currentUserDoc?.role !== 'admin') return;
+    if (!_3dGraficosRendered) { renderGx3D(); _3dGraficosRendered = true; }
+  }
 }
 
 // ── Helpers reutilizáveis ─────────────────────────────────────────────────────
