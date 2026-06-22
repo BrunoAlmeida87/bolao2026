@@ -10321,7 +10321,8 @@ async function exportAIDataDetalhado() {
 
     const jogosComRes = ALL_GAMES.filter(g => res[g.id] && _hasFullResult(res[g.id]));
     const jogosRestantes = ALL_GAMES.filter(g => !res[g.id] || !_hasFullResult(res[g.id]));
-    const ptsDispo = jogosRestantes.length * 10;
+    const ptsDispo = jogosRestantes.length * CFG.pts_exato;
+    const finalDecidida = ELIM_DATA.final.games.some(g => res[g.id] && _hasFullResult(res[g.id]));
 
     // Todas as fases em ordem cronológica
     const fases = [
@@ -10348,7 +10349,7 @@ async function exportAIDataDetalhado() {
           if (p == null) return;
           jogos++; pts += p;
           if (p > 0) acertos++;
-          if (p === 10) exatos++;
+          if (p === CFG.pts_exato) exatos++;
         });
         return { u, pts, acertos, exatos, jogos };
       });
@@ -10401,8 +10402,9 @@ async function exportAIDataDetalhado() {
 
     // Seção 5: Potencial de virada
     const potencial = ranking.map((u, i) => {
-      const bonus = !u.acertou_campeao && u.campeao ? ' +50pts se acertar campeão' : u.acertou_campeao ? ' ✅ campeão acertado' : '';
-      const maxTotal = u.pontos + ptsDispo + (!u.acertou_campeao && u.campeao ? 50 : 0);
+      const champPossivel = !finalDecidida && !u.acertou_campeao && u.campeao;
+      const bonus = champPossivel ? ` +${CFG.pts_campeao}pts se acertar campeão` : u.acertou_campeao ? ' ✅ campeão acertado' : (finalDecidida && !u.acertou_campeao && u.campeao ? ' ❌ campeão errado' : '');
+      const maxTotal = u.pontos + ptsDispo + (champPossivel ? CFG.pts_campeao : 0);
       return `  ${i + 1}º ${nm(u)}: ${u.pontos}pts atuais → máx. ${maxTotal}pts (falta ${ranking[0].pontos - u.pontos > 0 ? ranking[0].pontos - u.pontos + ' pts p/ liderar' : 'já é líder'})${bonus}`;
     }).join('\n');
 
@@ -10430,9 +10432,9 @@ async function exportAIDataDetalhado() {
         const pal = pals[g.id];
         if (!pal || pal.h === undefined) { semPalpite++; return; }
         const p = calcPontos(pal, res[g.id]);
-        if (p === 10) exatos++;
-        else if (p === 7) vencSaldo++;
-        else if (p === 5) sohVenc++;
+        if (p === CFG.pts_exato) exatos++;
+        else if (p === CFG.pts_vencedor_saldo) vencSaldo++;
+        else if (p === CFG.pts_apenas_vencedor) sohVenc++;
         else erros++;
       });
       return `  ${i + 1}º ${nm(u)}: ${u.pontos}pts | ✅${exatos} exatos | 🎯${vencSaldo} venc+saldo | 👍${sohVenc} só venc | ❌${erros} erros | ?${semPalpite} s/palpite${u.campeao ? ` | campeão: ${u.campeao}${u.acertou_campeao ? ' ✅' : ''}` : ''}`;
@@ -10448,7 +10450,7 @@ async function exportAIDataDetalhado() {
           const pal = allPals[u.uid]?.[g.id];
           if (!pal || pal.h === undefined) return `${nm(u)}:?`;
           const p = calcPontos(pal, r);
-          const t = p === 10 ? '✅' : p === 7 ? '🎯' : p === 5 ? '👍' : '❌';
+          const t = p === CFG.pts_exato ? '✅' : p === CFG.pts_vencedor_saldo ? '🎯' : p === CFG.pts_apenas_vencedor ? '👍' : '❌';
           return `${nm(u)}:${pal.h}-${pal.a}${t}(${p})`;
         }).join(' | ');
         return `  ${g.h} x ${g.a} → ${r.h_real}-${r.a_real}\n    ${pals}`;
@@ -10459,9 +10461,9 @@ async function exportAIDataDetalhado() {
     const data = `=== BOLÃO COPA 2026 — DADOS DETALHADOS POR JOGO E RODADA ===
 Data: ${today} | Participantes: ${users.length}
 Jogos concluídos: ${jogosComRes.length}/${ALL_GAMES.length} | Jogos restantes: ${jogosRestantes.length}
-Pontos ainda em disputa: até ${ptsDispo}pts por participante (${jogosRestantes.length} jogos × máx. 10pts)
+Pontos ainda em disputa: até ${ptsDispo}pts por participante (${jogosRestantes.length} jogos × máx. ${CFG.pts_exato}pts)
 
-Legenda: ✅=Exato(10pts) 🎯=Venc+Saldo(7pts) 👍=Vencedor(5pts) ❌=Errou(0pts) ?=Sem palpite
+Legenda: ✅=Exato(${CFG.pts_exato}pts) 🎯=Venc+Saldo(${CFG.pts_vencedor_saldo}pts) 👍=Vencedor(${CFG.pts_apenas_vencedor}pts) ❌=Errou(0pts) ?=Sem palpite
 
 ════════════════════════════════════════
 RESUMO GERAL DO BOLÃO (acumulado)
