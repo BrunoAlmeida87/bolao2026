@@ -9717,8 +9717,9 @@ function _bracketSideHTML(g, side, ctx) {
   const displayName = isPh
     ? (isThirdSlot ? '3º colocado a definir' : esc(resolvedTeam))
     : esc(resolvedTeam);
+  const flagHtml = isPh ? '' : teamFlag(resolvedTeam);
   let body =
-    `<div class="bt-main"><span class="bt-name ${isPh ? 'placeholder' : ''}">${displayName}</span>` +
+    `<div class="bt-main">${flagHtml}<span class="bt-name ${isPh ? 'placeholder' : ''}">${displayName}</span>` +
     `<span class="bracket-score">${score}</span>${penTxt}</div>`;
   if (origin) body += `<div class="bracket-origin">${esc(origin)}</div>`;
   if (isThirdSlot && isAdmin) {
