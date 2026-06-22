@@ -614,8 +614,9 @@ body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 /* ══════════════════════════════════════════
    BRACKET
 ══════════════════════════════════════════ */
-.bracket-wrap{overflow-x:auto;padding-bottom:20px}
+.bracket-wrap{padding-bottom:20px}
 .bracket{display:flex;gap:0;min-width:900px}
+#chaveamento-content.container{max-width:none}
 .bracket-round{flex:1;padding:0 6px}
 .bracket-round h4{
   text-align:center;font-size:0.75rem;color:var(--text-muted);
@@ -651,7 +652,8 @@ body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 /* ══════════════════════════════════════════
    BILATERAL BRACKET
 ══════════════════════════════════════════ */
-.bil-page-wrap{width:100%;overflow-x:auto;padding-bottom:24px}
+.bil-page-wrap{width:100%;padding-bottom:24px}
+#chaveamento-bilateral-content.container{max-width:none}
 .bil-bracket{display:flex;align-items:stretch;min-width:1060px;padding:0 2px}
 .bil-side{display:flex;flex:1;align-items:stretch}
 .bil-center{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;min-width:114px;flex-shrink:0;gap:6px}
@@ -2914,6 +2916,11 @@ function navigateTo(page, opts) {
     if (_hmode === 'replace') history.replaceState(_state, '', '#' + page);
     else history.pushState(_state, '', '#' + page);
   }
+  // Páginas de chaveamento precisam de scroll horizontal na página inteira
+  const _isBracketPage = page === 'chaveamento' || page === 'chaveamento-bilateral';
+  document.documentElement.style.overflowX = _isBracketPage ? 'auto' : '';
+  document.body.style.overflowX = _isBracketPage ? 'auto' : '';
+
   switch(page) {
     case 'dashboard':   renderDashboard(); break;
     case 'palpites':    renderPalpites(); break;
