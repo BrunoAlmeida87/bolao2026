@@ -9979,6 +9979,7 @@ async function renderAdminIA() {
           </p>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
             <button class="btn btn-primary" onclick="exportAIData()">📋 Copiar dados + prompt para IA</button>
+            <button class="btn btn-primary" onclick="exportAIDataDetalhado()" style="background:var(--accent2,#7c3aed)">📊 Dados detalhados por jogo/rodada</button>
           </div>
           <hr style="border-color:var(--border);margin:16px 0">
           <div class="card-title" style="margin-bottom:10px">📥 Colar resposta da IA</div>
@@ -10307,6 +10308,237 @@ REGRAS OBRIGATÓRIAS:
     await navigator.clipboard.writeText(data);
     showToast('✅ Dados + prompt copiados para a área de transferência!','success');
   } catch(e) { showToast('Erro ao gerar dados: '+e.message,'error'); }
+}
+
+async function exportAIDataDetalhado() {
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals, champPicks } = await _fetchPals(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const today = new Date().toLocaleDateString('pt-BR');
+    const nm = u => u.apelido || u.nome;
+
+    const jogosComRes = ALL_GAMES.filter(g => res[g.id] && _hasFullResult(res[g.id]));
+    const jogosRestantes = ALL_GAMES.filter(g => !res[g.id] || !_hasFullResult(res[g.id]));
+    const ptsDispo = jogosRestantes.length * 10;
+
+    // Todas as fases em ordem cronológica
+    const fases = [
+      { label: 'Grupos — Rodada 1', games: Object.values(GRUPOS_DATA).flatMap(g => g.games.filter(gm => gm.r === 1)) },
+      { label: 'Grupos — Rodada 2', games: Object.values(GRUPOS_DATA).flatMap(g => g.games.filter(gm => gm.r === 2)) },
+      { label: 'Grupos — Rodada 3', games: Object.values(GRUPOS_DATA).flatMap(g => g.games.filter(gm => gm.r === 3)) },
+      { label: 'Round of 32', games: ELIM_DATA.r32.games },
+      { label: 'Oitavas de Final', games: ELIM_DATA.r16.games },
+      { label: 'Quartas de Final', games: ELIM_DATA.quartas.games },
+      { label: 'Semifinais', games: ELIM_DATA.semi.games },
+      { label: 'Final / 3º lugar', games: ELIM_DATA.final.games },
+    ];
+
+    // Calcula pontos por fase por participante
+    const pontosPorFase = fases.map(fase => {
+      const jogosNaFase = fase.games.filter(g => res[g.id] && _hasFullResult(res[g.id]));
+      if (!jogosNaFase.length) return null;
+      const userStats = ranking.map(u => {
+        let pts = 0, acertos = 0, exatos = 0, jogos = 0;
+        jogosNaFase.forEach(g => {
+          const pal = allPals[u.uid]?.[g.id];
+          if (!pal || pal.h === undefined) return;
+          const p = calcPontos(pal, res[g.id]);
+          if (p == null) return;
+          jogos++; pts += p;
+          if (p > 0) acertos++;
+          if (p === 10) exatos++;
+        });
+        return { u, pts, acertos, exatos, jogos };
+      });
+      return { label: fase.label, total: jogosNaFase.length, userStats };
+    }).filter(Boolean);
+
+    // Seção 1: Tabela de pontos por fase
+    const tabelaPorFase = pontosPorFase.map(f => {
+      const linhas = f.userStats.map(s =>
+        `  ${(nm(s.u) + '                  ').slice(0, 18)} ${String(s.pts).padStart(3)}pts | ${s.acertos}/${s.jogos} acertos | ${s.exatos} exatos`
+      ).join('\n');
+      return `--- ${f.label} (${f.total} jogos concluídos) ---\n${linhas}`;
+    }).join('\n\n');
+
+    // Seção 2: Quem venceu cada fase
+    const lideresPorFase = pontosPorFase.map(f => {
+      const sorted = f.userStats.filter(s => s.jogos > 0).sort((a, b) => b.pts - a.pts);
+      const top = sorted.slice(0, 3).map((s, i) => `${i + 1}. ${nm(s.u)} (${s.pts}pts, ${s.exatos} exatos)`).join(' | ');
+      return `  ${f.label}: ${top}`;
+    }).join('\n');
+
+    // Seção 3: Melhor e pior fase por participante
+    const melhorPiorFase = ranking.map(u => {
+      let best = null, worst = null;
+      pontosPorFase.forEach(f => {
+        const s = f.userStats.find(s => s.u.uid === u.uid);
+        if (!s || s.jogos === 0) return;
+        if (!best || s.pts > best.pts) best = { label: f.label, pts: s.pts, jogos: s.jogos };
+        if (!worst || s.pts < worst.pts) worst = { label: f.label, pts: s.pts, jogos: s.jogos };
+      });
+      if (!best) return null;
+      const pior = (worst && worst.label !== best.label) ? ` | Pior: "${worst.label}" (${worst.pts}pts)` : '';
+      return `  ${nm(u)}: Melhor "${best.label}" (${best.pts}pts em ${best.jogos} jogos)${pior}`;
+    }).filter(Boolean).join('\n');
+
+    // Seção 4: Consistência (desvio padrão entre fases)
+    const consist = ranking.map(u => {
+      const vals = pontosPorFase.map(f => {
+        const s = f.userStats.find(s => s.u.uid === u.uid);
+        return s && s.jogos > 0 ? s.pts : null;
+      }).filter(v => v != null);
+      if (vals.length < 2) return null;
+      const mean = vals.reduce((a, v) => a + v, 0) / vals.length;
+      const std = Math.sqrt(vals.reduce((a, v) => a + (v - mean) ** 2, 0) / vals.length);
+      return { u, mean: mean.toFixed(1), std: std.toFixed(1), n: vals.length };
+    }).filter(Boolean).sort((a, b) => parseFloat(a.std) - parseFloat(b.std));
+
+    const maisConst = consist.slice(0, 3).map(c => `  ${nm(c.u)}: média ${c.mean}pts/fase, σ=${c.std} em ${c.n} fases`).join('\n');
+    const menosConst = consist.slice(-3).reverse().map(c => `  ${nm(c.u)}: média ${c.mean}pts/fase, σ=${c.std} em ${c.n} fases`).join('\n');
+
+    // Seção 5: Potencial de virada
+    const potencial = ranking.map((u, i) => {
+      const bonus = !u.acertou_campeao && u.campeao ? ' +50pts se acertar campeão' : u.acertou_campeao ? ' ✅ campeão acertado' : '';
+      const maxTotal = u.pontos + ptsDispo + (!u.acertou_campeao && u.campeao ? 50 : 0);
+      return `  ${i + 1}º ${nm(u)}: ${u.pontos}pts atuais → máx. ${maxTotal}pts (falta ${ranking[0].pontos - u.pontos > 0 ? ranking[0].pontos - u.pontos + ' pts p/ liderar' : 'já é líder'})${bonus}`;
+    }).join('\n');
+
+    // Seção 6: Jogos onde TODOS acertaram / TODOS erraram
+    const acertosGerais = jogosComRes.map(g => {
+      const r = res[g.id];
+      const pals = users.map(u => allPals[u.uid]?.[g.id]).filter(p => p && p.h !== undefined);
+      if (!pals.length) return null;
+      const acertos = pals.filter(p => calcPontos(p, r) > 0).length;
+      return { g, r, pct: Math.round(acertos / pals.length * 100), acertos, total: pals.length };
+    }).filter(Boolean);
+
+    const todosAcertaram = acertosGerais.filter(x => x.pct === 100).map(x =>
+      `  ${x.g.h} x ${x.g.a} [${x.r.h_real}-${x.r.a_real}] — todos os ${x.total} participantes pontuaram`
+    ).join('\n');
+    const todosErraram = acertosGerais.filter(x => x.pct === 0).map(x =>
+      `  ${x.g.h} x ${x.g.a} [${x.r.h_real}-${x.r.a_real}] — nenhum dos ${x.total} participantes pontuou`
+    ).join('\n');
+
+    // Seção 7: Ranking de pontos acumulados jogo a jogo por participante (totais por tipo)
+    const resumoGeral = ranking.map((u, i) => {
+      const pals = allPals[u.uid] || {};
+      let exatos = 0, vencSaldo = 0, sohVenc = 0, erros = 0, semPalpite = 0;
+      jogosComRes.forEach(g => {
+        const pal = pals[g.id];
+        if (!pal || pal.h === undefined) { semPalpite++; return; }
+        const p = calcPontos(pal, res[g.id]);
+        if (p === 10) exatos++;
+        else if (p === 7) vencSaldo++;
+        else if (p === 5) sohVenc++;
+        else erros++;
+      });
+      return `  ${i + 1}º ${nm(u)}: ${u.pontos}pts | ✅${exatos} exatos | 🎯${vencSaldo} venc+saldo | 👍${sohVenc} só venc | ❌${erros} erros | ?${semPalpite} s/palpite${u.campeao ? ` | campeão: ${u.campeao}${u.acertou_campeao ? ' ✅' : ''}` : ''}`;
+    }).join('\n');
+
+    // Seção 8: Matrix completa jogo a jogo por fase
+    const detalhesPorFase = fases.map(fase => {
+      const jogosNaFase = fase.games.filter(g => res[g.id] && _hasFullResult(res[g.id]));
+      if (!jogosNaFase.length) return null;
+      const linhasJogos = jogosNaFase.map(g => {
+        const r = res[g.id];
+        const pals = ranking.map(u => {
+          const pal = allPals[u.uid]?.[g.id];
+          if (!pal || pal.h === undefined) return `${nm(u)}:?`;
+          const p = calcPontos(pal, r);
+          const t = p === 10 ? '✅' : p === 7 ? '🎯' : p === 5 ? '👍' : '❌';
+          return `${nm(u)}:${pal.h}-${pal.a}${t}(${p})`;
+        }).join(' | ');
+        return `  ${g.h} x ${g.a} → ${r.h_real}-${r.a_real}\n    ${pals}`;
+      }).join('\n');
+      return `=== ${fase.label} ===\n${linhasJogos}`;
+    }).filter(Boolean).join('\n\n');
+
+    const data = `=== BOLÃO COPA 2026 — DADOS DETALHADOS POR JOGO E RODADA ===
+Data: ${today} | Participantes: ${users.length}
+Jogos concluídos: ${jogosComRes.length}/${ALL_GAMES.length} | Jogos restantes: ${jogosRestantes.length}
+Pontos ainda em disputa: até ${ptsDispo}pts por participante (${jogosRestantes.length} jogos × máx. 10pts)
+
+Legenda: ✅=Exato(10pts) 🎯=Venc+Saldo(7pts) 👍=Vencedor(5pts) ❌=Errou(0pts) ?=Sem palpite
+
+════════════════════════════════════════
+RESUMO GERAL DO BOLÃO (acumulado)
+════════════════════════════════════════
+${resumoGeral}
+
+════════════════════════════════════════
+PONTUAÇÃO POR FASE/RODADA
+════════════════════════════════════════
+${tabelaPorFase || '  (sem dados ainda)'}
+
+════════════════════════════════════════
+QUEM VENCEU CADA FASE
+════════════════════════════════════════
+${lideresPorFase || '  (sem dados ainda)'}
+
+════════════════════════════════════════
+MELHOR E PIOR FASE POR PARTICIPANTE
+════════════════════════════════════════
+${melhorPiorFase || '  (sem dados ainda)'}
+
+════════════════════════════════════════
+CONSISTÊNCIA ENTRE FASES (σ = desvio padrão)
+════════════════════════════════════════
+Mais regulares (jogam igual em toda fase):
+${maisConst || '  (sem dados)'}
+Mais irregulares (grandes altos e baixos):
+${menosConst || '  (sem dados)'}
+
+════════════════════════════════════════
+POTENCIAL DE VIRADA (pontos restantes)
+════════════════════════════════════════
+${potencial}
+
+════════════════════════════════════════
+JOGOS DE CONSENSO
+════════════════════════════════════════
+Todos acertaram (100% de aproveitamento):
+${todosAcertaram || '  (nenhum ainda)'}
+Todos erraram (0% de aproveitamento):
+${todosErraram || '  (nenhum ainda)'}
+
+════════════════════════════════════════
+PALPITES E RESULTADOS — JOGO A JOGO POR FASE
+════════════════════════════════════════
+${detalhesPorFase || '  (sem jogos concluídos ainda)'}
+
+==========================================================
+INSTRUÇÕES PARA A IA — ANÁLISE PROFUNDA JOGO A JOGO
+==========================================================
+Você recebeu a matriz completa de palpites vs resultados do Bolão Copa 2026.
+Analise os dados e gere de 8 a 12 cards de insights criativos e baseados em dados reais.
+
+REGRAS OBRIGATÓRIAS:
+1. Retorne APENAS um array JSON válido, sem texto antes ou depois, sem markdown.
+2. Cada card: {"icon":"emoji","title":"título curto","value":"nome/dado destacado","text":"1-2 frases com fatos concretos"}
+3. Explore os dados jogo a jogo e por rodada para cards específicos e originais:
+   - 🏆 "Craque da Fase" — quem dominou uma fase específica e como
+   - 📈 "Maior Virada" — quem mais melhorou de uma fase para a seguinte (em pts)
+   - 📉 "Tombo da Fase" — quem mais caiu de rendimento entre fases
+   - 🎯 "Máquina Consistente" — menor desvio padrão entre fases (sempre entrega)
+   - 🎢 "Montanha-Russa" — maior variação de rendimento entre fases
+   - 🔁 "Ainda Posso Ganhar!" — quem ainda pode alcançar o líder com os pts restantes
+   - 🤝 "Unânime" — jogo que todos acertaram ou todos erraram (cite o confronto e o placar)
+   - 🕵️ "Achado Raro" — quem acertou placar exato em jogo que a maioria errou
+   - 📊 "Rei dos Grupos" — melhor desempenho consolidado nas três rodadas de grupos
+   - ⚔️ "Mata-Mateiro" — melhor performance na fase eliminatória (se houver dados)
+   - 🔄 "Padrão Revelado" — um padrão recorrente nos palpites de alguém (ex: sempre aposta 1-0, sempre aposta no empate, sempre aposta no time de casa)
+   - 💡 "Jogo que Mudou Tudo" — um jogo específico que alterou a ordem do ranking
+4. Cite placares reais, nomes de confrontos e dados numéricos dos jogos.
+5. Espalhe os holofotes — no máx. 2 cards com o mesmo protagonista.
+6. Tom: analista esportivo apaixonado, preciso, com dados concretos e leveza.
+==========================================================`;
+
+    await navigator.clipboard.writeText(data);
+    showToast('✅ Dados detalhados por jogo/rodada copiados!', 'success');
+  } catch (e) { showToast('Erro ao gerar dados: ' + e.message, 'error'); }
 }
 
 async function saveAIInsights() {
