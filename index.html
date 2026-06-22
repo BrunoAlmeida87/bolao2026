@@ -10322,7 +10322,7 @@ async function exportAIDataDetalhado() {
     const jogosComRes = ALL_GAMES.filter(g => res[g.id] && _hasFullResult(res[g.id]));
     const jogosRestantes = ALL_GAMES.filter(g => !res[g.id] || !_hasFullResult(res[g.id]));
     const ptsDispo = jogosRestantes.length * CFG.pts_exato;
-    const finalDecidida = ELIM_DATA.final.games.some(g => res[g.id] && _hasFullResult(res[g.id]));
+    const finalDecidida = !!(res['FIN1'] && _hasFullResult(res['FIN1']));
 
     // Todas as fases em ordem cronológica
     const fases = [
@@ -10453,7 +10453,8 @@ async function exportAIDataDetalhado() {
           const t = p === CFG.pts_exato ? '✅' : p === CFG.pts_vencedor_saldo ? '🎯' : p === CFG.pts_apenas_vencedor ? '👍' : '❌';
           return `${nm(u)}:${pal.h}-${pal.a}${t}(${p})`;
         }).join(' | ');
-        return `  ${g.h} x ${g.a} → ${r.h_real}-${r.a_real}\n    ${pals}`;
+        const teams = _getResolvedTeamsForGame(g, res);
+        return `  ${teams.h} x ${teams.a} → ${r.h_real}-${r.a_real}\n    ${pals}`;
       }).join('\n');
       return `=== ${fase.label} ===\n${linhasJogos}`;
     }).filter(Boolean).join('\n\n');
