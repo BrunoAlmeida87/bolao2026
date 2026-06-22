@@ -3263,6 +3263,74 @@ async function _applyBracketPhase(phaseKey, resolveFn, res) {
   return changes;
 }
 
+// Detecta matematicamente quais times estão garantidos em 1º ou 2º lugar
+// mesmo que ainda restem jogos. Gera todos os 3ⁿ cenários possíveis dos
+// jogos restantes (n ≤ 6 → máx 729 combinações). Usa placar mínimo
+// (1-0/0-0/0-1) para conservadorismo: nunca coloca time errado na chave.
+// Retorna { first: string|null, second: string|null, topTwo: Set<string> }
+function _computeClinchedPositions(grpKey, res) {
+  const grp = GRUPOS_DATA[grpKey];
+  const teams = grp.teams;
+
+  const allPlayed = grp.games.every(g => _hasFullResult(res[g.id]));
+  if (allPlayed) {
+    const s = computeStandings(grpKey, res);
+    return { first: s[0]?.team || null, second: s[1]?.team || null,
+             topTwo: new Set([s[0]?.team, s[1]?.team].filter(Boolean)) };
+  }
+
+  const played   = grp.games.filter(g =>  _hasFullResult(res[g.id]));
+  const remaining = grp.games.filter(g => !_hasFullResult(res[g.id]));
+
+  // Acumula estatísticas dos jogos já disputados
+  const base = {};
+  teams.forEach(t => { base[t] = { pts:0, gp:0, gc:0, sg:0 }; });
+  played.forEach(g => {
+    const r = res[g.id];
+    const rh = parseInt(r.h_real), ra = parseInt(r.a_real);
+    const h = base[g.h], a = base[g.a];
+    h.gp += rh; h.gc += ra; a.gp += ra; a.gc += rh;
+    h.sg = h.gp - h.gc; a.sg = a.gp - a.gc;
+    if (rh > ra) { h.pts += 3; } else if (rh < ra) { a.pts += 3; }
+    else { h.pts += 1; a.pts += 1; }
+  });
+
+  // Simula todos os 3^n cenários com placar mínimo
+  const n = remaining.length;
+  const posSet = {};
+  teams.forEach(t => { posSet[t] = new Set(); });
+
+  for (let combo = 0; combo < Math.pow(3, n); combo++) {
+    const sim = {};
+    teams.forEach(t => { sim[t] = { ...base[t] }; });
+    let c = combo;
+    for (let i = 0; i < n; i++) {
+      const out = c % 3; c = Math.floor(c / 3); // 0=casa · 1=empate · 2=visit.
+      const g = remaining[i];
+      const h = sim[g.h], a = sim[g.a];
+      if      (out === 0) { h.gp+=1; h.gc+=0; a.gp+=0; a.gc+=1; h.pts+=3; }
+      else if (out === 1) { h.pts+=1; a.pts+=1; }
+      else                { h.gp+=0; h.gc+=1; a.gp+=1; a.gc+=0; a.pts+=3; }
+      h.sg = h.gp - h.gc; a.sg = a.gp - a.gc;
+    }
+    teams.map(t => ({ team:t, ...sim[t] }))
+         .sort((a,b) => b.pts-a.pts || b.sg-a.sg || b.gp-a.gp)
+         .forEach((e,idx) => posSet[e.team].add(idx));
+  }
+
+  // Garantido no top-2: em todos os cenários a posição é 0 ou 1
+  const topTwo = new Set(teams.filter(t => [...posSet[t]].every(p => p <= 1)));
+  // Garantido em 1º: sempre posição 0
+  const first = teams.find(t => [...posSet[t]].every(p => p === 0)) || null;
+  // Garantido em 2º: está no topTwo mas não garante 1º, e o 1º já está definido
+  let second = null;
+  if (first) {
+    const others = [...topTwo].filter(t => t !== first);
+    if (others.length === 1) second = others[0];
+  }
+  return { first, second, topTwo };
+}
+
 async function updateEliminationTeams() {
   try {
     isLoadingPage = true;
@@ -3270,14 +3338,11 @@ async function updateEliminationTeams() {
     const res = {};
     rSnap.docs.forEach(d=>{ res[d.id]=d.data(); });
 
-    // Standings por grupo: só publica 1º/2º quando o grupo está completo
+    // Publica 1º/2º assim que matematicamente garantido (não espera o grupo terminar)
     const groupLeaders = {};
     Object.keys(GRUPOS_DATA).forEach(grp => {
-      const grpGames = GRUPOS_DATA[grp].games;
-      const allPlayed = grpGames.every(g => _hasFullResult(res[g.id]));
-      if (!allPlayed) { groupLeaders[grp] = {}; return; }
-      const s = computeStandings(grp, res);
-      groupLeaders[grp] = { first: s[0]?.team, second: s[1]?.team };
+      const clinched = _computeClinchedPositions(grp, res);
+      groupLeaders[grp] = { first: clinched.first, second: clinched.second };
     });
     const bracketCfgSnap = await db_.collection('config').doc('bracket_thirds').get();
     const thirdOverrides = bracketCfgSnap.exists ? (bracketCfgSnap.data()?.overrides || {}) : {};
@@ -9587,12 +9652,16 @@ async function renderTabelas() {
     let html = `<div class="section-title">📊 Tabela de Grupos</div><div class="standings-grid">`;
     Object.keys(GRUPOS_DATA).forEach(grp=>{
       const rows = computeStandings(grp, res);
+      const clinched = _computeClinchedPositions(grp, res);
       html += `<div class="standings-card"><div class="standings-header">Grupo ${grp}</div>
         <table class="standings-table"><thead><tr><th>Time</th><th>PTS</th><th>J</th><th>V</th><th>E</th><th>D</th><th>GP</th><th>GC</th><th>SG</th></tr></thead><tbody>`;
-      rows.forEach(r=>{ html += `<tr><td>${esc(r.team)}</td><td>${r.pts}</td><td>${r.j}</td><td>${r.v}</td><td>${r.e}</td><td>${r.d}</td><td>${r.gp}</td><td>${r.gc}</td><td>${r.sg>=0?'+'+r.sg:r.sg}</td></tr>`; });
+      rows.forEach(r=>{
+        const badge = clinched.topTwo.has(r.team) ? ' ✅' : '';
+        html += `<tr><td>${esc(r.team)}${badge}</td><td>${r.pts}</td><td>${r.j}</td><td>${r.v}</td><td>${r.e}</td><td>${r.d}</td><td>${r.gp}</td><td>${r.gc}</td><td>${r.sg>=0?'+'+r.sg:r.sg}</td></tr>`;
+      });
       html += `</tbody></table></div>`;
     });
-    html += `</div><p class="text-muted" style="font-size:0.78rem;margin-top:12px">Verde = classificado · Laranja = possível 3º lugar · Baseado nos resultados lançados pelo admin.</p>`;
+    html += `</div><p class="text-muted" style="font-size:0.78rem;margin-top:12px">Verde = classificado · Laranja = possível 3º lugar · ✅ = matematicamente classificado (aguardando "Atualizar chaveamento") · Baseado nos resultados lançados pelo admin.</p>`;
     cont.innerHTML = html;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
