@@ -15460,8 +15460,8 @@ async function _corridaDownloadVideo() {
     // Velocidade: quanto menor, mais quadros (mais lento e suave). Cap de segurança
     // para o modo "bem smooth" não estourar memória/derrubar a página.
     const animFrames = Math.min(maxFrames, Math.ceil(totalSeg * (0.85 / (_corridaVidSpeed || 1)) * fps) + 1);
-    // Segura o quadro final por ~3s para dar tempo de ler o ranking do fim.
-    const holdFrames = Math.round(fps * 3);
+    // Segura o quadro final por ~6s para dar tempo de ler o ranking do fim.
+    const holdFrames = Math.round(fps * 6);
     const totalFrames = animFrames + holdFrames;
     const drawAt = (ctx, i) => {
       const seg = (Math.min(i, animFrames - 1) / Math.max(1, animFrames - 1)) * totalSeg;
