@@ -346,6 +346,18 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .gx-heat .hh{font-size:0.6rem;color:var(--text-muted);height:14px;vertical-align:bottom;text-align:center;white-space:nowrap}
 .gx-heat-rank{font-size:0.62rem;color:var(--text-muted);padding-right:4px;text-align:right}
 .gx-rnd-label{font-size:0.55rem;color:var(--gold);font-weight:700;line-height:1.1;margin-bottom:1px;white-space:nowrap}
+/* ── Ticker de curiosidades (estilo rodapé de noticiário) ── */
+.ticker-bar{display:flex;align-items:stretch;overflow:hidden;border:1px solid var(--border);border-radius:10px;background:var(--card);box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.ticker-label{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:9px 13px;background:linear-gradient(90deg,var(--gold),#c79a18);color:#1a1a1a;font-weight:800;font-size:0.72rem;letter-spacing:.4px;white-space:nowrap;text-transform:uppercase;z-index:2}
+.ticker-viewport{position:relative;flex:1 1 auto;min-width:0;overflow:hidden;display:flex;align-items:center}
+.ticker-viewport::after{content:'';position:absolute;top:0;bottom:0;right:0;width:34px;z-index:2;pointer-events:none;background:linear-gradient(270deg,var(--card),transparent)}
+.ticker-track{display:inline-flex;align-items:center;white-space:nowrap;will-change:transform;animation:ticker-scroll var(--ticker-dur,50s) linear infinite}
+.ticker-viewport:hover .ticker-track{animation-play-state:paused}
+.ticker-item{display:inline-flex;align-items:center;padding:0 4px;font-size:0.84rem;color:var(--white);font-weight:600}
+.ticker-item .ti-ico{margin-right:6px;font-size:0.95rem}
+.ticker-sep{padding:0 16px;color:var(--gold);opacity:.55;font-size:0.7rem}
+@keyframes ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.ticker-track{animation:none}}
 /* Tabela genérica de gráficos */
 .gx-table{width:100%;border-collapse:collapse;font-size:0.8rem}
 .gx-table th{text-align:left;color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:.3px;padding:6px 8px;border-bottom:1px solid var(--border)}
@@ -2205,6 +2217,7 @@ let CFG = {
   pts_campeao:50,
   chave_pix:'128.712.527-18',
   campeao_locked:false,
+  ticker_enabled:false,
   nome_bolao:'Bolão ICN Copa 2026',
   valor_participacao:50,
   qrcode_whatsapp:''
@@ -11841,6 +11854,20 @@ async function renderAdminConfig() {
       </div>
     </div>
     <div class="card">
+      <div class="card-title" style="margin-bottom:8px">📰 Ticker de Curiosidades</div>
+      <p class="text-muted" style="font-size:0.85rem;margin-bottom:14px">Uma faixa rolante com curiosidades e estatísticas do bolão e dos participantes, no estilo do rodapé dos canais de notícias. Quando ativado, aparecerá futuramente na página de Ranking. Abaixo um preview ao vivo de como ele fica (passe o mouse para pausar).</p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        <span style="font-size:0.9rem">Status:</span>
+        <span class="pts-badge" style="${CFG.ticker_enabled?'background:rgba(0,200,81,.15);color:var(--green)':'background:rgba(255,255,255,.06);color:var(--text-muted)'}">${CFG.ticker_enabled?'✅ ATIVADO':'⭕ DESATIVADO'}</span>
+      </div>
+      <div class="btn-group" style="margin-bottom:18px">
+        <button class="btn ${CFG.ticker_enabled?'btn-secondary':'btn-primary'}" onclick="toggleTicker(true)" ${CFG.ticker_enabled?'disabled':''}>▶️ Ativar ticker</button>
+        <button class="btn ${CFG.ticker_enabled?'btn-primary':'btn-secondary'}" onclick="toggleTicker(false)" ${CFG.ticker_enabled?'':'disabled'}>⏸️ Desativar ticker</button>
+      </div>
+      <div class="card-title" style="font-size:0.82rem;margin-bottom:8px">👀 Preview ao vivo</div>
+      <div id="ticker-preview"><div class="loading-wrap"><div class="spinner"></div></div></div>
+    </div>
+    <div class="card">
       <div class="card-title" style="margin-bottom:8px">🔒 Operações em Massa</div>
       <p class="text-muted" style="font-size:0.85rem;margin-bottom:16px">Bloquear/desbloquear todos os jogos de uma fase de uma vez.</p>
       <div class="btn-group">
@@ -11860,6 +11887,98 @@ async function renderAdminConfig() {
         <button id="btn-force-reload" class="btn btn-primary" onclick="forceAppReloadAll()">🔄 Forçar atualização para todos</button>
       </div>
     </div>`;
+  _loadTickerAdmin();
+}
+
+// ════════════════════════════════════════════
+// TICKER DE CURIOSIDADES
+// ════════════════════════════════════════════
+function _tkName(u) { return (u && (u.apelido || u.nome)) || '—'; }
+
+// Monta a lista de curiosidades/estatísticas que rolam no ticker.
+// Resiliente a dados vazios (pré-Copa): sempre devolve algo legível.
+function _tickerStats(users, res, allPals, champPicks) {
+  const items = [];
+  const nome = CFG.nome_bolao || 'Bolão';
+  const rank = computeRanking(users, res, allPals, champPicks);
+  const nU = rank.length;
+  const decididos = Object.keys(res || {}).filter(id => _hasFullResult(res[id])).length;
+  const totalJogos = (typeof ALL_GAMES !== 'undefined' && ALL_GAMES.length) || 104;
+
+  items.push({ ico: '🎉', text: `Bem-vindo ao ${nome}!` });
+  if (nU) items.push({ ico: '👥', text: `${nU} participantes na disputa` });
+  items.push({ ico: '⚽', text: `${decididos} de ${totalJogos} jogos já decididos` });
+
+  if (decididos > 0 && nU) {
+    const lider = rank[0];
+    items.push({ ico: '🏆', text: `${_tkName(lider)} lidera com ${lider.pontos} pts` });
+    if (rank[1]) {
+      const gap = rank[0].pontos - rank[1].pontos;
+      if (gap === 0) items.push({ ico: '🔥', text: `${_tkName(rank[0])} e ${_tkName(rank[1])} empatados na liderança!` });
+      else items.push({ ico: '🔥', text: `${_tkName(rank[1])} está a só ${gap} pts do líder` });
+    }
+    const certeiro = [...rank].sort((a, b) => b.exatos - a.exatos)[0];
+    if (certeiro && certeiro.exatos > 0) items.push({ ico: '🎯', text: `${_tkName(certeiro)} é o mais certeiro: ${certeiro.exatos} placares exatos` });
+    const totExatos = rank.reduce((s, u) => s + (u.exatos || 0), 0);
+    if (totExatos > 0) items.push({ ico: '💥', text: `${totExatos} placares exatos cravados no bolão` });
+    const media = Math.round(rank.reduce((s, u) => s + (u.pontos || 0), 0) / nU);
+    items.push({ ico: '📊', text: `Média do bolão: ${media} pts por participante` });
+    if (nU > 2) {
+      const lanterna = rank[nU - 1];
+      items.push({ ico: '🐢', text: `${_tkName(lanterna)} é a lanterna com ${lanterna.pontos} pts — bora reagir!` });
+    }
+  }
+
+  // Distribuição de palpites de campeão
+  const champCount = {};
+  Object.values(champPicks || {}).forEach(c => { if (c) champCount[c] = (champCount[c] || 0) + 1; });
+  const champSorted = Object.entries(champCount).sort((a, b) => b[1] - a[1]);
+  if (champSorted.length) {
+    const [team, cnt] = champSorted[0];
+    items.push({ ico: '⭐', text: `${team} é a favorita ao título: ${cnt} palpite${cnt > 1 ? 's' : ''} de campeão` });
+    if (champSorted.length > 1) items.push({ ico: '🌍', text: `${champSorted.length} seleções diferentes apostadas como campeãs` });
+  }
+
+  return items;
+}
+
+// Renderiza a faixa rolante. items: [{ico, text}]. Conteúdo duplicado para loop contínuo.
+function _renderTickerBar(items, opts = {}) {
+  if (!items || !items.length) return _gxEmpty ? _gxEmpty('Sem curiosidades ainda.') : '';
+  const set = items.map(it =>
+    `<span class="ticker-item"><span class="ti-ico">${esc(it.ico || '•')}</span>${esc(it.text)}</span><span class="ticker-sep">◆</span>`
+  ).join('');
+  const dur = Math.max(24, Math.round(items.length * 5)); // mais itens → mais lento (legível)
+  const label = opts.label !== undefined ? opts.label : '📰 Radar do Bolão';
+  return `<div class="ticker-bar">
+    ${label ? `<span class="ticker-label">${esc(label)}</span>` : ''}
+    <div class="ticker-viewport"><div class="ticker-track" style="--ticker-dur:${dur}s">${set}${set}</div></div>
+  </div>`;
+}
+
+// Carrega dados e injeta o preview do ticker no painel de admin.
+async function _loadTickerAdmin() {
+  const host = document.getElementById('ticker-preview');
+  if (!host) return;
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals, champPicks } = await _fetchPalsCached(users);
+    const items = _tickerStats(users, res, allPals, champPicks);
+    host.innerHTML = _renderTickerBar(items);
+  } catch (e) {
+    host.innerHTML = `<div class="alert alert-error">Erro ao montar o ticker: ${esc(errMsg(e))}</div>`;
+  }
+}
+
+async function toggleTicker(on) {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin pode alterar.', 'error'); return; }
+  try {
+    await db_.collection('config').doc('geral').set({ ticker_enabled: !!on }, { merge: true });
+    CFG.ticker_enabled = !!on;
+    showToast(on ? '📰 Ticker ativado' : '⏸️ Ticker desativado', on ? 'success' : 'info');
+    renderAdminConfig();
+  } catch (e) { showToast('Erro: ' + e.message, 'error'); }
 }
 
 async function toggleCampeaoLock(lock) {
