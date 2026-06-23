@@ -347,7 +347,7 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .gx-heat-rank{font-size:0.62rem;color:var(--text-muted);padding-right:4px;text-align:right}
 .gx-rnd-label{font-size:0.55rem;color:var(--gold);font-weight:700;line-height:1.1;margin-bottom:1px;white-space:nowrap}
 /* ── Ticker de curiosidades (estilo rodapé de noticiário) ── */
-.ticker-bar{display:flex;align-items:stretch;overflow:hidden;border:1px solid var(--border);border-radius:10px;background:var(--card);box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.ticker-bar{display:flex;align-items:stretch;overflow:hidden;border:1px solid var(--border);border-radius:0;background:var(--card);box-shadow:0 -2px 8px rgba(0,0,0,.22)}
 .ticker-label{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:9px 13px;background:linear-gradient(90deg,var(--gold),#c79a18);color:#1a1a1a;font-weight:800;font-size:0.72rem;letter-spacing:.4px;white-space:nowrap;text-transform:uppercase;z-index:2}
 .ticker-viewport{position:relative;flex:1 1 auto;min-width:0;overflow:hidden;display:flex;align-items:center}
 .ticker-viewport::after{content:'';position:absolute;top:0;bottom:0;right:0;width:34px;z-index:2;pointer-events:none;background:linear-gradient(270deg,var(--card),transparent)}
@@ -358,6 +358,15 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .ticker-sep{padding:0 16px;color:var(--gold);opacity:.55;font-size:0.7rem}
 @keyframes ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @media (prefers-reduced-motion:reduce){.ticker-track{animation:none}}
+/* ── Preview inline (painel admin) ── */
+#ticker-preview .ticker-bar{border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+/* ── Global ticker fixo no rodapé ── */
+#global-ticker{position:fixed;left:0;right:0;bottom:0;z-index:198;display:none}
+#global-ticker.visible{display:block}
+@media(max-width:820px){
+  #global-ticker{bottom:calc(56px + env(safe-area-inset-bottom))}
+  body.ticker-active .app-main{padding-bottom:42px}
+}
 /* Tabela genérica de gráficos */
 .gx-table{width:100%;border-collapse:collapse;font-size:0.8rem}
 .gx-table th{text-align:left;color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:.3px;padding:6px 8px;border-bottom:1px solid var(--border)}
@@ -1822,6 +1831,9 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
       </button>
     </div>
   </footer>
+
+  <!-- ── Global Ticker (fixo no rodapé, acima da bottom-nav) ── -->
+  <div id="global-ticker"></div>
 </div>
 
 <!-- MODAL ADMIN EDITAR NOME / EMAIL -->
@@ -2676,6 +2688,7 @@ async function handleAuthState(user) {
       _startVersionListener();
       _startAppReloadListener();
       _restorePageFromHash();
+      _bootGlobalTicker();
     } catch(e) {
       showToast('Erro ao carregar dados: '+e.message,'error');
       showLoading(false); showAuth();
@@ -11956,7 +11969,7 @@ function _renderTickerBar(items, opts = {}) {
   </div>`;
 }
 
-// Carrega dados e injeta o preview do ticker no painel de admin.
+// Carrega dados e injeta o preview inline (card de admin) E o ticker global no rodapé.
 async function _loadTickerAdmin() {
   const host = document.getElementById('ticker-preview');
   if (!host) return;
@@ -11966,9 +11979,38 @@ async function _loadTickerAdmin() {
     const { allPals, champPicks } = await _fetchPalsCached(users);
     const items = _tickerStats(users, res, allPals, champPicks);
     host.innerHTML = _renderTickerBar(items);
+    // Atualiza o ticker global com os mesmos dados (evita dupla fetch)
+    _mountGlobalTicker(items);
   } catch (e) {
     host.innerHTML = `<div class="alert alert-error">Erro ao montar o ticker: ${esc(errMsg(e))}</div>`;
   }
+}
+
+// Monta (ou atualiza) o ticker fixo no rodapé. Só exibe se ticker_enabled.
+function _mountGlobalTicker(items) {
+  const el = document.getElementById('global-ticker');
+  if (!el) return;
+  if (!CFG.ticker_enabled) { _destroyGlobalTicker(); return; }
+  el.innerHTML = _renderTickerBar(items, { label: '📰 Radar do Bolão' });
+  el.classList.add('visible');
+  document.body.classList.add('ticker-active');
+}
+
+function _destroyGlobalTicker() {
+  const el = document.getElementById('global-ticker');
+  if (el) { el.classList.remove('visible'); el.innerHTML = ''; }
+  document.body.classList.remove('ticker-active');
+}
+
+// Chamado no boot quando ticker já está ativo.
+async function _bootGlobalTicker() {
+  if (!CFG.ticker_enabled) return;
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals, champPicks } = await _fetchPalsCached(users);
+    _mountGlobalTicker(_tickerStats(users, res, allPals, champPicks));
+  } catch (e) { console.warn('ticker boot error', e); }
 }
 
 async function toggleTicker(on) {
@@ -11976,7 +12018,22 @@ async function toggleTicker(on) {
   try {
     await db_.collection('config').doc('geral').set({ ticker_enabled: !!on }, { merge: true });
     CFG.ticker_enabled = !!on;
-    showToast(on ? '📰 Ticker ativado' : '⏸️ Ticker desativado', on ? 'success' : 'info');
+    showToast(on ? '📰 Ticker ativado!' : '⏸️ Ticker desativado', on ? 'success' : 'info');
+    if (on) {
+      const previewBar = document.querySelector('#ticker-preview .ticker-track');
+      if (previewBar) {
+        const el = document.getElementById('global-ticker');
+        if (el) {
+          el.innerHTML = document.getElementById('ticker-preview').innerHTML;
+          el.classList.add('visible');
+          document.body.classList.add('ticker-active');
+        }
+      } else {
+        await _bootGlobalTicker();
+      }
+    } else {
+      _destroyGlobalTicker();
+    }
     renderAdminConfig();
   } catch (e) { showToast('Erro: ' + e.message, 'error'); }
 }
