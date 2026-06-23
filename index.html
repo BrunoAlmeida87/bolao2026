@@ -341,10 +341,11 @@ body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .gx-heat{border-collapse:separate;border-spacing:2px}
 .gx-heat th,.gx-heat td{padding:0}
 .gx-heat .hn{position:sticky;left:0;z-index:1;background:var(--card);font-size:0.72rem;
-  text-align:right;padding-right:8px;white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis}
+  text-align:right;padding-right:8px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis}
 .gx-heat .hc{width:16px;height:16px;border-radius:3px;text-align:center}
 .gx-heat .hh{font-size:0.6rem;color:var(--text-muted);height:14px;vertical-align:bottom;text-align:center;white-space:nowrap}
 .gx-heat-rank{font-size:0.62rem;color:var(--text-muted);padding-right:4px;text-align:right}
+.gx-rnd-label{font-size:0.55rem;color:var(--gold);font-weight:700;line-height:1.1;margin-bottom:1px;white-space:nowrap}
 /* Tabela genérica de gráficos */
 .gx-table{width:100%;border-collapse:collapse;font-size:0.8rem}
 .gx-table th{text-align:left;color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:.3px;padding:6px 8px;border-bottom:1px solid var(--border)}
@@ -9403,17 +9404,38 @@ function _gxHeatBody(d, filter) {
   const { games, rows } = computeScoreHeatmapData(d, filter);
   if (!games.length) return _gxEmpty('Sem jogos nesta faixa ainda.');
   const meUid = currentUser?.uid;
-  // Rótulos (times + data) por jogo — usados no cabeçalho, no tooltip e no clique.
   const gLabels = games.map(g => { const t = _gxGameTeams(g.id, d.res); return `${t.h} × ${t.a}${g.date ? ' · ' + g.date : ''}`; });
+
+  // Map each game to its round label for divider detection
+  const _grm = {};
+  Object.values(GRUPOS_DATA).forEach(grp => { grp.games.forEach(g => { _grm[g.id] = `Rod.${g.r}`; }); });
+  const _el = { r32: 'R32', r16: 'Oitavas', quartas: 'Quartas', semi: 'Semis', final: 'Final' };
+  Object.entries(ELIM_DATA).forEach(([ph, data]) => { data.games.forEach(g => { _grm[g.id] = _el[ph] || ph; }); });
+  const roundOf = games.map(g => _grm[g.id] || '');
+  const dividerAt = roundOf.map((r, ci) => ci > 0 && r !== roundOf[ci - 1]);
+  const DIV = 'border-left:2px solid rgba(255,255,255,.25)';
+
   _gxHeatState = {
     games: games.map((g, ci) => ({ id: g.id, label: gLabels[ci] })),
     rows: rows.map(r => ({ name: (r.user.apelido || r.user.nome || '—'), me: r.user.uid === meUid, cells: r.cells }))
   };
-  const header = `<tr><td class="hn"></td>${games.map((g, ci) => `<td class="hh" title="${esc(gLabels[ci])}">${esc(g.id)}</td>`).join('')}</tr>`;
-  const body = rows.map((r, i) => `<tr>
-    <td class="hn"${r.user.uid === meUid ? ' style="color:var(--gold);font-weight:700"' : ''}><span class="gx-heat-rank">${i + 1}º</span>${_gxShortName(r.user, 14)}</td>
-    ${r.cells.map((pts, ci) => `<td><div class="hc" style="background:${_gxHeatColor(pts)};cursor:pointer" onclick="gxHeatShow(${i},${ci})" title="${esc(gLabels[ci])} — ${pts == null ? 'sem palpite' : pts + ' pts'}"></div></td>`).join('')}
-  </tr>`).join('');
+
+  const header = `<tr><td class="hn"></td>${games.map((g, ci) => {
+    const ds = dividerAt[ci] ? ` style="${DIV}"` : '';
+    const lbl = dividerAt[ci] ? `<div class="gx-rnd-label">${esc(roundOf[ci])}</div>` : '';
+    return `<td class="hh" title="${esc(gLabels[ci])}"${ds}>${lbl}${esc(g.id)}</td>`;
+  }).join('')}</tr>`;
+
+  const body = rows.map((r, i) => {
+    const isMeStyle = r.user.uid === meUid ? ' style="color:var(--gold);font-weight:700"' : '';
+    const pts = r.user.pontos ?? 0;
+    const cells = r.cells.map((p, ci) => {
+      const ds = dividerAt[ci] ? ` style="${DIV}"` : '';
+      return `<td${ds}><div class="hc" style="background:${_gxHeatColor(p)};cursor:pointer" onclick="gxHeatShow(${i},${ci})" title="${esc(gLabels[ci])} — ${p == null ? 'sem palpite' : p + ' pts'}"></div></td>`;
+    }).join('');
+    return `<tr><td class="hn"${isMeStyle}><span class="gx-heat-rank">${i + 1}º</span>${_gxShortName(r.user, 11)} - ${pts}pts</td>${cells}</tr>`;
+  }).join('');
+
   const legend = `<div class="gx-legend">
     <span><i style="background:#00C851"></i>Exato (${CFG.pts_exato})</span>
     <span><i style="background:#FFD98A"></i>Venc.+saldo (${CFG.pts_vencedor_saldo ?? 7})</span>
