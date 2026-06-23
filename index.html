@@ -8828,6 +8828,7 @@ function renderGraficos() {
   try {
     html += renderGxResumoGeral(d);
     html += renderGxRoundSummary(d);
+    html += renderGxHeatmap(d);
     html += renderGxBumpCard(d);
     html += renderGxAccuracyBreakdown(d);
     html += renderGxStreaks(d);
@@ -8835,7 +8836,6 @@ function renderGraficos() {
     html += renderGxScoreline(d);
     html += renderGxHardestGames(d);
     html += renderGxZebras(d);
-    html += renderGxHeatmap(d);
     html += renderGxLeaderGap(d);
     html += renderGxH2H(d);
   } catch (e) {
@@ -9373,7 +9373,7 @@ function renderGxCompleteness(d) {
 }
 
 // ── 2. Heatmap de pontos por participante × jogo ──────────────────────────────
-let _gxHeatFilter = 'recent';
+let _gxHeatFilter = 'todos';
 function computeScoreHeatmapData(d, filter) {
   const { res, allPals, ranking } = d;
   const grpIds = new Set(Object.values(GRUPOS_DATA).flatMap(g => g.games.map(x => x.id)));
