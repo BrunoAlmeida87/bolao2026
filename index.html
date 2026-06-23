@@ -12020,7 +12020,6 @@ async function toggleTicker(on) {
     CFG.ticker_enabled = !!on;
     showToast(on ? '📰 Ticker ativado!' : '⏸️ Ticker desativado', on ? 'success' : 'info');
     if (on) {
-      // Já temos o preview carregado — reutiliza os dados do preview se disponível
       const previewBar = document.querySelector('#ticker-preview .ticker-track');
       if (previewBar) {
         const el = document.getElementById('global-ticker');
