@@ -11868,7 +11868,10 @@ async function renderAdminConfig() {
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:8px">📰 Ticker de Curiosidades</div>
-      <p class="text-muted" style="font-size:0.85rem;margin-bottom:14px">Uma faixa rolante com curiosidades e estatísticas do bolão e dos participantes, no estilo do rodapé dos canais de notícias. Quando ativado, aparecerá futuramente na página de Ranking. Abaixo um preview ao vivo de como ele fica (passe o mouse para pausar).</p>
+      <p class="text-muted" style="font-size:0.85rem;margin-bottom:14px">
+        Faixa rolante no rodapé com <b>dados personalizados para cada usuário</b> (posição, rival, aproveitamento)
+        intercalados com <b>curiosidades da Copa</b> que você adiciona abaixo. Pode gerar as curiosidades com IA.
+      </p>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         <span style="font-size:0.9rem">Status:</span>
         <span class="pts-badge" style="${CFG.ticker_enabled?'background:rgba(0,200,81,.15);color:var(--green)':'background:rgba(255,255,255,.06);color:var(--text-muted)'}">${CFG.ticker_enabled?'✅ ATIVADO':'⭕ DESATIVADO'}</span>
@@ -11877,6 +11880,24 @@ async function renderAdminConfig() {
         <button class="btn ${CFG.ticker_enabled?'btn-secondary':'btn-primary'}" onclick="toggleTicker(true)" ${CFG.ticker_enabled?'disabled':''}>▶️ Ativar ticker</button>
         <button class="btn ${CFG.ticker_enabled?'btn-primary':'btn-secondary'}" onclick="toggleTicker(false)" ${CFG.ticker_enabled?'':'disabled'}>⏸️ Desativar ticker</button>
       </div>
+
+      <hr style="border-color:var(--border);margin:4px 0 18px">
+      <div class="card-title" style="font-size:0.9rem;margin-bottom:6px">⚽ Curiosidades da Copa</div>
+      <p class="text-muted" style="font-size:0.82rem;margin-bottom:12px">
+        Cole aqui um JSON com fatos e curiosidades da Copa do Mundo 2026. Esses itens serão intercalados com os dados personalizados de cada participante. Use o botão abaixo para gerar um prompt pronto para a IA.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn btn-primary" onclick="exportTickerAIPrompt()">📋 Copiar prompt para IA</button>
+      </div>
+      <textarea id="ticker-facts-input" rows="6" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-family:monospace;font-size:0.8rem;resize:vertical;margin-bottom:10px"
+        placeholder='Cole aqui o JSON gerado pela IA. Exemplo:&#10;[&#10;  {"ico":"🌎","text":"Copa 2026 é a 1ª com 48 seleções na história"},&#10;  {"ico":"⚽","text":"3 países sediando: EUA, Canadá e México"}&#10;]'></textarea>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="btn btn-primary" onclick="saveTickerFacts()">💾 Salvar curiosidades</button>
+        <button class="btn btn-secondary" onclick="clearTickerFacts()">🗑️ Limpar tudo</button>
+      </div>
+      <div id="ticker-facts-status" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px"></div>
+
+      <hr style="border-color:var(--border);margin:4px 0 18px">
       <div class="card-title" style="font-size:0.82rem;margin-bottom:8px">👀 Preview ao vivo</div>
       <div id="ticker-preview"><div class="loading-wrap"><div class="spinner"></div></div></div>
     </div>
@@ -11908,60 +11929,117 @@ async function renderAdminConfig() {
 // ════════════════════════════════════════════
 function _tkName(u) { return (u && (u.apelido || u.nome)) || '—'; }
 
-// Monta a lista de curiosidades/estatísticas que rolam no ticker.
-// Resiliente a dados vazios (pré-Copa): sempre devolve algo legível.
-function _tickerStats(users, res, allPals, champPicks) {
+// ── Itens personalizados para o usuário logado ──
+function _tickerPersonalItems(rank, allPals, champPicks, res) {
+  const meUid = currentUser?.uid;
+  if (!meUid || !rank.length) return [];
   const items = [];
-  const nome = CFG.nome_bolao || 'Bolão';
-  const rank = computeRanking(users, res, allPals, champPicks);
-  const nU = rank.length;
+  const idx = rank.findIndex(u => u.uid === meUid);
+  if (idx < 0) return items;
+  const me = rank[idx];
+  const pos = idx + 1;
+  const total = rank.length;
   const decididos = Object.keys(res || {}).filter(id => _hasFullResult(res[id])).length;
-  const totalJogos = (typeof ALL_GAMES !== 'undefined' && ALL_GAMES.length) || 104;
 
-  items.push({ ico: '🎉', text: `Bem-vindo ao ${nome}!` });
-  if (nU) items.push({ ico: '👥', text: `${nU} participantes na disputa` });
-  items.push({ ico: '⚽', text: `${decididos} de ${totalJogos} jogos já decididos` });
+  // Posição atual
+  if (pos === 1) {
+    items.push({ ico: '👑', text: `Você lidera o bolão com ${me.pontos} pts — segura!` });
+  } else {
+    items.push({ ico: '📍', text: `Você está em ${pos}º lugar com ${me.pontos} pts` });
+  }
 
-  if (decididos > 0 && nU) {
-    const lider = rank[0];
-    items.push({ ico: '🏆', text: `${_tkName(lider)} lidera com ${lider.pontos} pts` });
-    if (rank[1]) {
-      const gap = rank[0].pontos - rank[1].pontos;
-      if (gap === 0) items.push({ ico: '🔥', text: `${_tkName(rank[0])} e ${_tkName(rank[1])} empatados na liderança!` });
-      else items.push({ ico: '🔥', text: `${_tkName(rank[1])} está a só ${gap} pts do líder` });
-    }
-    const certeiro = [...rank].sort((a, b) => b.exatos - a.exatos)[0];
-    if (certeiro && certeiro.exatos > 0) items.push({ ico: '🎯', text: `${_tkName(certeiro)} é o mais certeiro: ${certeiro.exatos} placares exatos` });
-    const totExatos = rank.reduce((s, u) => s + (u.exatos || 0), 0);
-    if (totExatos > 0) items.push({ ico: '💥', text: `${totExatos} placares exatos cravados no bolão` });
-    const media = Math.round(rank.reduce((s, u) => s + (u.pontos || 0), 0) / nU);
-    items.push({ ico: '📊', text: `Média do bolão: ${media} pts por participante` });
-    if (nU > 2) {
-      const lanterna = rank[nU - 1];
-      items.push({ ico: '🐢', text: `${_tkName(lanterna)} é a lanterna com ${lanterna.pontos} pts — bora reagir!` });
+  // Gap para o líder
+  if (idx > 0) {
+    const gap = rank[0].pontos - me.pontos;
+    items.push({ ico: '🏆', text: `${_tkName(rank[0])} lidera — você está ${gap} pt${gap !== 1 ? 's' : ''} atrás` });
+  }
+
+  // Rival imediatamente acima
+  if (idx > 0) {
+    const above = rank[idx - 1];
+    const diff = above.pontos - me.pontos;
+    if (diff === 0) items.push({ ico: '🤝', text: `Você está empatado com ${_tkName(above)}!` });
+    else items.push({ ico: '⚡', text: `${_tkName(above)} está só ${diff} pt${diff !== 1 ? 's' : ''} à sua frente` });
+  }
+
+  // Rival imediatamente abaixo
+  if (idx < total - 1) {
+    const below = rank[idx + 1];
+    const diff = me.pontos - below.pontos;
+    if (diff === 0) items.push({ ico: '😅', text: `${_tkName(below)} está empatado com você — cuidado!` });
+    else items.push({ ico: '👀', text: `${_tkName(below)} está ${diff} pt${diff !== 1 ? 's' : ''} atrás — segura a posição!` });
+  }
+
+  // Placares exatos vs média do bolão
+  if (decididos > 0 && me.exatos >= 0) {
+    const betterThan = rank.filter(u => u.exatos < me.exatos).length;
+    const pct = Math.round(betterThan / total * 100);
+    if (me.exatos === 0) {
+      items.push({ ico: '🎯', text: `Nenhum placar exato ainda — o próximo pode ser o seu!` });
+    } else {
+      items.push({ ico: '💎', text: `Seus ${me.exatos} placar${me.exatos !== 1 ? 'es' : ''} exato${me.exatos !== 1 ? 's' : ''} superam ${pct}% do bolão` });
     }
   }
 
-  // Distribuição de palpites de campeão
-  const champCount = {};
-  Object.values(champPicks || {}).forEach(c => { if (c) champCount[c] = (champCount[c] || 0) + 1; });
-  const champSorted = Object.entries(champCount).sort((a, b) => b[1] - a[1]);
-  if (champSorted.length) {
-    const [team, cnt] = champSorted[0];
-    items.push({ ico: '⭐', text: `${team} é a favorita ao título: ${cnt} palpite${cnt > 1 ? 's' : ''} de campeão` });
-    if (champSorted.length > 1) items.push({ ico: '🌍', text: `${champSorted.length} seleções diferentes apostadas como campeãs` });
+  // Aproveitamento geral
+  if (me.jogos > 0) {
+    const acertos = me.exatos + (me.venc_saldo || 0) + (me.apenas_venc || 0);
+    const aprov = Math.round(acertos / me.jogos * 100);
+    items.push({ ico: '📊', text: `Aproveitamento: ${aprov}% dos seus palpites pontuaram` });
+  }
+
+  // Palpite de campeão
+  const champPick = champPicks[meUid];
+  if (champPick) {
+    items.push({ ico: '⭐', text: `Seu palpite de campeão: ${champPick} — vai que vai!` });
+  }
+
+  // Posição em relação à metade do pelotão
+  const metade = Math.ceil(total / 2);
+  if (pos <= metade) {
+    items.push({ ico: '🚀', text: `Você está no top ${metade} do bolão — bom trabalho!` });
   }
 
   return items;
 }
 
-// Renderiza a faixa rolante. items: [{ico, text}]. Conteúdo duplicado para loop contínuo.
+// ── Intercala itens pessoais com curiosidades da Copa: P, C, P, C... ──
+function _tickerInterleave(personal, copa) {
+  if (!copa.length) return personal.length ? personal : [{ ico: '📰', text: 'Adicione curiosidades da Copa no painel admin!' }];
+  if (!personal.length) return copa;
+  const out = [];
+  const max = Math.max(personal.length, copa.length);
+  for (let i = 0; i < max; i++) {
+    if (i < personal.length) out.push(personal[i]);
+    if (i < copa.length) out.push(copa[i]);
+  }
+  return out;
+}
+
+// ── Busca curiosidades da Copa do Firestore ──
+async function _fetchTickerFacts() {
+  try {
+    const snap = await db_.collection('config').doc('ticker_facts').get();
+    if (snap.exists && Array.isArray(snap.data()?.facts)) return snap.data().facts.filter(f => f && f.text);
+  } catch (e) { /* silently */ }
+  return [];
+}
+
+// ── Constrói o array final de itens do ticker ──
+async function _buildTickerItems(users, res, allPals, champPicks) {
+  const rank = computeRanking(users, res, allPals, champPicks);
+  const personal = _tickerPersonalItems(rank, allPals, champPicks, res);
+  const copaFacts = await _fetchTickerFacts();
+  return _tickerInterleave(personal, copaFacts);
+}
+
+// ── Renderiza a faixa rolante. Conteúdo duplicado para loop contínuo. ──
 function _renderTickerBar(items, opts = {}) {
-  if (!items || !items.length) return _gxEmpty ? _gxEmpty('Sem curiosidades ainda.') : '';
+  if (!items || !items.length) return '';
   const set = items.map(it =>
     `<span class="ticker-item"><span class="ti-ico">${esc(it.ico || '•')}</span>${esc(it.text)}</span><span class="ticker-sep">◆</span>`
   ).join('');
-  const dur = Math.max(24, Math.round(items.length * 5)); // mais itens → mais lento (legível)
+  const dur = Math.max(30, Math.round(items.length * 6));
   const label = opts.label !== undefined ? opts.label : '📰 Radar do Bolão';
   return `<div class="ticker-bar">
     ${label ? `<span class="ticker-label">${esc(label)}</span>` : ''}
@@ -11969,7 +12047,7 @@ function _renderTickerBar(items, opts = {}) {
   </div>`;
 }
 
-// Carrega dados e injeta o preview inline (card de admin) E o ticker global no rodapé.
+// ── Carrega preview no admin e atualiza o ticker global ──
 async function _loadTickerAdmin() {
   const host = document.getElementById('ticker-preview');
   if (!host) return;
@@ -11977,16 +12055,19 @@ async function _loadTickerAdmin() {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u => u.ativo !== false);
     const { allPals, champPicks } = await _fetchPalsCached(users);
-    const items = _tickerStats(users, res, allPals, champPicks);
+    const items = await _buildTickerItems(users, res, allPals, champPicks);
     host.innerHTML = _renderTickerBar(items);
-    // Atualiza o ticker global com os mesmos dados (evita dupla fetch)
     _mountGlobalTicker(items);
+    // Preenche status das curiosidades salvas
+    const facts = await _fetchTickerFacts();
+    const statusEl = document.getElementById('ticker-facts-status');
+    if (statusEl) statusEl.textContent = facts.length ? `✅ ${facts.length} curiosidade${facts.length !== 1 ? 's' : ''} salva${facts.length !== 1 ? 's' : ''}` : '⭕ Nenhuma curiosidade salva ainda.';
   } catch (e) {
-    host.innerHTML = `<div class="alert alert-error">Erro ao montar o ticker: ${esc(errMsg(e))}</div>`;
+    host.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
 }
 
-// Monta (ou atualiza) o ticker fixo no rodapé. Só exibe se ticker_enabled.
+// ── Monta o ticker global fixo no rodapé ──
 function _mountGlobalTicker(items) {
   const el = document.getElementById('global-ticker');
   if (!el) return;
@@ -12002,14 +12083,14 @@ function _destroyGlobalTicker() {
   document.body.classList.remove('ticker-active');
 }
 
-// Chamado no boot quando ticker já está ativo.
+// ── Boot: monta o ticker global quando o usuário faz login ──
 async function _bootGlobalTicker() {
   if (!CFG.ticker_enabled) return;
   try {
     const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
     const users = allUsers.filter(u => u.ativo !== false);
     const { allPals, champPicks } = await _fetchPalsCached(users);
-    _mountGlobalTicker(_tickerStats(users, res, allPals, champPicks));
+    _mountGlobalTicker(await _buildTickerItems(users, res, allPals, champPicks));
   } catch (e) { console.warn('ticker boot error', e); }
 }
 
@@ -12019,23 +12100,93 @@ async function toggleTicker(on) {
     await db_.collection('config').doc('geral').set({ ticker_enabled: !!on }, { merge: true });
     CFG.ticker_enabled = !!on;
     showToast(on ? '📰 Ticker ativado!' : '⏸️ Ticker desativado', on ? 'success' : 'info');
-    if (on) {
-      const previewBar = document.querySelector('#ticker-preview .ticker-track');
-      if (previewBar) {
-        const el = document.getElementById('global-ticker');
-        if (el) {
-          el.innerHTML = document.getElementById('ticker-preview').innerHTML;
-          el.classList.add('visible');
-          document.body.classList.add('ticker-active');
-        }
-      } else {
-        await _bootGlobalTicker();
-      }
-    } else {
-      _destroyGlobalTicker();
-    }
+    if (on) await _bootGlobalTicker();
+    else _destroyGlobalTicker();
     renderAdminConfig();
   } catch (e) { showToast('Erro: ' + e.message, 'error'); }
+}
+
+// ── Salva curiosidades da Copa no Firestore ──
+async function saveTickerFacts() {
+  if (currentUserDoc?.role !== 'admin') return;
+  const raw = document.getElementById('ticker-facts-input')?.value?.trim();
+  if (!raw) { showToast('Cole um JSON antes de salvar.', 'warning'); return; }
+  let facts;
+  try { facts = JSON.parse(raw); } catch (e) { showToast('JSON inválido: ' + e.message, 'error'); return; }
+  if (!Array.isArray(facts)) { showToast('O JSON deve ser um array [ {...}, ... ]', 'error'); return; }
+  facts = facts.filter(f => f && typeof f.text === 'string' && f.text.trim());
+  if (!facts.length) { showToast('Nenhum item válido no JSON.', 'warning'); return; }
+  try {
+    await db_.collection('config').doc('ticker_facts').set({
+      facts,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser?.email || currentUser?.uid || 'admin'
+    });
+    showToast(`✅ ${facts.length} curiosidade${facts.length !== 1 ? 's' : ''} salva${facts.length !== 1 ? 's' : ''}!`, 'success');
+    document.getElementById('ticker-facts-input').value = '';
+    _loadTickerAdmin();
+  } catch (e) { showToast('Erro ao salvar: ' + e.message, 'error'); }
+}
+
+async function clearTickerFacts() {
+  if (currentUserDoc?.role !== 'admin') return;
+  if (!confirm('Apagar todas as curiosidades da Copa salvas?')) return;
+  try {
+    await db_.collection('config').doc('ticker_facts').set({ facts: [] });
+    showToast('🗑️ Curiosidades apagadas.', 'info');
+    _loadTickerAdmin();
+  } catch (e) { showToast('Erro: ' + e.message, 'error'); }
+}
+
+// ── Gera prompt para IA criar curiosidades da Copa ──
+async function exportTickerAIPrompt() {
+  let statsText = '';
+  try {
+    const res = await _fetchRes();
+    const decididos = Object.keys(res).filter(id => _hasFullResult(res[id]));
+    const totalGols = decididos.reduce((s, id) => s + (Number(res[id].h_real) || 0) + (Number(res[id].a_real) || 0), 0);
+    const mediaGols = decididos.length ? (totalGols / decididos.length).toFixed(1) : '—';
+    const placarFreq = {};
+    decididos.forEach(id => {
+      const k = `${res[id].h_real}-${res[id].a_real}`;
+      placarFreq[k] = (placarFreq[k] || 0) + 1;
+    });
+    const topPlacar = Object.entries(placarFreq).sort((a, b) => b[1] - a[1])[0];
+    statsText = `\nDADOS DO TORNEIO ATÉ AGORA:\n- Jogos disputados: ${decididos.length} de 104\n- Total de gols: ${totalGols}\n- Média de gols/jogo: ${mediaGols}\n- Placar mais comum: ${topPlacar ? topPlacar[0] + ' (apareceu ' + topPlacar[1] + 'x)' : '—'}\n`;
+  } catch (e) { /* ignora */ }
+
+  const prompt = `Você é um especialista em Copa do Mundo. Gere curiosidades e fatos interessantes sobre a Copa do Mundo 2026 para aparecerem num ticker de notícias de bolão.
+${statsText}
+CONTEXTO DA COPA 2026:
+- 1ª Copa com 48 seleções (antes eram 32)
+- Sediada em 3 países: EUA, Canadá e México
+- 104 jogos no total (antes eram 64)
+- Fase de grupos tem 12 grupos de 4 times (os 2 melhores + 8 melhores 3ºs avançam)
+- Jogos em cidades dos 3 países
+
+FORMATO DE SAÍDA — responda SOMENTE com um array JSON, sem texto adicional:
+[
+  {"ico": "🌎", "text": "texto curto da curiosidade (máx 85 chars)"},
+  ...
+]
+
+REGRAS:
+- Gere entre 12 e 18 itens
+- Textos em português brasileiro, tom descontraído e animado
+- Máximo 85 caracteres por texto (tem que caber numa faixa de notícias)
+- Varie os temas: recordes históricos, curiosidades do formato, fatos sobre times/jogadores, números do torneio atual se disponíveis
+- Use emojis variados e relevantes no campo "ico"
+- NÃO inclua dados específicos de participantes do bolão (esses são adicionados automaticamente)
+- NÃO repita temas entre os itens`;
+
+  try {
+    await navigator.clipboard.writeText(prompt);
+    showToast('📋 Prompt copiado! Cole no Claude ou ChatGPT.', 'success');
+  } catch (e) {
+    const ta = document.getElementById('ticker-facts-input');
+    if (ta) { ta.value = prompt; ta.select(); }
+    showToast('Copie o texto da área de texto.', 'info');
+  }
 }
 
 async function toggleCampeaoLock(lock) {
