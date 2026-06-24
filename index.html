@@ -2539,7 +2539,7 @@ async function forceAppReloadAll() {
 // Os palpites só mudam por edição do próprio usuário, que já invalida 'pals' localmente.
 function _onRemoteDataChange() {
   _scDel('res');
-  const viewPages = new Set(['dashboard','estatisticas','ver-palpites','ver-todos']);
+  const viewPages = new Set(['dashboard','estatisticas','ver-palpites','ver-todos','chaveamento','chaveamento-bilateral']);
   if (viewPages.has(_currentPage)) {
     if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
     navigateTo(_currentPage, { history: 'replace' });
@@ -3394,6 +3394,7 @@ async function updateEliminationTeams() {
     await _applyBracketPhase('final',   str => _resolveWinnerPlaceholders(str, 'semi',    res), res);
 
     _scDel('res'); // chaveamento escreveu h_team/a_team — invalida cache para próximas leituras
+    await _bumpDataVersion(); // notifica outros clientes que o chaveamento mudou
     isLoadingPage = false;
   } catch(e) {
     console.error('Erro ao atualizar eliminatórias:', e);
@@ -11043,6 +11044,12 @@ async function atualizarChaveamentoManual() {
   try {
     await updateEliminationTeams();
     await renderAdminResultados();
+    if (document.getElementById('page-chaveamento')?.classList.contains('active')) {
+      await renderChaveamento();
+    }
+    if (document.getElementById('page-chaveamento-bilateral')?.classList.contains('active')) {
+      await renderChaveamentoBilateral();
+    }
     showToast('✅ Chaveamento e classificação atualizados','success');
   } catch(e) {
     showToast('Erro ao atualizar: '+errMsg(e),'error');
