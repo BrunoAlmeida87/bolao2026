@@ -3300,10 +3300,12 @@ async function _applyBracketPhase(phaseKey, resolveFn, res) {
 // Detecta matematicamente quais times estão garantidos em 1º ou 2º lugar
 // mesmo que ainda restem jogos. Gera todos os 3ⁿ cenários de vitória/empate/
 // derrota dos jogos restantes (n ≤ 6 → máx 729 combinações) e certifica uma
-// posição SOMENTE quando ela é decidida PURAMENTE por pontos. Empates em
-// pontos contam contra: como o desempate por saldo de gols é imprevisível
-// (uma goleada num jogo restante pode inverter a ordem), nunca certificamos
-// um slot que dependa de saldo — assim jamais gravamos um time errado na chave.
+// posição quando ela é IMBATÍVEL em qualquer placar — considerando pontos e os
+// desempates por saldo/gols (computeStandings). Os gols dos jogos restantes são
+// tratados como ilimitados, então um slot só dependente de saldo só é gravado
+// quando o saldo já está travado (ex.: os envolvidos já jogaram tudo). Assim
+// jamais gravamos um time errado, mas preenchemos a chave em todos os casos já
+// decididos — inclusive os de empate em pontos resolvidos no saldo.
 // Retorna { first: string|null, second: string|null, topTwo: Set<string> }
 function _computeClinchedPositions(grpKey, res) {
   const grp = GRUPOS_DATA[grpKey];
@@ -3319,49 +3321,99 @@ function _computeClinchedPositions(grpKey, res) {
   const played    = grp.games.filter(g =>  _hasFullResult(res[g.id]));
   const remaining = grp.games.filter(g => !_hasFullResult(res[g.id]));
 
-  // Pontos já assegurados pelos jogos disputados
-  const basePts = {};
-  teams.forEach(t => { basePts[t] = 0; });
+  // Estatísticas já asseguradas pelos jogos disputados: pontos, saldo (sg) e
+  // gols pró (gp) — os mesmos critérios de desempate de computeStandings.
+  const pts0 = {}, sg0 = {}, gp0 = {};
+  teams.forEach(t => { pts0[t] = 0; sg0[t] = 0; gp0[t] = 0; });
   played.forEach(g => {
     const r = res[g.id];
     const rh = parseInt(r.h_real), ra = parseInt(r.a_real);
-    if (rh > ra) basePts[g.h] += 3;
-    else if (rh < ra) basePts[g.a] += 3;
-    else { basePts[g.h] += 1; basePts[g.a] += 1; }
+    gp0[g.h] += rh; gp0[g.a] += ra;
+    sg0[g.h] += rh - ra; sg0[g.a] += ra - rh;
+    if (rh > ra) pts0[g.h] += 3;
+    else if (rh < ra) pts0[g.a] += 3;
+    else { pts0[g.h] += 1; pts0[g.a] += 1; }
   });
 
-  // worstPos[t] = pior posição (0-indexed) que t pode terminar em QUALQUER
-  // cenário, contando empates em pontos como "acima" (pois o saldo poderia
-  // colocar o rival à frente). Só usamos pontos — nada de saldo/gols.
+  // Para cada um dos 3ⁿ cenários de vitória/empate/derrota dos jogos restantes
+  // (n ≤ 6 → máx 729) avaliamos posições GARANTIDAS levando em conta também o
+  // desempate por saldo/gols. Os GOLS dos jogos restantes são tratados como
+  // ilimitados (uma goleada pode inflar saldo/gp à vontade), então só
+  // certificamos uma posição quando ela é imbatível em QUALQUER placar — isso
+  // resolve corretamente os casos já decididos no saldo (ex.: dois times que
+  // já jogaram tudo e empataram em pontos), que a versão só-por-pontos deixava
+  // de fora, fazendo a tabela mostrar ✅ sem preencher a chave.
+  //   worstRank[X] = pior colocação possível (quantos times podem ficar à frente
+  //                  OU empatados-à-frente de X) → define 1º e top-2.
+  //   bestRank[X]  = melhor colocação possível (quantos times com CERTEZA ficam
+  //                  à frente de X em todo placar) → isola o 2º.
+  const INF = Infinity;
   const n = remaining.length;
-  const worstPos = {};
-  teams.forEach(t => { worstPos[t] = 0; });
+  const worstRank = {}, bestRank = {};
+  teams.forEach(t => { worstRank[t] = 0; bestRank[t] = teams.length; });
 
   for (let combo = 0; combo < Math.pow(3, n); combo++) {
-    const pts = { ...basePts };
+    const pts = { ...pts0 };
+    const W = {}, D = {}, L = {}; // vitórias/empates/derrotas restantes por time
+    teams.forEach(t => { W[t] = 0; D[t] = 0; L[t] = 0; });
     let c = combo;
     for (let i = 0; i < n; i++) {
       const out = c % 3; c = Math.floor(c / 3); // 0=casa · 1=empate · 2=visit.
       const g = remaining[i];
-      if      (out === 0) pts[g.h] += 3;
-      else if (out === 1) { pts[g.h] += 1; pts[g.a] += 1; }
-      else                pts[g.a] += 3;
+      if      (out === 0) { pts[g.h] += 3; W[g.h]++; L[g.a]++; }
+      else if (out === 1) { pts[g.h] += 1; pts[g.a] += 1; D[g.h]++; D[g.a]++; }
+      else                { pts[g.a] += 3; W[g.a]++; L[g.h]++; }
     }
+    const rem = t => W[t] + D[t] + L[t];
+    // u com CERTEZA estritamente à frente de t em qualquer placar dos jogos
+    // restantes: o pior caso de u ainda supera o melhor caso de t.
+    const defAhead = (u, t) => {
+      if (pts[u] > pts[t]) return true;
+      if (pts[u] < pts[t]) return false;
+      const sgUmin = L[u] > 0 ? -INF : sg0[u] + W[u];
+      const sgTmax = W[t] > 0 ?  INF : sg0[t] - L[t];
+      if (sgUmin > sgTmax) return true;
+      if (sgUmin < sgTmax) return false;
+      const gpUmin = gp0[u] + W[u];
+      const gpTmax = rem(t) > 0 ? INF : gp0[t];
+      return gpUmin > gpTmax;
+    };
+    // u PODE terminar à frente ou empatado-à-frente de t em algum placar:
+    // o melhor caso de u alcança o pior caso de t.
+    const feasAheadEq = (u, t) => {
+      if (pts[u] > pts[t]) return true;
+      if (pts[u] < pts[t]) return false;
+      const sgUmax = W[u] > 0 ?  INF : sg0[u] - L[u];
+      const sgTmin = L[t] > 0 ? -INF : sg0[t] + W[t];
+      if (sgUmax > sgTmin) return true;
+      if (sgUmax < sgTmin) return false;
+      const gpUmax = rem(u) > 0 ? INF : gp0[u];
+      const gpTmin = gp0[t] + W[t];
+      return gpUmax >= gpTmin;
+    };
     teams.forEach(X => {
-      let geAbove = 0; // times com pontos >= X (exclui o próprio) → pior posição
-      teams.forEach(Y => { if (Y !== X && pts[Y] >= pts[X]) geAbove++; });
-      if (geAbove > worstPos[X]) worstPos[X] = geAbove;
+      let worst = 0, best = 0;
+      teams.forEach(Y => {
+        if (Y === X) return;
+        if (feasAheadEq(Y, X)) worst++;
+        if (defAhead(Y, X))    best++;
+      });
+      if (worst > worstRank[X]) worstRank[X] = worst;
+      if (best  < bestRank[X])  bestRank[X]  = best;
     });
   }
 
-  // Garantido no top-2: pior posição ≤ 1 (no máximo um time pode ficar acima)
-  const topTwo = new Set(teams.filter(t => worstPos[t] <= 1));
-  // Garantido em 1º: pior posição 0 (ninguém empata nem supera em pontos)
-  const first = teams.find(t => worstPos[t] === 0) || null;
-  // Garantido em 2º: 1º já definido e exatamente um outro time no top-2
-  // (esse outro fica estritamente acima do 3º/4º, logo é 2º com certeza).
+  // Garantido no top-2: nunca cai para 3º/4º em nenhum cenário/placar.
+  const topTwo = new Set(teams.filter(t => worstRank[t] <= 1));
+  // Garantido em 1º: ninguém consegue alcançá-lo (nem empatar à frente).
+  const first = teams.find(t => worstRank[t] === 0) || null;
+  // Garantido em 2º: está no top-2 e SEMPRE há alguém com certeza à frente —
+  // logo nunca é 1º. Só certifica se houver um único candidato assim (cobre
+  // também o caso em que o 2º é conhecido antes do 1º estar definido).
   let second = null;
-  if (first) {
+  const secondCands = teams.filter(t => t !== first && worstRank[t] <= 1 && bestRank[t] >= 1);
+  if (secondCands.length === 1) second = secondCands[0];
+  else if (first) {
     const others = [...topTwo].filter(t => t !== first);
     if (others.length === 1) second = others[0];
   }
