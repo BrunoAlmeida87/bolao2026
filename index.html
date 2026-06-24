@@ -662,6 +662,9 @@ body.light-theme .date-filter-btn.active{background:var(--accent);color:#fff}
 .bt-name.placeholder{color:var(--text-muted);font-style:italic}
 .bracket-team.winner .bt-name{color:var(--gold);font-weight:700}
 .bracket-origin{font-size:0.66rem;color:var(--accent);font-weight:600;margin-top:2px}
+/* Slot preenchido provisoriamente pela classificação atual (1º/2º ainda pode trocar) */
+.bt-name.provisional,.bil-tname.provisional{color:var(--accent)}
+.prov-mark{font-size:0.55rem;line-height:1;color:#1a1a1a;background:var(--gold);font-weight:800;border-radius:4px;padding:1px 4px;margin-left:5px;vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
 .bracket-sel{
   width:100%;margin-top:5px;padding:5px 6px;border-radius:6px;
   background:var(--mid-blue);color:var(--white);
@@ -9808,12 +9811,40 @@ function _thirdSelectHTML(slot, state, overrides, handler) {
   return `<select class="bracket-sel" onchange="${handler}('${slot.slotKey}', this.value)">${opts}</select>`;
 }
 
+// Resolve o nome a exibir num slot do chaveamento.
+// • Slot já travado (h_team/a_team persistido ou time real) → usa o nome real.
+// • Slot de grupo do R32 ("1º G"/"2º G") ainda não travado → tenta preencher
+//   PROVISORIAMENTE pela classificação ATUAL, desde que o time esteja garantido
+//   no top-2 (✅). Times ainda em disputa pelo top-2 continuam como placeholder.
+// O provisório é apenas visual: NÃO é persistido nem propaga para as fases
+// seguintes (Venc./Perd.), evitando gravar confronto errado na cascata.
+// `cache` (opcional) memoiza standings/clinched por grupo dentro de um render.
+function _resolveBracketSlot(rawToken, persistedTeam, res, cache) {
+  const team = persistedTeam || rawToken;
+  if (!_isPlaceholder(team)) return { team, isPlaceholder: false, provisional: false };
+  const m = /^([12])º\s+([A-L])$/.exec(rawToken);
+  if (!m) return { team: rawToken, isPlaceholder: true, provisional: false };
+  const pos = parseInt(m[1]) - 1, grp = m[2];
+  let entry = cache && cache[grp];
+  if (!entry) {
+    entry = { st: computeStandings(grp, res), cl: _computeClinchedPositions(grp, res) };
+    if (cache) cache[grp] = entry;
+  }
+  const cand = entry.st[pos] && entry.st[pos].team;
+  if (!cand || !entry.cl.topTwo.has(cand)) return { team: rawToken, isPlaceholder: true, provisional: false };
+  const locked = (pos === 0 && entry.cl.first === cand) || (pos === 1 && entry.cl.second === cand);
+  return { team: cand, isPlaceholder: false, provisional: !locked };
+}
+
 function _bracketSideHTML(g, side, ctx) {
   const { res, isAdmin, isR32, state, overrides } = ctx;
   const r = res[g.id] || {};
   const rawToken = side === 'h' ? g.h : g.a;
-  const resolvedTeam = (side === 'h' ? r.h_team : r.a_team) || rawToken;
-  const isPh = _isPlaceholder(resolvedTeam);
+  if (!ctx._grpCache) ctx._grpCache = {};
+  const slot = _resolveBracketSlot(rawToken, side === 'h' ? r.h_team : r.a_team, res, ctx._grpCache);
+  const resolvedTeam = slot.team;
+  const isPh = slot.isPlaceholder;
+  const provisional = slot.provisional;
   const hasRes = r.h_real !== undefined && r.a_real !== undefined;
   const hasPen = r.h_pen !== undefined && r.a_pen !== undefined;
   const winner = _winnerOf(r, g.h, g.a);
@@ -9828,13 +9859,16 @@ function _bracketSideHTML(g, side, ctx) {
     ? (isThirdSlot ? '3º colocado a definir' : esc(resolvedTeam))
     : esc(resolvedTeam);
   const flagHtml = isPh ? '' : teamFlag(resolvedTeam);
+  const provMark = provisional
+    ? '<span class="prov-mark" title="Classificado pela tabela — posição 1º/2º ainda pode trocar">prov.</span>'
+    : '';
   let body =
-    `<div class="bt-main">${flagHtml}<span class="bt-name ${isPh ? 'placeholder' : ''}">${displayName}</span>` +
+    `<div class="bt-main">${flagHtml}<span class="bt-name ${isPh ? 'placeholder' : ''}${provisional ? ' provisional' : ''}">${displayName}${provMark}</span>` +
     `<span class="bracket-score">${score}</span>${penTxt}</div>`;
   if (origin) body += `<div class="bracket-origin">${esc(origin)}</div>`;
   if (isThirdSlot && isAdmin) {
-    const slot = state.slotDefs.find(s => s.slotKey === `${g.id}_${side}`);
-    if (slot) body += _thirdSelectHTML(slot, state, overrides, 'onAdminThirdOverrideChange');
+    const thirdSlot = state.slotDefs.find(s => s.slotKey === `${g.id}_${side}`);
+    if (thirdSlot) body += _thirdSelectHTML(thirdSlot, state, overrides, 'onAdminThirdOverrideChange');
   }
   return `<div class="bracket-team ${isWin ? 'winner' : ''}">${body}</div>`;
 }
@@ -9881,7 +9915,7 @@ async function renderChaveamento() {
     const overrides = isAdmin ? await _loadThirdOverrides() : {};
     const state = isAdmin ? _thirdUIState(res, overrides) : null;
     let html = `<div class="section-title">🔑 Chaveamento</div>
-      <div class="alert alert-info" style="font-size:0.82rem">Em empates na fase eliminatória, o vencedor é decidido nos <strong>penaltis</strong> (exibidos em parênteses). Para a pontuação do bolão, apenas o placar dos 90 minutos é considerado.</div>
+      <div class="alert alert-info" style="font-size:0.82rem">Em empates na fase eliminatória, o vencedor é decidido nos <strong>penaltis</strong> (exibidos em parênteses). Para a pontuação do bolão, apenas o placar dos 90 minutos é considerado.<br>O selo <span class="prov-mark">prov.</span> indica time já classificado (top-2) posicionado pela classificação atual — o 1º/2º pode trocar até o grupo terminar.</div>
       ${isAdmin ? `<div class="alert alert-warning" style="font-size:0.8rem">👑 <b>Modo admin:</b> as 8 vagas de <b>3º colocado</b> no Round of 32 são definidas <b>somente manualmente</b> — o sistema não preenche nada automaticamente. Escolha a seleção no seletor de cada vaga; ela some das demais listas (sem duplicidade) e é salva na hora.${state && !state.allThirds.length ? '<br><span style="color:var(--text-muted)">Nenhum grupo concluído ainda — os 3º colocados aparecem na lista conforme os grupos terminam.</span>' : ''}</div>` : ''}
       <div class="bracket-wrap"><div class="bracket">`;
     const rounds = [
@@ -9929,6 +9963,7 @@ async function renderChaveamentoBilateral() {
     const res = await _fetchRes();
 
     const roundOrder = _bracketRoundOrder();
+    const grpCache = {}; // memoiza standings/clinched por grupo (preenchimento provisório)
 
     function bilMatchCard(gameId, extraCls) {
       const gameDef = ALL_GAMES.find(g=>g.id===gameId);
@@ -9941,16 +9976,19 @@ async function renderChaveamentoBilateral() {
 
       function teamLine(side) {
         const rawToken = side==='h' ? (gameDef?.h||'?') : (gameDef?.a||'?');
-        const resolved = (side==='h' ? r.h_team : r.a_team) || rawToken;
-        const isPh = _isPlaceholder(resolved);
+        const slot = _resolveBracketSlot(rawToken, side==='h' ? r.h_team : r.a_team, res, grpCache);
+        const resolved = slot.team;
+        const isPh = slot.isPlaceholder;
+        const provisional = slot.provisional;
         const flag = isPh ? '' : teamFlag(resolved);
         const score = hasRes ? (side==='h' ? r.h_real : r.a_real) : '';
         const pen = hasPen ? ` <span class="bil-pen">(${side==='h'?r.h_pen:r.a_pen})</span>` : '';
         const isWin = !!winner && winner===resolved;
+        const provMark = provisional ? '<span class="prov-mark" title="Classificado pela tabela — posição 1º/2º ainda pode trocar">prov.</span>' : '';
         const shortName = isPh ? (resolved||'?').replace(/^(?:Venc\.|Perd\.)\s*/,'') : (resolved||'?');
         return `<div class="bil-team ${isWin?'winner':''}">
           ${flag?`<span>${flag}</span>`:''}
-          <span class="bil-tname ${isPh?'ph':''}">${esc(shortName)}</span>
+          <span class="bil-tname ${isPh?'ph':''}${provisional?' provisional':''}">${esc(shortName)}${provMark}</span>
           <span class="bil-tscore">${score}</span>${pen}
         </div>`;
       }
@@ -9987,7 +10025,7 @@ async function renderChaveamentoBilateral() {
     const thirdId = finIds.find(id=>id==='T1');
 
     const html = `<div class="section-title">🏆 Chaveamento Bilateral</div>
-      <div class="alert alert-info" style="font-size:0.82rem">Visualização em árvore bilateral — as duas metades convergem para a <strong>Final</strong> no centro. As linhas mostram quais partidas alimentam a próxima fase.</div>
+      <div class="alert alert-info" style="font-size:0.82rem">Visualização em árvore bilateral — as duas metades convergem para a <strong>Final</strong> no centro. As linhas mostram quais partidas alimentam a próxima fase.<br>O selo <span class="prov-mark">prov.</span> indica time já classificado (top-2) posicionado pela classificação atual — o 1º/2º pode trocar até o grupo terminar.</div>
       <div class="bil-page-wrap">
         <div class="bil-bracket">
           <div class="bil-side left">
