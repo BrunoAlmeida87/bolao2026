@@ -12003,6 +12003,192 @@ function _tickerPersonalItems(rank, allPals, champPicks, res) {
   return items;
 }
 
+// ════════════════════════════════════════════
+// ITENS AVANÇADOS / INTELIGENTES DO TICKER
+// Estatísticas mais ricas para o usuário logado: desempenho por fase,
+// regularidade (desvio padrão), posição relativa à média (z-score),
+// "gêmeo/oposto" de palpites (consenso × dissenso) e ousadia contra a
+// maioria. Todas calculadas só sobre jogos já decididos / com palpite.
+// ════════════════════════════════════════════
+
+// Desvio padrão populacional de uma lista de números.
+function _stdDev(arr) {
+  if (!arr.length) return 0;
+  const m = arr.reduce((s, x) => s + x, 0) / arr.length;
+  const v = arr.reduce((s, x) => s + (x - m) * (x - m), 0) / arr.length;
+  return Math.sqrt(v);
+}
+
+// Resultado H/D/A de um par de gols (palpite ou placar real). null se inválido.
+function _outcomeOf(h, a) {
+  h = parseInt(h); a = parseInt(a);
+  if (isNaN(h) || isNaN(a)) return null;
+  return h > a ? 'H' : h < a ? 'A' : 'D';
+}
+
+// Quebra os pontos do usuário por fase (3 rodadas de grupos + fases
+// eliminatórias), considerando apenas jogos decididos. Retorna só as fases
+// com pelo menos 1 jogo pontuado: [{key,label,pts,jogos,avg}].
+function _tickerPhaseBreakdown(uid, allPals, res) {
+  const pals = allPals[uid] || {};
+  const phases = [
+    { key: 'g1', label: '1ª rodada', ids: [] },
+    { key: 'g2', label: '2ª rodada', ids: [] },
+    { key: 'g3', label: '3ª rodada', ids: [] },
+    { key: 'r32', label: 'Rodada de 32', ids: (ELIM_DATA.r32?.games || []).map(g => g.id) },
+    { key: 'r16', label: 'Oitavas', ids: (ELIM_DATA.r16?.games || []).map(g => g.id) },
+    { key: 'quartas', label: 'Quartas', ids: (ELIM_DATA.quartas?.games || []).map(g => g.id) },
+    { key: 'semi', label: 'Semifinais', ids: (ELIM_DATA.semi?.games || []).map(g => g.id) },
+    { key: 'final', label: 'Final / 3º lugar', ids: (ELIM_DATA.final?.games || []).map(g => g.id) },
+  ];
+  Object.values(GRUPOS_DATA).forEach(g => g.games.forEach(game => {
+    const slot = phases[(game.r || 1) - 1];
+    if (slot) slot.ids.push(game.id);
+  }));
+  return phases.map(ph => {
+    let pts = 0, jogos = 0;
+    ph.ids.forEach(id => {
+      const pt = calcPontos(pals[id], res[id]);
+      if (pt !== null) { pts += pt; jogos++; }
+    });
+    return { key: ph.key, label: ph.label, pts, jogos, avg: jogos ? pts / jogos : 0 };
+  }).filter(p => p.jogos > 0);
+}
+
+function _tickerAdvancedItems(rank, allPals, res) {
+  const meUid = currentUser?.uid;
+  if (!meUid || !rank.length) return [];
+  const items = [];
+  const me = rank.find(u => u.uid === meUid);
+  if (!me) return items;
+  const total = rank.length;
+  const decididos = Object.keys(res || {}).filter(id => _hasFullResult(res[id]));
+  if (!decididos.length) return items;
+  const myPals = allPals[meUid] || {};
+
+  // ── 1. Desempenho entre rodadas/fases (melhor e pior aproveitamento) ──
+  const phases = _tickerPhaseBreakdown(meUid, allPals, res);
+  if (phases.length >= 2) {
+    const best = phases.reduce((a, b) => (b.avg > a.avg ? b : a));
+    const worst = phases.reduce((a, b) => (b.avg < a.avg ? b : a));
+    items.push({ ico: '🔥', text: `Seu auge foi na ${best.label}: média de ${best.avg.toFixed(1)} pts/jogo` });
+    if (worst.key !== best.key) {
+      items.push({ ico: '🧊', text: `Sua fase mais fria: ${worst.label} (${worst.avg.toFixed(1)} pts/jogo)` });
+    }
+  }
+
+  // ── 2. Posição relativa à média do bolão (z-score) ──
+  const allPts = rank.map(u => u.pontos);
+  const mean = allPts.reduce((s, x) => s + x, 0) / total;
+  const sd = _stdDev(allPts);
+  if (sd > 0) {
+    const z = (me.pontos - mean) / sd;
+    if (z >= 1) {
+      items.push({ ico: '🚀', text: `Você está ${z.toFixed(1)} desvios padrão ACIMA da média — fora da curva!` });
+    } else if (z <= -1) {
+      items.push({ ico: '🆘', text: `Você está ${Math.abs(z).toFixed(1)} desvios padrão abaixo da média — hora da virada!` });
+    } else {
+      const dif = me.pontos - mean;
+      items.push({ ico: '⚖️', text: `Você está ${dif >= 0 ? '+' : ''}${dif.toFixed(0)} pts da média do bolão (${mean.toFixed(0)} pts)` });
+    }
+    items.push({ ico: '📏', text: `O pelotão tem ${sd.toFixed(0)} pts de desvio padrão — disputa ${sd < mean * 0.2 ? 'colada' : 'espalhada'}` });
+  }
+
+  // ── 3. Regularidade: desvio padrão dos pontos por jogo (ranking) ──
+  const regs = rank.map(u => {
+    const pals = allPals[u.uid] || {};
+    const list = decididos.map(id => calcPontos(pals[id], res[id])).filter(p => p !== null);
+    return { uid: u.uid, n: list.length, std: _stdDev(list) };
+  }).filter(r => r.n >= 5);
+  if (regs.length >= 3) {
+    const mine = regs.find(r => r.uid === meUid);
+    if (mine) {
+      const sorted = [...regs].sort((a, b) => a.std - b.std);
+      const myPos = sorted.findIndex(r => r.uid === meUid) + 1;
+      if (myPos === 1) {
+        items.push({ ico: '🎯', text: `Você é o(a) jogador(a) mais regular do bolão (desvio de só ${mine.std.toFixed(1)} pts/jogo)` });
+      } else if (myPos === sorted.length) {
+        items.push({ ico: '🎢', text: `Você é o(a) mais imprevisível do bolão: ${mine.std.toFixed(1)} pts de desvio por jogo` });
+      } else {
+        items.push({ ico: '📐', text: `Regularidade: você é o(a) ${myPos}º mais constante (desvio de ${mine.std.toFixed(1)} pts/jogo)` });
+      }
+    }
+  }
+
+  // ── 4. Consenso × dissenso: gêmeo e oposto de palpites ──
+  // Compara o usuário com cada outro sobre jogos em que AMBOS palpitaram,
+  // medindo concordância de resultado (H/D/A) e palpites idênticos.
+  let twin = null, opposite = null, exactTwin = null;
+  rank.forEach(u => {
+    if (u.uid === meUid) return;
+    const oPals = allPals[u.uid] || {};
+    let common = 0, sameOutcome = 0, sameExact = 0;
+    ALL_GAMES.forEach(g => {
+      const a = myPals[g.id], b = oPals[g.id];
+      if (!a || !b || a.h === undefined || b.h === undefined) return;
+      common++;
+      const oa = _outcomeOf(a.h, a.a), ob = _outcomeOf(b.h, b.a);
+      if (oa && ob && oa === ob) sameOutcome++;
+      if (parseInt(a.h) === parseInt(b.h) && parseInt(a.a) === parseInt(b.a)) sameExact++;
+    });
+    if (common < 5) return;
+    const sim = sameOutcome / common;
+    if (!twin || sim > twin.sim) twin = { uid: u.uid, name: _tkName(u), sim };
+    if (!opposite || sim < opposite.sim) opposite = { uid: u.uid, name: _tkName(u), sim };
+    if (!exactTwin || sameExact > exactTwin.sameExact) exactTwin = { uid: u.uid, name: _tkName(u), sameExact };
+  });
+  if (twin) {
+    items.push({ ico: '🧬', text: `Seu gêmeo de palpites é ${twin.name}: vocês concordam em ${Math.round(twin.sim * 100)}% dos jogos` });
+  }
+  if (opposite && (!twin || opposite.uid !== twin.uid)) {
+    items.push({ ico: '🌗', text: `Seu oposto é ${opposite.name}: discordam em ${Math.round((1 - opposite.sim) * 100)}% dos palpites` });
+  }
+  if (exactTwin && exactTwin.sameExact >= 2 && (!twin || exactTwin.uid !== twin.uid)) {
+    items.push({ ico: '👯', text: `Você e ${exactTwin.name} cravaram o mesmo placar em ${exactTwin.sameExact} jogos` });
+  }
+
+  // ── 5. Ousadia: quando você foi contra a maioria do bolão ──
+  let foiContra = 0, contraAcertou = 0;
+  decididos.forEach(id => {
+    const mine = myPals[id];
+    if (!mine || mine.h === undefined) return;
+    const myo = _outcomeOf(mine.h, mine.a);
+    if (!myo) return;
+    const tally = { H: 0, D: 0, A: 0 };
+    rank.forEach(u => {
+      const p = (allPals[u.uid] || {})[id];
+      const o = p && p.h !== undefined ? _outcomeOf(p.h, p.a) : null;
+      if (o) tally[o]++;
+    });
+    const maj = Object.keys(tally).reduce((a, b) => (tally[b] > tally[a] ? b : a), 'H');
+    if (myo !== maj) {
+      foiContra++;
+      if (myo === _outcomeOf(res[id].h_real, res[id].a_real)) contraAcertou++;
+    }
+  });
+  if (foiContra > 0) {
+    items.push({
+      ico: '🎲',
+      text: contraAcertou > 0
+        ? `Você foi na contramão do bolão ${foiContra}x e acertou ${contraAcertou} — ousadia premiada!`
+        : `Você foi na contramão do bolão em ${foiContra} jogo${foiContra !== 1 ? 's' : ''} — coragem!`
+    });
+  }
+
+  return items;
+}
+
+// Intercala dois arrays item a item (a,b,a,b...), preservando a sobra.
+function _tickerZip(a, b) {
+  const out = [];
+  const max = Math.max(a.length, b.length);
+  for (let i = 0; i < max; i++) {
+    if (i < a.length) out.push(a[i]);
+    if (i < b.length) out.push(b[i]);
+  }
+  return out;
+}
+
 // ── Intercala itens pessoais com curiosidades da Copa: P, C, P, C... ──
 function _tickerInterleave(personal, copa) {
   if (!copa.length) return personal.length ? personal : [{ ico: '📰', text: 'Adicione curiosidades da Copa no painel admin!' }];
@@ -12028,7 +12214,11 @@ async function _fetchTickerFacts() {
 // ── Constrói o array final de itens do ticker ──
 async function _buildTickerItems(users, res, allPals, champPicks) {
   const rank = computeRanking(users, res, allPals, champPicks);
-  const personal = _tickerPersonalItems(rank, allPals, champPicks, res);
+  // Itens pessoais básicos + avançados (desvio padrão, desempenho por fase,
+  // consenso × dissenso, ousadia) intercalados para não agrupar tudo no fim.
+  const basic = _tickerPersonalItems(rank, allPals, champPicks, res);
+  const advanced = _tickerAdvancedItems(rank, allPals, res);
+  const personal = _tickerZip(basic, advanced);
   const copaFacts = await _fetchTickerFacts();
   return _tickerInterleave(personal, copaFacts);
 }
