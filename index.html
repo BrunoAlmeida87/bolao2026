@@ -12194,6 +12194,7 @@ function _tickerAdvancedItems(rank, allPals, res) {
   if (regs.length >= 3) {
     const mine = regs.find(r => r.uid === meUid);
     if (mine) {
+      items.push({ ico: '📉', text: `Seus pontos variam ±${mine.std.toFixed(1)} por jogo (desvio padrão) — ${mine.std < 3 ? 'bem consistente' : mine.std > 4.5 ? 'uma montanha-russa' : 'oscilação típica'}` });
       const sorted = [...regs].sort((a, b) => a.std - b.std);
       const myPos = sorted.findIndex(r => r.uid === meUid) + 1;
       if (myPos === 1) {
@@ -12206,17 +12207,20 @@ function _tickerAdvancedItems(rank, allPals, res) {
     }
   }
 
-  // ── 4. Consenso × dissenso: gêmeo e oposto de palpites ──
+  // ── 4. Consenso × dissenso (palpites) e oposto em RESULTADOS ──
   // Compara o usuário com cada outro APENAS em jogos já revelados (com
   // resultado, travados ou com palpites encerrados pelo horário) — a mesma
   // regra do "Ver Palpites". Sem isso, antes do início um usuário comum
   // poderia inferir palpites futuros ocultos dos demais pelas % de
   // concordância/discordância e pela contagem de palpites idênticos.
-  let twin = null, opposite = null, exactTwin = null;
+  // "Oposto em resultados" = aquele que pontua quando você falha (e vice-versa),
+  // medido só sobre jogos já DECIDIDOS em comum (acertou ≥1 pt × zerou).
+  let twin = null, opposite = null, exactTwin = null, resOpp = null, resTwin = null;
   rank.forEach(u => {
     if (u.uid === meUid) return;
     const oPals = allPals[u.uid] || {};
     let common = 0, sameOutcome = 0, sameExact = 0;
+    let decCommon = 0, resAgree = 0; // jogos decididos: ambos pontuam ou ambos zeram
     ALL_GAMES.forEach(g => {
       const a = myPals[g.id], b = oPals[g.id];
       if (!a || !b || a.h === undefined || b.h === undefined) return;
@@ -12225,21 +12229,37 @@ function _tickerAdvancedItems(rank, allPals, res) {
       const oa = _outcomeOf(a.h, a.a), ob = _outcomeOf(b.h, b.a);
       if (oa && ob && oa === ob) sameOutcome++;
       if (parseInt(a.h) === parseInt(b.h) && parseInt(a.a) === parseInt(b.a)) sameExact++;
+      if (_hasFullResult(res[g.id])) {
+        const pa = calcPontos(a, res[g.id]), pb = calcPontos(b, res[g.id]);
+        if (pa !== null && pb !== null) { decCommon++; if ((pa > 0) === (pb > 0)) resAgree++; }
+      }
     });
-    if (common < 5) return;
-    const sim = sameOutcome / common;
-    if (!twin || sim > twin.sim) twin = { uid: u.uid, name: _tkName(u), sim };
-    if (!opposite || sim < opposite.sim) opposite = { uid: u.uid, name: _tkName(u), sim };
-    if (!exactTwin || sameExact > exactTwin.sameExact) exactTwin = { uid: u.uid, name: _tkName(u), sameExact };
+    if (common >= 5) {
+      const sim = sameOutcome / common;
+      if (!twin || sim > twin.sim) twin = { uid: u.uid, name: _tkName(u), sim };
+      if (!opposite || sim < opposite.sim) opposite = { uid: u.uid, name: _tkName(u), sim };
+      if (!exactTwin || sameExact > exactTwin.sameExact) exactTwin = { uid: u.uid, name: _tkName(u), sameExact };
+    }
+    if (decCommon >= 5) {
+      const agree = resAgree / decCommon;
+      if (!resOpp || agree < resOpp.agree) resOpp = { uid: u.uid, name: _tkName(u), agree };
+      if (!resTwin || agree > resTwin.agree) resTwin = { uid: u.uid, name: _tkName(u), agree };
+    }
   });
   if (twin) {
     items.push({ ico: '🧬', text: `Seu gêmeo de palpites é ${twin.name}: vocês concordam em ${Math.round(twin.sim * 100)}% dos jogos` });
   }
   if (opposite && (!twin || opposite.uid !== twin.uid)) {
-    items.push({ ico: '🌗', text: `Seu oposto é ${opposite.name}: discordam em ${Math.round((1 - opposite.sim) * 100)}% dos palpites` });
+    items.push({ ico: '🌗', text: `Seu oposto nos palpites é ${opposite.name}: discordam em ${Math.round((1 - opposite.sim) * 100)}% das apostas` });
   }
   if (exactTwin && exactTwin.sameExact >= 2 && (!twin || exactTwin.uid !== twin.uid)) {
     items.push({ ico: '👯', text: `Você e ${exactTwin.name} cravaram o mesmo placar em ${exactTwin.sameExact} jogos` });
+  }
+  if (resOpp) {
+    items.push({ ico: '🪞', text: `Seu oposto nos resultados é ${resOpp.name}: quando um pontua, o outro costuma falhar (${Math.round((1 - resOpp.agree) * 100)}% dos jogos divergem)` });
+  }
+  if (resTwin && (!resOpp || resTwin.uid !== resOpp.uid) && resTwin.agree >= 0.7) {
+    items.push({ ico: '🤜', text: `Você e ${resTwin.name} andam juntos: pontuam ou falham nos mesmos jogos (${Math.round(resTwin.agree * 100)}%)` });
   }
 
   // ── 5. Ousadia: quando você foi contra a maioria do bolão ──
@@ -12483,7 +12503,7 @@ async function _buildTickerItems(users, res, allPals, champPicks) {
   // pessoais e do bolão é embaralhado e recortado a cada carga, então o ticker
   // mostra um conjunto diferente toda vez — evita a sensação de repetição.
   const anchor = basic.slice(0, 1);
-  const personalRest = _tickerShuffle([...basic.slice(1), ...advanced]).slice(0, 9);
+  const personalRest = _tickerShuffle([...basic.slice(1), ...advanced]).slice(0, 11);
   const personal = [...anchor, ...personalRest];
   const stats = _tickerZip(personal, _tickerShuffle(bolao).slice(0, 6));
   const copaFacts = await _fetchTickerFacts();
