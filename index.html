@@ -8689,13 +8689,12 @@ async function renderEstatisticas() {
       + (_outrasHtml || '<div class="card"><div class="gx-empty">Sem estatísticas para mostrar ainda.</div></div>')
       + '</div>'
       + '<div id="stats-tab-graficos" style="display:none"></div>'
-      + '<div id="stats-tab-3d" style="display:none"></div>';
+      + '<div id="stats-tab-trocas" style="display:none"></div>';
     // Guarda em memória todos os dados já carregados para os Gráficos reusarem
     // (zero leituras Firestore adicionais).
     _graficosData = { users, res, allPals, champPicks, ranking, analiseJogos, jogosComResultado, userAccStats };
     _graficosRendered = false;
-    _3dGraficosRendered = false;
-    _3dHistorico = null;
+    _trocasRendered = false;
     cont.innerHTML = html;
     if (_graficosPendingTab) { switchStatsSubTab('graficos'); _graficosPendingTab = false; }
     _momInit(); // carrossel do card "Momento dos Participantes"
@@ -8715,16 +8714,15 @@ async function renderEstatisticas() {
 let _graficosData = null;       // snapshot dos dados do bolão para os gráficos
 let _graficosRendered = false;  // evita re-render ao alternar de aba
 let _graficosPendingTab = false;// abrir já na aba Gráficos (ex.: deep-link)
-let _3dHistorico = null;        // historico de todos os usuários (carregado sob demanda)
-let _3dGraficosRendered = false;// evita re-render dos gráficos 3D
+let _trocasRendered = false;    // evita re-render da aba Trocas ao alternar
+let _trocasPubCache = null;     // snapshot publicado (cache/trocas_publicado) em memória
 
 function _gxSubTabsBar() {
-  const isAdmin = currentUserDoc?.role === 'admin';
   return `<div class="gx-subtabs">
     <button class="gx-subtab active" data-gxtab="classic" onclick="switchStatsSubTab('classic')">📈 Estatísticas</button>
     <button class="gx-subtab" data-gxtab="outras" onclick="switchStatsSubTab('outras')">🏅 Outras Stats</button>
     <button class="gx-subtab" data-gxtab="graficos" onclick="switchStatsSubTab('graficos')">📊 Gráficos</button>
-    ${isAdmin ? `<button class="gx-subtab" data-gxtab="3d" onclick="switchStatsSubTab('3d')">🧊 3D</button>` : ''}
+    <button class="gx-subtab" data-gxtab="trocas" onclick="switchStatsSubTab('trocas')">🔁 Trocas</button>
   </div>`;
 }
 
@@ -8735,16 +8733,212 @@ function switchStatsSubTab(tab) {
   const classic = document.getElementById('stats-tab-classic');
   const outras = document.getElementById('stats-tab-outras');
   const graf = document.getElementById('stats-tab-graficos');
-  const d3 = document.getElementById('stats-tab-3d');
+  const trocas = document.getElementById('stats-tab-trocas');
   if (classic) classic.style.display = (tab === 'classic') ? '' : 'none';
   if (outras) outras.style.display = (tab === 'outras') ? '' : 'none';
   if (graf) graf.style.display = (tab === 'graficos') ? '' : 'none';
-  if (d3) d3.style.display = (tab === '3d') ? '' : 'none';
+  if (trocas) trocas.style.display = (tab === 'trocas') ? '' : 'none';
   if (tab === 'graficos' && !_graficosRendered) { renderGraficos(); _graficosRendered = true; }
-  if (tab === '3d') {
-    if (currentUserDoc?.role !== 'admin') return;
-    if (!_3dGraficosRendered) { renderGx3D(); _3dGraficosRendered = true; }
+  if (tab === 'trocas' && !_trocasRendered) { renderStatsTrocas(); _trocasRendered = true; }
+}
+
+// ════════════════════════════════════════════
+// ESTATÍSTICAS → TROCAS DE PALPITES (Perdas e Ganhos)
+// ════════════════════════════════════════════
+// Lê o snapshot publicado pelo admin (cache/trocas_publicado) — 1 leitura — e
+// renderiza rankings, gráficos por participante e detalhamento. Nada é recalculado
+// aqui: a página fica leve e mostra o que foi publicado por último.
+const _TR_G = 'var(--green)', _TR_R = '#e74c3c';
+
+async function renderStatsTrocas() {
+  const el = document.getElementById('stats-tab-trocas');
+  if (!el) return;
+  el.innerHTML = '<div class="gx3d-loading">⏳ Carregando dados de trocas…</div>';
+  try {
+    let data = _trocasPubCache;
+    if (!data) {
+      const snap = await db_.collection('cache').doc('trocas_publicado').get();
+      data = snap.exists ? snap.data() : null;
+      if (data) _trocasPubCache = data; // só cacheia quando há dados (estado vazio re-checa toda vez)
+    }
+    const isAdmin = currentUserDoc?.role === 'admin';
+    if (!data || !Array.isArray(data.participantes) || !data.participantes.length) {
+      el.innerHTML = `<div class="card"><div class="gx-empty" style="padding:34px 20px;text-align:center;line-height:1.7">
+        🔁 <b style="font-size:1.05rem">Trocas de Palpites: Perdas e Ganhos</b><br><br>
+        Ainda não há um relatório publicado.<br>
+        <span style="color:var(--text-muted);font-size:0.86rem">${isAdmin
+          ? 'Vá em <b>Admin → 📈 Relatório</b>, gere o relatório de trocas e clique em <b>📢 Publicar nas Estatísticas</b>.'
+          : 'O administrador publica os dados quando quiser, e eles aparecem aqui para todos.'}</span>
+      </div></div>`;
+      return;
+    }
+    el.innerHTML = _buildTrocasStatsHTML(data);
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">Erro ao carregar trocas: ${esc(errMsg(e))}</div>`;
   }
+}
+function _trocasRefresh() { _trocasPubCache = null; renderStatsTrocas(); }
+
+function _trName(p) { return esc(p.a || p.n || '—'); }
+function _trJogo(gid) {
+  const g = ALL_GAMES.find(x => x.id === gid);
+  return g ? esc(g.h) + ' × ' + esc(g.a) : esc(gid);
+}
+
+// Linha de ranking com barra proporcional (uma cor).
+function _trRankRow(p, val, max, color, prefix, i) {
+  const medal = ['🥇', '🥈', '🥉'][i] || `<span style="color:var(--text-muted);font-weight:700">${i + 1}º</span>`;
+  const pct = max > 0 ? Math.abs(val) / max * 100 : 0;
+  return `<div style="display:flex;align-items:center;gap:8px;margin:5px 0">
+    <div style="flex:0 0 26px;text-align:center;font-size:0.92rem">${medal}</div>
+    <div style="flex:0 0 116px;font-size:0.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_trName(p)}</div>
+    <div style="flex:1;height:12px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color}"></div></div>
+    <div style="flex:0 0 50px;text-align:right;font-weight:800;color:${color}">${prefix}${val}</div>
+  </div>`;
+}
+
+// Detalhe de uma troca (item compacto do snapshot).
+function _trTrocaRow(it, maxAbs) {
+  const jogo = _trJogo(it.g);
+  const resStr = it.r[0] + '×' + it.r[1];
+  const bStr = it.b[0] + '×' + it.b[1], bPts = it.b[2];
+  const fStr = it.f ? it.f[0] + '×' + it.f[1] : null, fPts = it.f ? it.f[2] : 0;
+  const dCol = it.d > 0 ? _TR_G : _TR_R;
+  const pct = maxAbs > 0 ? Math.abs(it.d) / maxAbs * 100 : 0;
+  const neg = it.d < 0 ? `<div style="width:${pct}%;background:${_TR_R};border-radius:4px 0 0 4px"></div>` : '';
+  const pos = it.d > 0 ? `<div style="width:${pct}%;background:${_TR_G};border-radius:0 4px 4px 0"></div>` : '';
+  return `<div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:0.78rem">
+    <div style="display:flex;justify-content:space-between;gap:8px">
+      <span><b style="color:var(--white)">${esc(it.g)}</b> <span style="color:var(--text-muted)">${jogo}</span> · resultado <b>${resStr}</b></span>
+      <b style="color:${dCol};white-space:nowrap">${it.d > 0 ? '+' : ''}${it.d} pts</b>
+    </div>
+    <div style="margin-top:2px;color:var(--text-muted)">
+      tinha <b style="color:var(--white)">${bStr}</b> (${bPts} pts, ${_perdaScoreLabel(bPts)}) →
+      ${fStr ? `<b style="color:var(--white)">${fStr}</b> (${fPts} pts, ${_perdaScoreLabel(fPts)})` : `<span style="color:${_TR_R}">apagou o palpite</span> (0 pts)`}
+    </div>
+    <div style="display:flex;align-items:center;height:10px;margin-top:3px">
+      <div style="width:50%;display:flex;justify-content:flex-end;height:100%">${neg}</div>
+      <div style="width:1.5px;height:100%;background:var(--border)"></div>
+      <div style="width:50%;height:100%">${pos}</div>
+    </div>
+  </div>`;
+}
+
+function _buildTrocasStatsHTML(data) {
+  const G = _TR_G, R = _TR_R;
+  const ps = (data.participantes || []).slice();
+  ps.forEach(p => { p.t = p.t || []; });
+  const totG = ps.reduce((s, p) => s + (p.g || 0), 0);
+  const totL = ps.reduce((s, p) => s + (p.l || 0), 0);
+  const saldoTot = totG - totL;
+  const fmtWhen = data.at ? new Date(data.at).toLocaleString('pt-BR') : '—';
+  const isAdmin = currentUserDoc?.role === 'admin';
+  const sCol = v => v > 0 ? G : v < 0 ? R : 'var(--text-muted)';
+  const sStr = v => (v > 0 ? '+' : '') + v;
+  const maxAbsDelta = ps.reduce((m, p) => p.t.reduce((mm, it) => Math.max(mm, Math.abs(it.d)), m), 0);
+
+  // ── HERO ──
+  const tiles = [
+    ['💚', totG, 'Pontos ganhos trocando', G],
+    ['💸', totL, 'Pontos perdidos trocando', R],
+    ['⚖️', sStr(saldoTot), 'Saldo coletivo', sCol(saldoTot)],
+    ['👥', ps.length, 'Pessoas que trocaram', 'var(--white)'],
+  ].map(t => `<div style="background:rgba(255,255,255,.05);border-radius:12px;padding:12px;text-align:center">
+     <div style="font-size:1.5rem">${t[0]}</div>
+     <div style="font-size:1.4rem;font-weight:800;line-height:1.1;color:${t[3]}">${t[1]}</div>
+     <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">${t[2]}</div></div>`).join('');
+
+  const hero = `<div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">🔁 Trocas de Palpites: Perdas e Ganhos</span></div>
+    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;line-height:1.55">
+      Quando alguém muda um palpite, às vezes <b style="color:${G}">acerta e ganha pontos</b>,
+      às vezes <b style="color:${R}">larga um palpite que era melhor e perde</b>. Aqui está o placar dessas decisões — só com jogos já resultados.
+      <br>📅 Atualizado em <b>${esc(fmtWhen)}</b> · baseado em <b>${data.nj || 0}</b> jogo(s) com resultado.
+      ${isAdmin ? `<button class="btn btn-secondary btn-sm" style="margin-left:8px" onclick="_trocasRefresh()">↻ Recarregar</button>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">${tiles}</div>
+  </div>`;
+
+  // ── Destaques de evento único ──
+  let bigGain = null, bigLoss = null;
+  ps.forEach(p => p.t.forEach(it => {
+    if (it.d > 0) { if (!bigGain || it.d > bigGain.it.d) bigGain = { p, it }; }
+    else if (it.d < 0) { if (!bigLoss || it.d < bigLoss.it.d) bigLoss = { p, it }; }
+  }));
+  const destaque = (emo, titulo, x, color) => {
+    if (!x) return '';
+    const fStr = x.it.f ? x.it.f[0] + '×' + x.it.f[1] + ' (' + x.it.f[2] + ' pts)' : 'apagou (0 pts)';
+    return `<div style="flex:1 1 260px;background:rgba(255,255,255,.04);border-radius:12px;padding:12px;border-left:3px solid ${color}">
+      <div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">${emo} ${titulo}</div>
+      <div style="font-weight:800;font-size:0.96rem;margin:3px 0">${_trName(x.p)} <span style="color:${color}">${x.it.d > 0 ? '+' : ''}${x.it.d} pts</span></div>
+      <div style="font-size:0.78rem;color:var(--text-muted)">${esc(x.it.g)} ${_trJogo(x.it.g)} · resultado <b>${x.it.r[0]}×${x.it.r[1]}</b><br>
+        tinha <b style="color:var(--white)">${x.it.b[0]}×${x.it.b[1]}</b> (${x.it.b[2]} pts) → <b style="color:var(--white)">${fStr}</b></div>
+    </div>`;
+  };
+  const destaquesCard = (bigGain || bigLoss) ? `<div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">⭐ Momentos da Rodada</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px">${destaque('🔥', 'Melhor acerto na troca', bigGain, G)}${destaque('🥶', 'Maior arrependimento', bigLoss, R)}</div>
+  </div>` : '';
+
+  // ── Rankings Mão de Ouro / Mão Fria ──
+  const gainers = ps.filter(p => p.g > 0).sort((a, b) => b.g - a.g).slice(0, 5);
+  const losers = ps.filter(p => p.l > 0).sort((a, b) => b.l - a.l).slice(0, 5);
+  const maxG = gainers.reduce((m, p) => Math.max(m, p.g), 0);
+  const maxL = losers.reduce((m, p) => Math.max(m, p.l), 0);
+  const rankCard = (titulo, emo, rows) => `<div class="card" style="flex:1 1 320px;margin:0">
+    <div class="card-header"><span class="card-title" style="font-size:0.95rem">${emo} ${titulo}</span></div>
+    ${rows || '<div class="gx-empty">Sem dados.</div>'}</div>`;
+  const rankingsCard = `<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px">
+    ${rankCard('Mão de Ouro', '🥇', gainers.map((p, i) => _trRankRow(p, p.g, maxG, G, '+', i)).join(''))}
+    ${rankCard('Mão Fria', '🥶', losers.map((p, i) => _trRankRow(p, p.l, maxL, R, '−', i)).join(''))}
+  </div>`;
+
+  // ── Ranking geral por saldo + cards individuais ──
+  const bySaldo = ps.slice().sort((a, b) => b.s - a.s || (b.g + b.l) - (a.g + a.l));
+  const userCards = bySaldo.map((p, idx) => {
+    const safe = 'tr-u-' + idx;
+    const tot = (p.g + p.l) || 1;
+    const gw = p.g / tot * 100, lw = p.l / tot * 100;
+    const compBar = `<div style="display:flex;height:16px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.05)">
+      <div style="width:${gw}%;background:${G}" title="ganhos"></div>
+      <div style="width:${lw}%;background:${R}" title="perdas"></div></div>`;
+    const badges = [];
+    if (p.cg > 0) badges.push(`<span style="background:rgba(46,204,113,.15);color:${G};padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:700">🎯 Achou ${p.cg} cravada(s)</span>`);
+    if (p.cl > 0) badges.push(`<span style="background:rgba(243,156,18,.15);color:#f39c12;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:700">💎 Largou ${p.cl} cravada(s)</span>`);
+    const trocasSorted = p.t.slice().sort((a, b) => b.d - a.d);
+    const detail = trocasSorted.map(it => _trTrocaRow(it, maxAbsDelta)).join('');
+    return `<div class="card" style="margin-top:10px;padding:0;overflow:hidden">
+      <div style="padding:12px 16px;cursor:pointer" data-rel-toggle="${safe}" onclick="_relToggle('${safe}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:8px;min-width:0">
+            <span style="font-weight:800;color:var(--text-muted);flex:0 0 auto">${idx + 1}º</span>
+            <span style="font-weight:700;font-size:0.93rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_trName(p)}</span>
+          </div>
+          <div style="text-align:right;flex:0 0 auto;font-size:0.8rem">
+            <span style="color:${G};font-weight:700">+${p.g}</span> · <span style="color:${R};font-weight:700">−${p.l}</span> ·
+            saldo <b style="color:${sCol(p.s)}">${sStr(p.s)}</b>
+            <span class="rel-arrow" style="color:var(--text-muted);margin-left:6px">▼</span>
+          </div>
+        </div>
+        <div style="margin-top:8px">${compBar}</div>
+        ${badges.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${badges.join('')}</div>` : ''}
+      </div>
+      <div id="${safe}" style="display:none;padding:0 16px 14px;border-top:1px solid var(--border)">
+        ${detail || '<div class="gx-empty">Sem trocas com impacto.</div>'}
+      </div>
+    </div>`;
+  }).join('');
+
+  const rankingGeral = `<div class="card" style="margin-bottom:6px">
+    <div class="card-header"><span class="card-title">🏆 Ranking por Saldo nas Trocas</span></div>
+    <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:2px">Clique em cada participante para ver as trocas detalhadas. Barra: <b style="color:${G}">verde = ganhos</b> · <b style="color:${R}">vermelho = perdas</b>.</div>
+  </div>${userCards}`;
+
+  const rodape = `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:14px;line-height:1.5">
+    Cada jogo compara o palpite final com a melhor alternativa que a pessoa já teve no histórico. Considera apenas jogos com resultado lançado (palpites já revelados). Dados publicados pelo administrador.
+  </div>`;
+
+  return hero + destaquesCard + rankingsCard + rankingGeral + rodape;
 }
 
 // ── Helpers reutilizáveis ─────────────────────────────────────────────────────
@@ -13176,6 +13370,7 @@ function renderAdminRelatorio() {
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
         <button class="btn btn-primary" id="perda-gerar-btn" onclick="gerarRelatorioPerdas()">🔁 Gerar Relatório</button>
         <button class="btn btn-secondary" id="perda-export-btn" onclick="exportRelatorioTrocasExcel()" disabled title="Gere o relatório primeiro">📊 Exportar Excel</button>
+        <button class="btn btn-secondary" id="perda-publish-btn" onclick="publicarRelatorioTrocas()" disabled title="Gere o relatório primeiro">📢 Publicar nas Estatísticas</button>
         <span id="perda-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
       </div>
       <div id="perda-result"></div>
@@ -13461,10 +13656,12 @@ let _relTrocasExport = null;
 async function gerarRelatorioPerdas() {
   const btn = document.getElementById('perda-gerar-btn');
   const expBtn = document.getElementById('perda-export-btn');
+  const pubBtn = document.getElementById('perda-publish-btn');
   const status = document.getElementById('perda-status');
   const out = document.getElementById('perda-result');
   if (btn) btn.disabled = true;
   if (expBtn) expBtn.disabled = true;
+  if (pubBtn) pubBtn.disabled = true;
   _relTrocasExport = null;
   if (out) out.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   if (status) status.textContent = 'Carregando dados…';
@@ -13539,7 +13736,8 @@ async function gerarRelatorioPerdas() {
     const comTroca = results.filter(r => r.losses.length || r.gains.length)
       .sort((a, b) => (b.totalLost + b.totalGained) - (a.totalLost + a.totalGained) || b.saldo - a.saldo);
 
-    _relTrocasExport = { generatedAt: new Date(), results: comTroca };
+    const jogosComResultado = Object.keys(res).filter(id => _hasFullResult(res[id])).length;
+    _relTrocasExport = { generatedAt: new Date(), results: comTroca, jogosComResultado };
 
     const totalPerdidos = comTroca.reduce((s, r) => s + r.totalLost, 0);
     const totalGanhos = comTroca.reduce((s, r) => s + r.totalGained, 0);
@@ -13557,6 +13755,7 @@ async function gerarRelatorioPerdas() {
 
     if (status) status.textContent = 'Relatório gerado em ' + new Date().toLocaleString('pt-BR') + ' · ' + participantes.length + ' participantes.';
     if (expBtn) { expBtn.disabled = !comTroca.length; expBtn.title = comTroca.length ? 'Baixar planilha .xlsx' : 'Sem dados para exportar'; }
+    if (pubBtn) { pubBtn.disabled = !comTroca.length; pubBtn.title = comTroca.length ? 'Publicar na aba Estatísticas (todos veem)' : 'Sem dados para publicar'; }
 
     if (!comTroca.length) {
       if (out) out.innerHTML = '<div class="alert alert-info">Nenhuma troca de palpite alterou a pontuação (em jogos já resultados). Histórico considerado a partir da v1.9.0.</div>';
@@ -13698,694 +13897,46 @@ async function exportRelatorioTrocasExcel() {
   } catch(e) { showToast('Erro: ' + errMsg(e), 'error'); }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// GRÁFICOS 3D — Plotly.js com lazy loading
-// ═══════════════════════════════════════════════════════════════════════════
-
-const _3D_PAL = ['#FFD700','#00C4FF','#FF6B9D','#00E5A0','#FF9F45','#A78BFA',
-  '#34D399','#F87171','#60A5FA','#FBBF24','#C084FC','#4ADE80','#FB923C','#38BDF8',
-  '#E879F9','#86EFAC','#FCA5A5','#93C5FD','#FDE68A','#6EE7B7'];
-
-async function _loadPlotly() {
-  if (window.Plotly) return;
-  return new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.plot.ly/plotly-2.35.0.min.js';
-    s.onload = res; s.onerror = rej;
-    document.head.appendChild(s);
-  });
-}
-
-async function _fetch3DHistorico(users) {
-  if (_3dHistorico) return _3dHistorico;
-  const r = {};
-  await Promise.all(users.map(async u => {
-    const snaps = await db.collection('palpites').doc(u.uid)
-      .collection('historico').orderBy('at','asc').limit(1000).get();
-    r[u.uid] = snaps.docs.map(d => ({ ...d.data() }));
-  }));
-  _3dHistorico = r;
-  return r;
-}
-
-function _3dLay(title, xl, yl, zl) {
-  return {
-    title: { text: title, font: { color: '#e0e6ed', size: 13 }, x: 0.5 },
-    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-    scene: {
-      bgcolor: 'rgba(10,14,26,0.97)',
-      xaxis: { title: { text: xl, font:{size:11} }, color:'#8899aa', gridcolor:'rgba(255,255,255,0.08)', linecolor:'rgba(255,255,255,0.15)', showbackground:true, backgroundcolor:'rgba(15,20,40,0.5)' },
-      yaxis: { title: { text: yl, font:{size:11} }, color:'#8899aa', gridcolor:'rgba(255,255,255,0.08)', linecolor:'rgba(255,255,255,0.15)', showbackground:true, backgroundcolor:'rgba(15,20,40,0.5)' },
-      zaxis: { title: { text: zl, font:{size:11} }, color:'#8899aa', gridcolor:'rgba(255,255,255,0.08)', linecolor:'rgba(255,255,255,0.15)', showbackground:true, backgroundcolor:'rgba(15,20,40,0.5)' },
-    },
-    margin: { l:0, r:0, t:44, b:0 }, font: { color:'#8899aa', size:11 }, autosize:true,
-    legend: { font:{color:'#8899aa'}, bgcolor:'rgba(0,0,0,0)' },
-    modebar: { bgcolor:'rgba(0,0,0,0)', color:'#8899aa', activecolor:'#FFD700' }
-  };
-}
-
-function _3dPts(uid, gid, allPals, res) {
-  const p = calcPontos(allPals[uid]?.[gid], res[gid]);
-  return p == null ? 0 : p;
-}
-
-function _3dTs(at) {
-  if (!at) return null;
-  if (at.toDate) return at.toDate().getTime();
-  if (at.seconds) return at.seconds * 1000;
-  return null;
-}
-
-function _3dGrupoIds() {
-  return new Set(Object.values(GRUPOS_DATA).flatMap(g => g.games.map(gm => gm.id)));
-}
-function _3dElimIds() {
-  return new Set(Object.values(ELIM_DATA).flatMap(e => e.games.map(g => g.id)));
-}
-function _3dFilterPhase(gameIds, fase) {
-  if (fase === 'todos') return gameIds;
-  const s = fase === 'grupos' ? _3dGrupoIds() : _3dElimIds();
-  return gameIds.filter(id => s.has(id));
-}
-
-function _3dHelp(o, i, c) {
-  return `<details class="gx-help"><summary>ℹ️ O que estou vendo · Como interagir · Como é calculado</summary>
-    <div class="gx-help-body">
-      <div><strong>O que estou vendo:</strong> ${o}</div>
-      <div><strong>Como interagir:</strong> ${i}</div>
-      <div><strong>Como é calculado:</strong> ${c}</div>
-    </div></details>`;
-}
-
-function _3dFilt(id, lbl, opts, fn) {
-  return `<label class="gx3d-flbl">${lbl}</label><select id="${id}" class="gx3d-sel" onchange="${fn}">${opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select>`;
-}
-
-// ── renderGx3D: monta HTML e renderiza os 7 gráficos que não precisam de historico ──
-async function renderGx3D() {
-  const el = document.getElementById('stats-tab-3d');
-  if (!el) return;
-  el.innerHTML = '<div class="gx3d-loading">⏳ Carregando Plotly.js...</div>';
-  try { await _loadPlotly(); } catch(e) {
-    el.innerHTML = '<div class="gx3d-loading" style="color:#e74c3c">❌ Erro ao carregar biblioteca 3D. Verifique sua conexão e tente novamente.</div>';
-    return;
+// Publica um snapshot compacto da análise de trocas em cache/trocas_publicado,
+// que QUALQUER participante lê (1 leitura) na aba Estatísticas → Trocas. Assim a
+// página de stats não recalcula nada: o admin roda o relatório e "publica" quando
+// quiser, atualizando conforme novos jogos vão saindo.
+async function publicarRelatorioTrocas() {
+  if (!_relTrocasExport || !_relTrocasExport.results.length) {
+    showToast('Gere o relatório primeiro.', 'error'); return;
   }
-  const d = _graficosData;
-  if (!d || !d.jogosComResultado?.length) {
-    el.innerHTML = '<div class="gx3d-loading">Sem dados suficientes ainda. Aguarde resultados de jogos.</div>'; return;
-  }
-  el.innerHTML = `
-    <div id="gx3d-1-card" class="gx3d-card"></div>
-    <div id="gx3d-3-card" class="gx3d-card"></div>
-    <div id="gx3d-5-card" class="gx3d-card"></div>
-    <div id="gx3d-6-card" class="gx3d-card"></div>
-    <div id="gx3d-7-card" class="gx3d-card"></div>
-    <div id="gx3d-8-card" class="gx3d-card"></div>
-    <div id="gx3d-10-card" class="gx3d-card"></div>
-    <div class="gx3d-hist-banner" id="gx3d-hist-banner">
-      <div style="font-size:0.9rem;font-weight:700;margin-bottom:6px">🔒 Gráficos comportamentais</div>
-      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px">Os 3 gráficos abaixo analisam o histórico completo de alterações de palpites — requer uma busca adicional no banco.</div>
-      <button class="btn-primary" onclick="renderGx3DHistorico()" id="gx3d-hist-btn">📊 Carregar dados comportamentais</button>
-    </div>
-    <div id="gx3d-2-card" class="gx3d-card" style="display:none"></div>
-    <div id="gx3d-4-card" class="gx3d-card" style="display:none"></div>
-    <div id="gx3d-9-card" class="gx3d-card" style="display:none"></div>`;
-  _gx3d_paisagemRanking();
-  _gx3d_arenaRivalidades();
-  _gx3d_rioTempo();
-  _gx3d_dnaPalpites();
-  _gx3d_momentoQuantico();
-  _gx3d_nuvemPrevisoes();
-  _gx3d_mapaGravitacional();
-}
-
-async function renderGx3DHistorico() {
-  const btn = document.getElementById('gx3d-hist-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Buscando histórico...'; }
+  if (!confirm('Publicar estes dados na aba Estatísticas → Trocas?\n\nFicará visível para TODOS os participantes até a próxima publicação.')) return;
+  const pubBtn = document.getElementById('perda-publish-btn');
+  if (pubBtn) pubBtn.disabled = true;
+  showToast('⏳ Publicando…', '');
   try {
-    await _fetch3DHistorico(_graficosData.users);
-    const banner = document.getElementById('gx3d-hist-banner');
-    if (banner) banner.style.display = 'none';
-    ['gx3d-2-card','gx3d-4-card','gx3d-9-card'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.style.display = '';
-    });
-    _gx3d_cuboOusadia();
-    _gx3d_esferaDecisoes();
-    _gx3d_fingerprintEstrategia();
+    const { results, generatedAt, jogosComResultado } = _relTrocasExport;
+    // Chaves curtas para manter o documento bem abaixo do limite de 1 MB.
+    const participantes = results.map(r => ({
+      n: r.user.nome || r.name, a: r.user.apelido || '',
+      g: r.totalGained, l: r.totalLost, s: r.saldo,
+      ng: r.gains.length, nl: r.losses.length, cg: r.cravadasGanhas, cl: r.cravadasLargadas,
+      t: [
+        ...r.gains.map(x => ({ g: x.gid, k: 'G', r: [x.r.h_real, x.r.a_real], b: [x.best.h, x.best.a, x.best.score], f: x.deleted ? null : [x.finalPal.h, x.finalPal.a, x.finalScore], d: x.gained })),
+        ...r.losses.map(x => ({ g: x.gid, k: 'P', r: [x.r.h_real, x.r.a_real], b: [x.best.h, x.best.a, x.best.score], f: x.deleted ? null : [x.finalPal.h, x.finalPal.a, x.finalScore], d: -x.lost })),
+      ],
+    }));
+    const payload = {
+      at: (generatedAt || new Date()).toISOString(),
+      nj: jogosComResultado || 0,
+      np: participantes.length,
+      participantes,
+      publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      publishedBy: currentUser?.email || null,
+    };
+    await db_.collection('cache').doc('trocas_publicado').set(payload);
+    _trocasPubCache = null; // invalida cache local para refletir a nova publicação
+    showToast('✅ Publicado nas Estatísticas! Todos já podem ver.', 'success');
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.textContent = '⚠️ Erro — tentar novamente'; }
+    showToast('Erro ao publicar: ' + errMsg(e), 'error');
+  } finally {
+    if (pubBtn) pubBtn.disabled = false;
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 1 — Paisagem do Ranking
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_paisagemRanking() {
-  const card = document.getElementById('gx3d-1-card'); if (!card) return;
-  card.innerHTML = `
-    <div class="gx3d-title">🏔️ Paisagem do Ranking</div>
-    <div class="gx3d-subtitle">Pontos acumulados de cada participante ao longo do campeonato — em relevo 3D</div>
-    ${_3dHelp(
-      'Cada "montanha" é um participante. A altura (eixo Z) mostra os pontos acumulados em cada checkpoint. Quem tem a montanha mais alta ao fundo lidera.',
-      'Clique e arraste para girar o terreno. Scroll para zoom. Duplo-clique para resetar a câmera. Passe o cursor sobre qualquer ponto para ver nome, checkpoint e pontos acumulados.',
-      `Para cada checkpoint, soma todos os pontos dos jogos finalizados até aquele momento: ${CFG.pts_exato} pts (placa exato), ${CFG.pts_vencedor_saldo??7} pts (vencedor+saldo), ${CFG.pts_apenas_vencedor??5} pts (só vencedor), 0 pts (erro).`
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-1-gran','Granularidade:',[['dia','Por dia'],['rodada','Por rodada'],['2jogos','De 2 em 2'],['jogo','Por jogo']],'_gx3d_render1()')}
-      ${_3dFilt('gx3d-1-fase','Fase:',[['todos','Todos'],['grupos','Grupos'],['elim','Eliminatórias']],'_gx3d_render1()')}
-      ${_3dFilt('gx3d-1-topn','Jogadores:',[['10','Top 10'],['5','Top 5'],['0','Todos']],'_gx3d_render1()')}
-    </div>
-    <div id="gx3d-plot-1" class="gx3d-plot"></div>`;
-  _gx3d_render1();
-}
-function _gx3d_render1() {
-  const d = _graficosData; if (!d) return;
-  const gran = document.getElementById('gx3d-1-gran')?.value || 'dia';
-  const fase = document.getElementById('gx3d-1-fase')?.value || 'todos';
-  const topn = parseInt(document.getElementById('gx3d-1-topn')?.value || '10');
-  const { res, allPals, ranking } = d;
-  const users = topn > 0 ? ranking.slice(0, topn) : ranking;
-  let cps = _bumpCheckpoints(res, gran);
-  if (fase !== 'todos') {
-    const ps = fase === 'grupos' ? _3dGrupoIds() : _3dElimIds();
-    cps = cps.map(cp => ({ ...cp, gameIds: cp.gameIds.filter(id => ps.has(id)) })).filter(cp => cp.gameIds.length);
-  }
-  if (!cps.length) { Plotly.react('gx3d-plot-1',[],_3dLay('Sem dados para este filtro','','','')); return; }
-  const z = users.map(u => cps.map(cp => { let s=0; cp.gameIds.forEach(gid => { s+=_3dPts(u.uid,gid,allPals,res); }); return s; }));
-  Plotly.react('gx3d-plot-1',[{
-    type:'surface', x:cps.map(c=>c.label), y:users.map(u=>(u.apelido||u.nome||'?').substring(0,14)), z,
-    colorscale:'YlOrRd', showscale:true,
-    colorbar:{ title:{text:'Pts',font:{color:'#8899aa'}}, tickfont:{color:'#8899aa'} },
-    hovertemplate:'<b>%{y}</b><br>%{x}<br>Pontos: <b>%{z}</b><extra></extra>'
-  }], _3dLay('','Checkpoint','Participante','Pontos'), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 3 — Arena de Rivalidades
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_arenaRivalidades() {
-  const card = document.getElementById('gx3d-3-card'); if (!card) return;
-  card.innerHTML = `
-    <div class="gx3d-title">⚔️ Arena de Rivalidades</div>
-    <div class="gx3d-subtitle">Quem domina quem? Taxa de vitória de cada participante contra todos os outros</div>
-    ${_3dHelp(
-      'Uma superfície NxN. Cada célula Z mostra a taxa de vitória do jogador no eixo Y contra o jogador no eixo X. Z=1 (pico vermelho) = vence sempre; Z=0.5 (plano) = equilíbrio; Z=0 (vale azul) = sempre perde.',
-      'Gire para ver os picos de dominância. Passe o cursor sobre qualquer célula para ver o par e a taxa de vitória. A diagonal sempre vale 0.5 (cada um contra si mesmo).',
-      'Para cada par (A, B): conta todos os jogos em que ambos palpitaram. Se A marcou mais pontos do que B naquele jogo, é vitória de A. Taxa = vitórias de A ÷ total de jogos em comum.'
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-3-topn','Escopo:',[['10','Top 10'],['5','Top 5'],['15','Top 15'],['0','Top 20']],'_gx3d_render3()')}
-      ${_3dFilt('gx3d-3-fase','Fase:',[['todos','Todos'],['grupos','Grupos'],['elim','Eliminatórias']],'_gx3d_render3()')}
-    </div>
-    <div id="gx3d-plot-3" class="gx3d-plot"></div>`;
-  _gx3d_render3();
-}
-function _gx3d_render3() {
-  const d = _graficosData; if (!d) return;
-  const topn = Math.min(parseInt(document.getElementById('gx3d-3-topn')?.value || '10') || 20, 20);
-  const fase = document.getElementById('gx3d-3-fase')?.value || 'todos';
-  const { res, allPals, ranking } = d;
-  const users = ranking.slice(0, topn);
-  const games = _3dFilterPhase(d.jogosComResultado, fase);
-  const n = users.length;
-  const z = Array.from({length:n}, (_,i) => Array.from({length:n}, (_,j) => {
-    if (i===j) return 0.5;
-    let wins=0, total=0;
-    games.forEach(gid => {
-      const pi=allPals[users[i].uid]?.[gid], pj=allPals[users[j].uid]?.[gid], r=res[gid];
-      if (!pi||!pj||!r) return;
-      const ri=calcPontos(pi,r)??0, rj=calcPontos(pj,r)??0;
-      wins += ri>rj?1:0; total++;
-    });
-    return total>0 ? Math.round(wins/total*100)/100 : 0.5;
-  }));
-  const lbl = users.map(u=>(u.apelido||u.nome||'?').substring(0,12));
-  Plotly.react('gx3d-plot-3',[{
-    type:'surface', x:lbl, y:lbl, z,
-    colorscale:[['0','#1a6bcc'],['0.5','#202840'],['1','#cc3333']],
-    zauto:false, zmin:0, zmax:1, showscale:true,
-    colorbar:{ title:{text:'Taxa vitória',font:{color:'#8899aa'}}, tickformat:'.0%', tickfont:{color:'#8899aa'} },
-    hovertemplate:'<b>%{y}</b> vs <b>%{x}</b><br>Taxa vitória: <b>%{z:.0%}</b><extra></extra>'
-  }], _3dLay('','Adversário','Jogador','Taxa de vitória'), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 5 — Rio do Tempo
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_rioTempo() {
-  const card = document.getElementById('gx3d-5-card'); if (!card) return;
-  card.innerHTML = `
-    <div class="gx3d-title">🌊 Rio do Tempo</div>
-    <div class="gx3d-subtitle">Cada participante como um "rio" fluindo — posição × pontos × tempo</div>
-    ${_3dHelp(
-      'Cada linha colorida é um participante. Eixo X = checkpoints (tempo), Eixo Y = posição no ranking (invertido: valores maiores = melhor colocação), Eixo Z = pontos acumulados. Cruzamentos entre linhas revelam mudanças de posição.',
-      'Gire para ver os "rios" sob diferentes ângulos. Pontos onde os rios se cruzam = disputa direta que mudou a classificação. Passe o cursor para ver nome, posição e pontos em cada checkpoint.',
-      'A cada checkpoint, recalcula o ranking completo com os jogos finalizados até aquele momento. O eixo Y é calculado como (total de participantes − posição + 1) para que 1º lugar fique no topo.'
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-5-gran','Granularidade:',[['dia','Por dia'],['rodada','Por rodada'],['2jogos','De 2 em 2'],['jogo','Por jogo']],'_gx3d_render5()')}
-      ${_3dFilt('gx3d-5-fase','Fase:',[['todos','Todos'],['grupos','Grupos'],['elim','Eliminatórias']],'_gx3d_render5()')}
-      ${_3dFilt('gx3d-5-topn','Participantes:',[['5','Top 5'],['10','Top 10'],['0','Todos']],'_gx3d_render5()')}
-    </div>
-    <div id="gx3d-plot-5" class="gx3d-plot"></div>`;
-  _gx3d_render5();
-}
-function _gx3d_render5() {
-  const d = _graficosData; if (!d) return;
-  const gran = document.getElementById('gx3d-5-gran')?.value || 'dia';
-  const fase = document.getElementById('gx3d-5-fase')?.value || 'todos';
-  const topn = parseInt(document.getElementById('gx3d-5-topn')?.value || '5');
-  const { res, allPals, ranking, champPicks } = d;
-  const users = topn > 0 ? ranking.slice(0, topn) : ranking;
-  let cps = _bumpCheckpoints(res, gran);
-  if (fase !== 'todos') {
-    const ps = fase === 'grupos' ? _3dGrupoIds() : _3dElimIds();
-    cps = cps.map(cp => ({ ...cp, gameIds: cp.gameIds.filter(id => ps.has(id)) })).filter(cp => cp.gameIds.length);
-  }
-  if (cps.length < 2) return;
-  const rankingsAtCp = cps.map(cp => _computeRankingForGameIds(d.users, res, allPals, cp.gameIds, champPicks));
-  const total = d.users.length;
-  const traces = users.map((u, idx) => {
-    const xs=[], ys=[], zs=[], texts=[];
-    cps.forEach((cp, ci) => {
-      const r = rankingsAtCp[ci];
-      const pos = r.findIndex(x => x.uid === u.uid);
-      const pts = pos >= 0 ? r[pos].pontos : 0;
-      xs.push(cp.label); ys.push(pos >= 0 ? total - pos : 0); zs.push(pts);
-      texts.push(`${u.apelido||u.nome||'?'}<br>${cp.label}<br>${pos>=0?pos+1+'º':'?'}  |  ${pts} pts`);
-    });
-    const col = _3D_PAL[idx % _3D_PAL.length];
-    return { type:'scatter3d', mode:'lines+markers', name:(u.apelido||u.nome||'?').substring(0,14),
-      x:xs, y:ys, z:zs, text:texts, hoverinfo:'text',
-      line:{color:col, width:4}, marker:{size:5, color:col} };
-  });
-  Plotly.react('gx3d-plot-5', traces, _3dLay('','Checkpoint','Posição (invertida)','Pontos acumulados'), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 6 — DNA de Palpites por Seleção
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_dnaPalpites() {
-  const card = document.getElementById('gx3d-6-card'); if (!card) return;
-  card.innerHTML = `
-    <div class="gx3d-title">🧬 DNA de Palpites por Seleção</div>
-    <div class="gx3d-subtitle">Quem tem "especialidade" em quais seleções? Desempenho por participante × seleção</div>
-    ${_3dHelp(
-      'Cada bolinha representa o desempenho de um participante nos jogos de uma seleção específica. Bolinhas grandes e quentes = muitos pontos; pequenas e frias = poucos pontos.',
-      'Gire para identificar clusters de especialistas. Passe o cursor para ver participante, seleção e pontos. Identifique quem consistentemente acerta jogos de determinadas seleções.',
-      'Para cada par (participante, seleção): soma os pontos marcados em todos os jogos finalizados em que aquela seleção participou como mandante ou visitante. A métrica pode ser alterada pelo filtro.'
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-6-topn','Participantes:',[['10','Top 10'],['5','Top 5'],['0','Todos']],'_gx3d_render6()')}
-      ${_3dFilt('gx3d-6-mingames','Seleções:',[['0','Todas'],['2','Com 2+ jogos'],['3','Com 3+ jogos']],'_gx3d_render6()')}
-      ${_3dFilt('gx3d-6-metrica','Métrica:',[['total','Pontos totais'],['media','Média por jogo'],['pct','% de acerto']],'_gx3d_render6()')}
-    </div>
-    <div id="gx3d-plot-6" class="gx3d-plot"></div>`;
-  _gx3d_render6();
-}
-function _gx3d_render6() {
-  const d = _graficosData; if (!d) return;
-  const topn = parseInt(document.getElementById('gx3d-6-topn')?.value || '10');
-  const minG = parseInt(document.getElementById('gx3d-6-mingames')?.value || '0');
-  const metrica = document.getElementById('gx3d-6-metrica')?.value || 'total';
-  const { res, allPals, ranking, jogosComResultado } = d;
-  const users = topn > 0 ? ranking.slice(0, topn) : ranking;
-  const teamGames = {};
-  jogosComResultado.forEach(gid => {
-    const r = res[gid];
-    [r?.h_team, r?.a_team].forEach(t => { if (t) { if (!teamGames[t]) teamGames[t]=[]; teamGames[t].push(gid); } });
-  });
-  const teams = Object.keys(teamGames).filter(t => teamGames[t].length >= Math.max(1,minG)).sort();
-  if (!teams.length) return;
-  const xs=[],ys=[],zs=[],sizes=[],colors=[],texts=[];
-  users.forEach(u => {
-    const uN = (u.apelido||u.nome||'?').substring(0,12);
-    teams.forEach(team => {
-      let total=0, cnt=0, acertos=0;
-      teamGames[team].forEach(gid => {
-        const pal=allPals[u.uid]?.[gid], r=res[gid]; if (!pal||!r) return;
-        const pts=calcPontos(pal,r)??0; total+=pts; cnt++; if(pts>0) acertos++;
-      });
-      if (!cnt) return;
-      const val = metrica==='total'?total : metrica==='media'?Math.round(total/cnt*10)/10 : Math.round(acertos/cnt*100);
-      xs.push(uN); ys.push(team); zs.push(val);
-      sizes.push(Math.max(5, Math.min(22, val*(metrica==='total'?1.5:metrica==='media'?3:0.2))));
-      colors.push(val);
-      texts.push(`${uN}<br>${team}<br>${metrica==='pct'?val+'%':val+(metrica==='media'?' pts/jogo':' pts')}`);
-    });
-  });
-  Plotly.react('gx3d-plot-6',[{
-    type:'scatter3d', mode:'markers', x:xs, y:ys, z:zs, text:texts, hoverinfo:'text',
-    marker:{ size:sizes, color:colors, colorscale:'YlOrRd', showscale:true,
-      colorbar:{ title:{text:metrica==='pct'?'%':'Pts',font:{color:'#8899aa'}}, tickfont:{color:'#8899aa'} } }
-  }], _3dLay('','Participante','Seleção',metrica==='pct'?'% acerto':'Pontos'), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 7 — Momento Quântico
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_momentoQuantico() {
-  const card = document.getElementById('gx3d-7-card'); if (!card) return;
-  card.innerHTML = `
-    <div class="gx3d-title">⚡ Momento Quântico</div>
-    <div class="gx3d-subtitle">Pontos marcados jogo a jogo — quem brilhou quando? O sismógrafo do bolão</div>
-    ${_3dHelp(
-      'Uma superfície onde cada pico representa um participante que fez muitos pontos em determinado jogo. Picos = momentos de brilho; superfície plana = jogo difícil para todos; padrões paralelos = participantes com "sintonia" (acertaram os mesmos jogos).',
-      'Gire o sismógrafo para enxergar os padrões. Passe o cursor para ver quem acertou o quê. Procure participantes com picos nos mesmos jogos — provavelmente têm estratégias parecidas.',
-      `Pontos marcados em cada jogo individualmente (sem acumulação): ${CFG.pts_exato} pts (placa exato), ${CFG.pts_vencedor_saldo??7} pts (vencedor+saldo), ${CFG.pts_apenas_vencedor??5} pts (só vencedor), 0 pts (erro).`
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-7-topn','Participantes:',[['10','Top 10'],['5','Top 5'],['0','Todos']],'_gx3d_render7()')}
-      ${_3dFilt('gx3d-7-fase','Fase:',[['todos','Todos'],['grupos','Grupos'],['elim','Eliminatórias']],'_gx3d_render7()')}
-      ${_3dFilt('gx3d-7-ordem','Ordenar por:',[['ranking','Posição no ranking'],['peak','Maior pico'],['nome','Nome']],'_gx3d_render7()')}
-    </div>
-    <div id="gx3d-plot-7" class="gx3d-plot"></div>`;
-  _gx3d_render7();
-}
-function _gx3d_render7() {
-  const d = _graficosData; if (!d) return;
-  const topn = parseInt(document.getElementById('gx3d-7-topn')?.value || '10');
-  const fase = document.getElementById('gx3d-7-fase')?.value || 'todos';
-  const ordem = document.getElementById('gx3d-7-ordem')?.value || 'ranking';
-  const { res, allPals, ranking } = d;
-  let games = _3dFilterPhase(d.jogosComResultado, fase).slice().sort((a,b) => {
-    const ga=ALL_GAMES.find(g=>g.id===a), gb=ALL_GAMES.find(g=>g.id===b);
-    if (!ga||!gb) return 0;
-    return (_effectiveStartInstant(ga,res[a])?.getTime()||0)-(_effectiveStartInstant(gb,res[b])?.getTime()||0);
-  });
-  if (!games.length) return;
-  let users = topn > 0 ? ranking.slice(0, topn) : ranking;
-  if (ordem==='peak') users = users.slice().sort((a,b)=>Math.max(...games.map(g=>_3dPts(b.uid,g,allPals,res)))-Math.max(...games.map(g=>_3dPts(a.uid,g,allPals,res))));
-  else if (ordem==='nome') users = users.slice().sort((a,b)=>(a.apelido||a.nome||'').localeCompare(b.apelido||b.nome||''));
-  const gameLbls = games.map(gid => {
-    const r=res[gid]; return r?.h_team&&r?.a_team ? r.h_team.substring(0,3)+' x '+r.a_team.substring(0,3) : gid;
-  });
-  const z = users.map(u => games.map(gid => _3dPts(u.uid,gid,allPals,res)));
-  Plotly.react('gx3d-plot-7',[{
-    type:'surface', x:gameLbls, y:users.map(u=>(u.apelido||u.nome||'?').substring(0,14)), z,
-    colorscale:[[0,'#0d1117'],[0.01,'#1a2040'],[0.4,'#1a3a5c'],[0.7,'#e67e22'],[1,'#FFD700']],
-    showscale:true, colorbar:{ title:{text:'Pts/jogo',font:{color:'#8899aa'}}, tickfont:{color:'#8899aa'} },
-    hovertemplate:'<b>%{y}</b><br>%{x}<br>Pontos: <b>%{z}</b><extra></extra>'
-  }], _3dLay('','Jogo','Participante','Pontos no jogo'), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 8 — Nuvem de Previsões Coletivas
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_nuvemPrevisoes() {
-  const card = document.getElementById('gx3d-8-card'); if (!card) return;
-  const d = _graficosData;
-  const { analiseJogos, jogosComResultado, res } = d;
-  const gameOpts = jogosComResultado.filter(gid=>analiseJogos[gid]?.palpites?.length).map(gid => {
-    const r=res[gid];
-    const nm = r?.h_team&&r?.a_team ? `${r.h_team} ${r.h_real}×${r.a_real} ${r.a_team}` : gid;
-    return `<option value="${gid}">${esc(nm)}</option>`;
-  }).join('');
-  card.innerHTML = `
-    <div class="gx3d-title">☁️ Nuvem de Previsões Coletivas</div>
-    <div class="gx3d-subtitle">O que todos previram — e onde o resultado real caiu no espaço de palpites</div>
-    ${_3dHelp(
-      'Cada coluna é uma combinação de placar previsto (gols casa × gols visitante). A altura (Z) é quantas pessoas fizeram aquele palpite. A esfera vermelha/diamante é o resultado real.',
-      'Selecione um jogo. Gire para ver a "nuvem de consenso". Colunas altas = muita gente apostou naquele placar. Se o resultado real está num pico alto, o grupo previu corretamente. Se está numa região vazia, foi surpresa.',
-      'Agrupa todos os palpites do jogo selecionado pelo placar previsto (H × A) e conta a frequência de cada combinação. O resultado real é plotado como um ponto especial destacado.'
-    )}
-    <div class="gx3d-filters">
-      <label class="gx3d-flbl">Jogo:</label><select id="gx3d-8-game" class="gx3d-sel" onchange="_gx3d_render8()" style="max-width:260px">${gameOpts}</select>
-      ${_3dFilt('gx3d-8-scope','Escopo:',[['todos','Todos os palpites'],['top10','Só Top 10'],['top5','Só Top 5']],'_gx3d_render8()')}
-    </div>
-    <div id="gx3d-plot-8" class="gx3d-plot"></div>`;
-  _gx3d_render8();
-}
-function _gx3d_render8() {
-  const d = _graficosData; if (!d) return;
-  const gid = document.getElementById('gx3d-8-game')?.value; if (!gid) return;
-  const scope = document.getElementById('gx3d-8-scope')?.value || 'todos';
-  const { analiseJogos, res, ranking } = d;
-  const gameData = analiseJogos[gid]; if (!gameData) return;
-  let palpites = gameData.palpites || [];
-  if (scope==='top10') { const s=new Set(ranking.slice(0,10).map(u=>u.uid)); palpites=palpites.filter(p=>s.has(p.user?.uid)); }
-  else if (scope==='top5') { const s=new Set(ranking.slice(0,5).map(u=>u.uid)); palpites=palpites.filter(p=>s.has(p.user?.uid)); }
-  const freq = {};
-  palpites.forEach(p => {
-    const h=p.palpite?.h, a=p.palpite?.a;
-    if (h===undefined||a===undefined) return;
-    const k=`${h}_${a}`;
-    if (!freq[k]) freq[k]={h,a,count:0,names:[]};
-    freq[k].count++; freq[k].names.push(p.user?.apelido||p.user?.nome||'?');
-  });
-  const pts = Object.values(freq);
-  const traces = [{
-    type:'scatter3d', mode:'markers', name:'Palpites',
-    x:pts.map(p=>p.h), y:pts.map(p=>p.a), z:pts.map(p=>p.count),
-    text:pts.map(p=>`${p.h} × ${p.a}<br>${p.count} pessoa(s)<br>${p.names.slice(0,5).join(', ')}${p.names.length>5?'…':''}`),
-    hoverinfo:'text',
-    marker:{size:pts.map(p=>Math.max(6,p.count*3)), color:pts.map(p=>p.count),
-      colorscale:'Blues', showscale:false, opacity:0.85}
-  }];
-  const rh=res[gid]?.h_real, ra=res[gid]?.a_real;
-  if (rh!==undefined&&ra!==undefined) {
-    const realCnt=freq[`${rh}_${ra}`]?.count||0;
-    traces.push({ type:'scatter3d', mode:'markers+text', name:'Resultado real',
-      x:[rh], y:[ra], z:[Math.max(realCnt+0.5,1)],
-      text:[`${rh}×${ra}`], textposition:'top center', textfont:{color:'#FFD700',size:13},
-      hoverinfo:'text', hovertext:[`Resultado real: ${rh} × ${ra}${realCnt?' ('+realCnt+' acertaram)':''}`],
-      marker:{size:20, color:'#e74c3c', opacity:1, symbol:'diamond'} });
-  }
-  const tg = res[gid]?.h_team&&res[gid]?.a_team ? `${res[gid].h_team} × ${res[gid].a_team}` : gid;
-  Plotly.react('gx3d-plot-8', traces, _3dLay(tg,'Gols casa previstos','Gols visitante previstos','Frequência'), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 10 — Mapa Gravitacional
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_mapaGravitacional() {
-  const card = document.getElementById('gx3d-10-card'); if (!card) return;
-  card.innerHTML = `
-    <div class="gx3d-title">🌌 Mapa Gravitacional da Liderança</div>
-    <div class="gx3d-subtitle">Como o pelotão se distribui ao redor do líder ao longo do campeonato</div>
-    ${_3dHelp(
-      'Uma superfície que mostra, a cada checkpoint, quantas pessoas estão em cada faixa de distância do líder. "Cratera profunda" = líder disparado e sozinho. Superfície "achatada" = pelotão compacto, qualquer um pode ganhar.',
-      'Gire para ver o perfil gravitacional ao longo do tempo. Observe quando a cratera se abre (líder foge) ou se fecha (pelotão encosta). Passe o cursor para ver quantas pessoas estavam a X pontos do líder em determinado checkpoint.',
-      'A cada checkpoint, calcula o ranking completo. O líder tem distância 0. Participantes são agrupados em faixas de N pontos (configurável) abaixo do líder. A superfície mostra a densidade do pelotão.'
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-10-gran','Granularidade:',[['dia','Por dia'],['rodada','Por rodada'],['2jogos','De 2 em 2'],['jogo','Por jogo']],'_gx3d_render10()')}
-      ${_3dFilt('gx3d-10-bucket','Faixa:',[['10','10 pts'],['5','5 pts'],['15','15 pts'],['20','20 pts']],'_gx3d_render10()')}
-      ${_3dFilt('gx3d-10-fase','Fase:',[['todos','Todos'],['grupos','Grupos'],['elim','Eliminatórias']],'_gx3d_render10()')}
-    </div>
-    <div id="gx3d-plot-10" class="gx3d-plot"></div>`;
-  _gx3d_render10();
-}
-function _gx3d_render10() {
-  const d = _graficosData; if (!d) return;
-  const gran = document.getElementById('gx3d-10-gran')?.value || 'dia';
-  const bucket = parseInt(document.getElementById('gx3d-10-bucket')?.value || '10');
-  const fase = document.getElementById('gx3d-10-fase')?.value || 'todos';
-  const { res, allPals, champPicks } = d;
-  let cps = _bumpCheckpoints(res, gran);
-  if (fase !== 'todos') {
-    const ps = fase === 'grupos' ? _3dGrupoIds() : _3dElimIds();
-    cps = cps.map(cp => ({ ...cp, gameIds: cp.gameIds.filter(id => ps.has(id)) })).filter(cp => cp.gameIds.length);
-  }
-  if (cps.length < 2) return;
-  const rankingsAtCp = cps.map(cp => _computeRankingForGameIds(d.users, res, allPals, cp.gameIds, champPicks));
-  let maxGap = 0;
-  rankingsAtCp.forEach(r => { if (r.length>1) maxGap=Math.max(maxGap, (r[0]?.pontos||0)-(r[r.length-1]?.pontos||0)); });
-  const nBuckets = Math.max(2, Math.ceil(maxGap / bucket) + 1);
-  const z = cps.map((_, ci) => {
-    const r = rankingsAtCp[ci]; const leaderPts = r[0]?.pontos || 0;
-    const row = Array(nBuckets).fill(0);
-    r.forEach(u => { const bi=Math.floor((leaderPts-u.pontos)/bucket); if(bi<nBuckets) row[bi]++; });
-    return row;
-  });
-  const xLbls = Array.from({length:nBuckets}, (_,i) => i===0?'Líder':`-${i*bucket}pts`);
-  Plotly.react('gx3d-plot-10',[{
-    type:'surface', x:xLbls, y:cps.map(c=>c.label), z,
-    colorscale:'Blues', reversescale:true, showscale:true,
-    colorbar:{ title:{text:'Participantes',font:{color:'#8899aa'}}, tickfont:{color:'#8899aa'} },
-    hovertemplate:'<b>%{y}</b><br>Faixa: <b>%{x}</b><br>Participantes: <b>%{z}</b><extra></extra>'
-  }], _3dLay('','Distância do líder','Checkpoint','Participantes'), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 2 — Cubo da Ousadia (requer historico)
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_cuboOusadia() {
-  const card = document.getElementById('gx3d-2-card'); if (!card) return;
-  card.innerHTML = `
-    <div class="gx3d-title">🎲 Cubo da Ousadia</div>
-    <div class="gx3d-subtitle">Vale mudar o palpite de última hora com uma aposta radical? Descubra aqui</div>
-    ${_3dHelp(
-      'Cada ponto é uma alteração de palpite. Eixo X = horas antes do bloqueio em que a mudança foi feita; Eixo Y = magnitude da mudança (quanto mudou o placar previsto); Eixo Z = pontos que aquele jogador marcou naquele jogo. Pontos altos no canto "última hora + mudança radical" = last-minute hero.',
-      'Gire o cubo para procurar os pontos mais altos. Passe o cursor para ver quem fez a mudança, qual jogo, antecedência e pontos. Identifique se mudanças de última hora compensam.',
-      'Antecedência (X) = instante de bloqueio − horário da alteração, em horas. Magnitude (Y) = |novo placar casa − anterior| + |novo placar visitante − anterior|. Pontos (Z) = pontos marcados com o palpite final naquele jogo.'
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-2-type','Tipo de entrada:',[['todos','Todas as alterações'],['edit','Só re-edições'],['first','Só primeiros palpites']],'_gx3d_render2()')}
-      ${_3dFilt('gx3d-2-window','Janela:',[['tudo','Todo o período'],['24h','Últimas 24h'],['6h','Últimas 6h']],'_gx3d_render2()')}
-    </div>
-    <div id="gx3d-plot-2" class="gx3d-plot"></div>`;
-  _gx3d_render2();
-}
-function _gx3d_render2() {
-  const d = _graficosData; if (!d||!_3dHistorico) return;
-  const type = document.getElementById('gx3d-2-type')?.value || 'todos';
-  const win = document.getElementById('gx3d-2-window')?.value || 'tudo';
-  const { res, allPals } = d;
-  const maxH = win==='24h'?24:win==='6h'?6:1e9;
-  const xs=[],ys=[],zs=[],colors=[],texts=[];
-  d.users.forEach((u, uidx) => {
-    const hist = _3dHistorico[u.uid]||[];
-    const byGame = {};
-    hist.forEach(e => { if (!byGame[e.gameId]) byGame[e.gameId]=[]; byGame[e.gameId].push(e); });
-    Object.entries(byGame).forEach(([gid,entries]) => {
-      const game=ALL_GAMES.find(g=>g.id===gid); if(!game) return;
-      const lockMs=_gameLockInstant(game,res[gid])?.getTime(); if(!lockMs) return;
-      const finalPts=_3dPts(u.uid,gid,allPals,res);
-      entries.forEach((entry,ei) => {
-        if (type==='edit'&&!entry.edit) return;
-        if (type==='first'&&entry.edit) return;
-        const ms=_3dTs(entry.at); if(!ms) return;
-        const hoursB=(lockMs-ms)/3600000; if(hoursB<0||hoursB>maxH) return;
-        let mag=0;
-        if (ei>0) { const prev=entries[ei-1]; mag=Math.abs((entry.h??0)-(prev.h??0))+Math.abs((entry.a??0)-(prev.a??0)); }
-        else if (entry.edit) mag=1;
-        xs.push(Math.round(hoursB*10)/10); ys.push(mag); zs.push(finalPts);
-        colors.push(uidx);
-        texts.push(`${u.apelido||u.nome||'?'}<br>Jogo: ${gid}<br>${Math.round(hoursB*10)/10}h antes do bloqueio<br>Magnitude: ${mag} gol(s)<br>Pontos finais: ${finalPts}`);
-      });
-    });
-  });
-  Plotly.react('gx3d-plot-2',[{
-    type:'scatter3d', mode:'markers', x:xs, y:ys, z:zs, text:texts, hoverinfo:'text',
-    marker:{size:6, color:colors, colorscale:'Rainbow', opacity:0.8}
-  }], _3dLay('','Horas antes do bloqueio','Magnitude da mudança','Pontos no jogo'), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 4 — Esfera das Decisões (requer historico)
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_esferaDecisoes() {
-  const card = document.getElementById('gx3d-4-card'); if (!card) return;
-  const d = _graficosData;
-  const userOpts = '<option value="">Todos</option>' + d.ranking.map(u =>
-    `<option value="${u.uid}">${esc((u.apelido||u.nome||'?').substring(0,20))}</option>`).join('');
-  card.innerHTML = `
-    <div class="gx3d-title">🔮 Esfera das Decisões</div>
-    <div class="gx3d-subtitle">Quando cada participante decide seus palpites — e como isso afeta o resultado</div>
-    ${_3dHelp(
-      'Cada esfera é um participante. Eixo X = hora média do dia das alterações (0-23h). Eixo Y = antecedência média em dias antes do bloqueio. Eixo Z = desempenho (métrica escolhida). O tamanho da esfera indica o total de alterações feitas.',
-      'Procure clusters: esferas no canto "madrugada + última hora" são impulsivos. Esferas no canto "manhã + dias antes" são estrategistas. Compare a altura Z de cada cluster para ver quem acerta mais.',
-      'Hora (X): média das horas do dia (hora local) de todas as alterações antes do bloqueio. Antecedência (Y): média de dias entre a alteração e o bloqueio. Métricas Z: acurácia (% de jogos com ≥1 pt), exatos (% de placares exatos) ou total de pontos.'
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-4-metrica','Eixo Z:',[['acerto','Acurácia (%)'],['exato','Placares exatos (%)'],['pontos','Total de pontos']],'_gx3d_render4()')}
-      <label class="gx3d-flbl">Destacar:</label><select id="gx3d-4-user" class="gx3d-sel" onchange="_gx3d_render4()">${userOpts}</select>
-    </div>
-    <div id="gx3d-plot-4" class="gx3d-plot"></div>`;
-  _gx3d_render4();
-}
-function _gx3d_render4() {
-  const d = _graficosData; if (!d||!_3dHistorico) return;
-  const metrica = document.getElementById('gx3d-4-metrica')?.value || 'acerto';
-  const hlUid = document.getElementById('gx3d-4-user')?.value || '';
-  const { userAccStats, ranking, res } = d;
-  const xs=[],ys=[],zs=[],sizes=[],colors=[],texts=[];
-  ranking.forEach((u, idx) => {
-    const hist = (_3dHistorico[u.uid]||[]).filter(e => {
-      const ms=_3dTs(e.at); if(!ms) return false;
-      const gm=ALL_GAMES.find(g=>g.id===e.gameId); if(!gm) return false;
-      const lk=_gameLockInstant(gm,res[e.gameId])?.getTime(); return lk&&ms<lk;
-    });
-    if (!hist.length) return;
-    const avgHour = hist.reduce((s,e) => { const ms=_3dTs(e.at); return ms?s+new Date(ms).getHours():s; },0)/hist.length;
-    const avgDays = hist.reduce((s,e) => {
-      const ms=_3dTs(e.at), gm=ALL_GAMES.find(g=>g.id===e.gameId);
-      const lk=_gameLockInstant(gm,res[e.gameId])?.getTime();
-      return ms&&lk?s+(lk-ms)/86400000:s;
-    },0)/hist.length;
-    const st=userAccStats[u.uid];
-    const zV = metrica==='acerto'?parseFloat(st?.acertoPct||0) : metrica==='exato'?parseFloat(st?.exatoPct||0) : u.pontos;
-    xs.push(Math.round(avgHour*10)/10); ys.push(Math.round(avgDays*100)/100); zs.push(zV);
-    sizes.push(Math.max(8, Math.min(28, hist.length*1.5)));
-    colors.push(hlUid ? (u.uid===hlUid?'#FFD700':'#2a3460') : _3D_PAL[idx%_3D_PAL.length]);
-    texts.push(`${u.apelido||u.nome||'?'}<br>Hora média: ${Math.round(avgHour)}h<br>Antecedência média: ${avgDays.toFixed(1)} dias<br>${metrica==='pontos'?'Pontos':metrica==='exato'?'Exatos':'Acurácia'}: ${zV}${metrica!=='pontos'?'%':' pts'}<br>Alterações: ${hist.length}`);
-  });
-  const zLbl = metrica==='acerto'?'Acurácia (%)':metrica==='exato'?'Exatos (%)':'Pontos totais';
-  Plotly.react('gx3d-plot-4',[{
-    type:'scatter3d', mode:'markers', x:xs, y:ys, z:zs, text:texts, hoverinfo:'text',
-    marker:{size:sizes, color:colors, opacity:0.88, line:{color:'rgba(255,255,255,0.2)',width:1}}
-  }], _3dLay('','Hora do dia (média)','Dias antes do bloqueio (média)',zLbl), {responsive:true});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO 9 — Fingerprint de Estratégia (requer historico)
-// ─────────────────────────────────────────────────────────────────────────────
-function _gx3d_fingerprintEstrategia() {
-  const card = document.getElementById('gx3d-9-card'); if (!card) return;
-  card.innerHTML = `
-    <div class="gx3d-title">👆 Fingerprint de Estratégia</div>
-    <div class="gx3d-subtitle">A impressão digital de cada participante — risco assumido × antecipação por fase</div>
-    ${_3dHelp(
-      'Cada linha colorida é a "assinatura estratégica" de um participante. Eixo X = fase do torneio. Eixo Y = risco médio dos palpites naquela fase (diferença de gols prevista). Eixo Z = antecipação média (horas antes do bloqueio em que os palpites foram fixados). Linhas paralelas = estratégias parecidas.',
-      'Gire para agrupar por estilo. Linhas altas no Z = planejadores antecipados. Linhas baixas no Z = decidem na última hora. Y alto = ousados (placares abertos). Y baixo = conservadores (empates e placares fechados).',
-      'Para cada fase (rodada), calcula: risco = média de |gols_casa − gols_visitante| dos palpites; antecipação = média de horas antes do bloqueio em que aquele palpite foi fixado (última alteração antes do bloqueio).'
-    )}
-    <div class="gx3d-filters">
-      ${_3dFilt('gx3d-9-topn','Participantes:',[['5','Top 5'],['10','Top 10'],['0','Todos']],'_gx3d_render9()')}
-      ${_3dFilt('gx3d-9-metrica','Risco (eixo Y):',[['diff','Diferença de gols'],['total','Total de gols previstos']],'_gx3d_render9()')}
-    </div>
-    <div id="gx3d-plot-9" class="gx3d-plot"></div>`;
-  _gx3d_render9();
-}
-function _gx3d_render9() {
-  const d = _graficosData; if (!d||!_3dHistorico) return;
-  const topn = parseInt(document.getElementById('gx3d-9-topn')?.value || '5');
-  const metrica = document.getElementById('gx3d-9-metrica')?.value || 'diff';
-  const { res, allPals, ranking } = d;
-  const allCps = _bumpCheckpoints(res, 'rodada');
-  if (allCps.length < 2) return;
-  const phases = allCps.map((cp, i) => {
-    const prevIds = i>0 ? new Set(allCps[i-1].gameIds) : new Set();
-    return { label: cp.label, gameIds: cp.gameIds.filter(id => !prevIds.has(id)) };
-  }).filter(p => p.gameIds.length);
-  const users = topn > 0 ? ranking.slice(0, topn) : ranking;
-  // Build last-edit-before-lock per (uid, gid)
-  const lastEd = {};
-  d.users.forEach(u => {
-    const byG = {};
-    (_3dHistorico[u.uid]||[]).forEach(e => { if(!byG[e.gameId]) byG[e.gameId]=[]; byG[e.gameId].push(e); });
-    Object.entries(byG).forEach(([gid,entries]) => {
-      const gm=ALL_GAMES.find(g=>g.id===gid); if(!gm) return;
-      const lk=_gameLockInstant(gm,res[gid])?.getTime(); if(!lk) return;
-      const valid=entries.filter(e=>{const ms=_3dTs(e.at);return ms&&ms<lk;});
-      if (!valid.length) return;
-      const last=valid[valid.length-1]; const lMs=_3dTs(last.at);
-      lastEd[`${u.uid}_${gid}`]={h:last.h??allPals[u.uid]?.[gid]?.h??0, a:last.a??allPals[u.uid]?.[gid]?.a??0, hBefore:(lk-lMs)/3600000};
-    });
-  });
-  const traces = users.map((u, idx) => {
-    const xs=[],ys=[],zs=[];
-    phases.forEach(ph => {
-      const gs=ph.gameIds.filter(gid=>lastEd[`${u.uid}_${gid}`]||allPals[u.uid]?.[gid]);
-      if (!gs.length) return;
-      let riskSum=0, anticSum=0, cnt=0;
-      gs.forEach(gid => {
-        const le=lastEd[`${u.uid}_${gid}`], pal=allPals[u.uid]?.[gid];
-        const h=le?.h??pal?.h??0, a=le?.a??pal?.a??0;
-        riskSum+= metrica==='diff'?Math.abs(h-a):h+a;
-        anticSum+=le?.hBefore??0; cnt++;
-      });
-      xs.push(ph.label); ys.push(Math.round(riskSum/cnt*100)/100); zs.push(Math.round(anticSum/cnt*100)/100);
-    });
-    if (!xs.length) return null;
-    const col=_3D_PAL[idx%_3D_PAL.length];
-    return { type:'scatter3d', mode:'lines+markers', name:(u.apelido||u.nome||'?').substring(0,14),
-      x:xs, y:ys, z:zs, line:{color:col,width:4}, marker:{size:7,color:col},
-      hovertemplate:`<b>${esc(u.apelido||u.nome||'?')}</b><br>%{x}<br>Risco: %{y:.1f}<br>Antecipação: %{z:.1f}h<extra></extra>` };
-  }).filter(Boolean);
-  const yLbl = metrica==='diff'?'Risco (|gols casa − vis.|)':'Total gols previstos';
-  Plotly.react('gx3d-plot-9', traces, _3dLay('','Fase',yLbl,'Antecipação média (h)'), {responsive:true});
 }
 
 async function renderAdminExport() {
