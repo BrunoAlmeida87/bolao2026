@@ -12255,7 +12255,10 @@ function _tickerAdvancedItems(rank, allPals, res) {
   if (exactTwin && exactTwin.sameExact >= 2 && (!twin || exactTwin.uid !== twin.uid)) {
     items.push({ ico: '👯', text: `Você e ${exactTwin.name} cravaram o mesmo placar em ${exactTwin.sameExact} jogos` });
   }
-  if (resOpp) {
+  // Só anuncia "oposto nos resultados" quando há divergência real (≥35% dos
+  // jogos em comum). Sem isso, com todos pontuando/falhando juntos, sairia um
+  // "oposto" com 0% de divergência — sem sentido.
+  if (resOpp && (1 - resOpp.agree) >= 0.35) {
     items.push({ ico: '🪞', text: `Seu oposto nos resultados é ${resOpp.name}: quando um pontua, o outro costuma falhar (${Math.round((1 - resOpp.agree) * 100)}% dos jogos divergem)` });
   }
   if (resTwin && (!resOpp || resTwin.uid !== resOpp.uid) && resTwin.agree >= 0.7) {
