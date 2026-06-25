@@ -8933,19 +8933,19 @@ function _buildTrocasStatsHTML(data) {
     const rows = rh.map((p, i) => {
       const hypoPos = i + 1;
       const mov = (p.posR || hypoPos) - hypoPos; // >0 subiria, <0 cairia
-      const movBadge = mov > 0 ? `<span style="color:${G};font-weight:700">▲ ${mov}</span>`
-        : mov < 0 ? `<span style="color:${R};font-weight:700">▼ ${-mov}</span>`
+      const movBadge = mov > 0 ? `<span style="color:${G};font-weight:700">▲${mov}</span>`
+        : mov < 0 ? `<span style="color:${R};font-weight:700">▼${-mov}</span>`
         : `<span style="color:var(--text-muted)">=</span>`;
       const dPts = p.ph - p.pr;
       const dPtsStr = dPts !== 0 ? `<span style="color:${dPts > 0 ? G : R};font-weight:600">${dPts > 0 ? '+' : ''}${dPts}</span>` : '<span style="color:var(--text-muted)">—</span>';
       const hl = mov !== 0 ? 'background:rgba(255,255,255,.03)' : '';
       return `<tr style="${hl}">
-        <td style="padding:6px 8px;text-align:center;font-weight:700">${hypoPos}º</td>
-        <td style="padding:6px 8px;text-align:center">${movBadge}</td>
-        <td style="padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${_trName(p)}</td>
-        <td style="padding:6px 8px;text-align:center;font-weight:700">${p.ph}</td>
-        <td style="padding:6px 8px;text-align:center;color:var(--text-muted)">${p.posR || '—'}º</td>
-        <td style="padding:6px 8px;text-align:center">${dPtsStr}</td>
+        <td style="padding:5px 2px;text-align:center;font-weight:700">${hypoPos}</td>
+        <td style="padding:5px 2px;text-align:center">${movBadge}</td>
+        <td style="padding:5px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_trName(p)}</td>
+        <td style="padding:5px 2px;text-align:center;font-weight:700">${p.ph}</td>
+        <td style="padding:5px 2px;text-align:center;color:var(--text-muted)">${p.posR || '—'}</td>
+        <td style="padding:5px 2px;text-align:center">${dPtsStr}</td>
       </tr>`;
     }).join('');
     rankHipoCard = `<div class="card" style="margin-top:16px">
@@ -8955,12 +8955,13 @@ function _buildTrocasStatsHTML(data) {
         (calculado pelos horários das mudanças). A coluna <b>Mov.</b> compara com a posição <b>real</b>:
         <b style="color:${G}">▲</b> subiria sem as trocas · <b style="color:${R}">▼</b> cairia.
       </div>
-      <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)">
-        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+      <div style="border-radius:10px;border:1px solid var(--border);overflow:hidden">
+        <table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.74rem">
+          <colgroup><col style="width:24px"><col style="width:40px"><col><col style="width:42px"><col style="width:38px"><col style="width:34px"></colgroup>
           <thead><tr style="background:rgba(255,255,255,.05);text-align:center">
-            <th style="padding:7px 8px">#</th><th style="padding:7px 8px">Mov.</th>
-            <th style="padding:7px 8px;text-align:left">Participante</th>
-            <th style="padding:7px 8px">Pts hipo</th><th style="padding:7px 8px">Pos. real</th><th style="padding:7px 8px">Δ pts</th>
+            <th style="padding:6px 2px">#</th><th style="padding:6px 2px">Mov</th>
+            <th style="padding:6px 4px;text-align:left">Nome</th>
+            <th style="padding:6px 2px">Hipo</th><th style="padding:6px 2px">Real</th><th style="padding:6px 2px">Δ</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
