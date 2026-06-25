@@ -12098,7 +12098,8 @@ function _tickerPersonalItems(rank, allPals, champPicks, res) {
 // Estatísticas mais ricas para o usuário logado: desempenho por fase,
 // regularidade (desvio padrão), posição relativa à média (z-score),
 // "gêmeo/oposto" de palpites (consenso × dissenso) e ousadia contra a
-// maioria. Todas calculadas só sobre jogos já decididos / com palpite.
+// maioria. Só usam jogos já decididos ou revelados (com palpites encerrados),
+// nunca palpites futuros ocultos de outros usuários.
 // ════════════════════════════════════════════
 
 // Desvio padrão populacional de uma lista de números.
@@ -12206,8 +12207,11 @@ function _tickerAdvancedItems(rank, allPals, res) {
   }
 
   // ── 4. Consenso × dissenso: gêmeo e oposto de palpites ──
-  // Compara o usuário com cada outro sobre jogos em que AMBOS palpitaram,
-  // medindo concordância de resultado (H/D/A) e palpites idênticos.
+  // Compara o usuário com cada outro APENAS em jogos já revelados (com
+  // resultado, travados ou com palpites encerrados pelo horário) — a mesma
+  // regra do "Ver Palpites". Sem isso, antes do início um usuário comum
+  // poderia inferir palpites futuros ocultos dos demais pelas % de
+  // concordância/discordância e pela contagem de palpites idênticos.
   let twin = null, opposite = null, exactTwin = null;
   rank.forEach(u => {
     if (u.uid === meUid) return;
@@ -12216,6 +12220,7 @@ function _tickerAdvancedItems(rank, allPals, res) {
     ALL_GAMES.forEach(g => {
       const a = myPals[g.id], b = oPals[g.id];
       if (!a || !b || a.h === undefined || b.h === undefined) return;
+      if (!isPalpiteClosed(g, res[g.id])) return; // só jogos revelados
       common++;
       const oa = _outcomeOf(a.h, a.a), ob = _outcomeOf(b.h, b.a);
       if (oa && ob && oa === ob) sameOutcome++;
