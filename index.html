@@ -13162,6 +13162,21 @@ function renderAdminRelatorio() {
         <span id="rel-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
       </div>
       <div id="rel-result"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-header"><span class="card-title">😱 Trocas que Custaram Pontos</span></div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
+        Quem <b>tinha um palpite que pontuaria mais</b> e trocou por outro que pontuou menos —
+        inclusive quem largou um <b>placar cravado (${CFG.pts_exato} pts)</b> ou apagou o palpite.
+        Cada palpite que já passou pelo histórico é comparado com o <b>resultado real</b> e com o
+        palpite final que efetivamente valeu na pontuação. Só entram jogos <b>com resultado lançado</b>.
+        <br><b>Custo:</b> ~1 leitura por participante (histórico) + palpites atuais (cache). Use com moderação.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <button class="btn btn-primary" id="perda-gerar-btn" onclick="gerarRelatorioPerdas()">😱 Gerar Relatório de Perdas</button>
+        <span id="perda-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
+      </div>
+      <div id="perda-result"></div>
     </div>`;
 }
 
@@ -13412,6 +13427,179 @@ async function gerarRelatorioAlteracoes() {
 
     if (status) status.textContent = 'Relatório gerado em ' + new Date().toLocaleString('pt-BR') + ' · ' + participantes.length + ' participantes.';
     if (out) out.innerHTML = globalCard + userCards;
+  } catch(e) {
+    if (status) status.textContent = 'Erro: ' + errMsg(e);
+    if (out) out.innerHTML = '<div class="alert" style="background:rgba(231,76,60,.1);border:1px solid var(--red);border-radius:10px;padding:12px">Erro ao gerar relatório: ' + esc(errMsg(e)) + '</div>';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ════════════════════════════════════════════
+// RELATÓRIO DE PERDAS POR TROCA (Admin → Relatório)
+// ════════════════════════════════════════════
+// Detecta participantes que TINHAM um palpite que pontuaria mais e trocaram por
+// outro pior (ou apagaram), perdendo pontos. Usa o histórico imutável de
+// alterações (palpites/{uid}/historico) cruzado com o resultado real e com o
+// palpite final que efetivamente valeu (palpites/{uid}/jogos, via cache de
+// ranking). Só considera jogos com resultado lançado.
+function _perdaScoreLabel(pts) {
+  if (pts === CFG.pts_exato) return 'cravou o placar';
+  if (pts === (CFG.pts_vencedor_saldo ?? 7)) return 'vencedor + saldo';
+  if (pts === (CFG.pts_apenas_vencedor ?? 5)) return 'só o vencedor';
+  return 'errou';
+}
+function _perdaPlacar(p) { return p ? `${p.h}×${p.a}` : '—'; }
+
+async function gerarRelatorioPerdas() {
+  const btn = document.getElementById('perda-gerar-btn');
+  const status = document.getElementById('perda-status');
+  const out = document.getElementById('perda-result');
+  if (btn) btn.disabled = true;
+  if (out) out.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  if (status) status.textContent = 'Carregando dados…';
+  try {
+    const [users, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const participantes = users.filter(u => u.ativo !== false && u.role !== 'admin');
+    const palsData = await _fetchPalsCached(participantes);
+    const allPals = (palsData && palsData.allPals) || {};
+    if (status) status.textContent = 'Analisando histórico de ' + participantes.length + ' participante(s)…';
+
+    const histData = await Promise.all(participantes.map(async u => {
+      try {
+        const snap = await db_.collection('palpites').doc(u.uid).collection('historico')
+          .orderBy('at', 'asc').limit(1000).get();
+        _rTracker.add(snap.size || 1);
+        return { user: u, entries: snap.docs.map(d => d.data()), err: null };
+      } catch(e) { return { user: u, entries: [], err: errMsg(e) }; }
+    }));
+
+    const tsDate = ts => ts?.toDate ? ts.toDate() : (ts?.seconds ? new Date(ts.seconds * 1000) : null);
+    const fmtTime = dt => dt ? dt.toLocaleString('pt-BR') : '—';
+
+    const results = histData.map(({ user, entries, err }) => {
+      const name = user.apelido || user.nome || user.email || user.uid;
+      const pals = allPals[user.uid] || {};
+      // Agrupa os 'set' por jogo, em ordem cronológica (entries já vêm em ASC).
+      const byGame = new Map();
+      entries.forEach(e => {
+        if (e.action !== 'set' || e.h == null || e.a == null) return;
+        if (!byGame.has(e.gameId)) byGame.set(e.gameId, []);
+        byGame.get(e.gameId).push({ h: parseInt(e.h), a: parseInt(e.a), at: tsDate(e.at) });
+      });
+      const losses = [];
+      byGame.forEach((sets, gid) => {
+        const r = res[gid];
+        if (!_hasFullResult(r)) return;                 // só jogos com resultado
+        const finalPal = pals[gid] && pals[gid].h != null && pals[gid].a != null
+          ? { h: parseInt(pals[gid].h), a: parseInt(pals[gid].a) } : null;
+        const finalScore = finalPal ? (calcPontos(finalPal, r) ?? 0) : 0;
+        // Melhor palpite que passou pelo histórico e que DIFERE do palpite final.
+        let best = null;
+        sets.forEach(s => {
+          const sc = calcPontos(s, r);
+          if (sc == null) return;
+          const sameAsFinal = finalPal && finalPal.h === s.h && finalPal.a === s.a;
+          if (sameAsFinal) return;
+          if (!best || sc > best.score || (sc === best.score && s.at && best.at && s.at > best.at)) {
+            best = { h: s.h, a: s.a, score: sc, at: s.at };
+          }
+        });
+        if (!best) return;
+        const lost = best.score - finalScore;
+        if (lost <= 0) return;                          // não perdeu pontos com a troca
+        // Momento em que abandonou o bom palpite: 1º set posterior com valor diferente.
+        let abandonAt = null;
+        for (const s of sets) {
+          if (s.at && best.at && s.at > best.at && (s.h !== best.h || s.a !== best.a)) { abandonAt = s.at; break; }
+        }
+        losses.push({ gid, r, finalPal, finalScore, best, lost, abandonAt, deleted: !finalPal });
+      });
+      losses.sort((a, b) => b.lost - a.lost || b.best.score - a.best.score);
+      const totalLost = losses.reduce((s, l) => s + l.lost, 0);
+      const cravadasLargadas = losses.filter(l => l.best.score === CFG.pts_exato).length;
+      return { user, name, err, losses, totalLost, cravadasLargadas };
+    });
+
+    const comPerda = results.filter(r => r.losses.length > 0).sort((a, b) => b.totalLost - a.totalLost || b.losses.length - a.losses.length);
+    const totalPontosPerdidos = comPerda.reduce((s, r) => s + r.totalLost, 0);
+    const totalTrocasRuins = comPerda.reduce((s, r) => s + r.losses.length, 0);
+    const totalCravadas = comPerda.reduce((s, r) => s + r.cravadasLargadas, 0);
+
+    // Maior arrependimento individual (maior perda num único jogo).
+    let pior = null;
+    comPerda.forEach(r => r.losses.forEach(l => {
+      if (!pior || l.lost > pior.l.lost || (l.lost === pior.l.lost && l.best.score > pior.l.best.score)) pior = { r, l };
+    }));
+
+    if (status) status.textContent = 'Relatório gerado em ' + new Date().toLocaleString('pt-BR') + ' · ' + participantes.length + ' participantes.';
+
+    if (!comPerda.length) {
+      if (out) out.innerHTML = '<div class="alert alert-info" style="border-color:rgba(0,200,81,.4)">✅ <b>Ninguém perdeu pontos trocando de palpite.</b> Em todos os jogos já resultados, o palpite final de cada participante valeu pelo menos tanto quanto qualquer palpite anterior do histórico.</div>';
+      return;
+    }
+
+    const tiles = [
+      ['😱', comPerda.length, 'Pessoas que perderam'],
+      ['💸', totalPontosPerdidos, 'Pontos jogados fora'],
+      ['🔁', totalTrocasRuins, 'Trocas que pioraram'],
+      ['💎', totalCravadas, 'Cravadas largadas'],
+    ].map(t => '<div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">' +
+      '<div style="font-size:1.4rem">' + t[0] + '</div>' +
+      '<div style="font-size:1.3rem;font-weight:700;line-height:1.2">' + t[1] + '</div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">' + t[2] + '</div></div>').join('');
+
+    const insights = [
+      pior ? '🥇 <b>Maior arrependimento:</b> ' + esc(pior.r.name) + ' no jogo <b>' + esc(pior.l.gid) + '</b> — tinha <b>' + _perdaPlacar(pior.l.best) + '</b> (' + _perdaScoreLabel(pior.l.best.score) + ', ' + pior.l.best.score + ' pts), ' + (pior.l.deleted ? 'apagou e ficou com <b>0</b>' : 'trocou por <b>' + _perdaPlacar(pior.l.finalPal) + '</b> (' + pior.l.finalScore + ' pts)') + ' — <span style="color:#e74c3c;font-weight:700">perdeu ' + pior.l.lost + ' pts</span>' : '',
+      comPerda[0] ? '🏆 <b>Quem mais jogou pontos fora:</b> ' + esc(comPerda[0].name) + ' <span style="color:var(--text-muted)">(' + comPerda[0].totalLost + ' pts em ' + comPerda[0].losses.length + ' troca(s))</span>' : '',
+    ].filter(Boolean).map(l => '<div>' + l + '</div>').join('');
+
+    const globalCard = '<div class="card" style="margin-bottom:16px">' +
+      '<div class="card-header"><span class="card-title">💸 Visão Geral das Perdas</span></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px">' + tiles + '</div>' +
+      (insights ? '<div style="display:flex;flex-direction:column;gap:9px;font-size:0.84rem;border-top:1px solid var(--border);padding-top:14px">' + insights + '</div>' : '') +
+      '</div>';
+
+    const userCards = comPerda.map(r => {
+      const safeId = 'perda-u-' + r.user.uid.replace(/[^a-zA-Z0-9]/g, '_');
+      const lossRows = r.losses.map(l => {
+        const gdef = ALL_GAMES.find(g => g.id === l.gid);
+        const jogo = gdef ? esc(gdef.h) + ' × ' + esc(gdef.a) : '';
+        const resStr = l.r.h_real + '×' + l.r.a_real;
+        const finalStr = l.deleted
+          ? '<span style="color:#e74c3c">apagou o palpite</span> (0 pts)'
+          : '<b>' + _perdaPlacar(l.finalPal) + '</b> <span style="color:var(--text-muted)">(' + _perdaScoreLabel(l.finalScore) + ', ' + l.finalScore + ' pts)</span>';
+        const quando = l.abandonAt ? ' <span style="color:var(--text-muted);font-size:0.74rem">· trocou em ' + esc(fmtTime(l.abandonAt)) + '</span>' : '';
+        return '<div style="font-size:0.8rem;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)">' +
+          '<div><b style="color:var(--white)">' + esc(l.gid) + '</b> <span style="color:var(--text-muted)">' + jogo + '</span> — resultado <b>' + resStr + '</b></div>' +
+          '<div style="margin-top:3px">Tinha <b style="color:var(--green)">' + _perdaPlacar(l.best) + '</b> <span style="color:var(--text-muted)">(' + _perdaScoreLabel(l.best.score) + ', ' + l.best.score + ' pts)</span> → ' + finalStr +
+          ' <span style="color:#e74c3c;font-weight:700">−' + l.lost + ' pts</span>' + quando + '</div>' +
+        '</div>';
+      }).join('');
+      const badges = [];
+      if (r.cravadasLargadas > 0) badges.push('<span style="background:rgba(243,156,18,.15);color:#f39c12;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">💎 Largou ' + r.cravadasLargadas + ' cravada(s)</span>');
+      if (r === comPerda[0]) badges.push('<span style="background:rgba(231,76,60,.15);color:#e74c3c;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">🏆 Mais pontos perdidos</span>');
+      return '<div class="card" style="margin-top:10px;padding:0;overflow:hidden">' +
+        '<div style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:10px" data-rel-toggle="' + safeId + '" onclick="_relToggle(\'' + safeId + '\')">' +
+          '<div style="min-width:0;flex:1">' +
+            '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:8px">' +
+              '<span style="font-weight:700;font-size:0.93rem">' + esc(r.name) + '</span>' +
+              (r.user.email ? '<span style="color:var(--text-muted);font-size:0.76rem">' + esc(r.user.email) + '</span>' : '') +
+            '</div>' +
+            (badges.length ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + badges.join('') + '</div>' : '') +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0;font-size:0.8rem;color:var(--text-muted)">' +
+            '<div><b style="color:#e74c3c">−' + r.totalLost + '</b> pts · ' + r.losses.length + ' troca(s)</div>' +
+            '<div style="margin-top:6px" class="rel-arrow">▼ ver detalhes</div></div>' +
+        '</div>' +
+        '<div id="' + safeId + '" style="display:none;padding:0 16px 16px;border-top:1px solid var(--border)">' + lossRows + '</div>' +
+      '</div>';
+    }).join('');
+
+    if (out) out.innerHTML = globalCard + userCards +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:12px;line-height:1.5">' +
+      'Considera apenas o que está registrado no histórico (a partir da v1.9.0). O palpite final usado é o que está salvo hoje em <b>palpites/{uid}/jogos</b> — que é o que de fato valeu na pontuação.' +
+      '</div>';
   } catch(e) {
     if (status) status.textContent = 'Erro: ' + errMsg(e);
     if (out) out.innerHTML = '<div class="alert" style="background:rgba(231,76,60,.1);border:1px solid var(--red);border-radius:10px;padding:12px">Erro ao gerar relatório: ' + esc(errMsg(e)) + '</div>';
