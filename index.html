@@ -8952,8 +8952,15 @@ function _buildTrocasStatsHTML(data) {
       <div class="card-header"><span class="card-title">📊 Ranking Hipotético — "e se ninguém tivesse trocado?"</span></div>
       <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px;line-height:1.55">
         Como estaria o ranking se cada um tivesse mantido, em cada jogo, o palpite que <b>ficou mais tempo no sistema</b>
-        (calculado pelos horários das mudanças). A coluna <b>Mov.</b> compara com a posição <b>real</b>:
-        <b style="color:${G}">▲</b> subiria sem as trocas · <b style="color:${R}">▼</b> cairia.
+        (calculado pelos horários das mudanças). Colunas: <b>Mov</b> = movimento vs. a posição <b>real</b>
+        (<b style="color:${G}">▲</b> subiria sem as trocas · <b style="color:${R}">▼</b> cairia) ·
+        <b>Hipo</b> = pontos nesse cenário · <b>Real</b> = posição oficial hoje ·
+        <b>Δ</b> = <b>Hipo − pontos reais</b>: quantos pontos você faria
+        <b style="color:${G}">a mais</b> / <b style="color:${R}">a menos</b> se tivesse ficado com o palpite de mais tempo.
+      </div>
+      <div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5;background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px">
+        ⚠️ <b>Não confunda com o saldo dos cards acima.</b> Lá em cima a conta é o palpite <b>final × sua melhor alternativa</b>;
+        aqui o Δ é o palpite que <b>ficou mais tempo no ar × seu final</b> — bases diferentes, então os números (e até o sinal) podem não bater.
       </div>
       <div style="border-radius:10px;border:1px solid var(--border);overflow:hidden">
         <table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.74rem">
@@ -8966,7 +8973,7 @@ function _buildTrocasStatsHTML(data) {
           <tbody>${rows}</tbody>
         </table>
       </div>
-      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">O ranking oficial continua sendo o real — este é só um cenário curioso. "Δ pts" = quanto faria a mais/menos sem as trocas.</div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">O ranking oficial continua sendo o real — este é só um cenário curioso de "e se não tivesse trocado".</div>
     </div>`;
   }
 
