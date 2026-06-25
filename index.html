@@ -8926,11 +8926,54 @@ function _buildTrocasStatsHTML(data) {
     <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:2px">Clique em cada participante para ver as trocas detalhadas. Barra: <b style="color:${G}">verde = ganhos</b> · <b style="color:${R}">vermelho = perdas</b>.</div>
   </div>${userCards}`;
 
+  // ── Ranking hipotético (palpite que ficou mais tempo no sistema) ──
+  const rh = Array.isArray(data.rankHipo) ? data.rankHipo : [];
+  let rankHipoCard = '';
+  if (rh.length) {
+    const rows = rh.map((p, i) => {
+      const hypoPos = i + 1;
+      const mov = (p.posR || hypoPos) - hypoPos; // >0 subiria, <0 cairia
+      const movBadge = mov > 0 ? `<span style="color:${G};font-weight:700">▲ ${mov}</span>`
+        : mov < 0 ? `<span style="color:${R};font-weight:700">▼ ${-mov}</span>`
+        : `<span style="color:var(--text-muted)">=</span>`;
+      const dPts = p.ph - p.pr;
+      const dPtsStr = dPts !== 0 ? `<span style="color:${dPts > 0 ? G : R};font-weight:600">${dPts > 0 ? '+' : ''}${dPts}</span>` : '<span style="color:var(--text-muted)">—</span>';
+      const hl = mov !== 0 ? 'background:rgba(255,255,255,.03)' : '';
+      return `<tr style="${hl}">
+        <td style="padding:6px 8px;text-align:center;font-weight:700">${hypoPos}º</td>
+        <td style="padding:6px 8px;text-align:center">${movBadge}</td>
+        <td style="padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${_trName(p)}</td>
+        <td style="padding:6px 8px;text-align:center;font-weight:700">${p.ph}</td>
+        <td style="padding:6px 8px;text-align:center;color:var(--text-muted)">${p.posR || '—'}º</td>
+        <td style="padding:6px 8px;text-align:center">${dPtsStr}</td>
+      </tr>`;
+    }).join('');
+    rankHipoCard = `<div class="card" style="margin-top:16px">
+      <div class="card-header"><span class="card-title">📊 Ranking Hipotético — "e se ninguém tivesse trocado?"</span></div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px;line-height:1.55">
+        Como estaria o ranking se cada um tivesse mantido, em cada jogo, o palpite que <b>ficou mais tempo no sistema</b>
+        (calculado pelos horários das mudanças). A coluna <b>Mov.</b> compara com a posição <b>real</b>:
+        <b style="color:${G}">▲</b> subiria sem as trocas · <b style="color:${R}">▼</b> cairia.
+      </div>
+      <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+          <thead><tr style="background:rgba(255,255,255,.05);text-align:center">
+            <th style="padding:7px 8px">#</th><th style="padding:7px 8px">Mov.</th>
+            <th style="padding:7px 8px;text-align:left">Participante</th>
+            <th style="padding:7px 8px">Pts hipo</th><th style="padding:7px 8px">Pos. real</th><th style="padding:7px 8px">Δ pts</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">O ranking oficial continua sendo o real — este é só um cenário curioso. "Δ pts" = quanto faria a mais/menos sem as trocas.</div>
+    </div>`;
+  }
+
   const rodape = `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:14px;line-height:1.5">
     Cada jogo compara o palpite final com a melhor alternativa que a pessoa já teve no histórico. Considera apenas jogos com resultado lançado (palpites já revelados). Dados publicados pelo administrador.
   </div>`;
 
-  return hero + destaquesCard + rankingsCard + rankingGeral + rodape;
+  return hero + destaquesCard + rankingsCard + rankingGeral + rankHipoCard + rodape;
 }
 
 // ── Helpers reutilizáveis ─────────────────────────────────────────────────────
@@ -13405,6 +13448,7 @@ function renderAdminRelatorio() {
         <button class="btn btn-primary" id="perda-gerar-btn" onclick="gerarRelatorioPerdas()">🔁 Gerar Relatório</button>
         <button class="btn btn-secondary" id="perda-export-btn" onclick="exportRelatorioTrocasExcel()" disabled title="Gere o relatório primeiro">📊 Exportar Excel</button>
         <button class="btn btn-secondary" id="perda-publish-btn" onclick="publicarRelatorioTrocas()" disabled title="Gere o relatório primeiro">📢 Publicar nas Estatísticas</button>
+        <button class="btn btn-secondary" id="perda-unpublish-btn" onclick="despublicarRelatorioTrocas()" style="background:#7a2222;color:#fff" title="Remover da aba Estatísticas">🗑️ Remover publicação</button>
         <span id="perda-status" style="font-size:0.8rem;color:var(--text-muted)"></span>
       </div>
       <div id="perda-result"></div>
@@ -13684,6 +13728,35 @@ function _perdaScoreLabel(pts) {
 }
 function _perdaPlacar(p) { return p ? `${p.h}×${p.a}` : '—'; }
 
+// Determina o palpite que ficou MAIS TEMPO ativo no sistema para um jogo, a partir
+// dos eventos do histórico (set/delete) e do instante de bloqueio. Cada valor fica
+// ativo do seu 'set' até o próximo evento (ou até o bloqueio, para o último).
+// Retorna {h,a}, ou null se ficou mais tempo SEM palpite, ou finalPal se não há
+// duração mensurável (ex.: sem prazo conhecido). Base do ranking hipotético.
+function _longestHeldPalpite(evs, finalPal, lockInstant) {
+  if (!evs || !evs.length) return finalPal;
+  const lock = lockInstant ? lockInstant.getTime() : null;
+  if (lock == null) return finalPal; // sem janela mensurável → mantém o final
+  const dur = new Map(); // chave 'h,a' (ou 'E' = sem palpite) → ms acumulados
+  for (let i = 0; i < evs.length; i++) {
+    const e = evs[i];
+    const start = e.atMs;
+    if (start >= lock) continue; // evento após o prazo: não conta
+    let end = (i + 1 < evs.length) ? evs[i + 1].atMs : lock;
+    if (end > lock) end = lock;
+    const d = end - start;
+    if (d <= 0) continue;
+    const k = e.action === 'delete' ? 'E' : (e.h + ',' + e.a);
+    dur.set(k, (dur.get(k) || 0) + d);
+  }
+  let bestKey = null, bestD = -1;
+  dur.forEach((d, k) => { if (d > bestD) { bestD = d; bestKey = k; } });
+  if (bestKey == null || bestD <= 0) return finalPal;
+  if (bestKey === 'E') return null;
+  const [h, a] = bestKey.split(',').map(Number);
+  return { h, a };
+}
+
 // Guarda a última análise para a exportação em Excel (preenchido por gerarRelatorioPerdas).
 let _relTrocasExport = null;
 
@@ -13704,6 +13777,7 @@ async function gerarRelatorioPerdas() {
     const participantes = users.filter(u => u.ativo !== false); // inclui admins (também jogam)
     const palsData = await _fetchPalsCached(participantes);
     const allPals = (palsData && palsData.allPals) || {};
+    const champPicks = (palsData && palsData.champPicks) || {};
     if (status) status.textContent = 'Analisando histórico de ' + participantes.length + ' participante(s)…';
 
     const histData = await Promise.all(participantes.map(async u => {
@@ -13771,7 +13845,41 @@ async function gerarRelatorioPerdas() {
       .sort((a, b) => (b.totalLost + b.totalGained) - (a.totalLost + a.totalGained) || b.saldo - a.saldo);
 
     const jogosComResultado = Object.keys(res).filter(id => _hasFullResult(res[id])).length;
-    _relTrocasExport = { generatedAt: new Date(), results: comTroca, jogosComResultado };
+
+    // ── Ranking hipotético: usa, para cada jogo, o palpite que ficou MAIS TEMPO
+    // no sistema (por duração entre as mudanças), e pontua com o mesmo computeRanking. ──
+    const allPalsHipo = {};
+    participantes.forEach(u => { allPalsHipo[u.uid] = Object.assign({}, allPals[u.uid] || {}); });
+    histData.forEach(({ user, entries }) => {
+      const evByGame = new Map();
+      entries.forEach(e => {
+        if (!e.gameId || (e.action !== 'set' && e.action !== 'delete')) return;
+        const atMs = e.at && e.at.toMillis ? e.at.toMillis() : (e.at && e.at.seconds ? e.at.seconds * 1000 : null);
+        if (atMs == null) return;
+        if (!evByGame.has(e.gameId)) evByGame.set(e.gameId, []);
+        evByGame.get(e.gameId).push({ action: e.action, h: e.h != null ? parseInt(e.h) : null, a: e.a != null ? parseInt(e.a) : null, atMs });
+      });
+      evByGame.forEach((evs, gid) => {
+        if (!_hasFullResult(res[gid])) return;
+        evs.sort((x, y) => x.atMs - y.atMs);
+        const game = ALL_GAMES.find(g => g.id === gid);
+        const lock = game ? _gameLockInstant(game, res[gid]) : null;
+        const finalPal = (allPals[user.uid] && allPals[user.uid][gid]) || null;
+        const held = _longestHeldPalpite(evs, finalPal, lock);
+        if (held && held.h != null) allPalsHipo[user.uid][gid] = { h: held.h, a: held.a };
+        else delete allPalsHipo[user.uid][gid]; // ficou mais tempo sem palpite
+      });
+    });
+    const realRank = computeRanking(participantes, res, allPals, champPicks);
+    const hipoRank = computeRanking(participantes, res, allPalsHipo, champPicks);
+    const realPosByUid = {}; realRank.forEach((u, i) => { realPosByUid[u.uid] = i + 1; });
+    const realPtsByUid = {}; realRank.forEach(u => { realPtsByUid[u.uid] = u.pontos; });
+    const rankHipo = hipoRank.map((u) => ({
+      u: u.uid, n: u.nome || u.apelido || u.uid, a: u.apelido || '',
+      ph: u.pontos, pr: realPtsByUid[u.uid] || 0, posR: realPosByUid[u.uid] || null,
+    }));
+
+    _relTrocasExport = { generatedAt: new Date(), results: comTroca, jogosComResultado, rankHipo };
 
     const totalPerdidos = comTroca.reduce((s, r) => s + r.totalLost, 0);
     const totalGanhos = comTroca.reduce((s, r) => s + r.totalGained, 0);
@@ -13960,6 +14068,7 @@ async function publicarRelatorioTrocas() {
       nj: jogosComResultado || 0,
       np: participantes.length,
       participantes,
+      rankHipo: _relTrocasExport.rankHipo || [],
       publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
       publishedBy: currentUser?.email || null,
     };
@@ -13970,6 +14079,24 @@ async function publicarRelatorioTrocas() {
     showToast('Erro ao publicar: ' + errMsg(e), 'error');
   } finally {
     if (pubBtn) pubBtn.disabled = false;
+  }
+}
+
+// Remove a publicação (apaga cache/trocas_publicado). A aba Estatícas → Trocas volta
+// ao estado "ainda não publicado" para todos no próximo carregamento.
+async function despublicarRelatorioTrocas() {
+  if (!confirm('Remover a publicação das Trocas da aba Estatísticas?\n\nOs participantes deixarão de ver até você publicar de novo.')) return;
+  const b = document.getElementById('perda-unpublish-btn');
+  if (b) b.disabled = true;
+  showToast('⏳ Removendo publicação…', '');
+  try {
+    await db_.collection('cache').doc('trocas_publicado').delete();
+    _trocasPubCache = null;
+    showToast('✅ Publicação removida. A aba volta ao estado inicial.', 'success');
+  } catch(e) {
+    showToast('Erro ao remover: ' + errMsg(e), 'error');
+  } finally {
+    if (b) b.disabled = false;
   }
 }
 
