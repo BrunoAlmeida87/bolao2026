@@ -8797,17 +8797,15 @@ function _trRankRow(p, val, max, color, prefix, i) {
   </div>`;
 }
 
-// Detalhe de uma troca (item compacto do snapshot).
-function _trTrocaRow(it, maxAbs) {
+// Detalhe de uma troca (item compacto do snapshot). Sem barra: o indicador é uma
+// borda colorida fina à esquerda + o ±pts em cor, deixando a leitura mais limpa.
+function _trTrocaRow(it) {
   const jogo = _trJogo(it.g);
   const resStr = it.r[0] + '×' + it.r[1];
   const bStr = it.b[0] + '×' + it.b[1], bPts = it.b[2];
   const fStr = it.f ? it.f[0] + '×' + it.f[1] : null, fPts = it.f ? it.f[2] : 0;
   const dCol = it.d > 0 ? _TR_G : _TR_R;
-  const pct = maxAbs > 0 ? Math.abs(it.d) / maxAbs * 100 : 0;
-  const neg = it.d < 0 ? `<div style="width:${pct}%;background:${_TR_R};border-radius:4px 0 0 4px"></div>` : '';
-  const pos = it.d > 0 ? `<div style="width:${pct}%;background:${_TR_G};border-radius:0 4px 4px 0"></div>` : '';
-  return `<div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:0.78rem">
+  return `<div style="padding:7px 0 7px 10px;margin-top:2px;border-bottom:1px solid rgba(255,255,255,.06);border-left:3px solid ${dCol};font-size:0.78rem">
     <div style="display:flex;justify-content:space-between;gap:8px">
       <span><b style="color:var(--white)">${esc(it.g)}</b> <span style="color:var(--text-muted)">${jogo}</span> · resultado <b>${resStr}</b></span>
       <b style="color:${dCol};white-space:nowrap">${it.d > 0 ? '+' : ''}${it.d} pts</b>
@@ -8815,11 +8813,6 @@ function _trTrocaRow(it, maxAbs) {
     <div style="margin-top:2px;color:var(--text-muted)">
       tinha <b style="color:var(--white)">${bStr}</b> (${bPts} pts, ${_perdaScoreLabel(bPts)}) →
       ${fStr ? `<b style="color:var(--white)">${fStr}</b> (${fPts} pts, ${_perdaScoreLabel(fPts)})` : `<span style="color:${_TR_R}">apagou o palpite</span> (0 pts)`}
-    </div>
-    <div style="display:flex;align-items:center;height:10px;margin-top:3px">
-      <div style="width:50%;display:flex;justify-content:flex-end;height:100%">${neg}</div>
-      <div style="width:1.5px;height:100%;background:var(--border)"></div>
-      <div style="width:50%;height:100%">${pos}</div>
     </div>
   </div>`;
 }
@@ -8835,7 +8828,6 @@ function _buildTrocasStatsHTML(data) {
   const isAdmin = currentUserDoc?.role === 'admin';
   const sCol = v => v > 0 ? G : v < 0 ? R : 'var(--text-muted)';
   const sStr = v => (v > 0 ? '+' : '') + v;
-  const maxAbsDelta = ps.reduce((m, p) => p.t.reduce((mm, it) => Math.max(mm, Math.abs(it.d)), m), 0);
 
   // ── HERO ──
   const tiles = [
@@ -8906,7 +8898,7 @@ function _buildTrocasStatsHTML(data) {
     if (p.cg > 0) badges.push(`<span style="background:rgba(46,204,113,.15);color:${G};padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:700">🎯 Achou ${p.cg} cravada(s)</span>`);
     if (p.cl > 0) badges.push(`<span style="background:rgba(243,156,18,.15);color:#f39c12;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:700">💎 Largou ${p.cl} cravada(s)</span>`);
     const trocasSorted = p.t.slice().sort((a, b) => b.d - a.d);
-    const detail = trocasSorted.map(it => _trTrocaRow(it, maxAbsDelta)).join('');
+    const detail = trocasSorted.map(it => _trTrocaRow(it)).join('');
     return `<div class="card" style="margin-top:10px;padding:0;overflow:hidden">
       <div style="padding:12px 16px;cursor:pointer" data-rel-toggle="${safe}" onclick="_relToggle('${safe}')">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -12694,10 +12686,52 @@ async function _fetchTickerFacts() {
 }
 
 // ── Constrói o array final de itens do ticker ──
+// Lê (1×, memoizado) o snapshot de trocas publicado pelo admin. Compartilha o
+// mesmo cache em memória da aba Estatísticas → Trocas (_trocasPubCache).
+async function _fetchTrocasSnapshot() {
+  if (_trocasPubCache) return _trocasPubCache;
+  try {
+    const snap = await db_.collection('cache').doc('trocas_publicado').get();
+    const data = snap.exists ? snap.data() : null;
+    if (data) _trocasPubCache = data; // só cacheia quando há dados
+    return data;
+  } catch(_) { return null; }
+}
+
+// Itens PESSOAIS do ticker a partir das trocas de palpite do usuário logado
+// (perdas e ganhos), usando o snapshot publicado. Casa por uid; cai para nome.
+function _tickerTrocaItems(snap) {
+  const meUid = currentUser?.uid;
+  if (!meUid || !snap || !Array.isArray(snap.participantes) || !snap.participantes.length) return [];
+  const ps = snap.participantes;
+  let me = ps.find(p => p.u === meUid);
+  if (!me) {
+    const ap = currentUserDoc?.apelido, no = currentUserDoc?.nome;
+    me = ps.find(p => (ap && p.a === ap) || (no && p.n === no));
+  }
+  if (!me) return [];
+  const items = [];
+  const t = me.t || [];
+  const jl = gid => { const g = ALL_GAMES.find(x => x.id === gid); return g ? `${g.h} x ${g.a}` : gid; };
+  if (me.s > 0) items.push({ ico: '🔁', text: `Você tem saldo +${me.s} pts em trocas de palpite — trocou na hora certa!` });
+  else if (me.s < 0) items.push({ ico: '🥶', text: `Suas trocas de palpite custaram ${Math.abs(me.s)} pts no saldo — às vezes o 1º palpite era melhor` });
+  const gains = t.filter(x => x.d > 0).sort((a, b) => b.d - a.d);
+  if (gains[0]) items.push({ ico: '🔥', text: `Sua melhor sacada: trocou e ganhou +${gains[0].d} pts em ${jl(gains[0].g)}` });
+  const losses = t.filter(x => x.d < 0).sort((a, b) => a.d - b.d);
+  if (losses[0]) items.push({ ico: '💸', text: `Seu maior arrependimento: perdeu ${Math.abs(losses[0].d)} pts trocando em ${jl(losses[0].g)}` });
+  if (me.cl > 0) items.push({ ico: '💎', text: `Você largou ${me.cl} placar cravado trocando de palpite — doeu!` });
+  if (me.cg > 0) items.push({ ico: '🎯', text: `Você mudou e cravou ${me.cg} placar exato — ${me.cg > 1 ? 'sangue frio' : 'boa decisão'}!` });
+  const posS = ps.slice().sort((a, b) => b.s - a.s).findIndex(p => p === me) + 1;
+  if (posS > 0) items.push({ ico: '🏅', text: `Você é o ${posS}º melhor em saldo de trocas (de ${ps.length})` });
+  return items;
+}
+
 async function _buildTickerItems(users, res, allPals, champPicks) {
   const rank = computeRanking(users, res, allPals, champPicks);
   const basic = _tickerPersonalItems(rank, allPals, champPicks, res);
   const advanced = _tickerAdvancedItems(rank, allPals, res);
+  const trocaItems = _tickerTrocaItems(await _fetchTrocasSnapshot());
+  advanced.push(...trocaItems);
   const bolao = _tickerBolaoItems(rank, allPals, champPicks, res);
   // A posição atual é âncora fixa (sempre aparece). O resto das estatísticas
   // pessoais e do bolão é embaralhado e recortado a cada carga, então o ticker
@@ -13407,7 +13441,7 @@ async function gerarRelatorioAlteracoes() {
   if (status) status.textContent = 'Carregando dados…';
   try {
     const [users, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
-    const participantes = users.filter(u => u.ativo !== false && u.role !== 'admin');
+    const participantes = users.filter(u => u.ativo !== false); // inclui admins (também jogam)
     if (status) status.textContent = 'Buscando histórico de ' + participantes.length + ' participante(s)…';
 
     const histData = await Promise.all(participantes.map(async u => {
@@ -13667,7 +13701,7 @@ async function gerarRelatorioPerdas() {
   if (status) status.textContent = 'Carregando dados…';
   try {
     const [users, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
-    const participantes = users.filter(u => u.ativo !== false && u.role !== 'admin');
+    const participantes = users.filter(u => u.ativo !== false); // inclui admins (também jogam)
     const palsData = await _fetchPalsCached(participantes);
     const allPals = (palsData && palsData.allPals) || {};
     if (status) status.textContent = 'Analisando histórico de ' + participantes.length + ' participante(s)…';
@@ -13913,7 +13947,7 @@ async function publicarRelatorioTrocas() {
     const { results, generatedAt, jogosComResultado } = _relTrocasExport;
     // Chaves curtas para manter o documento bem abaixo do limite de 1 MB.
     const participantes = results.map(r => ({
-      n: r.user.nome || r.name, a: r.user.apelido || '',
+      u: r.user.uid, n: r.user.nome || r.name, a: r.user.apelido || '',
       g: r.totalGained, l: r.totalLost, s: r.saldo,
       ng: r.gains.length, nl: r.losses.length, cg: r.cravadasGanhas, cl: r.cravadasLargadas,
       t: [
