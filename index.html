@@ -8683,6 +8683,9 @@ async function renderEstatisticas() {
 
     // (Evolução do Ranking agora vive na sub-aba Gráficos — ver renderGraficos.)
 
+    // ── Palpiteiro Médio: participante hipotético que aposta a média de todos ──
+    html += _buildPalpiteiroMedioCard({ analiseJogos, res, jogosComResultado, users });
+
     // Fecha a sub-aba clássica, monta "Outras Stats" e prepara "Gráficos" (sob demanda).
     html += '</div>'
       + '<div id="stats-tab-outras" style="display:none"><div class="section-title">🏅 Outras Stats</div>'
@@ -8703,6 +8706,142 @@ async function renderEstatisticas() {
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`;
   }
+}
+
+// ════════════════════════════════════════════
+// PALPITEIRO MÉDIO — participante hipotético que aposta a MÉDIA dos palpites
+// ════════════════════════════════════════════
+// Para cada jogo já finalizado, pega a média de gols do mandante e do visitante
+// entre TODOS os palpites e arredonda (0,5 sobe). Esse placar vira o palpite de
+// um participante imaginário. Mostra quantos pontos ele faria, acertos/erros e
+// onde ele ficaria no ranking — responde "a média de todo mundo é boa?".
+
+// Arredondamento meio-para-cima (1,5 → 2 · 2,5 → 3). Gols nunca são negativos.
+function _roundMedia(x) { return Math.floor(x + 0.5); }
+
+function _buildPalpiteiroMedioCard({ analiseJogos, res, jogosComResultado, users }) {
+  // Total de pontos por participante (só jogos finalizados, sem bônus de campeão)
+  // para comparar a base certa com o palpiteiro médio.
+  const userTotals = {};
+  (users || []).forEach(u => { userTotals[u.uid] = 0; });
+
+  const linhas = [];
+  let medioPts = 0, exatos = 0, vencSaldo = 0, apenasVenc = 0, erros = 0;
+
+  (jogosComResultado || []).forEach(jid => {
+    const aj = analiseJogos[jid];
+    if (!aj || !aj.palpites.length) return;
+    const r = res[jid];
+    let sumH = 0, sumA = 0;
+    aj.palpites.forEach(p => {
+      sumH += (parseInt(p.palpite.h) || 0);
+      sumA += (parseInt(p.palpite.a) || 0);
+      if (userTotals[p.user.uid] !== undefined) userTotals[p.user.uid] += (p.pts || 0);
+    });
+    const n = aj.palpites.length;
+    const avgH = sumH / n, avgA = sumA / n;
+    const palp = { h: _roundMedia(avgH), a: _roundMedia(avgA) };
+    const pts = calcPontos(palp, r);
+    medioPts += pts;
+    if (pts === CFG.pts_exato) exatos++;
+    else if (pts === (CFG.pts_vencedor_saldo ?? 7)) vencSaldo++;
+    else if (pts === (CFG.pts_apenas_vencedor ?? 5)) apenasVenc++;
+    else erros++;
+    const tt = _getResolvedTeamsForGame(aj.game || { id: jid }, res);
+    linhas.push({
+      jid, h: tt.h, a: tt.a, date: aj.game?.date || '',
+      avgH, avgA, ph: palp.h, pa: palp.a,
+      rh: r.h_real, ra: r.a_real, pts
+    });
+  });
+
+  if (!linhas.length) {
+    return `<div class="card"><div class="card-title">🤖 O Palpiteiro Médio</div>
+      <div class="gx-empty">Ainda não há jogos finalizados para calcular a média.</div></div>`;
+  }
+
+  const nJogos = linhas.length;
+  const acertos = exatos + vencSaldo + apenasVenc;
+  const possivel = nJogos * CFG.pts_exato;
+  const aproveit = possivel > 0 ? Math.round(medioPts / possivel * 100) : 0;
+
+  // Comparação com os participantes reais (mesma base: jogos finalizados, sem bônus).
+  const totais = Object.values(userTotals);
+  const nPart = totais.length;
+  const somaPart = totais.reduce((s, v) => s + v, 0);
+  const mediaReal = nPart ? somaPart / nPart : 0;
+  const melhorReal = totais.length ? Math.max(...totais) : 0;
+  const acima = totais.filter(v => v > medioPts).length;        // participantes que fizeram mais
+  const posicao = acima + 1;                                     // colocação do palpiteiro médio
+  const totalRank = nPart + 1;                                   // participantes + palpiteiro médio
+  const pctBatidos = nPart ? Math.round((nPart - acima) / nPart * 100) : 0;
+  const vsMedia = medioPts - mediaReal;
+
+  const _lblPts = (p) => p === CFG.pts_exato ? 'Cravou' :
+    p === (CFG.pts_vencedor_saldo ?? 7) ? 'Venc+Saldo' :
+    p === (CFG.pts_apenas_vencedor ?? 5) ? 'Vencedor' : 'Errou';
+  const _colPts = (p) => p === CFG.pts_exato ? 'var(--gold)' :
+    p > 0 ? 'var(--green)' : 'var(--text-muted)';
+
+  const rows = linhas.map(l => {
+    const tipoCol = _colPts(l.pts);
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 4px;font-size:0.74rem">${esc(l.h)} <b>${l.rh}×${l.ra}</b> ${esc(l.a)}</td>
+      <td style="padding:6px 4px;text-align:center;font-size:0.72rem;color:var(--text-muted)">${l.avgH.toFixed(1)}×${l.avgA.toFixed(1)}</td>
+      <td style="padding:6px 4px;text-align:center;font-weight:700">${l.ph}×${l.pa}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;color:${tipoCol}">${l.pts>0?'+':''}${l.pts}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="card-title">🤖 O Palpiteiro Médio</div>
+    <div style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 14px">
+      Um participante imaginário que, em cada jogo, aposta a <b>média dos palpites de todo mundo</b>
+      (gols arredondados — 0,5 sobe). Será que “seguir a manada” dá certo?
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="text-align:center">
+        <div style="font-size:2.2rem;font-weight:800;color:var(--gold);line-height:1">${medioPts}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">pontos em ${nJogos} jogo${nJogos!==1?'s':''}</div>
+      </div>
+      <div style="text-align:center;border-left:1px solid var(--border);padding-left:14px">
+        <div style="font-size:1.4rem;font-weight:800;color:var(--text)">${posicao}º<span style="font-size:0.8rem;color:var(--text-muted)">/${totalRank}</span></div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">posição no ranking</div>
+      </div>
+    </div>
+
+    <div class="stats-grid" style="margin-bottom:12px">
+      <div class="stat-card"><div class="val" style="color:var(--gold)">${exatos}</div><div class="lbl">Cravadas</div></div>
+      <div class="stat-card"><div class="val" style="color:var(--green)">${vencSaldo}</div><div class="lbl">Venc+Saldo</div></div>
+      <div class="stat-card"><div class="val" style="color:var(--green)">${apenasVenc}</div><div class="lbl">Só Vencedor</div></div>
+      <div class="stat-card"><div class="val" style="color:var(--text-muted)">${erros}</div><div class="lbl">Erros</div></div>
+    </div>
+
+    <div style="font-size:0.84rem;line-height:1.55;background:var(--bg-soft,rgba(255,255,255,.03));border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px">
+      🎯 <b>${acertos}</b> de ${nJogos} palpites pontuaram (${Math.round(acertos/nJogos*100)}%) · aproveitamento <b>${aproveit}%</b> dos pontos possíveis.<br>
+      📊 A média do bolão vale <b>${medioPts}</b> pts — ${vsMedia>=0
+        ? `<span style="color:var(--green)">${Math.abs(vsMedia).toFixed(1)} pts acima</span>`
+        : `<span style="color:var(--red,#e05a5a)">${Math.abs(vsMedia).toFixed(1)} pts abaixo</span>`} da média real dos participantes (${mediaReal.toFixed(1)} pts).<br>
+      🏆 Apostando a média, o palpiteiro médio <b>bateria ${pctBatidos}%</b> dos ${nPart} participantes (o líder real tem ${melhorReal} pts nesses jogos).
+    </div>
+
+    <details style="margin-top:8px">
+      <summary style="cursor:pointer;font-size:0.82rem;color:var(--gold);padding:6px 0">📋 Ver jogo a jogo (${nJogos})</summary>
+      <table style="width:100%;border-collapse:collapse;margin-top:6px">
+        <thead><tr style="border-bottom:2px solid var(--border);font-size:0.68rem;color:var(--text-muted);text-transform:uppercase">
+          <th style="padding:5px 4px;text-align:left">Jogo (resultado)</th>
+          <th style="padding:5px 4px;text-align:center">Média</th>
+          <th style="padding:5px 4px;text-align:center">Palpite</th>
+          <th style="padding:5px 4px;text-align:right">Pts</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">
+        “Média” = média bruta dos gols entre todos os palpites · “Palpite” = média arredondada (0,5 sobe).
+      </div>
+    </details>
+  </div>`;
 }
 
 // ════════════════════════════════════════════
