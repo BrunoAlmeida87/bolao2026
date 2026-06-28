@@ -3585,13 +3585,19 @@ function _refreshDashMyPalCard(gameId) {
 function _bolaoDistribBarsHtml(game, bolaoDistrib) {
   if (!bolaoDistrib) return '';
   const { phw, pdr, paw } = bolaoDistrib;
-  const nH = esc((game.h || '').split(' ')[0]), nA = esc((game.a || '').split(' ')[0]);
+  // Mata-mata: game.h/game.a são placeholders ("2º A"). Resolve com a mesma lógica
+  // das chaves (h_team/a_team persistido ou classificação atual) — só no dashboard.
+  const _dr = (typeof _dashResults !== 'undefined' && _dashResults) ? _dashResults : {};
+  const _r = _dr[game.id] || {};
+  const _hN = _resolveBracketSlot(game.h, _r.h_team, _dr, {}).team;
+  const _aN = _resolveBracketSlot(game.a, _r.a_team, _dr, {}).team;
+  const nH = esc((_hN || '').split(' ')[0]), nA = esc((_aN || '').split(' ')[0]);
   const seg = (pct, col) => pct > 0 ? `<div style="width:${pct}%;background:${col}"></div>` : '';
   return `<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,.1);padding-top:8px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:0.68rem;margin-bottom:4px">
-      <span style="color:var(--gold);font-weight:700;white-space:nowrap">${teamFlag(game.h)} ${nH} ${phw}%</span>
+      <span style="color:var(--gold);font-weight:700;white-space:nowrap">${teamFlag(_hN)} ${nH} ${phw}%</span>
       <span style="color:var(--accent);font-weight:600;white-space:nowrap">Empate ${pdr}%</span>
-      <span style="color:#ff8a8a;font-weight:700;white-space:nowrap">${paw}% ${nA} ${teamFlag(game.a)}</span>
+      <span style="color:#ff8a8a;font-weight:700;white-space:nowrap">${paw}% ${nA} ${teamFlag(_aN)}</span>
     </div>
     <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.08)" title="Palpites do bolão: ${nH} ${phw}% · Empate ${pdr}% · ${nA} ${paw}%">
       ${seg(phw,'var(--gold)')}${seg(pdr,'var(--accent)')}${seg(paw,'#ff8a8a')}
@@ -7735,8 +7741,14 @@ async function renderEstatisticas() {
     if (_statNextGrp.items.length > 0) {
       const _isPlural = _statNextGrp.items.length > 1;
 
+      const _stBrkCache = {};
       const _gameCards = _statNextGrp.items.map(({game, start}) => {
         const _gr = res[game.id] || {};
+        // Resolve nomes das seleções nos jogos de mata-mata (placeholders "2º A"):
+        // usa h_team/a_team persistido ou, na falta, a classificação atual provisória —
+        // mesma lógica das chaves e do card do dashboard.
+        const _hName = _resolveBracketSlot(game.h, _gr.h_team, res, _stBrkCache).team;
+        const _aName = _resolveBracketSlot(game.a, _gr.a_team, res, _stBrkCache).team;
         const _closed = isPalpiteClosed(game, _gr);
         const _diff = start.getTime() - _nowMs;
         const _lockAtInst = _gameLockInstant(game, _gr);
@@ -7807,7 +7819,7 @@ async function renderEstatisticas() {
         // a lista (share nativo no celular / copiar no desktop).
         _statPending[game.id] = {
           users: _pendingUsers.map(u => ({ a: u.apelido || '', n: u.nome || '' })),
-          title: game.h + ' × ' + game.a,
+          title: _hName + ' × ' + _aName,
           when: (_dateStr ? _dateStr + ' às ' : '') + _time,
           lockMs: (() => { const li = _gameLockInstant(game, _gr); return li ? li.getTime() : null; })()
         };
@@ -7839,12 +7851,12 @@ async function renderEstatisticas() {
             const _top3 = Object.entries(_sf).sort((a,b)=>b[1]-a[1]).slice(0,3);
             const _maxPct=Math.max(_phw,_pdr,_paw);
             const _minPct=Math.min(_phw,_pdr,_paw);
-            const _favLbl = _phw===_maxPct ? esc(game.h) : (_paw===_maxPct ? esc(game.a) : 'Empate');
-            const _zebLbl = _phw===_minPct ? esc(game.h) : (_paw===_minPct ? esc(game.a) : 'Empate');
+            const _favLbl = _phw===_maxPct ? esc(_hName) : (_paw===_maxPct ? esc(_aName) : 'Empate');
+            const _zebLbl = _phw===_minPct ? esc(_hName) : (_paw===_minPct ? esc(_aName) : 'Empate');
             const _scenarios = [
-              {label: esc(game.h) + ' vence', r:{h_real:1,a_real:0}},
+              {label: esc(_hName) + ' vence', r:{h_real:1,a_real:0}},
               {label: 'Empate', r:{h_real:0,a_real:0}},
-              {label: esc(game.a) + ' vence', r:{h_real:0,a_real:1}},
+              {label: esc(_aName) + ' vence', r:{h_real:0,a_real:1}},
             ];
             const _scRows = _scenarios.map(sc => {
               const cnt = _gPals.filter(p=>calcPontos(p,sc.r)>0).length;
@@ -7867,7 +7879,7 @@ async function renderEstatisticas() {
               + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">'
               + '<div style="text-align:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px">'
               + '<div style="font-size:1.05rem;font-weight:800;color:var(--gold)">' + _phw + '%</div>'
-              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + esc(game.h) + '</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + esc(_hName) + '</div>'
               + '<div style="font-size:0.68rem;color:var(--text-muted)">' + _hw + ' palpite(s)</div>'
               + '</div>'
               + '<div style="text-align:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px">'
@@ -7877,7 +7889,7 @@ async function renderEstatisticas() {
               + '</div>'
               + '<div style="text-align:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px">'
               + '<div style="font-size:1.05rem;font-weight:800;color:#ff8a8a">' + _paw + '%</div>'
-              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + esc(game.a) + '</div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">' + esc(_aName) + '</div>'
               + '<div style="font-size:0.68rem;color:var(--text-muted)">' + _aw + ' palpite(s)</div>'
               + '</div>'
               + '</div>'
@@ -7888,7 +7900,7 @@ async function renderEstatisticas() {
               + '<div style="font-size:0.6rem;color:var(--text-muted);margin-top:1px">média de gols por time</div>'
               + '</div>'
               + '<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:7px 10px;flex:1;min-width:110px">'
-              + '<div style="font-size:0.68rem;color:var(--text-muted)">🎯 Top 3 placares apostados <span style="opacity:.8">(' + esc(game.h) + ' × ' + esc(game.a) + ')</span></div>'
+              + '<div style="font-size:0.68rem;color:var(--text-muted)">🎯 Top 3 placares apostados <span style="opacity:.8">(' + esc(_hName) + ' × ' + esc(_aName) + ')</span></div>'
               + '<div style="font-size:0.88rem;font-weight:700;color:var(--green)">'
               + _top3.map((t,i) => (i===0?'':' · ') + '<span style="opacity:' + (i===0?'1':i===1?'.8':'.6') + '">' + t[0] + ' <span style="font-size:0.68rem;font-weight:400">(' + t[1] + 'x)</span></span>').join('')
               + '</div>'
@@ -7959,7 +7971,7 @@ async function renderEstatisticas() {
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:10px">'
           + '<div>'
           + (_groupLbl ? '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">' + esc(_groupLbl) + '</div>' : '')
-          + '<div style="font-size:1rem;font-weight:800">' + teamFlag(game.h) + ' ' + esc(game.h) + ' × ' + teamFlag(game.a) + ' ' + esc(game.a) + '</div>'
+          + '<div style="font-size:1rem;font-weight:800">' + teamFlag(_hName) + ' ' + esc(_hName) + ' × ' + teamFlag(_aName) + ' ' + esc(_aName) + '</div>'
           + '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:2px">' + esc(_dateStr) + ' · ' + esc(_time) + ' (Brasília)</div>'
           + '</div>'
           + '<div style="text-align:right">'
