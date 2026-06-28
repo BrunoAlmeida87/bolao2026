@@ -5818,6 +5818,19 @@ async function renderSimulador() {
       ? _simWave.map(({ game }) => _simGameRowHtml(game)).join('')
       : '<div class="text-muted" style="padding:8px 2px;font-size:0.85rem">Nenhum jogo com palpite bloqueado ou em andamento para simular agora. O ranking abaixo é o oficial atual.</div>';
 
+    // Legenda de pontuação — destaca os valores majorados do mata-mata. Mostra só
+    // a(s) fase(s) presente(s) na leva atual de jogos do simulador.
+    const _waveHasMata = _simWave.some(({ game }) => _isMataGame(game.id));
+    const _waveHasGrupo = _simWave.some(({ game }) => !_isMataGame(game.id));
+    const _fmtPts = mata => `Exato <b style="color:var(--green)">${mata ? (CFG.pts_exato_mata ?? 15) : CFG.pts_exato}</b> · Vencedor+Saldo <b style="color:var(--green)">${mata ? (CFG.pts_vencedor_saldo_mata ?? 10) : (CFG.pts_vencedor_saldo ?? 7)}</b> · Só vencedor <b style="color:var(--green)">${mata ? (CFG.pts_apenas_vencedor_mata ?? 7) : (CFG.pts_apenas_vencedor ?? 5)}</b>`;
+    let _legendInner = '';
+    if (_waveHasMata && _waveHasGrupo) _legendInner = `🏁 Grupos: ${_fmtPts(false)}<br>🏆 Mata-mata: ${_fmtPts(true)}`;
+    else if (_waveHasMata) _legendInner = `🏆 Mata-mata — ${_fmtPts(true)}`;
+    else if (_waveHasGrupo) _legendInner = `🏁 Fase de grupos — ${_fmtPts(false)}`;
+    const _legendHtml = _legendInner
+      ? `<div style="font-size:0.74rem;color:var(--text-muted);line-height:1.6;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px 11px;margin-bottom:10px">${_legendInner}</div>`
+      : '';
+
     cont.innerHTML = `<div class="section-title">🔮 Simulador dos Próximos Resultados${_refreshBtn()}</div>
       <div style="display:flex;align-items:flex-start;gap:9px;background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.35);border-radius:12px;padding:11px 14px;margin-bottom:14px">
         <span style="font-size:1.2rem;line-height:1">🧪</span>
@@ -5828,6 +5841,7 @@ async function renderSimulador() {
           <div class="card-title" style="margin:0">⚽ Próximos jogos</div>
           <button class="btn btn-secondary btn-sm" onclick="simReset()">🧹 Limpar simulação</button>
         </div>
+        ${_legendHtml}
         <div id="sim-games">${gamesHtml}</div>
       </div>
       <div class="card">
@@ -5852,8 +5866,27 @@ function _simGameRowHtml(game) {
     <input type="number" class="score-input" id="sim_h_${game.id}" min="0" max="20" inputmode="numeric" placeholder="–" value="${d.h!==undefined?d.h:''}" aria-label="Placar simulado ${esc(teams.h)}" oninput="simOnInput('${game.id}')">
     <div class="vs-badge">✕</div>
     <input type="number" class="score-input" id="sim_a_${game.id}" min="0" max="20" inputmode="numeric" placeholder="–" value="${d.a!==undefined?d.a:''}" aria-label="Placar simulado ${esc(teams.a)}" oninput="simOnInput('${game.id}')">
-    <div><div class="team-name">${teamFlag(teams.a)} ${esc(teams.a)}</div><div class="game-meta" id="sim-tag-${game.id}"></div></div>
+    <div><div class="team-name">${teamFlag(teams.a)} ${esc(teams.a)}</div><div class="game-meta" id="sim-tag-${game.id}">${_simTagHtml(game.id, d.h, d.a)}</div></div>
   </div>`;
+}
+
+// Tag do placar simulado: "simulado 2×1" + quantos pontos VOCÊ faria com seu
+// palpite naquele jogo (pontuação por fase — mata-mata vale mais).
+function _simTagHtml(gid, h, a) {
+  if (h === undefined || a === undefined) {
+    return (h !== undefined || a !== undefined)
+      ? '<span style="font-size:0.66rem;color:var(--text-muted)">preencha os 2 placares</span>' : '';
+  }
+  let ptsTxt = '';
+  const myPal = _simAllPals[currentUser?.uid] && _simAllPals[currentUser.uid][gid];
+  if (myPal && myPal.h !== undefined && myPal.a !== undefined) {
+    const pts = calcPontos(myPal, { h_real: h, a_real: a }, gid);
+    if (pts !== null) {
+      const col = pts > 0 ? 'var(--green)' : 'var(--text-muted)';
+      ptsTxt = ` · <span style="color:${col};font-weight:700" title="Pontos que você faria neste jogo">você faz +${pts}</span>`;
+    }
+  }
+  return `<span style="font-size:0.66rem;color:var(--accent);font-weight:700">simulado ${h}×${a}</span>${ptsTxt}`;
 }
 
 function simOnInput(gid) {
@@ -5865,9 +5898,7 @@ function simOnInput(gid) {
   if (h === undefined && a === undefined) delete _simDraft[gid];
   else _simDraft[gid] = { h, a };
   const tag = document.getElementById('sim-tag-' + gid);
-  if (tag) tag.innerHTML = (h !== undefined && a !== undefined)
-    ? '<span style="font-size:0.66rem;color:var(--accent);font-weight:700">simulado ' + h + '×' + a + '</span>'
-    : ((h !== undefined || a !== undefined) ? '<span style="font-size:0.66rem;color:var(--text-muted)">preencha os 2 placares</span>' : '');
+  if (tag) tag.innerHTML = _simTagHtml(gid, h, a);
   _simRecompute();
 }
 
