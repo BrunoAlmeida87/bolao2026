@@ -3663,8 +3663,11 @@ function _buildNextGamesHtml(group) {
   const sameInstant = multi && group.items.every(x => x.start.getTime() === group.items[0].start.getTime());
   const cards = group.items.map(({ game, start }) => {
     const res = _dashResults[game.id] || {};
-    const homeFlag = teamFlag(game.h);
-    const awayFlag = teamFlag(game.a);
+    // Mata-mata: game.h/game.a são placeholders ("2º A"). O chaveamento grava os
+    // times resolvidos em h_team/a_team — usa-os quando existirem (mesmo fallback do bracket).
+    const { h: hName, a: aName } = _getResolvedTeamsForGame(game, _dashResults);
+    const homeFlag = teamFlag(hName);
+    const awayFlag = teamFlag(aName);
     const time = res.time_override || GAME_TIMES[game.id] || '--:--';
     const dateStr = res.date_override ? _isoToGameDate(res.date_override) : (game.date || '');
     const fmtDate = dateStr ? `${dateStr} às ${time} (Brasília)` : time;
@@ -3684,9 +3687,9 @@ function _buildNextGamesHtml(group) {
     return `<div class="next-game-card" data-gid="${game.id}">
       <div class="ngc-label">⏱️ ${cardLabel}${groupLabel ? ` · <span style="opacity:.7">${esc(groupLabel)}</span>` : ''}</div>
       <div class="ngc-teams">
-        <span class="ngc-team">${homeFlag} ${esc(game.h)}</span>
+        <span class="ngc-team">${homeFlag} ${esc(hName)}</span>
         <span class="ngc-vs">×</span>
-        <span class="ngc-team">${awayFlag} ${esc(game.a)}</span>
+        <span class="ngc-team">${awayFlag} ${esc(aName)}</span>
       </div>
       <div class="ngc-date">${esc(fmtDate)}</div>
       <div class="ngc-countdown" id="ngc-cd-${game.id}">—</div>
