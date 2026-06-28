@@ -248,7 +248,13 @@ select option{background:var(--mid-blue);color:var(--white)}
   border-left:4px solid var(--gold);
   padding:10px 14px;margin:18px 0 10px;border-radius:6px;
   letter-spacing:.3px;text-transform:uppercase;
+  cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;
 }
+.admin-phase-header:hover{background:linear-gradient(90deg,rgba(255,215,0,.2),rgba(255,215,0,0) 80%);}
+.aph-chevron{display:inline-block;transition:transform .15s;font-size:0.8em;line-height:1}
+.admin-phase-header:not(.collapsed) .aph-chevron{transform:rotate(90deg);}
+.aph-count{margin-left:auto;font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:none;letter-spacing:0}
+.admin-phase-body{margin-bottom:8px}
 
 /* ══════════════════════════════════════════
    STATS GRID
@@ -11252,6 +11258,33 @@ function switchAdminTab(tab) {
   }
 }
 
+// ── Minimizadores por fase no Admin → Resultados ─────────────────────────────
+// Cada fase (Grupos, Oitavas, …) pode ser recolhida. Padrão: minimizada. O estado
+// fica na sessão para sobreviver aos re-renders (ex.: ao salvar um placar), evitando
+// recolher justamente a fase em que o admin está trabalhando.
+const _ADM_PHASE_KEY = 'bolao_admin_phase_collapsed_v1';
+function _getAdmPhaseState() {
+  try { return JSON.parse(sessionStorage.getItem(_ADM_PHASE_KEY)) || {}; } catch (_) { return {}; }
+}
+function _isAdminPhaseCollapsed(label) {
+  const st = _getAdmPhaseState();
+  return label in st ? !!st[label] : true; // sem preferência salva → minimizado
+}
+function _setAdmPhaseCollapsed(label, collapsed) {
+  const st = _getAdmPhaseState();
+  st[label] = !!collapsed;
+  try { sessionStorage.setItem(_ADM_PHASE_KEY, JSON.stringify(st)); } catch (_) {}
+}
+function toggleAdminPhase(headerEl) {
+  const id = headerEl.getAttribute('data-phase-body');
+  const label = headerEl.getAttribute('data-phase-key');
+  const body = document.getElementById(id);
+  const collapsed = !headerEl.classList.contains('collapsed'); // novo estado
+  headerEl.classList.toggle('collapsed', collapsed);
+  if (body) body.style.display = collapsed ? 'none' : 'block';
+  _setAdmPhaseCollapsed(label, collapsed);
+}
+
 async function renderAdminResultados() {
   const cont = document.getElementById('admin-resultados');
   if (!cont) return;
@@ -11305,6 +11338,15 @@ async function renderAdminResultados() {
       const meta = { label: ELIM_DATA[ph].label, icon: ELIM_DATA[ph].icon };
       ELIM_DATA[ph].games.forEach(g => { phaseOf[g.id] = meta; });
     });
+    // Total / lançados por fase — exibido no cabeçalho recolhível de cada fase.
+    const phaseStats = {};
+    sortedGames.forEach(g => {
+      const lbl = (phaseOf[g.id] || { label:'Jogos' }).label;
+      const rr = res[g.id] || {};
+      if (!phaseStats[lbl]) phaseStats[lbl] = { total:0, done:0 };
+      phaseStats[lbl].total++;
+      if (rr.h_real !== undefined && rr.a_real !== undefined) phaseStats[lbl].done++;
+    });
 
     const _updateBar = `
       <div class="card" style="margin-bottom:16px;border-color:var(--accent);background:rgba(30,144,255,.06);position:sticky;top:8px;z-index:5">
@@ -11332,6 +11374,7 @@ async function renderAdminResultados() {
     let html = (TEST_MODE_ENABLED ? _testPanel : '') + _updateBar + _migOrientPanel + thirdPanel + `<div class="alert alert-info">Jogos em ordem cronológica. Palpites travam <b>automaticamente 1h antes</b> do início. Use o botão de trava para alternar: <b>⏱️ Automático → 🔒 Travado → 🟢 Liberado</b> (sobrepõe a regra). Edite a <b>data/hora (Brasília)</b> de cada jogo se o horário mudar.</div>`;
     let lastDate = null;
     let lastPhase = null;
+    let phaseIdx = 0;
     sortedGames.forEach(game=>{
       const r = res[game.id]||{};
       const lockState = r.locked===true ? 'on' : (r.unlock_override===true ? 'off' : 'auto');
@@ -11347,8 +11390,16 @@ async function renderAdminResultados() {
       const schedOverridden = !!(r.date_override || r.time_override);
       const phase = phaseOf[game.id] || { label:'Jogos', icon:'⚽' };
       if (phase.label !== lastPhase) {
-        if (lastDate!==null) { html += `</div>`; lastDate = null; }
-        html += `<div class="admin-phase-header">${phase.icon} ${esc(phase.label)}</div>`;
+        if (lastDate!==null) { html += `</div>`; lastDate = null; } // fecha card de data
+        if (lastPhase!==null) { html += `</div>`; }                  // fecha corpo da fase anterior
+        phaseIdx++;
+        const _pbId = `admin-phase-body-${phaseIdx}`;
+        const _collapsed = _isAdminPhaseCollapsed(phase.label);
+        const _ps = phaseStats[phase.label] || { total:0, done:0 };
+        html += `<div class="admin-phase-header${_collapsed?' collapsed':''}" data-phase-body="${_pbId}" data-phase-key="${esc(phase.label)}" onclick="toggleAdminPhase(this)" role="button" tabindex="0" aria-expanded="${_collapsed?'false':'true'}">`
+          + `<span class="aph-chevron">▸</span>${phase.icon} ${esc(phase.label)}`
+          + `<span class="aph-count">${_ps.done}/${_ps.total} lançados</span></div>`;
+        html += `<div class="admin-phase-body" id="${_pbId}" style="display:${_collapsed?'none':'block'}">`;
         lastPhase = phase.label;
       }
       if (game.date !== lastDate) {
@@ -11403,7 +11454,8 @@ async function renderAdminResultados() {
         <span style="margin-left:auto" id="lockstate_${game.id}">${_lockStateLabel(lockState)}</span>
       </div>`;
     });
-    if (lastDate!==null) html += `</div>`;
+    if (lastDate!==null) html += `</div>`;   // fecha último card de data
+    if (lastPhase!==null) html += `</div>`;  // fecha último corpo de fase
     cont.innerHTML = html;
   } catch(e) { cont.innerHTML = `<div class="alert alert-error">Erro: ${esc(errMsg(e))}</div>`; }
 }
