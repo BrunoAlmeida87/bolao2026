@@ -5801,12 +5801,12 @@ async function renderSimulador() {
     const { allPals, champPicks } = await _fetchPalsCached(users);
     _simUsers = users; _simResOfficial = res; _simAllPals = allPals; _simChampPicks = champPicks;
     _simDraft = {};
-    // Só jogos com palpite BLOQUEADO ou EM ANDAMENTO e ainda SEM resultado.
-    // Jogos com palpite ainda aberto ficam de fora (não dá pra simular o que
-    // as pessoas ainda estão preenchendo); jogos já decididos também saem.
+    // Todos os jogos exibidos no card de timer da tela principal (a mesma leva do
+    // dashboard, via _getStatNextGroupWave) que ainda NÃO têm placar final — inclui
+    // jogos com palpite ainda ABERTO, em andamento ou bloqueado. Jogos já decididos saem.
     _simWave = (_getStatNextGroupWave(res).items || []).filter(({ game }) => {
       const r = res[game.id] || {};
-      return isPalpiteClosed(game, r) && !_hasFullResult(r);
+      return !_hasFullResult(r);
     });
 
     // Posições no ranking oficial atual — base das setas ↑↓ (calculado uma vez).
@@ -5816,7 +5816,7 @@ async function renderSimulador() {
 
     const gamesHtml = _simWave.length
       ? _simWave.map(({ game }) => _simGameRowHtml(game)).join('')
-      : '<div class="text-muted" style="padding:8px 2px;font-size:0.85rem">Nenhum jogo com palpite bloqueado ou em andamento para simular agora. O ranking abaixo é o oficial atual.</div>';
+      : '<div class="text-muted" style="padding:8px 2px;font-size:0.85rem">Nenhum jogo com timer ativo para simular agora. O ranking abaixo é o oficial atual.</div>';
 
     // Legenda de pontuação — destaca os valores majorados do mata-mata. Mostra só
     // a(s) fase(s) presente(s) na leva atual de jogos do simulador.
