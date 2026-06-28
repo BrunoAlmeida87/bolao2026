@@ -3661,13 +3661,21 @@ function _buildNextGamesHtml(group) {
   const multi = group.items.length > 1;
   // Todos no mesmo instante? Então é "Partida Simultânea"; senão é uma leva/rodada.
   const sameInstant = multi && group.items.every(x => x.start.getTime() === group.items[0].start.getTime());
+  const _brkCache = {};
   const cards = group.items.map(({ game, start }) => {
     const res = _dashResults[game.id] || {};
-    // Mata-mata: game.h/game.a são placeholders ("2º A"). O chaveamento grava os
-    // times resolvidos em h_team/a_team — usa-os quando existirem (mesmo fallback do bracket).
-    const { h: hName, a: aName } = _getResolvedTeamsForGame(game, _dashResults);
-    const homeFlag = teamFlag(hName);
-    const awayFlag = teamFlag(aName);
+    // Mata-mata: game.h/game.a são placeholders ("2º A"). Resolve igual ao bracket
+    // (_resolveBracketSlot): usa h_team/a_team persistido ou, na falta, a
+    // classificação atual dos grupos. Slot ainda indefinido mantém o placeholder.
+    const hSlot = _resolveBracketSlot(game.h, res.h_team, _dashResults, _brkCache);
+    const aSlot = _resolveBracketSlot(game.a, res.a_team, _dashResults, _brkCache);
+    const _slotName = (slot, raw) => slot.isPlaceholder
+      ? (/^Melhor 3º/.test(raw) ? '3º a definir' : slot.team)
+      : slot.team;
+    const hName = _slotName(hSlot, game.h);
+    const aName = _slotName(aSlot, game.a);
+    const homeFlag = hSlot.isPlaceholder ? '' : teamFlag(hSlot.team);
+    const awayFlag = aSlot.isPlaceholder ? '' : teamFlag(aSlot.team);
     const time = res.time_override || GAME_TIMES[game.id] || '--:--';
     const dateStr = res.date_override ? _isoToGameDate(res.date_override) : (game.date || '');
     const fmtDate = dateStr ? `${dateStr} às ${time} (Brasília)` : time;
