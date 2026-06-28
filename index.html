@@ -2190,6 +2190,11 @@ const ALL_GAMES = [
   ...Object.values(ELIM_DATA).flatMap(e=>e.games)
 ];
 
+// IDs das partidas do mata-mata (fase eliminatória). Usado para aplicar a
+// pontuação majorada do mata-mata (ver _ptsForType/calcPontos).
+const _MATA_IDS = new Set(Object.values(ELIM_DATA).flatMap(e=>e.games.map(g=>g.id)));
+function _isMataGame(id){ return _MATA_IDS.has(id); }
+
 // Verificação de consistência da chave: cada O1..O16 deve aparecer
 // (a) uma única vez como ID em R32 e (b) uma única vez como origem
 // das oitavas (Q1..Q8). Também valida contagem total de 104 jogos.
@@ -2228,6 +2233,10 @@ let CFG = {
   pts_resultado:5,
   pts_vencedor_saldo:7,
   pts_apenas_vencedor:5,
+  // Pontuação majorada na fase de mata-mata (aprovada em votação do grupo).
+  pts_exato_mata:15,
+  pts_vencedor_saldo_mata:10,
+  pts_apenas_vencedor_mata:7,
   pts_bonus_classificacao:3,
   pts_campeao:50,
   chave_pix:'128.712.527-18',
@@ -2597,7 +2606,7 @@ async function _writeRankingCache() {
       nome: u.nome || '', apelido: u.apelido || '',
       pontos: u.pontos || 0, exatos: u.exatos || 0,
       venc_saldo: u.venc_saldo || 0, apenas_venc: u.apenas_venc || 0,
-      jogos: u.jogos || 0, erros: u.erros || 0,
+      jogos: u.jogos || 0, erros: u.erros || 0, ptsMax: u.ptsMax || 0,
       bonus_campeao: u.bonus_campeao || 0,
       acertou_campeao: u.acertou_campeao || false,
       campeao: u.campeao || null
@@ -2993,27 +3002,39 @@ window.addEventListener('popstate', (e) => {
 // ════════════════════════════════════════════
 // RANKING LOGIC
 // ════════════════════════════════════════════
-function calcPontos(pal, res) {
+// Tipo do acerto, INDEPENDENTE de pontuação: 'exato' | 'saldo' | 'vencedor' | 'erro' | null.
+// (null = sem palpite ou sem resultado). É a base da classificação — não usar mais
+// comparação por valor de pontos, pois grupos (10/7/5) e mata-mata (15/10/7) colidem.
+function _hitType(pal, res) {
   if (!pal || pal.h===undefined || pal.a===undefined) return null;
   if (res===undefined || res.h_real===undefined || res.a_real===undefined) return null;
   const ph=parseInt(pal.h), pa=parseInt(pal.a);
   const rh=parseInt(res.h_real), ra=parseInt(res.a_real);
-
-  // 1. Placar exato
-  if (ph===rh && pa===ra) return CFG.pts_exato;
-
-  // 2. Vencedor + Saldo de gols
-  const pSaldo = ph - pa;
-  const rSaldo = rh - ra;
+  if (ph===rh && pa===ra) return 'exato';
   const pRes = ph>pa?'H':ph<pa?'A':'D';
   const rRes = rh>ra?'H':rh<ra?'A':'D';
-  if (pRes===rRes && pSaldo===rSaldo) return CFG.pts_vencedor_saldo ?? 7;
+  if (pRes!==rRes) return 'erro';
+  if ((ph-pa)===(rh-ra)) return 'saldo';
+  return 'vencedor';
+}
 
-  // 3. Apenas vencedor/empate
-  if (pRes===rRes) return CFG.pts_apenas_vencedor ?? 5;
+// Pontos de um tipo de acerto, conforme a fase. mata=true usa a tabela majorada.
+// Grupos: 10/7/5 · Mata-mata: 15/10/7 (configurável via CFG.*_mata).
+function _ptsForType(type, mata) {
+  switch (type) {
+    case 'exato':    return mata ? (CFG.pts_exato_mata ?? 15)          : CFG.pts_exato;
+    case 'saldo':    return mata ? (CFG.pts_vencedor_saldo_mata ?? 10) : (CFG.pts_vencedor_saldo ?? 7);
+    case 'vencedor': return mata ? (CFG.pts_apenas_vencedor_mata ?? 7) : (CFG.pts_apenas_vencedor ?? 5);
+    default:         return 0; // 'erro'
+  }
+}
 
-  // 4. Errou
-  return 0;
+// Pontos do palpite. gameId define a fase (mata-mata pontua mais). Sem gameId,
+// assume fase de grupos. Retorna null quando não há palpite/resultado.
+function calcPontos(pal, res, gameId) {
+  const t = _hitType(pal, res);
+  if (t === null) return null;
+  return _ptsForType(t, _isMataGame(gameId));
 }
 
 // Lista única e ordenada das 48 seleções participantes (extraída de GRUPOS_DATA).
@@ -3062,24 +3083,25 @@ function computeRanking(users, resultados, allPalpites, championPicks={}) {
   return users
     .filter(u=>u.ativo!==false)
     .map(u=>{
-      let pontos=0, exatos=0, venc_saldo=0, apenas_venc=0, jogos=0, erros=0;
+      let pontos=0, exatos=0, venc_saldo=0, apenas_venc=0, jogos=0, erros=0, ptsMax=0;
       const pals = allPalpites[u.uid]||{};
       jogosComResultado.forEach(jid=>{
         const p=pals[jid], r=resultados[jid];
         if (!p) return;
-        const pts = calcPontos(p,r);
-        if (pts===null) return;
-        jogos++; pontos+=pts;
-        if (pts===CFG.pts_exato) exatos++;
-        else if (pts===(CFG.pts_vencedor_saldo ?? 7)) venc_saldo++;
-        else if (pts===(CFG.pts_apenas_vencedor ?? 5)) apenas_venc++;
-        else if (pts===0) erros++;
+        const t = _hitType(p,r);
+        if (t===null) return;
+        const mata = _isMataGame(jid);
+        jogos++; pontos += _ptsForType(t, mata); ptsMax += _ptsForType('exato', mata);
+        if (t==='exato') exatos++;
+        else if (t==='saldo') venc_saldo++;
+        else if (t==='vencedor') apenas_venc++;
+        else erros++;
       });
       const userChampion = championPicks[u.uid] || null;
       const acertouCampeao = !!(champion && userChampion && userChampion===champion);
       const bonusCampeao = acertouCampeao ? ptsCampeao : 0;
       pontos += bonusCampeao;
-      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros, campeao: userChampion, bonus_campeao: bonusCampeao, acertou_campeao: acertouCampeao };
+      return { ...u, pontos, exatos, venc_saldo, apenas_venc, jogos, erros, ptsMax, campeao: userChampion, bonus_campeao: bonusCampeao, acertou_campeao: acertouCampeao };
     })
     // Desempate: pontos → exatos → venc+saldo → vencedor → acertou o campeão.
     // Persistindo o empate em todos os critérios, o prêmio é dividido (ver Regras).
@@ -4142,7 +4164,7 @@ async function renderDashboard() {
     <div class="ranking-cards" id="rank-cards">${_rb.cards}</div>`;
 
     html += `<p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:8px">
-      ${CFG.pts_exato} pts exato · ${CFG.pts_vencedor_saldo} pts vencedor+saldo · ${CFG.pts_apenas_vencedor} pts vencedor · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>
+      Grupos: ${CFG.pts_exato}/${CFG.pts_vencedor_saldo}/${CFG.pts_apenas_vencedor} · Mata-mata: ${CFG.pts_exato_mata ?? 15}/${CFG.pts_vencedor_saldo_mata ?? 10}/${CFG.pts_apenas_vencedor_mata ?? 7} (exato/venc+saldo/venc) · ${CFG.pts_campeao||0} pts bônus campeão${finalChampion?` 🏆 Campeã: ${teamFlag(finalChampion)} ${esc(finalChampion)}`:''}</p>
     <div class="ranking-share-row">
       <button class="btn-share" onclick="shareMyRankingCard()">📸 Gerar imagem — Minha posição</button>
       <button class="btn-share" onclick="shareTop5RelegImage()">📸 Gerar imagem — Top 3 + Rebaixamento (classificação por densidade)</button>
@@ -4304,11 +4326,13 @@ async function renderPalpites(editUid=null) {
   }
 }
 
-function _ptsBadgeStyle(pts) {
+// `mata` (opcional) escolhe a tabela de pontos da fase para rotular corretamente
+// (grupos 10/7/5 × mata-mata 15/10/7, que colidem em valor).
+function _ptsBadgeStyle(pts, mata) {
   if (pts === null || pts === undefined) return null;
-  if (pts === CFG.pts_exato)           return {bg:'rgba(255,215,0,.18)',  color:'var(--gold)',  label:'Exato'};
-  if (pts === CFG.pts_vencedor_saldo)  return {bg:'rgba(76,175,80,.18)',  color:'#4CAF50',     label:'Venc.+Saldo'};
-  if (pts === CFG.pts_apenas_vencedor) return {bg:'rgba(100,181,246,.18)',color:'#64B5F6',     label:'Vencedor'};
+  if (pts === _ptsForType('exato', mata))    return {bg:'rgba(255,215,0,.18)',  color:'var(--gold)',  label:'Exato'};
+  if (pts === _ptsForType('saldo', mata))    return {bg:'rgba(76,175,80,.18)',  color:'#4CAF50',     label:'Venc.+Saldo'};
+  if (pts === _ptsForType('vencedor', mata)) return {bg:'rgba(100,181,246,.18)',color:'#64B5F6',     label:'Vencedor'};
   if (pts === 0)                       return {bg:'rgba(255,68,68,.12)',   color:'var(--red)',  label:'Erro'};
   return {bg:'rgba(255,255,255,.08)', color:'var(--text-muted)', label:''};
 }
@@ -4328,7 +4352,7 @@ function buildPalRow(game) {
   const res = resultados[game.id]||{};
   const teams = _getResolvedTeamsForGame(game, resultados);
   const hasResult = res.h_real!==undefined;
-  const pts = calcPontos(pal,res);
+  const pts = calcPontos(pal,res,game.id);
   const isClosed = isPalpiteClosed(game, res);
   const closeAttr = isClosed ? `readonly onclick="showPalpiteClosedReason('${game.id}')" onfocus="showPalpiteClosedReason('${game.id}')"` : '';
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
@@ -4336,7 +4360,7 @@ function buildPalRow(game) {
   const editCount = pal.editCount || 0;
   const editBadge = (isClosed && editCount > 0) ? `<span style="font-size:0.63rem;color:var(--text-muted);padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.06);margin-left:4px" title="Você alterou este palpite ${editCount} ${editCount===1?'vez':'vezes'}">✏️ ${editCount}×</span>` : '';
   const resultBadge = hasResult?`<span class="result-badge">${res.h_real}–${res.a_real}</span>`:'';
-  const _ps = _ptsBadgeStyle(pts);
+  const _ps = _ptsBadgeStyle(pts, _isMataGame(game.id));
   const ptsBadge = _ps!==null?`<span class="result-badge" style="background:${_ps.bg};color:${_ps.color}">${_ps.label?_ps.label+' ':''}${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = teamFlag(teams.h);
   const flagA = teamFlag(teams.a);
@@ -5040,10 +5064,10 @@ function buildVerPalRow(game, userPals, res, canReveal=true) {
   // Revela palpites quando: resultado lançado, trava manual, ou prazo (1h antes do início) passou
   const isLocked = r.locked===true || hasResult || isPalpiteClosed(game, r);
   const showPal = canReveal || isLocked;
-  const pts = calcPontos(pal,r);
+  const pts = calcPontos(pal,r,game.id);
   const iCls = (pal.h!==undefined&&pal.a!==undefined)?'filled':'';
   const resultBadge = hasResult?`<span class="result-badge">${r.h_real}–${r.a_real}</span>`:'';
-  const _ps = _ptsBadgeStyle(pts);
+  const _ps = _ptsBadgeStyle(pts, _isMataGame(game.id));
   const ptsBadge = (showPal&&_ps!==null)?`<span class="result-badge" style="background:${_ps.bg};color:${_ps.color}">${_ps.label?_ps.label+' ':''}${pts>0?'+'+pts:'0'}pts</span>`:'';
   const flagH = teamFlag(teams.h);
   const flagA = teamFlag(teams.a);
@@ -5172,35 +5196,41 @@ function renderRegras() {
         <div class="card-title" style="margin-bottom:16px">🎯 Como Funcionam os Pontos</div>
         <p class="text-muted" style="line-height:1.8;margin-bottom:14px">
           No ${esc(CFG.nome_bolao)}, você ganha pontos acertando os placares e resultados dos jogos.
-          Quanto mais preciso for seu palpite, mais pontos você recebe!
+          Quanto mais preciso for seu palpite, mais pontos você recebe! A partir do
+          <strong style="color:var(--gold)">mata-mata (Round of 32 em diante)</strong> a pontuação é
+          <strong>maior</strong> — cada acerto vale mais e a reta final pesa no ranking.
         </p>
         <table class="ranking-table" style="margin:0">
-          <thead><tr><th>Acerto</th><th>Descrição</th><th>Pts</th></tr></thead>
+          <thead><tr><th>Acerto</th><th>Descrição</th><th style="text-align:center">Grupos</th><th style="text-align:center">Mata-mata</th></tr></thead>
           <tbody>
             <tr>
               <td style="font-weight:700;color:var(--gold)">Placar Exato</td>
               <td style="font-size:0.85rem">Acertou o placar exato (ex: palpitou 2-1, deu 2-1)</td>
-              <td><span class="pts-badge">${CFG.pts_exato}</span></td>
+              <td style="text-align:center"><span class="pts-badge">${CFG.pts_exato}</span></td>
+              <td style="text-align:center"><span class="pts-badge">${CFG.pts_exato_mata ?? 15}</span></td>
             </tr>
             <tr>
               <td style="font-weight:700;color:var(--accent)">Vencedor + Saldo</td>
               <td style="font-size:0.85rem">Acertou o vencedor E a diferença de gols (ex: palpitou 2-0, deu 3-1)</td>
-              <td><span class="pts-badge">${CFG.pts_vencedor_saldo}</span></td>
+              <td style="text-align:center"><span class="pts-badge">${CFG.pts_vencedor_saldo}</span></td>
+              <td style="text-align:center"><span class="pts-badge">${CFG.pts_vencedor_saldo_mata ?? 10}</span></td>
             </tr>
             <tr>
               <td style="font-weight:700;color:var(--orange)">Apenas Vencedor</td>
               <td style="font-size:0.85rem">Acertou quem venceu (ou empate), mas não o placar nem a diferença</td>
-              <td><span class="pts-badge">${CFG.pts_apenas_vencedor}</span></td>
+              <td style="text-align:center"><span class="pts-badge">${CFG.pts_apenas_vencedor}</span></td>
+              <td style="text-align:center"><span class="pts-badge">${CFG.pts_apenas_vencedor_mata ?? 7}</span></td>
             </tr>
             <tr>
               <td style="font-weight:700;color:var(--red)">Errou</td>
               <td style="font-size:0.85rem">Seu palpite não bate com o resultado</td>
-              <td style="font-weight:700;color:var(--text-muted)">0</td>
+              <td style="text-align:center;font-weight:700;color:var(--text-muted)">0</td>
+              <td style="text-align:center;font-weight:700;color:var(--text-muted)">0</td>
             </tr>
             <tr>
               <td style="font-weight:700;color:var(--gold)">🏆 Bônus Campeão</td>
               <td style="font-size:0.85rem">Acertou a seleção campeã da Copa do Mundo (escolhida na aba ⚽ Palpites). O bônus é creditado quando a Final (19/Jul) for decretada.</td>
-              <td><span class="pts-badge">${CFG.pts_campeao||0}</span></td>
+              <td colspan="2" style="text-align:center"><span class="pts-badge">${CFG.pts_campeao||0}</span></td>
             </tr>
           </tbody>
         </table>
@@ -5666,10 +5696,10 @@ async function renderVerTodos() {
         const canSeePal = isAdminView || isOwn || isGameLocked;
         if (!pal||pal.h===undefined) { row += `<td style="color:var(--text-muted)">—</td>`; return; }
         if (!canSeePal) { row += `<td style="color:var(--text-muted);font-size:0.72rem">🔒</td>`; return; }
-        const pts = calcPontos(pal, r);
+        const pts = calcPontos(pal, r, g.id);
         const _ph = parseInt(pal.h), _pa = parseInt(pal.a); // coage a inteiro → sem XSS no innerHTML
         const palStr = (isNaN(_ph) || isNaN(_pa)) ? '—' : `${_ph}-${_pa}`;
-        const _ps = _ptsBadgeStyle(pts);
+        const _ps = _ptsBadgeStyle(pts, _isMataGame(g.id));
         const cellBg = _ps ? `background:${_ps.bg};` : '';
         const cellCol = _ps ? `color:${_ps.color};` : '';
         const ptsLine = _ps && pts!==null ? `<div style="font-size:0.65rem;margin-top:1px;opacity:0.85">${pts>0?'+'+pts+'pts':'0pts'}</div>` : '';
@@ -5873,7 +5903,7 @@ function _simRecompute() {
       `<span style="color:var(--text-muted)">=</span>`;
     // Pontos que esta pessoa ganha com os placares simulados deste momento.
     let gain = 0;
-    simGids.forEach(gid => { const p = _simAllPals[u.uid] && _simAllPals[u.uid][gid]; const pts = calcPontos(p, merged[gid]); if (pts != null) gain += pts; });
+    simGids.forEach(gid => { const p = _simAllPals[u.uid] && _simAllPals[u.uid][gid]; const pts = calcPontos(p, merged[gid], gid); if (pts != null) gain += pts; });
     const gainHtml = (simGids.length > 0 && gain > 0)
       ? `<div style="color:var(--green);font-weight:700;font-size:0.7rem;line-height:1.1" title="Pontos ganhos com os placares simulados">+${gain}</div>` : '';
     const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '';
@@ -6226,11 +6256,11 @@ function calcUserAccuracyStats(uid, allPals, res) {
     const p = userPals[g.id];
     if (!p) { tempStreak = 0; tempExactStreak = 0; continue; }
     count++;
-    const pts = calcPontos(p, res[g.id]);
-    if (pts >= (CFG.pts_apenas_vencedor || 5)) {
+    const t = _hitType(p, res[g.id]);
+    if (t && t !== 'erro') {
       acertos++; tempStreak++; maxStreak = Math.max(maxStreak, tempStreak);
     } else { tempStreak = 0; }
-    if (pts === CFG.pts_exato) {
+    if (t === 'exato') {
       exatos++; tempExactStreak++; maxExactStreak = Math.max(maxExactStreak, tempExactStreak);
     } else { tempExactStreak = 0; }
     totalGolDiff += Math.abs(parseInt(p.h) - parseInt(res[g.id].h_real)) + Math.abs(parseInt(p.a) - parseInt(res[g.id].a_real));
@@ -6239,14 +6269,13 @@ function calcUserAccuracyStats(uid, allPals, res) {
   for (let i = gamesOrdered.length - 1; i >= 0; i--) {
     const p = userPals[gamesOrdered[i].id];
     if (!p) break;
-    const pts = calcPontos(p, res[gamesOrdered[i].id]);
-    if (pts >= (CFG.pts_apenas_vencedor || 5)) currentStreak++; else break;
+    const t = _hitType(p, res[gamesOrdered[i].id]);
+    if (t && t !== 'erro') currentStreak++; else break;
   }
   for (let i = gamesOrdered.length - 1; i >= 0; i--) {
     const p = userPals[gamesOrdered[i].id];
     if (!p) break;
-    const pts = calcPontos(p, res[gamesOrdered[i].id]);
-    if (pts === CFG.pts_exato) currentExactStreak++; else break;
+    if (_hitType(p, res[gamesOrdered[i].id]) === 'exato') currentExactStreak++; else break;
   }
   return {
     acertoPct: count > 0 ? (acertos / count * 100).toFixed(1) : '-',
@@ -6292,7 +6321,7 @@ function _buildUserEvolutionChart(uid, allPals, res) {
       if (!_hasFullResult(res[id])) return;
       const p = userPals[id];
       if (!p || p.h===undefined) return;
-      const pts = calcPontos(p, res[id]);
+      const pts = calcPontos(p, res[id], id);
       if (pts!==null) { cumPts+=pts; rdPts+=pts; }
     });
     points.push({ label: rd.label, cum: cumPts, rdPts });
@@ -6398,12 +6427,12 @@ async function openUserProfile(uid) {
     const gamesWithRes = ALL_GAMES.filter(g=>_hasFullResult(res[g.id]));
     const gamePreds = gamesWithRes.map(g=>{
       const p=userPals[g.id]; if(!p||p.h===undefined) return null;
-      const pts=calcPontos(p,res[g.id]);
+      const pts=calcPontos(p,res[g.id],g.id);
       const ph=parseInt(p.h)||0, pa=parseInt(p.a)||0;
       const rh=parseInt(res[g.id].h_real), ra=parseInt(res[g.id].a_real);
-      return {g, p, r:res[g.id], pts, miss:Math.abs(ph-rh)+Math.abs(pa-ra)};
+      return {g, p, r:res[g.id], pts, t:_hitType(p,res[g.id]), miss:Math.abs(ph-rh)+Math.abs(pa-ra)};
     }).filter(Boolean);
-    const exactPreds = gamePreds.filter(x=>x.pts===CFG.pts_exato).slice(-5).reverse();
+    const exactPreds = gamePreds.filter(x=>x.t==='exato').slice(-5).reverse();
     const worstPreds = gamePreds.filter(x=>x.pts===0).sort((a,b)=>b.miss-a.miss).slice(0,3);
 
     // 7. Consensus vs divergence
@@ -6524,7 +6553,7 @@ async function openUserProfile(uid) {
 
     const predExatosHtml = exactPreds.map(x=>`<div class="perfil-pred-row">
         <span style="flex:1">${esc(x.g.h)} <b style="color:var(--green)">${parseInt(x.p.h)}-${parseInt(x.p.a)}</b> ${esc(x.g.a)}</span>
-        <span class="rank-chip exact" style="flex-shrink:0">+${CFG.pts_exato}pts</span>
+        <span class="rank-chip exact" style="flex-shrink:0">+${x.pts}pts</span>
       </div>`).join('');
 
     const predErrosHtml = worstPreds.map(x=>`<div class="perfil-pred-row" style="border-color:rgba(255,68,68,.15)">
@@ -6771,13 +6800,13 @@ function _computeRankingForGameIds(users, resultados, allPalpites, gameIds, cham
         if (!r || r.h_real===undefined || r.a_real===undefined) return;
         const p = pals[jid];
         if (!p) return;
-        const pts = calcPontos(p,r);
-        if (pts===null) return;
-        jogos++; pontos+=pts;
-        if (pts===CFG.pts_exato) exatos++;
-        else if (pts===(CFG.pts_vencedor_saldo ?? 7)) venc_saldo++;
-        else if (pts===(CFG.pts_apenas_vencedor ?? 5)) apenas_venc++;
-        else if (pts===0) erros++;
+        const t = _hitType(p,r);
+        if (t===null) return;
+        jogos++; pontos += _ptsForType(t, _isMataGame(jid));
+        if (t==='exato') exatos++;
+        else if (t==='saldo') venc_saldo++;
+        else if (t==='vencedor') apenas_venc++;
+        else erros++;
       });
       const userChampion = (championPicks||{})[u.uid] || null;
       const acertou_campeao = !!(champion && userChampion && userChampion===champion);
@@ -6835,36 +6864,38 @@ function _calcMomentum(ranking, allPals, res, n = 5) {
 
   const stats = ranking.map(u => {
     const pals = allPals[u.uid] || {};
+    // Máximo de pontos por jogo conforme a fase (grupos 10 × mata-mata 15).
+    const _maxOf = id => _ptsForType('exato', _isMataGame(id));
     // Histórico do próprio participante (base de comparação).
-    let ptsAll = 0, predAll = 0;
+    let ptsAll = 0, predAll = 0, ptsMaxAll = 0;
     gamesOrdered.forEach(g => {
-      const p = calcPontos(pals[g.id], res[g.id]);
-      if (p == null) return; predAll++; ptsAll += p;
+      const p = calcPontos(pals[g.id], res[g.id], g.id);
+      if (p == null) return; predAll++; ptsAll += p; ptsMaxAll += _maxOf(g.id);
     });
     // Janela recente.
-    let pts = 0, pred = 0, scored = 0, exatos = 0, vSaldo = 0, vencedor = 0, erros = 0;
+    let pts = 0, pred = 0, scored = 0, exatos = 0, vSaldo = 0, vencedor = 0, erros = 0, ptsMaxRecent = 0;
     recent.forEach(g => {
-      const p = calcPontos(pals[g.id], res[g.id]);
-      if (p == null) return;
-      pred++; pts += p;
-      if (p === PTS_MAX) { exatos++; scored++; }
-      else if (p === PTS_VS) { vSaldo++; scored++; }
-      else if (p === PTS_V) { vencedor++; scored++; }
+      const t = _hitType(pals[g.id], res[g.id]);
+      if (t == null) return;
+      pred++; pts += _ptsForType(t, _isMataGame(g.id)); ptsMaxRecent += _maxOf(g.id);
+      if (t === 'exato') { exatos++; scored++; }
+      else if (t === 'saldo') { vSaldo++; scored++; }
+      else if (t === 'vencedor') { vencedor++; scored++; }
       else erros++;
     });
     // Sequência ativa de jogos pontuando (do mais recente para trás).
     let streak = 0;
     for (let i = gamesOrdered.length - 1; i >= 0; i--) {
-      const p = calcPontos(pals[gamesOrdered[i].id], res[gamesOrdered[i].id]);
-      if (p == null) break;
-      if (p > 0) streak++; else break;
+      const t = _hitType(pals[gamesOrdered[i].id], res[gamesOrdered[i].id]);
+      if (t == null) break;
+      if (t !== 'erro') streak++; else break;
     }
-    const eff = pred ? pts / (pred * PTS_MAX) : 0;
-    const effAll = predAll ? ptsAll / (predAll * PTS_MAX) : 0;
+    const eff = ptsMaxRecent ? pts / ptsMaxRecent : 0;
+    const effAll = ptsMaxAll ? ptsAll / ptsMaxAll : 0;
     return {
       uid: u.uid, apelido: u.apelido || u.nome,
       pred, scored, exatos, vSaldo, vencedor, erros,
-      pts, ptsMax: pred * PTS_MAX, eff, effAll, deltaEff: eff - effAll,
+      pts, ptsMax: ptsMaxRecent, eff, effAll, deltaEff: eff - effAll,
       predAll, streak, rankPos: rankPos[u.uid] ?? 999
     };
   });
@@ -7558,7 +7589,7 @@ function _statFinishedGameBody(gid, data) {
   const avgA = (gPals.reduce((a, x) => a + (parseInt(x.p.a) || 0), 0) / tot).toFixed(1);
   const sf = {}; gPals.forEach(x => { const k = `${parseInt(x.p.h) || 0}×${parseInt(x.p.a) || 0}`; sf[k] = (sf[k] || 0) + 1; });
   const top3 = Object.entries(sf).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  let exatos = 0; gPals.forEach(x => { if (calcPontos(x.p, r) === CFG.pts_exato) exatos++; });
+  let exatos = 0; gPals.forEach(x => { if (_hitType(x.p, r) === 'exato') exatos++; });
   const distCol = (pct, n, lbl, out, baseColor) => {
     const on = out === realOut;
     return '<div style="text-align:center;background:' + (on ? 'rgba(0,200,81,.12)' : 'rgba(255,255,255,.04)') + ';border:1px solid ' + (on ? 'rgba(0,200,81,.5)' : 'transparent') + ';border-radius:8px;padding:8px">'
@@ -7573,8 +7604,8 @@ function _statFinishedGameBody(gid, data) {
   const grid = rows.map(({ u, p, has }) => {
     let val;
     if (has) {
-      const pts = calcPontos(p, r);
-      const ps = (pts !== null) ? _ptsBadgeStyle(pts) : null;
+      const pts = calcPontos(p, r, gid);
+      const ps = (pts !== null) ? _ptsBadgeStyle(pts, _isMataGame(gid)) : null;
       const col = ps ? ps.color : 'var(--gold)';
       const tag = (pts !== null) ? ' <span style="font-size:0.62rem;color:' + col + '">(' + (pts > 0 ? '+' + pts : '0') + ')</span>' : '';
       // Segurança: o palpite vem do doc do próprio usuário — coage a inteiro para
@@ -7630,11 +7661,12 @@ async function renderEstatisticas() {
       users.forEach(u=>{
         const p=allPals[u.uid]?.[jid];
         if(!p) return;
-        const pts = calcPontos(p,res[jid]);
+        const t = _hitType(p,res[jid]);
+        const pts = calcPontos(p,res[jid],jid);
         analiseJogos[jid].palpites.push({user:u,palpite:p,pts});
-        if(pts===CFG.pts_exato) analiseJogos[jid].exatos++;
-        else if(pts===(CFG.pts_vencedor_saldo ?? 7)) analiseJogos[jid].venc_saldo++;
-        else if(pts===(CFG.pts_apenas_vencedor ?? 5)) analiseJogos[jid].apenas_venc++;
+        if(t==='exato') analiseJogos[jid].exatos++;
+        else if(t==='saldo') analiseJogos[jid].venc_saldo++;
+        else if(t==='vencedor') analiseJogos[jid].apenas_venc++;
         else analiseJogos[jid].erros++;
       });
     });
@@ -7902,8 +7934,8 @@ async function renderEstatisticas() {
               + _allRows.map(({ u, p, has }) => {
                   let _valHtml;
                   if (has) {
-                    const _pts = _hasRes ? calcPontos(p, _gr) : null;
-                    const _ps = (_hasRes && _pts !== null) ? _ptsBadgeStyle(_pts) : null;
+                    const _pts = _hasRes ? calcPontos(p, _gr, game.id) : null;
+                    const _ps = (_hasRes && _pts !== null) ? _ptsBadgeStyle(_pts, _isMataGame(game.id)) : null;
                     const _scoreCol = _ps ? _ps.color : 'var(--gold)';
                     const _ptsTag = (_hasRes && _pts !== null) ? ' <span style="font-size:0.62rem;color:' + (_ps ? _ps.color : 'var(--text-muted)') + '">(' + (_pts > 0 ? '+' + _pts : '0') + ')</span>' : '';
                     // Segurança: coage o placar a inteiro (o palpite vem do doc do usuário) → sem XSS no innerHTML.
@@ -8004,7 +8036,7 @@ async function renderEstatisticas() {
       users.forEach(u => {
         _maxGain[u.uid] = _nextGames.reduce((acc, g) => {
           const p = allPals[u.uid]?.[g.id];
-          return acc + (p && p.h !== undefined && p.a !== undefined ? _maxPts : 0);
+          return acc + (p && p.h !== undefined && p.a !== undefined ? _ptsForType('exato', _isMataGame(g.id)) : 0);
         }, 0);
       });
       // Scenarios to test for each game (generic + each user's exact bet added below)
@@ -8026,8 +8058,8 @@ async function renderEstatisticas() {
             // Guarda o placar hipotético e o rótulo do jogo p/ explicar o cenário.
             gameId: game.id, label: `${game.h} × ${game.a}`, relevant: hasChal || hasTgt,
             score: { h: sc.h_real, a: sc.a_real },
-            gainChal: hasChal ? calcPontos(palChal, sc) : 0,
-            gainTgt:  hasTgt  ? calcPontos(palTgt,  sc) : 0
+            gainChal: hasChal ? calcPontos(palChal, sc, game.id) : 0,
+            gainTgt:  hasTgt  ? calcPontos(palTgt,  sc, game.id) : 0
           }));
       }
       // Checks all combinations of outcomes across all simultaneous games.
@@ -8068,7 +8100,7 @@ async function renderEstatisticas() {
       // Points at stake in next group
       const _totalAtStake = _nextGames.reduce((acc, g) => {
         const cnt = users.filter(u => { const p=allPals[u.uid]?.[g.id]; return p&&p.h!==undefined&&p.a!==undefined; }).length;
-        return acc + cnt * _maxPts;
+        return acc + cnt * _ptsForType('exato', _isMataGame(g.id));
       }, 0);
       const _gap12 = ranking.length >= 2 ? (ranking[0].pontos - ranking[1].pontos) : 0;
       const _nearTop = ranking.slice(1).filter(u => {
@@ -8108,7 +8140,7 @@ async function renderEstatisticas() {
 
       const _explainImpact = '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:10px;line-height:1.5;background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px">'
         + '💡 <b>Como é calculado:</b> '
-        + '"Pontos máximos em disputa" = nº de palpites enviados × pontos do placar exato (' + _maxPts + ' pts). '
+        + '"Pontos máximos em disputa" = nº de palpites enviados × pontos do placar exato (' + CFG.pts_exato + ' nos grupos, ' + (CFG.pts_exato_mata ?? 15) + ' no mata-mata). '
         + '"Podem alcançar a pontuação atual do líder" = participantes para quem existe algum resultado onde eles passam o líder, considerando o que ambos apostaram. '
         + '"Pode ultrapassar" = existe pelo menos um resultado onde o saldo de pontos inverte — o cenário mostra qual placar favorece a ultrapassagem e quantos pontos cada um faria.'
         + '</div>';
@@ -8276,7 +8308,7 @@ async function renderEstatisticas() {
         if (!gamesWithRes.length) return null;
         const byExatos = users.map(u => {
           const ex = gamesWithRes.filter(id => {
-            const p = allPals[u.uid]?.[id]; return p && calcPontos(p, res[id]) === CFG.pts_exato;
+            const p = allPals[u.uid]?.[id]; return p && _hitType(p, res[id]) === 'exato';
           }).length;
           return { u, ex };
         }).sort((a,b) => b.ex-a.ex);
@@ -8737,7 +8769,7 @@ function _buildPalpiteiroMedioCard({ analiseJogos, res, jogosComResultado, users
   (users || []).forEach(u => { userTotals[u.uid] = 0; });
 
   const linhas = [];
-  let medioPts = 0, exatos = 0, vencSaldo = 0, apenasVenc = 0, erros = 0;
+  let medioPts = 0, exatos = 0, vencSaldo = 0, apenasVenc = 0, erros = 0, possivelMax = 0;
 
   (jogosComResultado || []).forEach(jid => {
     const aj = analiseJogos[jid];
@@ -8752,17 +8784,20 @@ function _buildPalpiteiroMedioCard({ analiseJogos, res, jogosComResultado, users
     const n = aj.palpites.length;
     const avgH = sumH / n, avgA = sumA / n;
     const palp = { h: _roundMedia(avgH), a: _roundMedia(avgA) };
-    const pts = calcPontos(palp, r);
+    const _mata = _isMataGame(jid);
+    const t = _hitType(palp, r);
+    const pts = _ptsForType(t, _mata);
     medioPts += pts;
-    if (pts === CFG.pts_exato) exatos++;
-    else if (pts === (CFG.pts_vencedor_saldo ?? 7)) vencSaldo++;
-    else if (pts === (CFG.pts_apenas_vencedor ?? 5)) apenasVenc++;
+    possivelMax += _ptsForType('exato', _mata);
+    if (t === 'exato') exatos++;
+    else if (t === 'saldo') vencSaldo++;
+    else if (t === 'vencedor') apenasVenc++;
     else erros++;
     const tt = _getResolvedTeamsForGame(aj.game || { id: jid }, res);
     linhas.push({
       jid, h: tt.h, a: tt.a, date: aj.game?.date || '',
       avgH, avgA, ph: palp.h, pa: palp.a,
-      rh: r.h_real, ra: r.a_real, pts
+      rh: r.h_real, ra: r.a_real, pts, t
     });
   });
 
@@ -8773,7 +8808,7 @@ function _buildPalpiteiroMedioCard({ analiseJogos, res, jogosComResultado, users
 
   const nJogos = linhas.length;
   const acertos = exatos + vencSaldo + apenasVenc;
-  const possivel = nJogos * CFG.pts_exato;
+  const possivel = possivelMax;
   const aproveit = possivel > 0 ? Math.round(medioPts / possivel * 100) : 0;
 
   // Comparação com os participantes reais (mesma base: jogos finalizados, sem bônus).
@@ -8788,14 +8823,14 @@ function _buildPalpiteiroMedioCard({ analiseJogos, res, jogosComResultado, users
   const pctBatidos = nPart ? Math.round((nPart - acima) / nPart * 100) : 0;
   const vsMedia = medioPts - mediaReal;
 
-  const _lblPts = (p) => p === CFG.pts_exato ? 'Cravou' :
-    p === (CFG.pts_vencedor_saldo ?? 7) ? 'Venc+Saldo' :
-    p === (CFG.pts_apenas_vencedor ?? 5) ? 'Vencedor' : 'Errou';
-  const _colPts = (p) => p === CFG.pts_exato ? 'var(--gold)' :
-    p > 0 ? 'var(--green)' : 'var(--text-muted)';
+  const _lblPts = (t) => t === 'exato' ? 'Cravou' :
+    t === 'saldo' ? 'Venc+Saldo' :
+    t === 'vencedor' ? 'Vencedor' : 'Errou';
+  const _colPts = (t) => t === 'exato' ? 'var(--gold)' :
+    (t === 'saldo' || t === 'vencedor') ? 'var(--green)' : 'var(--text-muted)';
 
   const rows = linhas.map(l => {
-    const tipoCol = _colPts(l.pts);
+    const tipoCol = _colPts(l.t);
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:6px 4px;font-size:0.74rem">${esc(l.h)} <b>${l.rh}×${l.ra}</b> ${esc(l.a)}</td>
       <td style="padding:6px 4px;text-align:center;font-size:0.72rem;color:var(--text-muted)">${l.avgH.toFixed(1)}×${l.avgA.toFixed(1)}</td>
@@ -8961,8 +8996,8 @@ function _trTrocaRow(it) {
       <b style="color:${dCol};white-space:nowrap">${it.d > 0 ? '+' : ''}${it.d} pts</b>
     </div>
     <div style="margin-top:2px;color:var(--text-muted)">
-      tinha <b style="color:var(--white)">${bStr}</b> (${bPts} pts, ${_perdaScoreLabel(bPts)}) →
-      ${fStr ? `<b style="color:var(--white)">${fStr}</b> (${fPts} pts, ${_perdaScoreLabel(fPts)})` : `<span style="color:${_TR_R}">apagou o palpite</span> (0 pts)`}
+      tinha <b style="color:var(--white)">${bStr}</b> (${bPts} pts, ${_perdaScoreLabel(bPts, _isMataGame(it.g))}) →
+      ${fStr ? `<b style="color:var(--white)">${fStr}</b> (${fPts} pts, ${_perdaScoreLabel(fPts, _isMataGame(it.g))})` : `<span style="color:${_TR_R}">apagou o palpite</span> (0 pts)`}
     </div>
   </div>`;
 }
@@ -9253,8 +9288,9 @@ function _gxGameStats(gid, data) {
     const h = parseInt(p.h), a = parseInt(p.a);
     if (isNaN(h) || isNaN(a)) return;
     nPals++;
-    const pts = calcPontos(p, r);
-    if (pts != null) { sumPts += pts; if (pts === CFG.pts_exato) exatos++; if (pts === 0) erros++; }
+    const pts = calcPontos(p, r, gid);
+    const t = _hitType(p, r);
+    if (pts != null) { sumPts += pts; if (t === 'exato') exatos++; if (t === 'erro') erros++; }
     const o = h > a ? 'H' : h < a ? 'A' : 'D'; oc[o]++;
     const key = `${h}×${a}`; scoreFreq[key] = (scoreFreq[key] || 0) + 1;
   });
@@ -9272,12 +9308,13 @@ function _gxGameStats(gid, data) {
 }
 function _gxOutcomeLabel(o, teams) { return o === 'H' ? teams.h : o === 'A' ? teams.a : 'Empate'; }
 
-// Cores do heatmap por pontuação obtida no jogo.
-function _gxHeatColor(pts) {
+// Cores do heatmap por pontuação obtida no jogo. `mata` (opcional) escolhe a
+// tabela de pontos da fase (grupos 10/7/5 × mata-mata 15/10/7).
+function _gxHeatColor(pts, mata) {
   if (pts == null) return 'rgba(255,255,255,.03)';      // sem palpite
-  if (pts === CFG.pts_exato) return '#00C851';          // placar exato → verde forte
-  if (pts === (CFG.pts_vencedor_saldo ?? 7)) return '#FFD98A'; // vencedor+saldo → dourado claro
-  if (pts === (CFG.pts_apenas_vencedor ?? 5)) return '#1E90FF';// apenas vencedor → azul
+  if (pts === _ptsForType('exato', mata)) return '#00C851';          // placar exato → verde forte
+  if (pts === _ptsForType('saldo', mata)) return '#FFD98A'; // vencedor+saldo → dourado claro
+  if (pts === _ptsForType('vencedor', mata)) return '#1E90FF';// apenas vencedor → azul
   return 'rgba(140,160,190,.20)';                        // 0 pontos → cinza
 }
 
@@ -9320,12 +9357,14 @@ function renderGraficos() {
 // placar exato; os demais níveis têm nomes próprios e não são chamados de acerto.
 function _gxScoringGlossary() {
   const ex = CFG.pts_exato, vs = CFG.pts_vencedor_saldo ?? 7, av = CFG.pts_apenas_vencedor ?? 5;
+  const exM = CFG.pts_exato_mata ?? 15, vsM = CFG.pts_vencedor_saldo_mata ?? 10, avM = CFG.pts_apenas_vencedor_mata ?? 7;
   return `<details class="gx-help"><summary>ℹ️ Como contamos cada palpite</summary>
     <div class="gx-help-body">
-      <div><span class="gx-tag" style="background:#00C851">Exato · ${ex} pts</span> cravou o placar. <b>É o único que chamamos de “acerto”/“cravada”.</b></div>
-      <div><span class="gx-tag" style="background:#FFD98A;color:#222">Vencedor + saldo · ${vs} pts</span> acertou quem venceu <b>e</b> o saldo de gols, mas não o placar.</div>
-      <div><span class="gx-tag" style="background:#1E90FF">Só o vencedor · ${av} pts</span> acertou apenas quem venceu (ou o empate).</div>
+      <div><span class="gx-tag" style="background:#00C851">Exato · ${ex}/${exM} pts</span> cravou o placar. <b>É o único que chamamos de “acerto”/“cravada”.</b></div>
+      <div><span class="gx-tag" style="background:#FFD98A;color:#222">Vencedor + saldo · ${vs}/${vsM} pts</span> acertou quem venceu <b>e</b> o saldo de gols, mas não o placar.</div>
+      <div><span class="gx-tag" style="background:#1E90FF">Só o vencedor · ${av}/${avM} pts</span> acertou apenas quem venceu (ou o empate).</div>
       <div><span class="gx-tag" style="background:rgba(140,160,190,.5)">Erro · 0 pts</span> não pontuou.</div>
+      <div style="margin-top:4px;color:var(--text-muted);font-size:0.8rem">Valores: <b>grupos / mata-mata</b> (Round of 32 em diante vale mais).</div>
     </div>
   </details>`;
 }
@@ -9454,7 +9493,7 @@ function renderGxBumpCard(d) {
 function computeAccuracyBreakdown(d) {
   return d.ranking
     .filter(u => u.jogos > 0)
-    .map(u => ({ u, exatos: u.exatos, venc_saldo: u.venc_saldo, apenas_venc: u.apenas_venc, erros: u.erros, jogos: u.jogos, pontos: u.pontos }))
+    .map(u => ({ u, exatos: u.exatos, venc_saldo: u.venc_saldo, apenas_venc: u.apenas_venc, erros: u.erros, jogos: u.jogos, pontos: u.pontos, ptsMax: u.ptsMax }))
     .sort((a, b) => b.exatos - a.exatos || b.pontos - a.pontos);
 }
 function renderGxAccuracyBreakdown(d) {
@@ -9465,7 +9504,7 @@ function renderGxAccuracyBreakdown(d) {
   const seg = (n, total, color, label) => n > 0 ? `<div class="gx-stack-seg" style="width:${(n / total * 100).toFixed(1)}%;background:${color}" title="${label}: ${n}"></div>` : '';
   const body = top.map(r => {
     const t = r.exatos + r.venc_saldo + r.apenas_venc + r.erros || 1;
-    const disputados = r.jogos * CFG.pts_exato; // máximo possível (cravando todos)
+    const disputados = r.ptsMax ?? (r.jogos * CFG.pts_exato); // máximo possível (cravando todos, por fase)
     return `<div class="gx-stack-row"${r.u.uid === meUid ? ' style="background:rgba(255,215,0,.06);border-radius:8px"' : ''}>
       <div class="gx-stack-name">${_gxName(r.u)}</div>
       <div class="gx-stack-bar">
@@ -9856,7 +9895,7 @@ function computeScoreHeatmapData(d, filter) {
     cells: games.map(g => {
       const p = allPals[u.uid]?.[g.id];
       if (!p || p.h === undefined) return null;
-      return calcPontos(p, res[g.id]);
+      return calcPontos(p, res[g.id], g.id);
     })
   }));
   return { games, rows };
@@ -9899,15 +9938,15 @@ function _gxHeatBody(d, filter) {
     const pts = r.user.pontos ?? 0;
     const cells = r.cells.map((p, ci) => {
       const ds = dividerAt[ci] ? ` style="${DIV}"` : '';
-      return `<td${ds}><div class="hc" style="background:${_gxHeatColor(p)};cursor:pointer" onclick="gxHeatShow(${i},${ci})" title="${esc(gLabels[ci])} — ${p == null ? 'sem palpite' : p + ' pts'}"></div></td>`;
+      return `<td${ds}><div class="hc" style="background:${_gxHeatColor(p, _isMataGame(games[ci].id))};cursor:pointer" onclick="gxHeatShow(${i},${ci})" title="${esc(gLabels[ci])} — ${p == null ? 'sem palpite' : p + ' pts'}"></div></td>`;
     }).join('');
     return `<tr><td class="hn"${isMeStyle}><span class="gx-heat-rank">${i + 1}º</span>${_gxShortName(r.user, 11)} - ${pts}pts</td>${cells}</tr>`;
   }).join('');
 
   const legend = `<div class="gx-legend">
-    <span><i style="background:#00C851"></i>Exato (${CFG.pts_exato})</span>
-    <span><i style="background:#FFD98A"></i>Venc.+saldo (${CFG.pts_vencedor_saldo ?? 7})</span>
-    <span><i style="background:#1E90FF"></i>Só vencedor (${CFG.pts_apenas_vencedor ?? 5})</span>
+    <span><i style="background:#00C851"></i>Exato (${CFG.pts_exato}/${CFG.pts_exato_mata ?? 15})</span>
+    <span><i style="background:#FFD98A"></i>Venc.+saldo (${CFG.pts_vencedor_saldo ?? 7}/${CFG.pts_vencedor_saldo_mata ?? 10})</span>
+    <span><i style="background:#1E90FF"></i>Só vencedor (${CFG.pts_apenas_vencedor ?? 5}/${CFG.pts_apenas_vencedor_mata ?? 7})</span>
     <span><i style="background:rgba(140,160,190,.20)"></i>0 pts</span>
     <span><i style="background:rgba(255,255,255,.03)"></i>Sem palpite</span>
   </div>`;
@@ -10082,11 +10121,11 @@ function computeH2HCompare(uidA, uidB, d) {
   games.forEach(g => {
     const pa = allPals[uidA]?.[g.id], pb = allPals[uidB]?.[g.id];
     if (!pa || pa.h === undefined || !pb || pb.h === undefined) return;
-    const ptsA = calcPontos(pa, res[g.id]), ptsB = calcPontos(pb, res[g.id]);
+    const ptsA = calcPontos(pa, res[g.id], g.id), ptsB = calcPontos(pb, res[g.id], g.id);
     if (ptsA == null || ptsB == null) return;
     acc.n++; acc.totalA += ptsA; acc.totalB += ptsB;
-    if (ptsA === CFG.pts_exato) acc.exatosA++;
-    if (ptsB === CFG.pts_exato) acc.exatosB++;
+    if (_hitType(pa, res[g.id]) === 'exato') acc.exatosA++;
+    if (_hitType(pb, res[g.id]) === 'exato') acc.exatosB++;
     if (ptsA > ptsB) acc.winA++; else if (ptsB > ptsA) acc.winB++; else acc.ties++;
   });
   return acc;
@@ -10926,7 +10965,7 @@ async function exportAIDataDetalhado() {
 
     const jogosComRes = ALL_GAMES.filter(g => res[g.id] && _hasFullResult(res[g.id]));
     const jogosRestantes = ALL_GAMES.filter(g => !res[g.id] || !_hasFullResult(res[g.id]));
-    const ptsDispo = jogosRestantes.length * CFG.pts_exato;
+    const ptsDispo = jogosRestantes.reduce((acc, g) => acc + _ptsForType('exato', _isMataGame(g.id)), 0);
     const finalDecidida = !!(res['FIN1'] && _hasFullResult(res['FIN1']));
 
     // Todas as fases em ordem cronológica
@@ -10950,11 +10989,11 @@ async function exportAIDataDetalhado() {
         jogosNaFase.forEach(g => {
           const pal = allPals[u.uid]?.[g.id];
           if (!pal || pal.h === undefined) return;
-          const p = calcPontos(pal, res[g.id]);
+          const p = calcPontos(pal, res[g.id], g.id);
           if (p == null) return;
           jogos++; pts += p;
           if (p > 0) acertos++;
-          if (p === CFG.pts_exato) exatos++;
+          if (_hitType(pal, res[g.id]) === 'exato') exatos++;
         });
         return { u, pts, acertos, exatos, jogos };
       });
@@ -11036,10 +11075,10 @@ async function exportAIDataDetalhado() {
       jogosComRes.forEach(g => {
         const pal = pals[g.id];
         if (!pal || pal.h === undefined) { semPalpite++; return; }
-        const p = calcPontos(pal, res[g.id]);
-        if (p === CFG.pts_exato) exatos++;
-        else if (p === CFG.pts_vencedor_saldo) vencSaldo++;
-        else if (p === CFG.pts_apenas_vencedor) sohVenc++;
+        const t = _hitType(pal, res[g.id]);
+        if (t === 'exato') exatos++;
+        else if (t === 'saldo') vencSaldo++;
+        else if (t === 'vencedor') sohVenc++;
         else erros++;
       });
       return `  ${i + 1}º ${nm(u)}: ${u.pontos}pts | ✅${exatos} exatos | 🎯${vencSaldo} venc+saldo | 👍${sohVenc} só venc | ❌${erros} erros | ?${semPalpite} s/palpite${u.campeao ? ` | campeão: ${u.campeao}${u.acertou_campeao ? ' ✅' : ''}` : ''}`;
@@ -11054,8 +11093,9 @@ async function exportAIDataDetalhado() {
         const pals = ranking.map(u => {
           const pal = allPals[u.uid]?.[g.id];
           if (!pal || pal.h === undefined) return `${nm(u)}:?`;
-          const p = calcPontos(pal, r);
-          const t = p === CFG.pts_exato ? '✅' : p === CFG.pts_vencedor_saldo ? '🎯' : p === CFG.pts_apenas_vencedor ? '👍' : '❌';
+          const p = calcPontos(pal, r, g.id);
+          const ht = _hitType(pal, r);
+          const t = ht === 'exato' ? '✅' : ht === 'saldo' ? '🎯' : ht === 'vencedor' ? '👍' : '❌';
           return `${nm(u)}:${pal.h}-${pal.a}${t}(${p})`;
         }).join(' | ');
         const teams = _getResolvedTeamsForGame(g, res);
@@ -11067,9 +11107,9 @@ async function exportAIDataDetalhado() {
     const data = `=== BOLÃO COPA 2026 — DADOS DETALHADOS POR JOGO E RODADA ===
 Data: ${today} | Participantes: ${users.length}
 Jogos concluídos: ${jogosComRes.length}/${ALL_GAMES.length} | Jogos restantes: ${jogosRestantes.length}
-Pontos ainda em disputa: até ${ptsDispo}pts por participante (${jogosRestantes.length} jogos × máx. ${CFG.pts_exato}pts)
+Pontos ainda em disputa: até ${ptsDispo}pts por participante (${jogosRestantes.length} jogos restantes)
 
-Legenda: ✅=Exato(${CFG.pts_exato}pts) 🎯=Venc+Saldo(${CFG.pts_vencedor_saldo}pts) 👍=Vencedor(${CFG.pts_apenas_vencedor}pts) ❌=Errou(0pts) ?=Sem palpite
+Pontuação — Grupos: ✅Exato=${CFG.pts_exato} 🎯Venc+Saldo=${CFG.pts_vencedor_saldo} 👍Vencedor=${CFG.pts_apenas_vencedor} | Mata-mata: ✅Exato=${CFG.pts_exato_mata ?? 15} 🎯Venc+Saldo=${CFG.pts_vencedor_saldo_mata ?? 10} 👍Vencedor=${CFG.pts_apenas_vencedor_mata ?? 7} | ❌Errou=0 ?=Sem palpite
 
 ════════════════════════════════════════
 RESUMO GERAL DO BOLÃO (acumulado)
@@ -12312,7 +12352,7 @@ async function renderAdminConfig() {
       <div class="card-title" style="margin-bottom:16px">⚙️ Configurações do Bolão</div>
       <div class="form-group"><label>Nome do Bolão</label><input id="cfg-nome" value="${esc(CFG.nome_bolao)}"></div>
 
-      <div class="card-title" style="margin-top:20px;margin-bottom:12px;font-size:0.95rem">📊 Regras de Pontuação</div>
+      <div class="card-title" style="margin-top:20px;margin-bottom:12px;font-size:0.95rem">📊 Regras de Pontuação — Fase de Grupos</div>
       <div class="form-row">
         <div class="form-group"><label>Placar Exato</label><input type="number" id="cfg-pts-exato" value="${CFG.pts_exato}" min="0" max="100"></div>
         <div class="form-group"><label>Vencedor + Saldo</label><input type="number" id="cfg-pts-venc-saldo" value="${CFG.pts_vencedor_saldo ?? 7}" min="0" max="100"></div>
@@ -12320,6 +12360,16 @@ async function renderAdminConfig() {
       <div class="form-row">
         <div class="form-group"><label>Apenas Vencedor</label><input type="number" id="cfg-pts-apenas-venc" value="${CFG.pts_apenas_vencedor ?? 5}" min="0" max="100"></div>
         <div class="form-group"><label>Bônus Classificação <span style="color:var(--gold);font-size:0.7rem">🚧 não implementado</span></label><input type="number" id="cfg-pts-bonus-class" value="${CFG.pts_bonus_classificacao ?? 3}" min="0" max="100" disabled title="Pontuação por acertar a classificação do grupo — em desenvolvimento"></div>
+      </div>
+
+      <div class="card-title" style="margin-top:20px;margin-bottom:12px;font-size:0.95rem">🏆 Regras de Pontuação — Mata-mata <span style="color:var(--gold);font-size:0.7rem">(Round of 32 em diante)</span></div>
+      <div class="form-row">
+        <div class="form-group"><label>Placar Exato</label><input type="number" id="cfg-pts-exato-mata" value="${CFG.pts_exato_mata ?? 15}" min="0" max="100"></div>
+        <div class="form-group"><label>Vencedor + Saldo</label><input type="number" id="cfg-pts-venc-saldo-mata" value="${CFG.pts_vencedor_saldo_mata ?? 10}" min="0" max="100"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Apenas Vencedor</label><input type="number" id="cfg-pts-apenas-venc-mata" value="${CFG.pts_apenas_vencedor_mata ?? 7}" min="0" max="100"></div>
+        <div class="form-group"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Palpite Campeão</label><input type="number" id="cfg-pts-campeao" value="${CFG.pts_campeao ?? 50}" min="0" max="200" title="Pontuação por acertar a seleção campeã"></div>
@@ -12526,7 +12576,7 @@ function _tickerPhaseBreakdown(uid, allPals, res) {
   return phases.map(ph => {
     let pts = 0, jogos = 0;
     ph.ids.forEach(id => {
-      const pt = calcPontos(pals[id], res[id]);
+      const pt = calcPontos(pals[id], res[id], id);
       if (pt !== null) { pts += pt; jogos++; }
     });
     return { key: ph.key, label: ph.label, pts, jogos, avg: jogos ? pts / jogos : 0 };
@@ -12575,7 +12625,7 @@ function _tickerAdvancedItems(rank, allPals, res) {
   // ── 3. Regularidade: desvio padrão dos pontos por jogo (ranking) ──
   const regs = rank.map(u => {
     const pals = allPals[u.uid] || {};
-    const list = decididos.map(id => calcPontos(pals[id], res[id])).filter(p => p !== null);
+    const list = decididos.map(id => calcPontos(pals[id], res[id], id)).filter(p => p !== null);
     return { uid: u.uid, n: list.length, std: _stdDev(list) };
   }).filter(r => r.n >= 5);
   if (regs.length >= 3) {
@@ -12741,11 +12791,11 @@ function _tickerAdvancedItems(rank, allPals, res) {
   let bestCrav = null;
   decididos.forEach(id => {
     const p = myPals[id];
-    if (!p || p.h === undefined || calcPontos(p, res[id]) !== (CFG.pts_exato ?? 10)) return;
+    if (!p || p.h === undefined || _hitType(p, res[id]) !== 'exato') return;
     let got = 0, tot = 0;
     rank.forEach(u => {
       const q = (allPals[u.uid] || {})[id];
-      if (q && q.h !== undefined) { tot++; if (calcPontos(q, res[id]) === (CFG.pts_exato ?? 10)) got++; }
+      if (q && q.h !== undefined) { tot++; if (_hitType(q, res[id]) === 'exato') got++; }
     });
     const share = tot ? got / tot : 1;
     if (!bestCrav || share < bestCrav.share) bestCrav = { id, share };
@@ -13128,6 +13178,9 @@ async function saveCFGAdmin() {
   const ptsExato = parseInt(document.getElementById('cfg-pts-exato').value)||10;
   const ptsVencSaldo = parseInt(document.getElementById('cfg-pts-venc-saldo').value)||7;
   const ptsApenasVenc = parseInt(document.getElementById('cfg-pts-apenas-venc').value)||5;
+  const ptsExatoMata = parseInt(document.getElementById('cfg-pts-exato-mata').value)||15;
+  const ptsVencSaldoMata = parseInt(document.getElementById('cfg-pts-venc-saldo-mata').value)||10;
+  const ptsApenasVencMata = parseInt(document.getElementById('cfg-pts-apenas-venc-mata').value)||7;
   const ptsBonusClass = parseInt(document.getElementById('cfg-pts-bonus-class').value)||3;
   const ptsCampeao = parseInt(document.getElementById('cfg-pts-campeao').value)||50;
 
@@ -13138,6 +13191,9 @@ async function saveCFGAdmin() {
       pts_exato:ptsExato,
       pts_vencedor_saldo:ptsVencSaldo,
       pts_apenas_vencedor:ptsApenasVenc,
+      pts_exato_mata:ptsExatoMata,
+      pts_vencedor_saldo_mata:ptsVencSaldoMata,
+      pts_apenas_vencedor_mata:ptsApenasVencMata,
       pts_bonus_classificacao:ptsBonusClass,
       pts_campeao:ptsCampeao
     };
@@ -13878,10 +13934,10 @@ async function gerarRelatorioAlteracoes() {
 // e o palpite final que de fato valeu (palpites/{uid}/jogos, via cache de ranking).
 // Métrica por jogo: delta = pontosFinal − melhorAlternativaAnterior. delta<0 = perda,
 // delta>0 = ganho. Só considera jogos com resultado lançado.
-function _perdaScoreLabel(pts) {
-  if (pts === CFG.pts_exato) return 'cravou o placar';
-  if (pts === (CFG.pts_vencedor_saldo ?? 7)) return 'vencedor + saldo';
-  if (pts === (CFG.pts_apenas_vencedor ?? 5)) return 'só o vencedor';
+function _perdaScoreLabel(pts, mata) {
+  if (pts === _ptsForType('exato', mata)) return 'cravou o placar';
+  if (pts === _ptsForType('saldo', mata)) return 'vencedor + saldo';
+  if (pts === _ptsForType('vencedor', mata)) return 'só o vencedor';
   return 'errou';
 }
 function _perdaPlacar(p) { return p ? `${p.h}×${p.a}` : '—'; }
@@ -13966,11 +14022,11 @@ async function gerarRelatorioPerdas() {
         if (!_hasFullResult(r)) return;                 // só jogos com resultado
         const finalPal = pals[gid] && pals[gid].h != null && pals[gid].a != null
           ? { h: parseInt(pals[gid].h), a: parseInt(pals[gid].a) } : null;
-        const finalScore = finalPal ? (calcPontos(finalPal, r) ?? 0) : 0;
+        const finalScore = finalPal ? (calcPontos(finalPal, r, gid) ?? 0) : 0;
         // Melhor palpite que passou pelo histórico e que DIFERE do palpite final.
         let best = null;
         sets.forEach(s => {
-          const sc = calcPontos(s, r);
+          const sc = calcPontos(s, r, gid);
           if (sc == null) return;
           const sameAsFinal = finalPal && finalPal.h === s.h && finalPal.a === s.a;
           if (sameAsFinal) return;
@@ -13994,8 +14050,8 @@ async function gerarRelatorioPerdas() {
       gains.sort((a, b) => b.gained - a.gained || b.finalScore - a.finalScore);
       const totalLost = losses.reduce((s, l) => s + l.lost, 0);
       const totalGained = gains.reduce((s, g) => s + g.gained, 0);
-      const cravadasLargadas = losses.filter(l => l.best.score === CFG.pts_exato).length;
-      const cravadasGanhas = gains.filter(g => g.finalScore === CFG.pts_exato).length;
+      const cravadasLargadas = losses.filter(l => l.best.score === _ptsForType('exato', _isMataGame(l.gid))).length;
+      const cravadasGanhas = gains.filter(g => g.finalScore === _ptsForType('exato', _isMataGame(g.gid))).length;
       return { user, name, err, losses, gains, totalLost, totalGained, saldo: totalGained - totalLost, cravadasLargadas, cravadasGanhas };
     });
 
@@ -14092,10 +14148,11 @@ async function gerarRelatorioPerdas() {
       const gdef = ALL_GAMES.find(g => g.id === it.gid);
       const jogo = gdef ? esc(gdef.h) + ' × ' + esc(gdef.a) : '';
       const resStr = it.r.h_real + '×' + it.r.a_real;
-      const fromStr = '<b>' + _perdaPlacar(it.best) + '</b> <span style="color:var(--text-muted)">(' + _perdaScoreLabel(it.best.score) + ', ' + it.best.score + ' pts)</span>';
+      const _itMata = _isMataGame(it.gid);
+      const fromStr = '<b>' + _perdaPlacar(it.best) + '</b> <span style="color:var(--text-muted)">(' + _perdaScoreLabel(it.best.score, _itMata) + ', ' + it.best.score + ' pts)</span>';
       const toStr = it.deleted
         ? '<span style="color:#e74c3c">apagou o palpite</span> (0 pts)'
-        : '<b>' + _perdaPlacar(it.finalPal) + '</b> <span style="color:var(--text-muted)">(' + _perdaScoreLabel(it.finalScore) + ', ' + it.finalScore + ' pts)</span>';
+        : '<b>' + _perdaPlacar(it.finalPal) + '</b> <span style="color:var(--text-muted)">(' + _perdaScoreLabel(it.finalScore, _itMata) + ', ' + it.finalScore + ' pts)</span>';
       const delta = kind === 'loss'
         ? '<span style="color:#e74c3c;font-weight:700">−' + it.lost + ' pts</span>'
         : '<span style="color:var(--green);font-weight:700">+' + it.gained + ' pts</span>';
@@ -14395,7 +14452,7 @@ async function exportAllCSV() {
         const pal = allPals[u.uid]?.[g.id];
         const r = res[g.id];
         if (!pal) return;
-        const pts = calcPontos(pal, r);
+        const pts = calcPontos(pal, r, g.id);
         csv += `"${u.nome}","${u.apelido}","${g.id}","${g.h}",${pal.h!==undefined?pal.h:''},${pal.a!==undefined?pal.a:''},"${g.a}",${r?.h_real??''},${r?.a_real??''},${r?.locked?1:0},${pts??''}\n`;
       });
     });
@@ -14483,9 +14540,12 @@ async function exportFullExcel() {
     // Sheet 4 - Configurações
     const cfgData = [['Configuração','Valor']];
     cfgData.push(['Nome do Bolão', CFG.nome_bolao]);
-    cfgData.push(['Placar Exato', CFG.pts_exato]);
-    cfgData.push(['Vencedor + Saldo', CFG.pts_vencedor_saldo]);
-    cfgData.push(['Apenas Vencedor', CFG.pts_apenas_vencedor]);
+    cfgData.push(['Placar Exato (grupos)', CFG.pts_exato]);
+    cfgData.push(['Vencedor + Saldo (grupos)', CFG.pts_vencedor_saldo]);
+    cfgData.push(['Apenas Vencedor (grupos)', CFG.pts_apenas_vencedor]);
+    cfgData.push(['Placar Exato (mata-mata)', CFG.pts_exato_mata ?? 15]);
+    cfgData.push(['Vencedor + Saldo (mata-mata)', CFG.pts_vencedor_saldo_mata ?? 10]);
+    cfgData.push(['Apenas Vencedor (mata-mata)', CFG.pts_apenas_vencedor_mata ?? 7]);
     cfgData.push(['Bônus Classificação', CFG.pts_bonus_classificacao]);
     cfgData.push(['Palpite Campeão', CFG.pts_campeao]);
     cfgData.push(['Palpite Campeão Bloqueado?', CFG.campeao_locked?'SIM':'NÃO']);
@@ -15348,11 +15408,11 @@ async function installPwaApp() {
 // ════════════════════════════════════════════
 // MODAL NOVOS RESULTADOS
 // ════════════════════════════════════════════
-function _newResPtsBadge(pts) {
+function _newResPtsBadge(pts, mata) {
   if (pts === null || pts === undefined) return `<span class="new-res-pts none">sem palpite</span>`;
-  if (pts === CFG.pts_exato)                    return `<span class="new-res-pts exact">+${pts} Exato</span>`;
-  if (pts === (CFG.pts_vencedor_saldo ?? 7))    return `<span class="new-res-pts vsaldo">+${pts} V+Saldo</span>`;
-  if (pts === (CFG.pts_apenas_vencedor ?? 5))   return `<span class="new-res-pts venc">+${pts} Vencedor</span>`;
+  if (pts === _ptsForType('exato', mata))    return `<span class="new-res-pts exact">+${pts} Exato</span>`;
+  if (pts === _ptsForType('saldo', mata))    return `<span class="new-res-pts vsaldo">+${pts} V+Saldo</span>`;
+  if (pts === _ptsForType('vencedor', mata)) return `<span class="new-res-pts venc">+${pts} Vencedor</span>`;
   return `<span class="new-res-pts miss">+0 Erro</span>`;
 }
 
@@ -15371,7 +15431,7 @@ function _showNewResultsModal(res, myPals) {
       if (_hasFullResult(r) && !seen[id]) {
         const game = gameMap[id];
         const teams = { h: r.h_team || (game?.h) || id, a: r.a_team || (game?.a) || id };
-        const pts = calcPontos(myPals[id], r);
+        const pts = calcPontos(myPals[id], r, id);
         if (pts !== null) newPts += pts;
         newGames.push({ id, r, game, teams, pts });
       }
@@ -15404,7 +15464,7 @@ function _showNewResultsModal(res, myPals) {
           <div class="new-res-result">${r.h_real}–${r.a_real}</div>
         </div>
         <div class="new-res-pred">${predStr}</div>
-        ${_newResPtsBadge(pts)}
+        ${_newResPtsBadge(pts, _isMataGame(id))}
       </div>`;
     }).join('');
 
@@ -15732,7 +15792,7 @@ function _corridaBuild(users, res, allPals) {
   const cum = {}; uids.forEach(uid => cum[uid] = 0);
   const frames = games.map(g => {
     const r = res[g.id];
-    users.forEach(u => { const pts = calcPontos(allPals[u.uid] && allPals[u.uid][g.id], r); if (pts != null) cum[u.uid] += pts; });
+    users.forEach(u => { const pts = calcPontos(allPals[u.uid] && allPals[u.uid][g.id], r, g.id); if (pts != null) cum[u.uid] += pts; });
     const values = Object.assign({}, cum);
     const order = uids.slice().sort((a, b) => (values[b] - values[a]) || apel[a].localeCompare(apel[b]));
     const rank = {}; order.forEach((uid, i) => rank[uid] = i);
@@ -16608,11 +16668,11 @@ async function openH2H(uid1, uid2) {
   }
 }
 
-function _h2hPtsBadge(pts) {
+function _h2hPtsBadge(pts, mata) {
   if (pts === null || pts === undefined) return `<span class="h2h-pts-badge none">—</span>`;
-  if (pts === CFG.pts_exato) return `<span class="h2h-pts-badge exact">+${pts}</span>`;
-  if (pts === (CFG.pts_vencedor_saldo ?? 7)) return `<span class="h2h-pts-badge vsaldo">+${pts}</span>`;
-  if (pts === (CFG.pts_apenas_vencedor ?? 5)) return `<span class="h2h-pts-badge venc">+${pts}</span>`;
+  if (pts === _ptsForType('exato', mata)) return `<span class="h2h-pts-badge exact">+${pts}</span>`;
+  if (pts === _ptsForType('saldo', mata)) return `<span class="h2h-pts-badge vsaldo">+${pts}</span>`;
+  if (pts === _ptsForType('vencedor', mata)) return `<span class="h2h-pts-badge venc">+${pts}</span>`;
   return `<span class="h2h-pts-badge miss">+0</span>`;
 }
 
@@ -16639,8 +16699,8 @@ function _renderH2HContent(uid1, uid2, users, allPals, res, champPicks, cont) {
       const r = res[g.id];
       const p1 = pals1[g.id];
       const p2 = pals2[g.id];
-      const pts1 = calcPontos(p1, r);
-      const pts2 = calcPontos(p2, r);
+      const pts1 = calcPontos(p1, r, g.id);
+      const pts2 = calcPontos(p2, r, g.id);
       const v = (pts1 !== null && pts2 !== null) ? (pts1 > pts2 ? 1 : pts1 < pts2 ? 2 : 0) : null;
       return { g, r, p1, p2, pts1, pts2, v };
     });
@@ -16744,7 +16804,7 @@ function _renderH2HTabs(activeTab) {
 
     rows += `<div class="h2h-game-row ${rowClass}">
       <div class="h2h-pal p1">
-        ${_h2hPtsBadge(pts1)}
+        ${_h2hPtsBadge(pts1, _isMataGame(g.id))}
         <span class="h2h-pal-score">${pal1Score}</span>
       </div>
       <div class="h2h-game-center">
@@ -16753,7 +16813,7 @@ function _renderH2HTabs(activeTab) {
       </div>
       <div class="h2h-pal p2">
         <span class="h2h-pal-score">${pal2Score}</span>
-        ${_h2hPtsBadge(pts2)}
+        ${_h2hPtsBadge(pts2, _isMataGame(g.id))}
       </div>
     </div>`;
   });

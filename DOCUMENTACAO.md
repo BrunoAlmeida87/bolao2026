@@ -268,36 +268,51 @@ Horários de todos os 104 jogos estão mapeados em `GAME_TIMES` no código.
 
 ### Valores de Pontos (configuráveis pelo admin)
 
-| Acerto | Pontos padrão |
-|--------|--------------|
-| Placar exato (casa e fora corretos) | **10 pts** |
-| Vencedor + saldo de gols igual | **7 pts** |
-| Apenas vencedor/empate correto | **5 pts** |
-| Bônus campeão correto | **50 pts** |
+A pontuação é **maior na fase de mata-mata** (Round of 32 em diante), aprovada em
+votação do grupo — cada acerto vale mais e a reta final pesa no ranking.
+
+| Acerto | Grupos | Mata-mata |
+|--------|--------|-----------|
+| Placar exato (casa e fora corretos) | **10 pts** | **15 pts** |
+| Vencedor + saldo de gols igual | **7 pts** | **10 pts** |
+| Apenas vencedor/empate correto | **5 pts** | **7 pts** |
+| Bônus campeão correto | **50 pts** (único, na Final) | |
 
 ### Algoritmo (`calcPontos`)
 
+A classificação do tipo de acerto (`_hitType`) é **independente** do valor dos pontos —
+grupos (10/7/5) e mata-mata (15/10/7) colidem em valor, então não se pode mais inferir
+o tipo a partir da pontuação. `_ptsForType(tipo, mata)` aplica a tabela da fase e
+`_isMataGame(id)` identifica os jogos do mata-mata (IDs em `ELIM_DATA`).
+
 ```javascript
-function calcPontos(palpite, resultado) {
+// Tipo do acerto, independente de pontuação.
+function _hitType(palpite, resultado) {
   const ph = palpite.h, pa = palpite.a;
   const rh = resultado.h_real, ra = resultado.a_real;
+  if (ph === rh && pa === ra) return 'exato';
+  const pRes = ph>pa ? 'H' : ph<pa ? 'A' : 'D';
+  const rRes = rh>ra ? 'H' : rh<ra ? 'A' : 'D';
+  if (pRes !== rRes) return 'erro';
+  if ((ph - pa) === (rh - ra)) return 'saldo';
+  return 'vencedor';
+}
 
-  // 1. Placar exato
-  if (ph === rh && pa === ra) return CFG.pts_exato;
+// Pontos do tipo conforme a fase (mata = mata-mata).
+function _ptsForType(type, mata) {
+  switch (type) {
+    case 'exato':    return mata ? CFG.pts_exato_mata          : CFG.pts_exato;
+    case 'saldo':    return mata ? CFG.pts_vencedor_saldo_mata : CFG.pts_vencedor_saldo;
+    case 'vencedor': return mata ? CFG.pts_apenas_vencedor_mata: CFG.pts_apenas_vencedor;
+    default:         return 0; // 'erro'
+  }
+}
 
-  const pSaldo = ph - pa;  // saldo previsto
-  const rSaldo = rh - ra;  // saldo real
-  const pRes = ph>pa ? 'H' : ph<pa ? 'A' : 'D';  // resultado previsto
-  const rRes = rh>ra ? 'H' : rh<ra ? 'A' : 'D';  // resultado real
-
-  // 2. Vencedor correto + mesmo saldo
-  if (pRes === rRes && pSaldo === rSaldo) return CFG.pts_vencedor_saldo;
-
-  // 3. Apenas vencedor/empate correto
-  if (pRes === rRes) return CFG.pts_apenas_vencedor;
-
-  // 4. Errou
-  return 0;
+// gameId define a fase (mata-mata pontua mais).
+function calcPontos(palpite, resultado, gameId) {
+  const t = _hitType(palpite, resultado);
+  if (t === null) return null;
+  return _ptsForType(t, _isMataGame(gameId));
 }
 ```
 
@@ -495,9 +510,12 @@ Campos editáveis:
 
 | Campo | Descrição |
 |-------|-----------|
-| `pts_exato` | Pontos por placar exato (padrão: 10) |
-| `pts_vencedor_saldo` | Pontos por vencedor + saldo (padrão: 7) |
-| `pts_apenas_vencedor` | Pontos só pelo vencedor (padrão: 5) |
+| `pts_exato` | Pontos por placar exato — grupos (padrão: 10) |
+| `pts_vencedor_saldo` | Pontos por vencedor + saldo — grupos (padrão: 7) |
+| `pts_apenas_vencedor` | Pontos só pelo vencedor — grupos (padrão: 5) |
+| `pts_exato_mata` | Pontos por placar exato — mata-mata (padrão: 15) |
+| `pts_vencedor_saldo_mata` | Pontos por vencedor + saldo — mata-mata (padrão: 10) |
+| `pts_apenas_vencedor_mata` | Pontos só pelo vencedor — mata-mata (padrão: 7) |
 | `pts_campeao` | Bônus de campeão (padrão: 50) |
 | `nome_bolao` | Nome exibido no header |
 | `valor_participacao` | Taxa em R$ (padrão: 50) |
@@ -861,9 +879,12 @@ Objeto `CFG` carregado de `config/geral` no login. Valores padrão:
 const CFG = {
   app_version:           'v1.12.2',
   nome_bolao:            'Bolão ICN Copa 2026',
-  pts_exato:             10,
-  pts_vencedor_saldo:    7,
-  pts_apenas_vencedor:   5,
+  pts_exato:             10,        // grupos
+  pts_vencedor_saldo:    7,         // grupos
+  pts_apenas_vencedor:   5,         // grupos
+  pts_exato_mata:        15,        // mata-mata (Round of 32+)
+  pts_vencedor_saldo_mata: 10,      // mata-mata
+  pts_apenas_vencedor_mata: 7,      // mata-mata
   pts_campeao:           50,
   valor_participacao:    50,         // R$
   chave_pix:             '128.712.527-18',
