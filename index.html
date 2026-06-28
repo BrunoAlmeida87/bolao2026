@@ -4259,6 +4259,13 @@ async function renderPalpites(editUid=null) {
       ...Object.entries(ELIM_DATA).map(([k,v])=>({key:k,label:v.icon+' '+v.label}))
     ];
 
+    // Pílulas de filtro rápido por fase do mata-mata (espelham os filtros por
+    // rodada da fase de grupos). Reusam switchPalPhase. Rótulos em PT solicitados.
+    const _mataLabels = { r32:'16 avos', r16:'Oitavas de final', quartas:'Quartas de final', semi:'Semifinais', final:'Final' };
+    const _mataFilterPills = Object.keys(ELIM_DATA)
+      .map(k => `<button class="date-filter-btn mata-filter-btn" data-phase="${k}" onclick="switchPalPhase('${k}')">${esc(_mataLabels[k] || ELIM_DATA[k].label)}</button>`)
+      .join('');
+
     // Coleta datas únicas para o filtro
     const _dateMap = new Map();
     ALL_GAMES.forEach(game => {
@@ -4299,6 +4306,10 @@ async function renderPalpites(editUid=null) {
         <button class="date-filter-btn round-filter-btn" data-round="1" onclick="switchPalRound('1')">1ª rodada</button>
         <button class="date-filter-btn round-filter-btn" data-round="2" onclick="switchPalRound('2')">2ª rodada</button>
         <button class="date-filter-btn round-filter-btn" data-round="3" onclick="switchPalRound('3')">3ª rodada</button>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;font-weight:600">🏆 Filtrar por mata-mata:</div>
+      <div class="date-filter-wrap" id="mata-filter-wrap">
+        ${_mataFilterPills}
       </div>
       <div class="phase-tabs" id="phase-tabs">`;
     phases.forEach((p,i)=>{ html += `<button class="phase-tab ${i===0?'active':''}" onclick="switchPalPhase('${p.key}')" data-phase="${p.key}">${p.label}</button>`; });
@@ -4528,6 +4539,7 @@ function switchPalDate(iso) {
   document.querySelectorAll('.date-filter-btn:not(.round-filter-btn)').forEach(b =>
     b.classList.toggle('active', b.dataset.dateiso === iso));
   _setRoundFilterActive(''); // sai do filtro por rodada (modos exclusivos)
+  _setMataFilterActive('');  // sai do filtro por fase do mata-mata
   _setPalNextActive(false);  // sai do filtro "próximos jogos"
   _palExitSorted();          // desfaz a ordenação por data (volta as linhas ao lugar)
 
@@ -4586,6 +4598,7 @@ function switchPalPhase(key) {
   // Sai de um eventual filtro por rodada: restaura a visibilidade das partidas.
   document.querySelectorAll('#pal-phases .game-row').forEach(r => { r.style.display = ''; });
   _setRoundFilterActive('');
+  _setMataFilterActive(key); // sincroniza a pílula do mata-mata (grupos → nenhuma)
   _setPalNextActive(false);
   _applyPalGroupVisibility();
 }
@@ -4606,6 +4619,7 @@ function switchPalGroup(grp, el) {
   const scope = tabsWrap.closest('.pal-phase') || document;
   scope.querySelectorAll('.game-row').forEach(r => { r.style.display = ''; });
   _setRoundFilterActive('');
+  _setMataFilterActive('');
   _setPalNextActive(false);
   _applyPalGroupVisibility(tabsWrap);
 }
@@ -4628,6 +4642,12 @@ function _setRoundFilterActive(val) {
   document.querySelectorAll('.round-filter-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.round === val));
 }
+// Marca a pílula ativa do filtro por fase do mata-mata. Passe '' (ou 'grupos')
+// para desmarcar todas — usado pelos demais filtros (modos mutuamente exclusivos).
+function _setMataFilterActive(key) {
+  document.querySelectorAll('.mata-filter-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.phase === key));
+}
 function _setDateFilterActive(iso) {
   document.querySelectorAll('.date-filter-btn:not(.round-filter-btn)').forEach(b =>
     b.classList.toggle('active', b.dataset.dateiso === iso));
@@ -4639,6 +4659,7 @@ function _setDateFilterActive(iso) {
 // normal de navegação por fase/grupo.
 function switchPalRound(r) {
   _setRoundFilterActive(r);
+  _setMataFilterActive('');  // sai do filtro por fase do mata-mata
   _setDateFilterActive(''); // sai do filtro por data (modos exclusivos)
   _setPalNextActive(false); // sai do filtro "próximos jogos"
   const phaseTabs = document.getElementById('phase-tabs');
@@ -4736,6 +4757,7 @@ function _setPalNextActive(on) {
 // a navegação por aba. Limpa os filtros de data/rodada (modos exclusivos).
 function switchPalNextGames() {
   _setRoundFilterActive('');
+  _setMataFilterActive('');
   _setDateFilterActive('');
   _setPalNextActive(true);
   _palShowSorted([..._palNextGameIds]); // próximos jogos em ordem de data
