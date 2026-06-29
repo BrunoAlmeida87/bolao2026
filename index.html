@@ -5711,15 +5711,25 @@ async function renderVerTodos() {
           }).join('')}
         </tr></thead>`;
 
+    // Memoiza standings/clinched por grupo na resolução dos slots do mata-mata.
+    const _vtBrkCache = {};
     const rowHtml = g => {
       const r = res[g.id]||{};
       const hasResult = r.h_real!==undefined;
       const resultStr = hasResult?`${r.h_real}-${r.a_real}`:'—';
-      const short = t => t.split(' ')[0];
       const dateStr = `${r.date_override?_isoToGameDate(r.date_override):(g.date||'—')}${r.time_override?' '+r.time_override:''}`;
+      // Resolve o placeholder das eliminatórias (ex.: "2º A", "Venc. O1") para a
+      // seleção real — via h_team/a_team persistido ou classificação atual. Encurta
+      // só nomes reais ao 1º termo; placeholders ficam inteiros (senão "2º A"→"2º").
+      const sideHtml = (rawToken, persisted) => {
+        const slot = _resolveBracketSlot(rawToken, persisted, res, _vtBrkCache);
+        const t = slot.team;
+        const disp = slot.isPlaceholder ? t : t.split(' ')[0];
+        return `${teamFlag(t)} ${esc(disp)}`;
+      };
       let row = `<tr>
         <td style="text-align:left;white-space:nowrap;position:sticky;left:0;z-index:1;background:var(--card)">
-          <div>${teamFlag(g.h)} ${esc(short(g.h))} × ${teamFlag(g.a)} ${esc(short(g.a))}</div>
+          <div>${sideHtml(g.h, r.h_team)} × ${sideHtml(g.a, r.a_team)}</div>
           <div style="font-size:0.62rem;color:var(--text-muted);margin-top:1px">${esc(dateStr)}</div>
         </td>
         <td style="font-weight:600;color:${hasResult?'var(--green)':'var(--text-muted)'};white-space:nowrap">${resultStr}</td>`;
