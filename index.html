@@ -3175,9 +3175,12 @@ function _hasFullResult(r) {
 
 function _getResolvedTeamsForGame(game, resMap) {
   const r = (resMap && resMap[game.id]) || {};
+  // Resolve placeholders das eliminatórias (classificação atual dos grupos e
+  // vencedores já decididos das fases anteriores), além do h_team/a_team
+  // persistido. Slots ainda indefinidos voltam como o próprio placeholder.
   return {
-    h: r.h_team || game.h,
-    a: r.a_team || game.a
+    h: _resolveBracketSlot(game.h, r.h_team, resMap, {}).team,
+    a: _resolveBracketSlot(game.a, r.a_team, resMap, {}).team
   };
 }
 
@@ -10318,17 +10321,39 @@ function _thirdSelectHTML(slot, state, overrides, handler) {
   return `<select class="bracket-sel" onchange="${handler}('${slot.slotKey}', this.value)">${opts}</select>`;
 }
 
+// Mapa id da partida → definição. Usado para resolver feeders "Venc./Perd. Xxx".
+const _GAME_BY_ID = Object.fromEntries(ALL_GAMES.map(g => [g.id, g]));
+
 // Resolve o nome a exibir num slot do chaveamento.
 // • Slot já travado (h_team/a_team persistido ou time real) → usa o nome real.
 // • Slot de grupo do R32 ("1º G"/"2º G") ainda não travado → tenta preencher
 //   PROVISORIAMENTE pela classificação ATUAL, desde que o time esteja garantido
 //   no top-2 (✅). Times ainda em disputa pelo top-2 continuam como placeholder.
-// O provisório é apenas visual: NÃO é persistido nem propaga para as fases
-// seguintes (Venc./Perd.), evitando gravar confronto errado na cascata.
+// • Feeder "Venc. O1" / "Perd. SF2" → resolve recursivamente a partida de
+//   origem e, assim que ela tem vencedor decidido (inclui pênaltis), propaga o
+//   classificado para a próxima fase — sem esperar o admin "aplicar a fase".
+// O provisório é apenas visual: NÃO é persistido na cascata.
 // `cache` (opcional) memoiza standings/clinched por grupo dentro de um render.
 function _resolveBracketSlot(rawToken, persistedTeam, res, cache) {
   const team = persistedTeam || rawToken;
   if (!_isPlaceholder(team)) return { team, isPlaceholder: false, provisional: false };
+
+  // Feeder do mata-mata: propaga o classificado da partida de origem.
+  const wm = /^(Venc|Perd)\.\s+(\w+)$/.exec(rawToken);
+  if (wm) {
+    const src = _GAME_BY_ID[wm[2]];
+    if (!src) return { team: rawToken, isPlaceholder: true, provisional: false };
+    const sr = (res && res[src.id]) || {};
+    const hS = _resolveBracketSlot(src.h, sr.h_team, res, cache);
+    const aS = _resolveBracketSlot(src.a, sr.a_team, res, cache);
+    // Só propaga com ambos os lados definidos e a partida já decidida.
+    if (hS.isPlaceholder || aS.isPlaceholder) return { team: rawToken, isPlaceholder: true, provisional: false };
+    const w = _winnerOf(sr, hS.team, aS.team);
+    if (!w) return { team: rawToken, isPlaceholder: true, provisional: false };
+    const out = wm[1] === 'Venc' ? w : (w === hS.team ? aS.team : hS.team);
+    return { team: out, isPlaceholder: false, provisional: hS.provisional || aS.provisional };
+  }
+
   const m = /^([12])º\s+([A-L])$/.exec(rawToken);
   if (!m) return { team: rawToken, isPlaceholder: true, provisional: false };
   const pos = parseInt(m[1]) - 1, grp = m[2];
@@ -10354,7 +10379,10 @@ function _bracketSideHTML(g, side, ctx) {
   const provisional = slot.provisional;
   const hasRes = r.h_real !== undefined && r.a_real !== undefined;
   const hasPen = r.h_pen !== undefined && r.a_pen !== undefined;
-  const winner = _winnerOf(r, g.h, g.a);
+  // Vencedor calculado com os times JÁ resolvidos (inclui propagação provisória),
+  // para destacar o lado certo mesmo antes de o admin aplicar a fase.
+  const otherSlot = _resolveBracketSlot(side === 'h' ? g.a : g.h, side === 'h' ? r.a_team : r.h_team, res, ctx._grpCache);
+  const winner = _winnerOf(r, side === 'h' ? resolvedTeam : otherSlot.team, side === 'h' ? otherSlot.team : resolvedTeam);
   const isWin = !!winner && winner === resolvedTeam;
   const score = hasRes ? (side === 'h' ? r.h_real : r.a_real) : '';
   const penTxt = hasPen
