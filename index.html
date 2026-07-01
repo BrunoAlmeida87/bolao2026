@@ -5392,31 +5392,25 @@ function renderRegras() {
 // Dados de fácil atualização semanal. Para corrigir/editar, basta alterar os
 // arrays abaixo — nenhuma outra parte do sistema depende deles.
 const cardapioSemana = [
-  { dia: "Segunda", data: "22/06",
+  // Segunda 29/06 sem cardápio divulgado (café e almoço não informados).
+  { dia: "Segunda", data: "29/06", cafe: [], almoco: null },
+  { dia: "Terça", data: "30/06",
     cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Polenguinho","Maçã"],
-    almoco: { saladas:["Alface crespa","Seleta","Beterraba ralada"],
-      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Batata palito","Filé de frango ao sugo","Bife à tirolesa"],
-      suco:"Abacaxi", sobremesa:"Doce de leite com coco", fruta:"Melancia" } },
-  { dia: "Terça", data: "23/06",
-    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Queijo prato","Melão"],
-    almoco: { saladas:["Alface crespa e roxa","Grãos à campanha","Tomate"],
-      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Purê de batatas","Filé de coxa assado","Iscas de fígado"],
-      suco:"Uva", sobremesa:"Pudim de baunilha", fruta:"Banana" } },
-  { dia: "Quarta", data: "24/06",
-    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Mortadela","Mamão"],
-    almoco: { saladas:["Alface americana","Mix de vegetais","Couve-flor"],
-      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Espaguete ao alho e óleo","Almôndegas ao sugo","Filé de frango à francesa"],
-      suco:"Manga", sobremesa:"Marrom glacê", fruta:"Melancia" } },
-  { dia: "Quinta", data: "25/06",
-    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Presunto","Melão"],
-    almoco: { saladas:["Alface crespa","Cenoura ralada","Tomate"],
-      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Brócolis à Nápoles","Linguiça de frango","Bife à diplomata"],
-      suco:"Goiaba", sobremesa:"Cocada", fruta:"Banana" } },
-  { dia: "Sexta", data: "26/06",
-    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Branquet","Mamão"],
-    almoco: { saladas:["Itália","Abóbora","Banana-da-terra, passas e mel"],
-      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Feijão tropeiro","Copa-lombo acebolado","Frango assado na cerveja"],
-      suco:"Maracujá", sobremesa:"Espumoni", fruta:"Laranja" } }
+    almoco: { saladas:["Alface crespa","Cenoura ralada","Brócolis"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Batata Daniel","Omelete de forno","Bife ao molho calabrês"],
+      suco:"Caju", sobremesa:"Doce de mamão", fruta:"Melancia" } },
+  { dia: "Quarta", data: "01/07",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Gelatina","Banana"],
+    almoco: { saladas:["Alface crespa e roxa","Tabule","Beterraba"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Souflê de legumes","Filé de coxa assado","Caçarola especial"],
+      suco:"Abacaxi", sobremesa:"Gelatina", fruta:"Melão" } },
+  { dia: "Quinta", data: "02/07",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Presunto","Mamão"],
+    almoco: { saladas:["Alface americana","Verão","Tomate"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Panachê de legumes","Frango assado","Bife à fricandole"],
+      suco:"Uva", sobremesa:"Curau", fruta:"Laranja" } },
+  // Sexta 03/07: café não informado e almoço especial (sem detalhamento).
+  { dia: "Sexta", data: "03/07", cafe: [], almoco: { especial: true } }
 ];
 
 const horariosTransporte = [
@@ -5539,8 +5533,8 @@ const _CATEGORIAS_ALIMENTO = [
   { cat:'beb',   kw:['achocolatado','cafe','leite','suco','iogurte','vitamina'] },
   { cat:'fruta', kw:['maca','melao','mamao','melancia','banana','laranja','abacaxi','goiaba','acerola','caju','maracuja','uva','manga','morango','abacate','pera','kiwi','tangerina','mexerica'] },
   { cat:'carb',  kw:['arroz','pao','batata','polenta','farofa','massinha','massa','macarr','milho','mandioca','tutu','pure','nhoque','cuscuz','pipoca','aipim','inhame'] },
-  { cat:'prot',  kw:['frango','bife','file','carne','linguic','salsich','carre','picadinho','toscana','presunto','mortadela','blanquet','queijo','polengu','ovo','peixe','salpicao','strogon','almondega','hamburg','coxa','diplomata','caipira','fazendinha','acebolado','calabresa','figado'] },
-  { cat:'veg',   kw:['alface','brocolis','beterraba','repolho','abobora','couve','cenoura','tomate','pepino','vinagrete','salada','rucula','agriao','espinafre','chuchu','vagem','ervilha','feijao','grao','lentilha','escarola','acelga','rabanete','quiabo','jilo','berinjela'] }
+  { cat:'prot',  kw:['frango','bife','file','carne','linguic','salsich','carre','picadinho','toscana','presunto','mortadela','blanquet','queijo','polengu','ovo','omelete','peixe','salpicao','strogon','almondega','hamburg','coxa','diplomata','caipira','fazendinha','acebolado','calabres','figado','fricandol'] },
+  { cat:'veg',   kw:['alface','brocolis','beterraba','repolho','abobora','couve','cenoura','tomate','pepino','vinagrete','salada','rucula','agriao','espinafre','chuchu','vagem','ervilha','feijao','grao','lentilha','escarola','acelga','rabanete','quiabo','jilo','berinjela','legume','tabule','panache'] }
 ];
 function _normTxt(s) { return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
 function _catAlimento(nome) {
@@ -5552,21 +5546,37 @@ function _menuCardHtml(c, isToday) {
   const a = c.almoco;
   const chips = arr => `<div class="menu-chips">${arr.map(x => `<span class="menu-chip cat-${_catAlimento(x)}">${esc(x)}</span>`).join('')}</div>`;
   const extra = (ico, lbl, val) => `<div class="menu-extra-item"><span class="ico">${ico}</span><span><span class="lbl">${lbl}</span><br>${esc(val)}</span></div>`;
+  const nota = txt => `<div style="color:var(--text-muted);font-size:0.85rem;font-style:italic;padding:6px 0">${esc(txt)}</div>`;
+  const destaque = txt => `<div style="font-weight:700;color:var(--gold);background:rgba(255,215,0,.08);border:1px dashed var(--gold);border-radius:8px;padding:10px 12px;margin:4px 0">${esc(txt)}</div>`;
+
+  // Café: pode não ter sido divulgado.
+  const cafeHtml = (c.cafe && c.cafe.length) ? chips(c.cafe) : nota('Não informado');
+
+  // Almoço: ausente (não divulgado), especial (sem detalhamento) ou completo.
+  let almocoHtml;
+  if (!a) {
+    almocoHtml = nota('Não informado');
+  } else if (a.especial) {
+    almocoHtml = destaque('🍽️ Almoço especial');
+  } else {
+    almocoHtml = `<div class="menu-mini">🥗 Saladas</div>${chips(a.saladas)}
+      <div class="menu-mini">🍛 Pratos</div>${chips(a.pratos)}
+      <div class="menu-extras">
+        ${extra('🥤', 'Suco', a.suco)}
+        ${extra('🍮', 'Sobremesa', a.sobremesa)}
+        ${extra('🍎', 'Fruta', a.fruta)}
+      </div>`;
+  }
+
   return `<div class="menu-card${isToday ? ' today' : ''}">
     <div class="menu-card-head">
       <span class="menu-day">${esc(c.dia)}</span><span class="menu-date">${esc(c.data)}</span>${isToday ? '<span class="menu-today-badge">Hoje</span>' : ''}
     </div>
     <div class="menu-card-body">
       <div class="menu-sub">☕ Café da manhã</div>
-      ${chips(c.cafe)}
+      ${cafeHtml}
       <div class="menu-sub">🍽️ Almoço</div>
-      <div class="menu-mini">🥗 Saladas</div>${chips(a.saladas)}
-      <div class="menu-mini">🍛 Pratos</div>${chips(a.pratos)}
-      <div class="menu-extras">
-        ${extra('🥤', 'Suco', a.suco)}
-        ${extra('🍮', 'Sobremesa', a.sobremesa)}
-        ${extra('🍎', 'Fruta', a.fruta)}
-      </div>
+      ${almocoHtml}
     </div>
   </div>`;
 }
