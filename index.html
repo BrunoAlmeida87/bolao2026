@@ -5409,8 +5409,9 @@ const cardapioSemana = [
     almoco: { saladas:["Alface americana","Verão","Tomate"],
       pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Panachê de legumes","Frango assado","Bife à fricandole"],
       suco:"Uva", sobremesa:"Curau", fruta:"Laranja" } },
-  // Sexta 03/07: café não informado e almoço especial (sem detalhamento).
-  { dia: "Sexta", data: "03/07", cafe: [], almoco: { especial: true } }
+  // Sexta 03/07: café não informado e almoço especial (feijoada).
+  { dia: "Sexta", data: "03/07", cafe: [], almoco: { especial: true, titulo: "Feijoada",
+    motivo: "Para comemorar a assinatura do contrato que marca a 1ª etapa da fabricação do SNCA" } }
 ];
 
 const horariosTransporte = [
@@ -5557,7 +5558,8 @@ function _menuCardHtml(c, isToday) {
   if (!a) {
     almocoHtml = nota('Não informado');
   } else if (a.especial) {
-    almocoHtml = destaque('🍽️ Almoço especial');
+    almocoHtml = destaque(`🍽️ Almoço especial${a.titulo ? ': ' + a.titulo : ''}`)
+      + (a.motivo ? nota(a.motivo) : '');
   } else {
     almocoHtml = `<div class="menu-mini">🥗 Saladas</div>${chips(a.saladas)}
       <div class="menu-mini">🍛 Pratos</div>${chips(a.pratos)}
