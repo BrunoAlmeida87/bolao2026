@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.4">
+<meta name="app-version" content="v1.13.5">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1834,7 +1834,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.4</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.5</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2234,7 +2234,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.4',
+  app_version:'v1.13.5',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -4243,6 +4243,10 @@ async function renderDashboard() {
         </div>
         <div class="bump-sub" style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
         <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${_dashBumpBar}</div>
+        <div class="bump-actions no-capture" style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px">
+          <button type="button" class="gx-chip" onclick="_bumpHighlightLeaders()" title="Ilumina quem já foi 1º colocado ao menos uma vez (na granularidade atual)">🥇 Já foram líderes</button>
+          <button type="button" class="gx-chip" onclick="_shareBumpChartFromBtn(this)" title="Baixar/compartilhar a imagem do gráfico em alta resolução">🖼️ Exportar imagem (HD)</button>
+        </div>
         <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, _evoPals, 'dia', false, _evoChamp)}</div>
       </div>`;
     }
@@ -7524,6 +7528,10 @@ function _buildBumpChart(users, res, allPals, gran, keepSel, champPicks) {
   }
   const rankingsAtCp = checkpoints.map(cp => _computeRankingForGameIds(users, res, allPals, cp.gameIds, champPicks));
   const finalRanking = rankingsAtCp[rankingsAtCp.length - 1];
+  // Conjunto de quem ocupou a 1ª posição em ALGUM checkpoint — casa exatamente com
+  // as linhas que tocaram a faixa "1°" do gráfico na granularidade atual. Alimenta
+  // o atalho "Já foram líderes" (_bumpHighlightLeaders), recomputado a cada render.
+  _bumpEverLeaders = new Set(rankingsAtCp.map(rk => rk[0] && rk[0].uid).filter(Boolean));
   const n = users.length, numCp = checkpoints.length;
   const svgW=700, padL=30, padR=130, padT=18, padB=28, rowH=Math.max(18, Math.min(26, Math.floor(420/n)));
   const svgH = padT + padB + n * rowH;
@@ -7590,8 +7598,19 @@ let _bumpSel = new Set();
 let _bumpExport = null; // modelo de desenho do gráfico (para exportar em canvas)
 let _bumpGran = 'dia'; // granularidade do eixo X: 'dia' | 'rodada' | '2jogos'
 let _bumpData = null;  // { users, res, allPals } guardado para re-render no filtro
+let _bumpEverLeaders = new Set(); // quem já foi 1º em algum checkpoint (granularidade atual)
 function _bumpToggle(uid){ if(_bumpSel.has(uid)) _bumpSel.delete(uid); else _bumpSel.add(uid); _bumpApply(); }
 function _bumpClear(){ _bumpSel.clear(); _bumpApply(); }
+// Atalho: ilumina TODAS as pessoas que já foram 1º colocado ao menos uma vez,
+// considerando a granularidade atual do gráfico (por dia/rodada/2 jogos/jogo).
+// Alterna: se os líderes já estão exatamente destacados, limpa a seleção.
+function _bumpHighlightLeaders(){
+  if (!_bumpEverLeaders || !_bumpEverLeaders.size) { showToast('Ainda não há líderes para destacar.','info'); return; }
+  const same = _bumpSel.size === _bumpEverLeaders.size && [..._bumpEverLeaders].every(u => _bumpSel.has(u));
+  _bumpSel = same ? new Set() : new Set(_bumpEverLeaders);
+  _bumpApply();
+  if (!same) showToast(`🥇 ${_bumpEverLeaders.size} participante(s) que já lideraram`, 'success');
+}
 // O gráfico aparece no Dashboard E nas Estatísticas — ambas as páginas ficam no
 // DOM. Limita as buscas por id (#bump-svg/#bump-chart-host) à página visível para
 // não colidir com a cópia oculta da outra página.
@@ -9604,7 +9623,7 @@ function renderGxBumpCard(d) {
   _bumpGran = 'dia';
   const granBar = [['dia','Por dia'],['rodada','Por rodada'],['2jogos','A cada 2 jogos'],['jogo','Por jogo']]
     .map(([g,l]) => `<button class="gx-chip bump-gran-btn${g==='dia'?' active':''}" data-gran="${g}" onclick="setBumpGran('${g}')">${l}</button>`).join('');
-  return `<div class="card">
+  return `<div class="card" data-no-share>
       <div class="card-title">📈 Evolução do Ranking</div>
       <div class="bump-hint" style="display:flex;gap:9px;align-items:flex-start;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.4);border-radius:10px;padding:10px 13px;margin:8px 0 10px;line-height:1.45">
         <span style="font-size:1.25rem;line-height:1.1">👆</span>
@@ -9612,6 +9631,10 @@ function renderGxBumpCard(d) {
       </div>
       <div class="bump-sub" style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 10px;line-height:1.45">Posição de cada participante ao longo do tempo. Linha dourada = líder atual.</div>
       <div class="gx-chips bump-gran-bar" style="margin-bottom:10px">${granBar}</div>
+      <div class="bump-actions no-capture" style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px">
+        <button type="button" class="gx-chip" onclick="_bumpHighlightLeaders()" title="Ilumina quem já foi 1º colocado ao menos uma vez (na granularidade atual)">🥇 Já foram líderes</button>
+        <button type="button" class="gx-chip" onclick="_shareBumpChartFromBtn(this)" title="Baixar/compartilhar a imagem do gráfico em alta resolução">🖼️ Exportar imagem (HD)</button>
+      </div>
       <div class="bump-chart-wrap" id="bump-chart-host">${_buildBumpChart(users, res, allPals, 'dia', false, champPicks)}</div>
     </div>`;
 }
@@ -15319,13 +15342,14 @@ async function _swapSvgsForCapture(card, scale) {
 // num <canvas> próprio (fundo + título + gráfico via _bumpRenderCanvas, que usa
 // só primitivas). Evita de vez o "URL malformed" do html2canvas com SVG inline
 // (acontece em PC e celular) e o canvas "tainted" do iOS.
-async function _shareBumpChartImage(card, btn) {
+async function _shareBumpChartImage(card, btn, scale) {
   const prev = btn.textContent;
   try {
     btn.disabled = true; btn.textContent = '⏳';
-    const chart = _bumpRenderCanvas(2);
+    const S = Math.max(2, Math.min(4, scale || 2)); // 2 = padrão; até 4 p/ alta resolução
+    const chart = _bumpRenderCanvas(S);
     if (!chart) throw new Error('Gráfico indisponível — abra a aba Estatísticas novamente.');
-    const S = 2, W = 700, chartH = chart.height / S;
+    const W = 700, chartH = chart.height / S;
     const headerH = 64, footerH = 30, padX = 18;
     const H = headerH + chartH + footerH;
     const cv = document.createElement('canvas');
@@ -15348,6 +15372,16 @@ async function _shareBumpChartImage(card, btn) {
   } finally {
     btn.disabled = false; btn.textContent = prev;
   }
+}
+
+// Botão "Exportar imagem (HD)" do card Evolução do Ranking — exporta em alta
+// resolução (escala 3 → ~2100px de largura) a imagem exatamente como está na tela
+// (granularidade e destaques atuais). Usa o caminho dedicado sem html2canvas.
+function _shareBumpChartFromBtn(btn){
+  const card = btn.closest('.card');
+  if (!card) { showToast('Gráfico indisponível.','error'); return; }
+  if (!_bumpExport) { showToast('Gráfico indisponível — reabra a página.','error'); return; }
+  return _shareBumpChartImage(card, btn, 3);
 }
 
 // Compartilha o card individual mais próximo do botão. Sub-cards (partidas
