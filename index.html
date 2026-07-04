@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.6">
+<meta name="app-version" content="v1.13.7">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1834,7 +1834,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.6</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.7</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2234,7 +2234,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.6',
+  app_version:'v1.13.7',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3172,9 +3172,13 @@ function _computePositionDeltas(users, res, allPals, champPicks) {
   // só dividem o mesmo nível se empatarem em TODOS os critérios de desempate
   // oficiais (pontos, exatos, vencedor+saldo, apenas vencedor, acerto do campeão).
   const _prevRank = computeRanking(users, resPrev, allPals, champPicks);
+  // Posição tradicional COM EMPATE (1,2,2,4…), idêntica ao _rankPositionsTieAware
+  // usado no ranking atual — sem isso, jogadores empatados no ranking anterior
+  // recebiam posição sequencial (1,2,3,4) e apareciam com setas ↑/↓ falsas.
+  const _prevPos = _rankPositionsTieAware(_prevRank);
   let _lvl = 0;
   _prevRank.forEach((u, i) => {
-    deltas[u.uid] = i + 1;
+    deltas[u.uid] = _prevPos[i];
     if (i === 0 || !_rankFullyTiedPair(_prevRank[i - 1], u)) _lvl++;
     denseDeltas[u.uid] = _lvl;
   });
@@ -4045,7 +4049,10 @@ async function renderDashboard() {
     const _kpiIsLeader = myRank === 1 && ranking.length > 0;
     const _kpiPct = ALL_GAMES.length > 0 ? Math.round(totalJogos/ALL_GAMES.length*100) : 0;
     const _kpiPrevPos = positionDeltas[currentUser.uid];
-    const _kpiDelta = (_kpiPrevPos && myRank > 0) ? (_kpiPrevPos - myRank) : 0;
+    // Posição atual COM EMPATE (mesma base dos deltas, agora tie-aware) — evita
+    // ▲▼ falso quando o usuário está empatado com outros.
+    const _myTiePos = myRank > 0 ? _rankPositionsTieAware(ranking)[myRank - 1] : 0;
+    const _kpiDelta = (_kpiPrevPos && _myTiePos > 0) ? (_kpiPrevPos - _myTiePos) : 0;
     const _kpiDeltaHtml = _kpiDelta > 0
       ? `<div><span class="kpi-delta up">▲${_kpiDelta}</span></div>`
       : _kpiDelta < 0
@@ -15024,7 +15031,9 @@ function _mkCanvas(w, h, desiredScale) {
 function _deltaText(uid) {
   const prevPos = _cachedPositionDeltas[uid];
   if (!prevPos) return '';
-  const curPos = _cachedRanking.findIndex(r=>r.uid===uid)+1;
+  const _idx = _cachedRanking.findIndex(r=>r.uid===uid);
+  if (_idx < 0) return '';
+  const curPos = _rankPositionsTieAware(_cachedRanking)[_idx]; // com empate (casa com deltas)
   const d = prevPos - curPos;
   return d > 0 ? `↑${d}` : d < 0 ? `↓${Math.abs(d)}` : '=';
 }
@@ -15246,7 +15255,8 @@ async function shareTop5RelegImage() {
     }
     const prevPos = _cachedPositionDeltas[u.uid];
     if (prevPos) {
-      const curPos = ranking.findIndex(r=>r.uid===u.uid)+1;
+      const _idx = ranking.findIndex(r=>r.uid===u.uid);
+      const curPos = positions[_idx]; // com empate (casa com deltas)
       const d = prevPos - curPos;
       const dTxt = d>0?`↑${d}`:d<0?`↓${Math.abs(d)}`:'=';
       const dColor = d>0?'#00C851':d<0?'#ff6b6b':'#8899AA';
