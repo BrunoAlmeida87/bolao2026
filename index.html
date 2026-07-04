@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.7">
+<meta name="app-version" content="v1.13.8">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1834,7 +1834,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.7</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.8</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2234,7 +2234,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.7',
+  app_version:'v1.13.8',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -2565,36 +2565,19 @@ function _onRemoteDataChange() {
   }
 }
 
-// ── Auto-atualização ao voltar para o primeiro plano ─────────────────────────
-// Em celular/PWA, quando o app fica em segundo plano o listener de versão do
-// Firestore (_startVersionListener) é suspenso. Então um resultado lançado pelo
-// admin enquanto o app estava oculto NÃO chegava por push — a partida recém-
-// encerrada só aparecia em "Partidas Realizadas" na próxima mudança de versão
-// (na prática, quando o próximo jogo era mexido). Ao voltar o foco, invalidamos
-// o cache de resultados e re-renderizamos a página de visualização atual, para
-// que o jogo já finalizado apareça de imediato, sem esperar outro jogo começar.
+// ── Atualização ao voltar para o primeiro plano ──────────────────────────────
+// Ao voltar o foco (após ≥15s oculto) apenas INVALIDAMOS o cache de resultados —
+// sem forçar re-render da página. Assim a próxima navegação/interação já busca
+// dados frescos, sem interromper a tela atual (evita "resetar" filtros/rolagem e
+// corridas de render). A atualização ao vivo continua chegando pelo listener de
+// versão do Firestore (app aberto) e pelo botão ↻ / pull-to-refresh.
 let _hiddenSince = 0;
-let _lastFgRefresh = 0;
-function _refreshCurrentViewFromCache(reason) {
-  if (!currentUser) return;
-  const now = Date.now();
-  if (now - _lastFgRefresh < 4000) return; // evita re-render duplicado (focus + visibilitychange)
-  const viewPages = new Set(['dashboard','estatisticas','ver-palpites','ver-todos']);
-  if (!viewPages.has(_currentPage)) return; // nunca interrompe quem preenche palpites / admin
-  _lastFgRefresh = now;
-  _scDel('res');
-  if (_currentPage === 'ver-palpites' && _currentVerPalpitesUid) _pendingPalpitesUid = _currentVerPalpitesUid;
-  navigateTo(_currentPage, { history: 'replace' });
-}
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { _hiddenSince = Date.now(); return; }
   const away = _hiddenSince ? (Date.now() - _hiddenSince) : 0;
   _hiddenSince = 0;
-  // Só re-renderiza se ficou oculto por ≥10s (ignora alt-tab rápido / troca de app breve).
-  if (away >= 10000) _refreshCurrentViewFromCache('visible');
+  if (away >= 15000 && currentUser) { try { _scDel('res'); } catch(_){} }
 });
-// bfcache (voltar do histórico com a página restaurada da memória) também precisa atualizar.
-window.addEventListener('pageshow', e => { if (e.persisted) _refreshCurrentViewFromCache('pageshow'); });
 
 // Incrementa a versão dos dados — chamado após o admin gravar/alterar um resultado.
 async function _bumpDataVersion() {
