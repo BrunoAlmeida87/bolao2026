@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.5">
+<meta name="app-version" content="v1.13.6">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1834,7 +1834,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.5</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.6</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2234,7 +2234,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.5',
+  app_version:'v1.13.6',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3655,6 +3655,12 @@ const TIMER_CLUSTER_GAP_MS = 8 * 3600000;
 // Tempo após o início em que a partida é exibida como "em andamento"; depois disso
 // (sem resultado lançado) passa para "aguardando oficialização".
 const MATCH_DURATION_MS = 120 * 60000;
+// Prazo MÁXIMO que um jogo já iniciado, mas SEM resultado lançado, permanece na
+// tela inicial (em andamento / aguardando oficialização). Cobre a partida +
+// prorrogação/pênaltis + folga para o admin lançar o placar. Passado esse prazo o
+// card some, para jogos antigos (ex.: fase de grupos já encerrada) não ficarem
+// presos poluindo "Próximas Partidas".
+const STALE_NO_RESULT_MS = 6 * 3600000; // 6h
 // Antecedência com que QUALQUER jogo aparece na tela inicial (com timer regressivo),
 // independentemente da "leva" automática por proximidade: 24h antes do início.
 const NEXT_SHOW_BEFORE_MS = 24 * 3600000;
@@ -3697,7 +3703,13 @@ function _nextGamesGroup() {
       return hideAfter !== null && now < hideAfter;
     }
     const started = x.start.getTime() <= now;
-    if (started) return true;                          // em andamento/aguardando até ter resultado
+    if (started) {
+      if (mode === 'show') return true;                // admin fixou manualmente este card
+      // Em andamento / aguardando oficialização: só enquanto estiver dentro do prazo
+      // após o início. Depois disso (sem resultado) o card sai — evita acumular jogos
+      // antigos (ex.: fase de grupos já encerrada) presos na tela.
+      return (now - x.start.getTime()) <= STALE_NO_RESULT_MS;
+    }
     if (mode === 'show') return true;                  // futuro fixado manualmente
     if (wave.has(x.game.id)) return true;              // futuro dentro da leva automática
     return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // qualquer jogo a < 24h do início
@@ -3714,6 +3726,7 @@ function _nextGamesGroup() {
     if (_resolved(x.game.id)) { _consider(_resultHideAfterMs(r)); return; }
     _consider(x.start.getTime());                         // futuro → em andamento
     _consider(x.start.getTime() - NEXT_SHOW_BEFORE_MS);   // entra na janela de 24h
+    _consider(x.start.getTime() + STALE_NO_RESULT_MS);    // some se seguir sem resultado
   });
   if (nextRenderAt === Infinity) nextRenderAt = null;
   return { key: items.map(x => x.game.id).join(','), nextRenderAt, items };
@@ -7253,7 +7266,12 @@ function _getStatNextGroupWave(res) {
       return hideAfter !== null && now < hideAfter;
     }
     const started = x.start.getTime() <= now;
-    if (started) return true;
+    if (started) {
+      if (mode === 'show') return true;                // admin fixou manualmente este card
+      // Só enquanto dentro do prazo após o início; sem resultado depois disso, sai
+      // (evita jogos antigos presos em "Próximas Partidas").
+      return (now - x.start.getTime()) <= STALE_NO_RESULT_MS;
+    }
     if (mode === 'show') return true;
     if (wave.has(x.game.id)) return true;              // leva automática por proximidade
     return (x.start.getTime() - now) <= NEXT_SHOW_BEFORE_MS; // mesma regra do dashboard: < 24h do início
