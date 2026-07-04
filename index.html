@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.8">
+<meta name="app-version" content="v1.13.9">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -1834,7 +1834,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.8</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.9</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2234,7 +2234,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.8',
+  app_version:'v1.13.9',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -3963,8 +3963,20 @@ async function renderDashboard() {
     if (_rankCache) {
       // Cache hit: ranking pré-calculado — busca só os palpites do usuário atual
       ranking = _rankCache.rows || [];
-      positionDeltas = _rankCache.deltas || {};
-      denseDeltas = _rankCache.densedeltas || {};
+      // Recalcula os deltas de posição a partir do snapshot de palpites do próprio
+      // cache (0 leituras extras), garantindo que as setas ↑/↓ usem SEMPRE a lógica
+      // atual de posição (com empate). Sem isso, um cache gravado por uma versão
+      // anterior do app traria deltas sequenciais e mostraria movimento falso (ex.:
+      // "+2") para quem está empatado. Fallback: usa os deltas gravados se o cache
+      // não tiver o snapshot de palpites (>80 participantes).
+      if (_rankCache.pals && _rankCache.pals.allPals) {
+        const _pd = _computePositionDeltas(users, res, _rankCache.pals.allPals, _rankCache.pals.champPicks || {});
+        positionDeltas = _pd.deltas;
+        denseDeltas = _pd.denseDeltas;
+      } else {
+        positionDeltas = _rankCache.deltas || {};
+        denseDeltas = _rankCache.densedeltas || {};
+      }
       const [_myPSnap, _myPDoc] = await Promise.all([
         db_.collection('palpites').doc(currentUser.uid).collection('jogos').get(),
         db_.collection('palpites').doc(currentUser.uid).get()
