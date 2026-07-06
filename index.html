@@ -5442,26 +5442,31 @@ function renderRegras() {
 // Dados de fácil atualização semanal. Para corrigir/editar, basta alterar os
 // arrays abaixo — nenhuma outra parte do sistema depende deles.
 const cardapioSemana = [
-  // Segunda 29/06 sem cardápio divulgado (café e almoço não informados).
-  { dia: "Segunda", data: "29/06", cafe: [], almoco: null },
-  { dia: "Terça", data: "30/06",
+  { dia: "Segunda", data: "06/07",
     cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Polenguinho","Maçã"],
-    almoco: { saladas:["Alface crespa","Cenoura ralada","Brócolis"],
-      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Batata Daniel","Omelete de forno","Bife ao molho calabrês"],
-      suco:"Caju", sobremesa:"Doce de mamão", fruta:"Melancia" } },
-  { dia: "Quarta", data: "01/07",
-    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Gelatina","Banana"],
-    almoco: { saladas:["Alface crespa e roxa","Tabule","Beterraba"],
-      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Souflê de legumes","Filé de coxa assado","Caçarola especial"],
-      suco:"Abacaxi", sobremesa:"Gelatina", fruta:"Melão" } },
-  { dia: "Quinta", data: "02/07",
-    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Presunto","Mamão"],
-    almoco: { saladas:["Alface americana","Verão","Tomate"],
-      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Panachê de legumes","Frango assado","Bife à fricandole"],
-      suco:"Uva", sobremesa:"Curau", fruta:"Laranja" } },
-  // Sexta 03/07: café não informado e almoço especial (feijoada).
-  { dia: "Sexta", data: "03/07", cafe: [], almoco: { especial: true, titulo: "Feijoada",
-    motivo: "Para comemorar a assinatura do contrato que marca a 1ª etapa da fabricação do SNCA" } }
+    almoco: { saladas:["Alface crespa","Cenoura ralada","Brócolis e couve-flor"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Creme de milho","Filé de frango à romana","Bife ao molho calabrês"],
+      suco:"Goiaba", sobremesa:"Doce de leite", fruta:"Melancia" } },
+  { dia: "Terça", data: "07/07",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Queijo","Melão"],
+    almoco: { saladas:["Alface americana","Coleslaw","Tomate"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Purê de batatas","Isca de fígado","Frango assado"],
+      suco:"Caju", sobremesa:"Pudim de baunilha", fruta:"Banana" } },
+  { dia: "Quarta", data: "08/07",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Mortadela","Mamão"],
+    almoco: { saladas:["Alface crespa e roxa","Abóbora com milho","Beterraba c/ tomilho"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Pirão com ovos","Peixe à grega","Goulash"],
+      suco:"Acerola", sobremesa:"Gelatina", fruta:"Melão" } },
+  { dia: "Quinta", data: "09/07",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Presunto","Melão"],
+    almoco: { saladas:["Alface americana","Chuchu c/ cenoura","Couve-flor"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Espaguete ao alho e óleo","Almôndegas ao sugo","Filé de frango acebolado"],
+      suco:"Abacaxi", sobremesa:"Cocada", fruta:"Banana" } },
+  { dia: "Sexta", data: "10/07",
+    cafe: ["Achocolatado","Café","Café com leite","Leite puro","Pão francês","Pão careca doce","Pão de forma integral","Blanquet","Mamão"],
+    almoco: { saladas:["Verde","Alemã","Mix de vegetais"],
+      pratos:["Arroz agulhinha","Arroz integral","Feijão preto","Farofa à brasileira","Filé de coxa assado","Virado mineiro"],
+      suco:"Maracujá", sobremesa:"Romeu e Julieta", fruta:"Laranja" } }
 ];
 
 const horariosTransporte = [
