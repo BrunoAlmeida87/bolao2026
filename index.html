@@ -5992,7 +5992,11 @@ function _simAliveTeams(mergedRes) {
     if (!win) return; // empate sem pênaltis definidos → ninguém eliminado
     [h, a].forEach(t => { if (t && all.has(t) && t !== win) eliminated.add(t); });
   }));
-  const pool = reached.size ? reached : all; // sem mata-mata resolvido → todas
+  // Só estreita o pool para os classificados quando a fase de grupos TERMINOU.
+  // Durante os grupos, alguns slots do mata-mata já podem resolver de forma
+  // provisória (times garantidos), mas os demais times seguem vivos — então
+  // mantemos todas as seleções selecionáveis até os grupos fecharem.
+  const pool = (reached.size && _allGroupsComplete(mergedRes)) ? reached : all;
   return [...pool].filter(t => !eliminated.has(t)).sort((a, b) => a.localeCompare(b, 'pt'));
 }
 
