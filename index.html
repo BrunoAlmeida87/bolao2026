@@ -9033,7 +9033,7 @@ function _rzLeadership(users, allPals, res, champPicks={}){
     .sort((a,b)=> _parseGameDate(a.date)-_parseGameDate(b.date) || (FIFA_MATCH_NO[a.id]||0)-(FIFA_MATCH_NO[b.id]||0));
   const champ=_getFinalChampion(res);          // campeã (se a Final já saiu)
   const ptsCampeao=CFG.pts_campeao ?? 0;
-  const cum={}; users.forEach(u=>cum[u.uid]={pts:0,ex:0,vs:0,av:0});
+  const cum={}; users.forEach(u=>cum[u.uid]={pts:0,ex:0,vs:0,av:0,ch:0});
   const steps={}, maxRun={}, curRun={}, since={};
   let prev=null;
   played.forEach(g=>{
@@ -9044,13 +9044,14 @@ function _rzLeadership(users, allPals, res, champPicks={}){
       const t=_hitType(p,res[g.id]);
       if(t==='exato')c.ex++; else if(t==='saldo')c.vs++; else if(t==='vencedor')c.av++;
     });
-    // Bônus de campeão entra ao processar a Final (mesmo critério do computeRanking),
-    // para que o líder pós-final reflita quem cravou a campeã.
-    if (champ && g.id==='FIN1' && ptsCampeao) users.forEach(u=>{ if(champPicks[u.uid]===champ) cum[u.uid].pts+=ptsCampeao; });
-    let leader=null, bp=-1,be=-1,bv=-1,ba=-1;
+    // Ao processar a Final, marca quem cravou a campeã (ch) e soma o bônus. O flag
+    // ch entra como ÚLTIMO desempate abaixo — igual ao acertou_campeao do
+    // computeRanking — mesmo quando pts_campeao é 0.
+    if (champ && g.id==='FIN1') users.forEach(u=>{ if(champPicks[u.uid]===champ){ cum[u.uid].ch=1; cum[u.uid].pts+=ptsCampeao; } });
+    let leader=null, bp=-1,be=-1,bv=-1,ba=-1,bch=-1;
     users.forEach(u=>{ const c=cum[u.uid];
-      const better = c.pts>bp || (c.pts===bp && (c.ex>be || (c.ex===be && (c.vs>bv || (c.vs===bv && c.av>ba)))));
-      if (better){ bp=c.pts;be=c.ex;bv=c.vs;ba=c.av;leader=u; }
+      const better = c.pts>bp || (c.pts===bp && (c.ex>be || (c.ex===be && (c.vs>bv || (c.vs===bv && (c.av>ba || (c.av===ba && c.ch>bch)))))));
+      if (better){ bp=c.pts;be=c.ex;bv=c.vs;ba=c.av;bch=c.ch;leader=u; }
     });
     if (!leader || bp<=0){ prev=null; return; }
     steps[leader.uid]=(steps[leader.uid]||0)+1;
