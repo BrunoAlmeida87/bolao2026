@@ -1240,6 +1240,22 @@ body.light-theme footer{background:rgba(0,0,0,.05);color:var(--text-muted)}
 .ai-card-text{font-size:0.8rem;color:var(--text-muted);line-height:1.45}
 .ai-updated{font-size:0.72rem;color:var(--text-muted);margin-top:10px;text-align:right}
 .light-theme .ai-card{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.09)}
+/* Banner "Resumão do Bolão" no dashboard (aviso + link para a retrospectiva) */
+.dash-resumao-banner{display:flex;align-items:center;gap:13px;width:100%;text-align:left;cursor:pointer;
+  background:linear-gradient(135deg,rgba(255,215,0,.16),rgba(0,196,255,.10) 60%,rgba(255,140,0,.14));
+  border:1.5px solid rgba(255,215,0,.4);border-radius:16px;padding:13px 15px;margin-bottom:24px;
+  box-shadow:0 6px 22px -10px rgba(255,200,40,.4);transition:transform .12s,box-shadow .2s,border-color .2s}
+.dash-resumao-banner:hover{transform:translateY(-1px);border-color:rgba(255,215,0,.7);box-shadow:0 10px 26px -10px rgba(255,200,40,.55)}
+.dash-resumao-banner:active{transform:translateY(0)}
+.drb-emoji{font-size:1.9rem;line-height:1;flex:0 0 auto}
+.drb-txt{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.drb-title{font-size:1.02rem;font-weight:900;color:var(--gold);line-height:1.15}
+.drb-sub{font-size:0.76rem;color:var(--text-muted);line-height:1.35}
+.drb-cta{flex:0 0 auto;display:inline-flex;align-items:center;gap:2px;font-weight:800;font-size:0.85rem;color:var(--gold);
+  background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.35);border-radius:20px;padding:6px 12px;white-space:nowrap}
+.drb-arrow{font-size:1.2rem;line-height:1;transition:transform .15s}
+.dash-resumao-banner:hover .drb-arrow{transform:translateX(3px)}
+@media(max-width:420px){ .drb-sub{font-size:0.72rem} .drb-cta{padding:5px 10px} }
 /* Carrossel "Análise da IA" no dashboard (estilo manchete de notícias) */
 .ai-news{position:relative;background:linear-gradient(135deg,rgba(30,144,255,.16),rgba(255,215,0,.09));border:1.5px solid rgba(255,215,0,.42);border-radius:16px;padding:15px 17px;margin-bottom:24px;box-shadow:0 6px 22px -8px rgba(255,200,40,.4),0 0 0 1px rgba(255,215,0,.06) inset}
 .ai-news-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;position:relative}
@@ -4155,6 +4171,18 @@ async function renderDashboard() {
 
     // Manchetes da Análise da IA (carrossel animado) — preenchido após o render.
     html += `<div id="dash-ai-news"></div>`;
+
+    // Aviso + link para o "🏆 Resumão do Bolão" (retrospectiva) — só quando já há jogos.
+    if (totalJogos > 0) {
+      html += `<button type="button" class="dash-resumao-banner" onclick="goToResumao()" aria-label="Abrir o Resumão do Bolão">
+        <span class="drb-emoji">🏆</span>
+        <span class="drb-txt">
+          <span class="drb-title">Resumão do Bolão</span>
+          <span class="drb-sub">Rankings, lendas, azarões e curiosidades da Copa num só lugar</span>
+        </span>
+        <span class="drb-cta">Ver <span class="drb-arrow">›</span></span>
+      </button>`;
+    }
 
     if (totalJogos === 0) {
       html += `<div class="card" style="text-align:center;padding:24px">
@@ -8704,6 +8732,7 @@ async function renderEstatisticas() {
     _resumaoRendered = false;
     cont.innerHTML = html;
     if (_graficosPendingTab) { switchStatsSubTab('graficos'); _graficosPendingTab = false; }
+    if (_resumaoPendingTab) { switchStatsSubTab('outras'); _resumaoPendingTab = false; }
     _momInit(); // carrossel do card "Momento dos Participantes"
     _addStatShareButtons(cont); // botão 📸 de compartilhar imagem em cada card
     _applyPendingStatsScroll(); // "Ver mais" do dashboard rola até a partida
@@ -8863,6 +8892,7 @@ let _graficosPendingTab = false;// abrir já na aba Gráficos (ex.: deep-link)
 let _trocasRendered = false;    // evita re-render da aba Trocas ao alternar
 let _trocasPubCache = null;     // snapshot publicado (cache/trocas_publicado) em memória
 let _resumaoRendered = false;   // evita re-render do "Resumão do Bolão" ao alternar
+let _resumaoPendingTab = false; // abrir já na sub-aba Resumão (ex.: link do dashboard)
 
 function _gxSubTabsBar() {
   return `<div class="gx-subtabs">
@@ -11163,8 +11193,15 @@ async function renderAdminIA() {
           </p>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
             <button class="btn btn-primary" onclick="exportAIData()">📋 Copiar dados + prompt para IA</button>
+            <button class="btn btn-primary" onclick="exportAIDataResumao()" style="background:linear-gradient(135deg,#d4af37,#b8860b)">🏆 Copiar Resumão + prompt (curiosidades)</button>
             <button class="btn btn-primary" onclick="exportAIDataDetalhado()" style="background:var(--accent2,#7c3aed)">📊 Dados detalhados por jogo/rodada</button>
           </div>
+          <p style="font-size:0.8rem;color:var(--text-muted);margin:-6px 0 14px;line-height:1.5;background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.2);border-radius:8px;padding:9px 11px">
+            🏆 <b>Resumão + prompt</b>: gera cards de <b>curiosidades da retrospectiva</b> (rankings por fase,
+            mestres do exato, especialistas em saldo, mais tempo na liderança, regularidade, ousadia,
+            duplas opostas/gêmeas, viradas, seleções e zebras). Cole a resposta abaixo para essas
+            curiosidades aparecerem no carrossel da tela principal.
+          </p>
           <hr style="border-color:var(--border);margin:16px 0">
           <div class="card-title" style="margin-bottom:10px">📥 Colar resposta da IA</div>
           <textarea id="ai-json-input" rows="8" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-family:monospace;font-size:0.82rem;resize:vertical" placeholder='Cole aqui o JSON gerado pela IA.&#10;Exemplo: [{"icon":"🎯","title":"Mais certeiro","value":"João Silva","text":"73% de aproveitamento..."}]'></textarea>
@@ -11492,6 +11529,175 @@ REGRAS OBRIGATÓRIAS:
     await navigator.clipboard.writeText(data);
     showToast('✅ Dados + prompt copiados para a área de transferência!','success');
   } catch(e) { showToast('Erro ao gerar dados: '+e.message,'error'); }
+}
+
+// ── Prompt do RESUMÃO DO BOLÃO ────────────────────────────────────────────────
+// Exporta TODAS as curiosidades da retrospectiva (mesmas funções puras _rz* da aba
+// "🏆 Resumão") + um prompt que faz a IA gerar cards no MESMO formato JSON do
+// dashboard. Assim o admin cola a resposta em "Colar resposta da IA" e as
+// curiosidades do Resumão passam a aparecer no carrossel da tela principal.
+async function exportAIDataResumao() {
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u=>u.ativo!==false);
+    const {allPals, champPicks} = await _fetchPals(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const jogosComResultado = Object.keys(res).filter(id=>_hasFullResult(res[id]));
+    const totalJogosRes = jogosComResultado.length;
+    const today = new Date().toLocaleDateString('pt-BR');
+    const nm = u => (u && (u.apelido || u.nome)) || '—';
+
+    if (totalJogosRes === 0) {
+      showToast('Ainda não há jogos com resultado para gerar o Resumão.', 'error');
+      return;
+    }
+
+    const userAccStats = {};
+    users.forEach(u => { userAccStats[u.uid] = calcUserAccuracyStats(u.uid, allPals, res); });
+
+    // Análise por jogo (base de seleções e jogos que marcaram) — mesma da aba Stats.
+    const analiseJogos = {};
+    jogosComResultado.forEach(jid => {
+      analiseJogos[jid] = { exatos:0, venc_saldo:0, apenas_venc:0, erros:0, palpites:[] };
+      const g = ALL_GAMES.find(x => x.id === jid); if (g) analiseJogos[jid].game = g;
+      users.forEach(u => {
+        const p = allPals[u.uid]?.[jid]; if (!p) return;
+        const t = _hitType(p, res[jid]); const pts = calcPontos(p, res[jid], jid);
+        analiseJogos[jid].palpites.push({ user:u, palpite:p, pts });
+        if (t==='exato') analiseJogos[jid].exatos++; else if (t==='saldo') analiseJogos[jid].venc_saldo++;
+        else if (t==='vencedor') analiseJogos[jid].apenas_venc++; else analiseJogos[jid].erros++;
+      });
+    });
+
+    // TOP 5 por fase (Rodada 1/2/3 e Mata-mata)
+    const faseBlocks = _rzPhases().map(ph => {
+      const { rows, playedCount } = _rzPhaseRanking(ph.ids, users, allPals, res);
+      if (!rows.length) return `== TOP ${ph.label.toUpperCase()} ==\n  (sem resultado ainda)`;
+      const lines = rows.slice(0,5).map((r,i)=>`  ${i+1}. ${nm(r.u)} — ${r.pts} pts (${r.jogos} jogos)`).join('\n');
+      return `== TOP ${ph.label.toUpperCase()} (${playedCount} jogos) ==\n${lines}`;
+    }).join('\n\n');
+
+    const exatos = _rzExatos(ranking, userAccStats).slice(0,5)
+      .map((r,i)=>`  ${i+1}. ${nm(r.u)} — ${r.exatos} exatos (${r.pct.toFixed(0)}%${r.streak>=2?`, ${r.streak} seguidos`:''})`).join('\n');
+    const saldo = _rzSaldo(ranking, allPals, res).slice(0,5)
+      .map((r,i)=>`  ${i+1}. ${nm(r.u)} — ${r.saldo} acertos de saldo (${r.pct.toFixed(0)}%)`).join('\n');
+    const venc = _rzVencedor(users, allPals, res, jogosComResultado).slice(0,5)
+      .map((r,i)=>`  ${i+1}. ${nm(r.u)} — ${r.venc} vencedores (${r.pct.toFixed(0)}%, ${r.vit}V/${r.emp}E)`).join('\n');
+
+    const lead = _rzLeadership(users, allPals, res, champPicks);
+    const lideranca = lead.rows.slice(0,5)
+      .map((r,i)=>`  ${i+1}. ${nm(r.u)} — ${r.steps}/${lead.total} jogos na ponta${r.run>=2?`, maior sequência ${r.run}`:''}${r.since?` (assumiu em ${r.since.date||r.since.id})`:''}`).join('\n');
+
+    const consist = _rzConsistency(users, allPals, res).slice(0,5)
+      .map((r,i)=>`  ${i+1}. ${nm(r.u)} — índice ${r.idx.toFixed(1)} (média ${r.mean.toFixed(1)}/fase, desvio ${r.std.toFixed(1)})`).join('\n');
+
+    const bold = _rzBoldness(users, allPals, res);
+    const ousados = bold.slice(0,3).map(r=>`  • ${nm(r.u)}: distância média ${r.ousadia.toFixed(2)} da média do grupo`).join('\n');
+    const conservadores = bold.slice().reverse().slice(0,3).map(r=>`  • ${nm(r.u)}: distância média ${r.ousadia.toFixed(2)} (colado na maioria)`).join('\n');
+
+    const opp = _rzOpposition(users, allPals, res);
+    const opostos = opp.rows.slice(0,6).map(r=>`  • ${nm(r.u)} ↔ ${nm(r.other)}: ${r.pct.toFixed(0)}% diferentes (${r.common} jogos)`).join('\n');
+    const duplaOposta = opp.globalPair ? `${nm(opp.globalPair.a)} e ${nm(opp.globalPair.b)} — ${opp.globalPair.pct.toFixed(0)}% diferentes` : '(sem dados)';
+    const gemeos = opp.globalTwin ? `${nm(opp.globalTwin.a)} e ${nm(opp.globalTwin.b)} — ${(100-opp.globalTwin.pct).toFixed(0)}% parecidos` : '(sem dados)';
+
+    const turn = _rzTurnaround(users, allPals, res, champPicks);
+    const viradas = turn ? [
+      turn.up ? `  • Maior arrancada no mata-mata: ${nm(turn.up.u)} (${turn.up.before}º → ${turn.up.after}º${turn.up.delta>0?`, subiu ${turn.up.delta}`:''})` : '',
+      (turn.down && turn.down !== turn.up) ? `  • Maior queda no mata-mata: ${nm(turn.down.u)} (${turn.down.before}º → ${turn.down.after}º)` : ''
+    ].filter(Boolean).join('\n') : '  (mata-mata ainda não começou)';
+
+    const sel = _rzSelecoes(analiseJogos, res).filter(t=>t.jogos>0);
+    const maisPontos = sel.slice().sort((a,b)=>b.pts-a.pts)[0];
+    const maisEnganou = sel.filter(t=>t.palpites>=Math.max(3,users.length)).sort((a,b)=>a.acertoPct-b.acertoPct)[0]
+      || sel.slice().sort((a,b)=>a.acertoPct-b.acertoPct)[0];
+    const selecoes = [
+      maisPontos ? `  • Seleção que mais rendeu pontos ao bolão: ${maisPontos.name} (${maisPontos.pts} pts somados)` : '',
+      maisEnganou ? `  • Seleção que mais enganou: ${maisEnganou.name} (só ${maisEnganou.acertoPct.toFixed(0)}% de acerto nos seus jogos)` : ''
+    ].filter(Boolean).join('\n');
+
+    const dif = Object.entries(analiseJogos).filter(([,x])=>x.palpites.length>0)
+      .map(([,x])=>({ game:x.game, pct:(x.exatos+x.venc_saldo+x.apenas_venc)/x.palpites.length*100 })).sort((a,b)=>a.pct-b.pct);
+    const zebra = dif[0], consenso = dif[dif.length-1];
+    const jogosMarcantes = [
+      zebra && zebra.game ? `  • Maior zebra: ${zebra.game.h} x ${zebra.game.a} — só ${zebra.pct.toFixed(0)}% acertaram o vencedor` : '',
+      consenso && consenso.game && consenso!==zebra ? `  • Consenso certeiro: ${consenso.game.h} x ${consenso.game.a} — ${consenso.pct.toFixed(0)}% acertaram` : ''
+    ].filter(Boolean).join('\n');
+
+    const champ = _getFinalChampion(res);
+
+    const data = `=== BOLÃO COPA 2026 — RESUMÃO DO BOLÃO (RETROSPECTIVA) PARA ANÁLISE IA ===
+Data: ${today}
+Participantes: ${users.length}
+Jogos com resultado: ${totalJogosRes} de ${ALL_GAMES.length}
+${champ ? `Campeã da Copa: ${champ}` : 'Campeã ainda não definida'}
+
+${faseBlocks}
+
+== MESTRES DO PLACAR EXATO ==
+${exatos || '  (ninguém cravou ainda)'}
+
+== ESPECIALISTAS EM SALDO (vencedor + diferença de gols, sem cravar) ==
+${saldo || '  (sem dados ainda)'}
+
+== CAÇADORES DE VENCEDOR (acertaram quem venceu ou o empate) ==
+${venc || '  (sem dados ainda)'}
+
+== MAIS TEMPO NA LIDERANÇA (jogos no topo, reprocessado em ordem cronológica) ==
+${lideranca || '  (sem dados ainda)'}
+
+== REGULARIDADE (índice de consistência = média/(1+desvio) por fase) ==
+${consist || '  (poucas fases para medir)'}
+
+== MAIS OUSADOS (mais longe da média de gols do grupo) ==
+${ousados || '  (sem dados ainda)'}
+
+== MAIS CONSERVADORES (colados na média do grupo) ==
+${conservadores || '  (sem dados ainda)'}
+
+== DUPLAS: OPOSTOS E GÊMEOS ==
+  Dupla mais oposta do bolão: ${duplaOposta}
+  Gêmeos de palpite (mais parecidos): ${gemeos}
+  Maiores "opostos" de cada um:
+${opostos || '  (sem duplas com jogos suficientes)'}
+
+== VIRADAS ENTRE GRUPOS E MATA-MATA ==
+${viradas}
+
+== ESTATÍSTICAS POR SELEÇÃO ==
+${selecoes || '  (sem dados ainda)'}
+
+== JOGOS QUE MARCARAM ==
+${jogosMarcantes || '  (sem dados ainda)'}
+
+==========================================================
+INSTRUÇÕES PARA A IA (não inclua este bloco na resposta)
+==========================================================
+Gere os CARDS DE CURIOSIDADES do "Resumão do Bolão" — uma retrospectiva divertida
+de fim de Copa. Esses cards vão aparecer no carrossel da tela principal do app.
+
+REGRAS OBRIGATÓRIAS:
+1. Retorne APENAS um array JSON válido, sem texto antes ou depois, sem bloco de código markdown.
+2. Cada card segue EXATAMENTE o formato: {"icon":"emoji","title":"título curto","value":"nome/valor destacado","text":"1-2 frases curtas e divertidas"}
+3. Gere de 12 a 16 cards, cada um sobre um ÂNGULO DIFERENTE do Resumão. Use os blocos acima, por exemplo:
+   - 🏁 Melhores por fase (destaque um líder de rodada/mata-mata surpreendente)
+   - 🎯 Mestre do placar exato · 📐 Especialista em saldo · 🏹 Caçador de vencedor
+   - 👑 Quem passou mais tempo na liderança (e a maior sequência na ponta)
+   - 🧱 Regularidade absurda (melhor índice de consistência) e o que isso significa
+   - 🎲 O mais ousado vs 🛡️ o mais conservador (contra ou a favor da manada)
+   - ⚔️ A dupla mais oposta (narre como rivais naturais) e 🤝 os gêmeos de palpite
+   - 🚀 A maior arrancada no mata-mata · 🧊 a maior queda
+   - 🌍 A seleção que mais enganou / mais rendeu pontos · 🦓 a maior zebra do bolão
+   - 🏛️ Hall da Fama: transforme os campeões de cada ranking em prêmios simbólicos
+4. NÃO repita o mesmo participante como protagonista em mais de 2 cards — espalhe os holofotes.
+5. Use apenas o apelido/primeiro nome nas descrições (nunca nome completo).
+6. Tom: comemorativo, criativo e bem-humorado, como uma retrospectiva de fim de Copa — nada de crueldade com quem foi mal.
+7. Títulos curtos e chamativos; textos de no máximo 2 frases que despertem curiosidade.
+8. Se algum bloco estiver "sem dados ainda", simplesmente não crie card sobre ele.
+==========================================================`;
+
+    await navigator.clipboard.writeText(data);
+    showToast('✅ Resumão + prompt copiados! Cole no Claude/ChatGPT.', 'success');
+  } catch(e) { showToast('Erro ao gerar Resumão: '+errMsg(e), 'error'); }
 }
 
 async function exportAIDataDetalhado() {
@@ -16136,6 +16342,12 @@ function openGraficosFromIntro() {
   closeGraficosIntro();
   // Abre direto na sub-aba Gráficos assim que a página renderizar.
   _graficosPendingTab = true;
+  navigateTo('estatisticas');
+}
+
+// Link do dashboard → abre a aba Stats já na sub-aba "🏆 Resumão do Bolão".
+function goToResumao() {
+  _resumaoPendingTab = true;
   navigateTo('estatisticas');
 }
 
