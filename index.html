@@ -322,6 +322,53 @@ body.light-theme .gx-select{background:#fff}
 body.light-theme .gx-bar-track{background:rgba(0,0,0,.06)}
 .gx-bar-fill{height:100%;border-radius:7px;min-width:2px;transition:width .4s}
 .gx-bar-val{flex:0 0 auto;font-size:0.78rem;font-weight:700;color:var(--text-muted);min-width:34px;text-align:right}
+/* ══════════════════════════════════════════
+   RESUMÃO DO BOLÃO (sub-aba de retrospectiva)
+══════════════════════════════════════════ */
+.rz-hero{position:relative;text-align:center;padding:24px 16px;margin-bottom:20px;border-radius:18px;overflow:hidden;
+  background:linear-gradient(135deg,rgba(255,215,0,.15),rgba(0,196,255,.10) 55%,rgba(255,140,0,.13));
+  border:1px solid rgba(255,215,0,.25)}
+.rz-hero::after{content:"🎉";position:absolute;font-size:5rem;opacity:.06;right:6px;bottom:-16px;pointer-events:none}
+.rz-hero h2{font-size:1.5rem;font-weight:900;margin:0;color:var(--gold);letter-spacing:.3px;line-height:1.2}
+.rz-hero p{font-size:0.85rem;color:var(--text-muted);margin:9px auto 0;max-width:470px;line-height:1.5}
+.rz-rows{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.rz-row{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:10px;padding:8px 10px}
+body.light-theme .rz-row{background:rgba(0,0,0,.04)}
+.rz-row-top{background:linear-gradient(90deg,rgba(255,215,0,.17),rgba(255,215,0,.03));border:1px solid rgba(255,215,0,.3)}
+.rz-row-me{outline:1px solid rgba(0,196,255,.5);outline-offset:-1px}
+.rz-row-medal{flex:0 0 26px;text-align:center;font-size:1rem}
+.rz-pos{font-size:0.8rem;font-weight:700;color:var(--text-muted)}
+.rz-row-main{flex:1;min-width:0}
+.rz-row-name{font-size:0.86rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rz-row-track{height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin-top:5px}
+body.light-theme .rz-row-track{background:rgba(0,0,0,.08)}
+.rz-row-fill{height:100%;border-radius:4px;min-width:3px;transition:width .4s}
+.rz-row-val{flex:0 0 auto;text-align:right;font-weight:800;font-size:1rem;line-height:1.05;display:flex;flex-direction:column;align-items:flex-end}
+.rz-row-sub{font-size:0.6rem;font-weight:600;color:var(--text-muted);margin-top:1px;white-space:nowrap}
+.rz-row-badge{display:inline-block;font-size:0.62rem;font-weight:700;padding:1px 6px;border-radius:8px;background:rgba(255,215,0,.16);color:var(--gold);margin-left:6px;vertical-align:middle}
+.rz-phase-leader{background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.25);border-radius:10px;padding:9px 12px;font-size:0.82rem;margin-bottom:10px;line-height:1.4}
+.rz-note{font-size:0.72rem;color:var(--text-muted);margin-top:10px;text-align:center;line-height:1.4}
+.rz-hall-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:4px}
+.rz-hall-card{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px 12px;text-align:center}
+body.light-theme .rz-hall-card{background:rgba(0,0,0,.03)}
+.rz-hall-emoji{font-size:1.7rem;line-height:1}
+.rz-hall-title{font-size:0.63rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin:6px 0 4px;font-weight:700}
+.rz-hall-name{font-size:0.98rem;font-weight:800;color:var(--gold);line-height:1.2}
+.rz-hall-detail{font-size:0.72rem;color:var(--text-muted);margin-top:3px;line-height:1.35}
+.rz-narr{display:flex;flex-direction:column;gap:10px}
+.rz-narr-line{display:flex;gap:10px;align-items:flex-start;background:rgba(255,255,255,.03);border-left:3px solid var(--gold);border-radius:8px;padding:9px 12px;font-size:0.85rem;line-height:1.45}
+body.light-theme .rz-narr-line{background:rgba(0,0,0,.03)}
+.rz-narr-line .em{font-size:1.05rem;line-height:1.2;flex:0 0 auto}
+.rz-duo{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;background:rgba(255,255,255,.04);border-radius:10px;padding:12px;margin-top:8px;font-weight:700;text-align:center}
+body.light-theme .rz-duo{background:rgba(0,0,0,.04)}
+.rz-duo .pct{color:var(--orange)}
+.rz-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.rz-mini{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
+body.light-theme .rz-mini{background:rgba(0,0,0,.03)}
+.rz-mini-lbl{font-size:0.68rem;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);font-weight:700}
+.rz-mini-val{font-size:1.05rem;font-weight:800;margin-top:6px}
+.rz-mini-sub{font-size:0.74rem;color:var(--text-muted);margin-top:2px}
+@media(max-width:520px){ .rz-hero h2{font-size:1.25rem} .rz-mini-grid{grid-template-columns:1fr} }
 /* Barra empilhada (precisão por tipo) */
 .gx-stack-row{display:flex;align-items:center;gap:10px;padding:5px 0}
 .gx-stack-name{flex:0 0 34%;max-width:34%;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -7851,16 +7898,6 @@ async function renderEstatisticas() {
         placarFreq[key]=(placarFreq[key]||0)+1;
       });
     });
-    const placarMaisComum = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1])[0];
-
-    // Resultado mais comum
-    const resultFreq = {};
-    jogosComResultado.forEach(jid=>{
-      const r=res[jid];
-      const key=`${r.h_real}-${r.a_real}`;
-      resultFreq[key]=(resultFreq[key]||0)+1;
-    });
-    const resultMaisComum = Object.entries(resultFreq).sort((a,b)=>b[1]-a[1])[0];
 
     // Dificuldade dos jogos
     const gameDifficulty = Object.entries(analiseJogos)
@@ -7877,12 +7914,8 @@ async function renderEstatisticas() {
     const userAccStats = {};
     users.forEach(u => { userAccStats[u.uid] = calcUserAccuracyStats(u.uid, allPals, res); });
 
-    // Rankings alternativos
+    // Rankings alternativos (base de vários destaques da aba clássica)
     const altData = calcAltRankings(ranking, allPals);
-    const melhorSniper = altData.slice().sort((a,b) => b.exatos - a.exatos)[0];
-    const maisZicado = altData.slice().sort((a,b) => b.erros - a.erros)[0];
-    const reiEmpates = altData.slice().sort((a,b) => b.empates - a.empates)[0];
-    const apostadorOusado = altData.slice().sort((a,b) => b.mediaGols - a.mediaGols)[0];
 
     // Momento dos participantes — destaques editoriais (últimos 5 jogos com resultado)
     const momentum = _calcMomentum(ranking, allPals, res, 5);
@@ -8417,137 +8450,6 @@ async function renderEstatisticas() {
       </div>`;
     }
 
-    // Buffer da sub-aba "Outras Stats" (estatísticas menos vistas).
-    let _outrasHtml = '';
-
-    // ── Rankings alternativos ──
-    if (totalJogos > 0 && ranking.length > 0) {
-      const mkAward = (emoji, title, color, user, sub) => user ? `
-        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;text-align:center">
-          <div style="font-size:1.8rem">${emoji}</div>
-          <div style="font-size:0.7rem;color:var(--text-muted);margin:4px 0 6px;text-transform:uppercase;letter-spacing:.5px">${title}</div>
-          <div style="font-size:1rem;font-weight:700;color:${color}">${esc(user.apelido||user.nome)}</div>
-          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px">${sub}</div>
-        </div>` : '';
-      _outrasHtml += `<div class="card">
-        <div class="card-title">🏅 Rankings Alternativos</div>
-        <div class="stats-alt-grid">
-          ${mkAward('🎯','Melhor Sniper','var(--gold)',melhorSniper,`${melhorSniper?.exatos||0} placares exatos`)}
-          ${mkAward('💀','Mais Zicado','#ff6b6b',maisZicado,`${maisZicado?.erros||0} erros`)}
-          ${mkAward('🤝','Rei dos Empates','var(--accent)',reiEmpates,`${reiEmpates?.empates||0} palpites de empate`)}
-          ${mkAward('🚀','Apostador Ousado','var(--orange)',apostadorOusado,`média ${apostadorOusado?.mediaGols?.toFixed(1)||0} gols/jogo`)}
-        </div>
-      </div>`;
-    }
-
-    // ── Sequências & Recordes ──
-    if (totalJogos > 0) {
-      const accAll = users.map(u => ({ u, ...calcUserAccuracyStats(u.uid, allPals, res) }));
-
-      // Lista de recorde de sequência (genérica). maxKey = maior sequência;
-      // curKey = sequência ativa atual (para marcar "ativo!"). Mostra todos os
-      // participantes com sequência >= min (vários, não só o líder).
-      const _streakList = (title, arr, maxKey, curKey, color, uniSing, uniPlur, hat) => {
-        if (!arr.length) return '';
-        return `<div style="margin-bottom:16px">
-          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">${title}</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            ${arr.slice(0,10).map((a,i)=>{
-              const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="color:var(--text-muted)">${i+1}.</span>`;
-              const v=a[maxKey], active=v>0 && v===a[curKey], hatM=(hat&&v>=3)?' 🎩':'';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
-                <span style="font-weight:600">${medal} ${esc(a.u.apelido||a.u.nome)}${hatM}</span>
-                <span style="color:${color};font-weight:700">${v} ${v>1?uniPlur:uniSing}${active?' <span style="font-size:0.72rem;color:var(--green)">(ativo!)</span>':''}</span>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>`;
-      };
-      // Pontos seguidos = jogos consecutivos pontuando (placar exato, V+saldo OU
-      // só vencedor). Exatos seguidos = somente placar cravado consecutivo.
-      const pontosSeq = accAll.filter(a=>a.maxStreak>=2).sort((a,b)=>b.maxStreak-a.maxStreak||b.currentStreak-a.currentStreak);
-      const exatosSeq = accAll.filter(a=>a.maxExactStreak>=2).sort((a,b)=>b.maxExactStreak-a.maxExactStreak||b.currentExactStreak-a.currentExactStreak);
-
-      // Sniper por rodada
-      const rounds = [
-        { label:'Rodada 1', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===1).map(gm=>gm.id)) },
-        { label:'Rodada 2', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===2).map(gm=>gm.id)) },
-        { label:'Rodada 3', ids: Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===3).map(gm=>gm.id)) },
-        ...Object.values(ELIM_DATA).map(d=>({ label: d.label, ids: d.games.map(g=>g.id) }))
-      ].map(rd => {
-        const gamesWithRes = rd.ids.filter(id => _hasFullResult(res[id]));
-        if (!gamesWithRes.length) return null;
-        const byExatos = users.map(u => {
-          const ex = gamesWithRes.filter(id => {
-            const p = allPals[u.uid]?.[id]; return p && _hitType(p, res[id]) === 'exato';
-          }).length;
-          return { u, ex };
-        }).sort((a,b) => b.ex-a.ex);
-        const top = byExatos[0];
-        return top.ex > 0 ? { label: rd.label, user: top.u, ex: top.ex, total: gamesWithRes.length } : null;
-      }).filter(Boolean);
-
-      let seqHtml = '';
-
-      // ⚽ Maior sequência de PONTOS seguidos (jogos consecutivos pontuando).
-      seqHtml += _streakList('⚽ Maior Sequência de Pontos (jogos seguidos pontuando)', pontosSeq, 'maxStreak', 'currentStreak', '#60A5FA', 'jogo', 'jogos', false)
-        || `<div style="margin-bottom:16px"><div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">⚽ Maior Sequência de Pontos</div><div style="font-size:0.85rem;color:var(--text-muted)">Ninguém emendou 2 jogos pontuando ainda.</div></div>`;
-
-      // 🎯 Maior sequência de PLACARES EXATOS seguidos (só placar cravado).
-      seqHtml += _streakList('🎯 Maior Sequência de Placares Exatos (cravados seguidos)', exatosSeq, 'maxExactStreak', 'currentExactStreak', 'var(--gold)', 'exato', 'exatos', true)
-        || `<div style="margin-bottom:16px"><div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎯 Maior Sequência de Placares Exatos</div><div style="font-size:0.85rem;color:var(--text-muted)">Ninguém cravou 2 placares exatos seguidos ainda — quem vai ser o primeiro? 👀</div></div>`;
-
-      // Sniper por rodada
-      if (rounds.length) {
-        seqHtml += `<div>
-          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">🎯 Sniper da Rodada</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            ${rounds.map(rd=>`<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px">
-              <span style="font-size:0.82rem;color:var(--text-muted)">${esc(rd.label)}</span>
-              <span style="font-weight:600">${esc(rd.user.apelido||rd.user.nome)} <span style="color:var(--gold)">${rd.ex}/${rd.total} exato${rd.ex>1?'s':''}</span></span>
-            </div>`).join('')}
-          </div>
-        </div>`;
-      }
-
-      if (seqHtml) {
-        _outrasHtml += `<div class="card">
-          <div class="card-title">🏆 Sequências & Recordes</div>
-          <div style="margin-top:14px">${seqHtml}</div>
-        </div>`;
-      }
-    }
-
-    // ── Perfis de Apostador ──
-    if (users.length > 0) {
-      const profiles = users.map(u => {
-        const pals = Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined);
-        if (!pals.length) return null;
-        const avgGols = pals.reduce((s,p)=>s+parseInt(p.h||0)+parseInt(p.a||0),0)/pals.length;
-        const empPct = Math.round(pals.filter(p=>parseInt(p.h)===parseInt(p.a)).length/pals.length*100);
-        let profile, icon, color;
-        if (avgGols < 1.8)      { profile='Conservador'; icon='🛡️'; color='#60A5FA'; }
-        else if (avgGols < 2.8) { profile='Equilibrado'; icon='⚖️'; color='var(--green)'; }
-        else                    { profile='Ousado';       icon='🚀'; color='var(--orange)'; }
-        return { u, profile, icon, color, avgGols, empPct };
-      }).filter(Boolean);
-      if (profiles.length) {
-        _outrasHtml += `<div class="card">
-          <div class="card-title">🎭 Perfis de Apostador</div>
-          <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">Estilo de jogo baseado na média de gols palpitados — não tem a ver com acertos.</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            ${profiles.map(a=>`<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px;flex-wrap:wrap">
-              <span style="font-weight:600;min-width:80px;flex:1">${esc(a.u.apelido||a.u.nome)}</span>
-              <span style="color:${a.color};font-weight:700;min-width:110px">${a.icon} ${a.profile}</span>
-              <span style="font-size:0.78rem;color:var(--text-muted)">Ø${a.avgGols.toFixed(1)} gols/jogo</span>
-              <span style="font-size:0.78rem;color:var(--text-muted)">${a.empPct}% apostas em empate</span>
-            </div>`).join('')}
-          </div>
-          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:10px">🛡️ Conservador &lt;1.8 gols · ⚖️ Equilibrado 1.8–2.8 · 🚀 Ousado &gt;2.8</div>
-        </div>`;
-      }
-    }
-
     // ── Consenso & Dissenso + Placar Favorito ──
     const lockedGamesStats = ALL_GAMES.map(game => {
       const r = res[game.id]||{};
@@ -8587,30 +8489,6 @@ async function renderEstatisticas() {
             ${mkDistBar(polemico)}
             <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">Opiniões divididas — spread de ${Math.round(polemico.spread)}pp</div>
           </div>
-        </div>
-      </div>`;
-    }
-
-    // Placar favorito por participante
-    const favPlacares = users.map(u=>{
-      const pals=Object.values(allPals[u.uid]||{}).filter(p=>p.h!==undefined&&p.a!==undefined);
-      if (!pals.length) return null;
-      const freq={};
-      pals.forEach(p=>{ const _h=parseInt(p.h)||0,_a=parseInt(p.a)||0; const k=`${Math.max(_h,_a)}×${Math.min(_h,_a)}`; freq[k]=(freq[k]||0)+1; });
-      const [placar,count]=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0];
-      return count>=2?{u,placar,count,total:pals.length}:null;
-    }).filter(Boolean).sort((a,b)=>b.count/b.total-a.count/a.total);
-
-    if (favPlacares.length >= 3) {
-      _outrasHtml += `<div class="card">
-        <div class="card-title">🔁 Placar Favorito</div>
-        <div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 12px">O placar que cada um mais aposta — revela o "palpite padrão" de cada participante.</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${favPlacares.map(f=>`<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:5px 12px;font-size:0.82rem">
-            <span style="font-weight:600">${esc(f.u.apelido||f.u.nome)}</span>
-            <span style="color:var(--gold);margin-left:6px">${f.placar}</span>
-            <span style="color:var(--text-muted);font-size:0.72rem;margin-left:4px">(${f.count}×)</span>
-          </div>`).join('')}
         </div>
       </div>`;
     }
@@ -8706,25 +8584,6 @@ async function renderEstatisticas() {
           </div>
         </div>`;
       }
-    }
-
-    // ── Heatmap de placares mais palpitados (Top 12) ──
-    const topPlacares = Object.entries(placarFreq).sort((a,b)=>b[1]-a[1]).slice(0, 12);
-    if (topPlacares.length > 0) {
-      const maxFreq = topPlacares[0][1] || 1;
-      _outrasHtml += `<div class="card">
-        <div class="card-title">🧠 Ranking de Placares (Top 12)</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px">
-          ${topPlacares.map(([placar, qtd])=>`
-            <div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:rgba(255,255,255,0.03)">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                <span style="font-weight:800;color:var(--gold)">${placar}</span>
-                <span style="font-size:0.8rem;color:var(--text-muted)">${qtd}x</span>
-              </div>
-              <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round((qtd/maxFreq)*100)}%"></div></div>
-            </div>`).join('')}
-        </div>
-      </div>`;
     }
 
     // ── Ousadia detalhada ──
@@ -8827,84 +8686,14 @@ async function renderEstatisticas() {
       html += `</tbody></table></div></div>`;
     }
 
-    // ── Cards originais (movidos para "Outras Stats") ──
-    _outrasHtml += `<div class="card">
-        <div class="card-title">🏆 Jogo Mais Acertado (Placar Exato)</div>
-        ${maiorAcerto.id ? `
-          <div style="margin-top:12px">
-            <p style="font-size:0.95rem;font-weight:600;margin-bottom:6px">${esc(analiseJogos[maiorAcerto.id].game?.h||'')} × ${esc(analiseJogos[maiorAcerto.id].game?.a||'')}</p>
-            <p style="font-size:0.85rem;color:var(--text-muted)">
-              ${analiseJogos[maiorAcerto.id].exatos} placares exatos ·
-              ${analiseJogos[maiorAcerto.id].venc_saldo} vencedor+saldo ·
-              ${analiseJogos[maiorAcerto.id].apenas_venc} apenas vencedor
-            </p>
-          </div>
-        ` : '<p class="text-muted">Sem dados</p>'}
-      </div>
-
-      <div class="card">
-        <div class="card-title">🔢 Placar Mais Palpitado</div>
-        ${placarMaisComum ? `
-          <p style="font-size:1.2rem;font-weight:700;color:var(--gold);margin-top:12px">${placarMaisComum[0]} <span style="font-size:0.85rem;color:var(--text-muted)">(${placarMaisComum[1]} palpites)</span></p>
-        ` : '<p class="text-muted">Sem dados</p>'}
-      </div>
-
-      <div class="card">
-        <div class="card-title">📊 Resultado Mais Comum</div>
-        ${resultMaisComum ? `
-          <p style="font-size:1.2rem;font-weight:700;color:var(--green);margin-top:12px">${resultMaisComum[0]} <span style="font-size:0.85rem;color:var(--text-muted)">(${resultMaisComum[1]} jogos)</span></p>
-        ` : '<p class="text-muted">Sem dados</p>'}
-      </div>`;
-
-    // ── Palpites de Campeão ──
-    const champVotes = {};
-    users.forEach(u => { const t = champPicks[u.uid]; if(t) champVotes[t] = (champVotes[t]||0) + 1; });
-    const champVotesArr = Object.entries(champVotes).sort((a,b)=>b[1]-a[1]);
-    const totalVotes = champVotesArr.reduce((s,[,v])=>s+v,0);
-    const semEscolha = users.length - totalVotes;
-    const finalChampionEst = _getFinalChampion(res);
-    const isAdminEst = currentUserDoc?.role === 'admin';
-    const champEstRevealed = isAdminEst || CFG.campeao_locked === true || !!finalChampionEst;
-    if (!champEstRevealed) {
-      _outrasHtml += `<div class="card" style="text-align:center;padding:20px">
-        <div style="font-size:1.5rem;margin-bottom:8px">🔒</div>
-        <div style="font-weight:700;color:var(--gold);margin-bottom:4px">Estatísticas de Campeão</div>
-        <div style="font-size:0.85rem;color:var(--text-muted)">Visível após o bloqueio das escolhas de campeão pelo admin</div>
-      </div>`;
-    } else if (champVotesArr.length > 0) {
-      const maxVotes = champVotesArr[0][1] || 1;
-      _outrasHtml += `<div class="card">
-        <div class="card-title" style="margin-bottom:14px">🏆 Palpites de Campeão (${totalVotes} escolha${totalVotes!==1?'s':''})</div>
-        ${finalChampionEst?`<div class="alert alert-success" style="margin-bottom:12px;font-size:0.82rem">🏆 Campeã definida: <b>${teamFlag(finalChampionEst)} ${esc(finalChampionEst)}</b></div>`:''}
-        ${champVotesArr.map(([team,count])=>{
-          const flag = teamFlag(team);
-          const pct = totalVotes>0?Math.round(count/totalVotes*100):0;
-          const isWinner = team===finalChampionEst;
-          return `<div class="champ-stat-row">
-            <div class="champ-stat-team">${flag} ${esc(team)}${isWinner?' ✅':''}</div>
-            <div class="champ-stat-bar-wrap">
-              <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round(count/maxVotes*100)}%;${isWinner?'background:var(--green)':''}"></div></div>
-            </div>
-            <span class="champ-stat-count">${count} (${pct}%)</span>
-          </div>`;
-        }).join('')}
-        ${semEscolha>0?`<div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${semEscolha} participante(s) ainda sem escolha de campeão</div>`:''}
-      </div>`;
-    }
-
-    // ── Completude dos palpites (movida dos Gráficos para "Outras Stats") ──
-    _outrasHtml += renderGxCompleteness({ users, res, allPals });
-
-    // (Evolução do Ranking agora vive na sub-aba Gráficos — ver renderGraficos.)
-
     // ── Palpiteiro Médio: participante hipotético que aposta a média de todos ──
     html += _buildPalpiteiroMedioCard({ analiseJogos, res, jogosComResultado, users });
 
-    // Fecha a sub-aba clássica, monta "Outras Stats" e prepara "Gráficos" (sob demanda).
+    // Fecha a sub-aba clássica. A sub-aba "🏆 Resumão do Bolão" (antiga "Outras
+    // Stats") e a de "Gráficos" são renderizadas SOB DEMANDA ao abrir (renderResumao/
+    // renderGraficos), reaproveitando _graficosData — zero leituras extras do Firestore.
     html += '</div>'
-      + '<div id="stats-tab-outras" style="display:none"><div class="section-title">🏅 Outras Stats</div>'
-      + (_outrasHtml || '<div class="card"><div class="gx-empty">Sem estatísticas para mostrar ainda.</div></div>')
-      + '</div>'
+      + '<div id="stats-tab-outras" style="display:none"></div>'
       + '<div id="stats-tab-graficos" style="display:none"></div>'
       + '<div id="stats-tab-trocas" style="display:none"></div>';
     // Guarda em memória todos os dados já carregados para os Gráficos reusarem
@@ -8912,6 +8701,7 @@ async function renderEstatisticas() {
     _graficosData = { users, res, allPals, champPicks, ranking, analiseJogos, jogosComResultado, userAccStats };
     _graficosRendered = false;
     _trocasRendered = false;
+    _resumaoRendered = false;
     cont.innerHTML = html;
     if (_graficosPendingTab) { switchStatsSubTab('graficos'); _graficosPendingTab = false; }
     _momInit(); // carrossel do card "Momento dos Participantes"
@@ -9072,11 +8862,12 @@ let _graficosRendered = false;  // evita re-render ao alternar de aba
 let _graficosPendingTab = false;// abrir já na aba Gráficos (ex.: deep-link)
 let _trocasRendered = false;    // evita re-render da aba Trocas ao alternar
 let _trocasPubCache = null;     // snapshot publicado (cache/trocas_publicado) em memória
+let _resumaoRendered = false;   // evita re-render do "Resumão do Bolão" ao alternar
 
 function _gxSubTabsBar() {
   return `<div class="gx-subtabs">
     <button class="gx-subtab active" data-gxtab="classic" onclick="switchStatsSubTab('classic')">📈 Estatísticas</button>
-    <button class="gx-subtab" data-gxtab="outras" onclick="switchStatsSubTab('outras')">🏅 Outras Stats</button>
+    <button class="gx-subtab" data-gxtab="outras" onclick="switchStatsSubTab('outras')">🏆 Resumão</button>
     <button class="gx-subtab" data-gxtab="graficos" onclick="switchStatsSubTab('graficos')">📊 Gráficos</button>
     <button class="gx-subtab" data-gxtab="trocas" onclick="switchStatsSubTab('trocas')">🔁 Trocas</button>
   </div>`;
@@ -9094,8 +8885,544 @@ function switchStatsSubTab(tab) {
   if (outras) outras.style.display = (tab === 'outras') ? '' : 'none';
   if (graf) graf.style.display = (tab === 'graficos') ? '' : 'none';
   if (trocas) trocas.style.display = (tab === 'trocas') ? '' : 'none';
+  if (tab === 'outras' && !_resumaoRendered) { renderResumao(); _resumaoRendered = true; }
   if (tab === 'graficos' && !_graficosRendered) { renderGraficos(); _graficosRendered = true; }
   if (tab === 'trocas' && !_trocasRendered) { renderStatsTrocas(); _trocasRendered = true; }
+}
+
+// ════════════════════════════════════════════
+// RESUMÃO DO BOLÃO — retrospectiva de fim de Copa (sub-aba "🏆 Resumão")
+// ════════════════════════════════════════════
+// Renderizado SOB DEMANDA ao abrir a aba, reaproveitando _graficosData (os mesmos
+// dados já carregados por renderEstatisticas) — zero leituras extras do Firestore.
+// Cada estatística tem uma função de CÁLCULO pura (_rz*) separada da renderização,
+// facilitando teste e manutenção. Tudo considera apenas jogos com resultado lançado
+// e reutiliza as funções oficiais de pontuação (calcPontos/_hitType).
+
+function _rzName(u){ return esc((u && (u.apelido || u.nome)) || '—'); }
+function _rzMedal(i){ return ['🥇','🥈','🥉'][i] || `<span class="rz-pos">${i+1}º</span>`; }
+
+// Fases usadas em rankings/consistência: 3 rodadas de grupos + mata-mata inteiro.
+function _rzPhases(){
+  const grR = r => Object.values(GRUPOS_DATA).flatMap(g=>g.games.filter(gm=>gm.r===r).map(gm=>gm.id));
+  return [
+    { key:'r1',   label:'Rodada 1',  emoji:'1️⃣', ids: grR(1) },
+    { key:'r2',   label:'Rodada 2',  emoji:'2️⃣', ids: grR(2) },
+    { key:'r3',   label:'Rodada 3',  emoji:'3️⃣', ids: grR(3) },
+    { key:'mata', label:'Mata-mata', emoji:'⚔️', ids: Array.from(_MATA_IDS) },
+  ];
+}
+
+// Linha de ranking compacta: medalha · nome (+badge opcional) + barra · valor + sub.
+function _rzRankRow(u, val, max, sub, color, i, nameBadge){
+  const pct = max>0 ? Math.max(4, Math.abs(val)/max*100) : 0;
+  const me = u && currentUser && u.uid===currentUser.uid;
+  const col = color || 'var(--gold)';
+  return `<div class="rz-row${i===0?' rz-row-top':''}${me?' rz-row-me':''}">
+    <div class="rz-row-medal">${_rzMedal(i)}</div>
+    <div class="rz-row-main">
+      <div class="rz-row-name">${_rzName(u)}${nameBadge?`<span class="rz-row-badge">${nameBadge}</span>`:''}</div>
+      <div class="rz-row-track"><div class="rz-row-fill" style="width:${pct.toFixed(1)}%;background:${col}"></div></div>
+    </div>
+    <div class="rz-row-val" style="color:${col}">${val}${sub?`<span class="rz-row-sub">${sub}</span>`:''}</div>
+  </div>`;
+}
+function _rzHall(emoji, title, name, detail){
+  return `<div class="rz-hall-card"><div class="rz-hall-emoji">${emoji}</div>
+    <div class="rz-hall-title">${title}</div>
+    <div class="rz-hall-name">${name||'—'}</div>
+    <div class="rz-hall-detail">${detail||''}</div></div>`;
+}
+
+// ── CÁLCULOS (funções puras) ─────────────────────────────────────────────────
+
+// 1. Top pontuadores de uma fase (lista de ids). Só jogos com resultado.
+function _rzPhaseRanking(phaseIds, users, allPals, res){
+  const played = phaseIds.filter(id=>_hasFullResult(res[id]));
+  const rows = users.map(u=>{
+    let pts=0, jogos=0;
+    played.forEach(id=>{ const pt=calcPontos(allPals[u.uid]?.[id], res[id], id); if(pt!==null){ pts+=pt; jogos++; } });
+    return { u, pts, jogos };
+  }).filter(r=>r.jogos>0).sort((a,b)=>b.pts-a.pts||b.jogos-a.jogos);
+  return { rows, playedCount: played.length };
+}
+
+// 2. Mestres do placar exato (usa o ranking já computado + maior sequência de exatos).
+function _rzExatos(ranking, userAccStats){
+  return ranking.map(u=>({
+    u, exatos:u.exatos, jogos:u.jogos,
+    pct: u.jogos? u.exatos/u.jogos*100 : 0,
+    streak: userAccStats?.[u.uid]?.maxExactStreak || 0
+  })).filter(r=>r.exatos>0).sort((a,b)=>b.exatos-a.exatos||b.pct-a.pct);
+}
+
+// 3. Especialistas em saldo (vencedor + diferença de gols, sem cravar). Guarda um
+// exemplo de jogo em que acertou o saldo para ilustrar.
+function _rzSaldo(ranking, allPals, res){
+  return ranking.map(u=>{
+    let ex=null;
+    if (u.venc_saldo>0){
+      const pals=allPals[u.uid]||{};
+      for (const jid of Object.keys(pals)){
+        if (_hasFullResult(res[jid]) && _hitType(pals[jid], res[jid])==='saldo'){
+          const t=_gxGameTeams(jid,res);
+          ex={ jogo:`${t.h} × ${t.a}`, palpite:`${pals[jid].h}×${pals[jid].a}`, real:`${res[jid].h_real}×${res[jid].a_real}` };
+          break;
+        }
+      }
+    }
+    return { u, saldo:u.venc_saldo, jogos:u.jogos, pct: u.jogos? u.venc_saldo/u.jogos*100 : 0, ex };
+  }).filter(r=>r.saldo>0).sort((a,b)=>b.saldo-a.saldo||b.pct-a.pct);
+}
+
+// 4. Caçadores de vencedor (qualquer acerto de resultado). Separa vitórias e empates.
+function _rzVencedor(users, allPals, res, jogosComResultado){
+  return users.map(u=>{
+    let venc=0, jogos=0, vit=0, emp=0;
+    jogosComResultado.forEach(id=>{
+      const p=allPals[u.uid]?.[id]; if(!p) return;
+      const t=_hitType(p,res[id]); if(t===null) return;
+      jogos++;
+      if (t!=='erro'){ venc++; (parseInt(res[id].h_real)===parseInt(res[id].a_real)) ? emp++ : vit++; }
+    });
+    return { u, venc, jogos, vit, emp, pct: jogos? venc/jogos*100 : 0 };
+  }).filter(r=>r.venc>0).sort((a,b)=>b.venc-a.venc||b.pct-a.pct);
+}
+
+// 5. Índice de oposição entre dois palpites de um mesmo jogo, normalizado [0,1]:
+// 70% vem da distância de placar (|Δcasa|+|Δfora|, saturando em 6 gols) e 30% de
+// terem apostado em vencedores diferentes. 1 = totalmente opostos naquele jogo.
+function _rzGameOpp(pa, pb){
+  const ha=parseInt(pa.h), aa=parseInt(pa.a), hb=parseInt(pb.h), ab=parseInt(pb.a);
+  const dist = Math.min(6, Math.abs(ha-hb)+Math.abs(aa-ab)) / 6;
+  const wa = ha>aa?'H':ha<aa?'A':'D', wb = hb>ab?'H':hb<ab?'A':'D';
+  return dist*0.7 + (wa!==wb?0.3:0);
+}
+// Para cada participante, acha o "oposto" (maior índice médio). Também devolve a
+// dupla mais oposta e a mais parecida do bolão inteiro.
+function _rzOpposition(users, allPals, minCommon=3){
+  const valid={};
+  users.forEach(u=>{ const src=allPals[u.uid]||{}, out={};
+    Object.keys(src).forEach(gid=>{ const p=src[gid]; if(p&&p.h!==undefined&&p.a!==undefined) out[gid]=p; });
+    valid[u.uid]=out; });
+  const perUser={}; let globalPair=null, globalTwin=null;
+  for (let i=0;i<users.length;i++) for (let j=i+1;j<users.length;j++){
+    const A=users[i], B=users[j], pa=valid[A.uid], pb=valid[B.uid];
+    let sum=0, common=0;
+    for (const gid in pa){ if (pb[gid]){ sum+=_rzGameOpp(pa[gid], pb[gid]); common++; } }
+    if (common<minCommon) continue;
+    const pct=sum/common*100;
+    if (!perUser[A.uid] || pct>perUser[A.uid].pct) perUser[A.uid]={ other:B, pct, common };
+    if (!perUser[B.uid] || pct>perUser[B.uid].pct) perUser[B.uid]={ other:A, pct, common };
+    if (!globalPair || pct>globalPair.pct) globalPair={ a:A, b:B, pct, common };
+    if (!globalTwin || pct<globalTwin.pct) globalTwin={ a:A, b:B, pct, common };
+  }
+  const rows=users.map(u=>perUser[u.uid]?{ u, ...perUser[u.uid] }:null).filter(Boolean).sort((a,b)=>b.pct-a.pct);
+  return { rows, globalPair, globalTwin, minCommon };
+}
+
+// 6. Tempo na liderança (aproximação): reprocessa os jogos finalizados em ordem
+// cronológica e, após CADA um, recalcula quem está em 1º (pelos mesmos critérios de
+// desempate do ranking oficial). Não há histórico persistido — esta é a melhor
+// granularidade possível: "jogos como líder". Conta também a maior sequência
+// consecutiva na ponta e quando cada um assumiu a liderança pela 1ª vez.
+function _rzLeadership(users, allPals, res){
+  const played = ALL_GAMES.filter(g=>_hasFullResult(res[g.id]))
+    .sort((a,b)=> _parseGameDate(a.date)-_parseGameDate(b.date) || (FIFA_MATCH_NO[a.id]||0)-(FIFA_MATCH_NO[b.id]||0));
+  const cum={}; users.forEach(u=>cum[u.uid]={pts:0,ex:0,vs:0,av:0});
+  const steps={}, maxRun={}, curRun={}, since={};
+  let prev=null;
+  played.forEach(g=>{
+    users.forEach(u=>{
+      const p=allPals[u.uid]?.[g.id];
+      const pt=calcPontos(p,res[g.id],g.id); if(pt===null) return;
+      const c=cum[u.uid]; c.pts+=pt;
+      const t=_hitType(p,res[g.id]);
+      if(t==='exato')c.ex++; else if(t==='saldo')c.vs++; else if(t==='vencedor')c.av++;
+    });
+    let leader=null, bp=-1,be=-1,bv=-1,ba=-1;
+    users.forEach(u=>{ const c=cum[u.uid];
+      const better = c.pts>bp || (c.pts===bp && (c.ex>be || (c.ex===be && (c.vs>bv || (c.vs===bv && c.av>ba)))));
+      if (better){ bp=c.pts;be=c.ex;bv=c.vs;ba=c.av;leader=u; }
+    });
+    if (!leader || bp<=0){ prev=null; return; }
+    steps[leader.uid]=(steps[leader.uid]||0)+1;
+    curRun[leader.uid]=(prev&&prev.uid===leader.uid)?(curRun[leader.uid]||0)+1:1;
+    if (prev&&prev.uid!==leader.uid) curRun[prev.uid]=0;
+    maxRun[leader.uid]=Math.max(maxRun[leader.uid]||0, curRun[leader.uid]);
+    if (!since[leader.uid]) since[leader.uid]={ date:g.date, id:g.id };
+    prev=leader;
+  });
+  const rows=users.map(u=>({ u, steps:steps[u.uid]||0, run:maxRun[u.uid]||0, since:since[u.uid] }))
+    .filter(r=>r.steps>0).sort((a,b)=>b.steps-a.steps||b.run-a.run);
+  return { rows, total:played.length, currentLeader:prev };
+}
+
+// 7. Consistência: pontos por fase → média, desvio padrão e índice combinado
+// média/(1+desvio), que premia quem pontua bem SEM oscilar (e não só quem oscila
+// pouco por pontuar pouco). Precisa de >=2 fases jogadas.
+function _rzConsistency(users, allPals, res){
+  const phases=_rzPhases();
+  return users.map(u=>{
+    const vals=[];
+    phases.forEach(ph=>{
+      const played=ph.ids.filter(id=>_hasFullResult(res[id]));
+      if(!played.length) return;
+      let pts=0, has=false;
+      played.forEach(id=>{ const pt=calcPontos(allPals[u.uid]?.[id],res[id],id); if(pt!==null){ pts+=pt; has=true; } });
+      if(has) vals.push(pts);
+    });
+    if(vals.length<2) return null;
+    const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const std=Math.sqrt(vals.reduce((a,v)=>a+(v-mean)**2,0)/vals.length);
+    return { u, mean, std, idx: mean/(1+std), phases:vals.length };
+  }).filter(Boolean).sort((a,b)=>b.idx-a.idx);
+}
+
+// Ousadia vs. média do grupo: por jogo com >=3 palpites, mede a distância do palpite
+// de cada um à média de gols do grupo naquele jogo. Alto = ousado; baixo = conservador.
+function _rzBoldness(users, allPals){
+  const games={};
+  users.forEach(u=>{ const pals=allPals[u.uid]||{};
+    Object.keys(pals).forEach(gid=>{ const p=pals[gid]; if(p.h===undefined||p.a===undefined) return;
+      const g=games[gid]||(games[gid]={sH:0,sA:0,n:0}); g.sH+=parseInt(p.h)||0; g.sA+=parseInt(p.a)||0; g.n++; }); });
+  return users.map(u=>{
+    const pals=allPals[u.uid]||{}; let sum=0,n=0;
+    Object.keys(pals).forEach(gid=>{ const p=pals[gid], g=games[gid]; if(!g||g.n<3||p.h===undefined) return;
+      sum += Math.abs((parseInt(p.h)||0)-g.sH/g.n)+Math.abs((parseInt(p.a)||0)-g.sA/g.n); n++; });
+    return n? { u, ousadia:sum/n, jogos:n } : null;
+  }).filter(Boolean).sort((a,b)=>b.ousadia-a.ousadia);
+}
+
+// Viradas: compara a posição no ranking considerando só a fase de grupos vs. o
+// ranking com o mata-mata incluído. delta>0 = subiu com o mata-mata.
+function _rzTurnaround(users, allPals, res){
+  const grpIds=Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(x=>x.id));
+  const mataIds=Array.from(_MATA_IDS);
+  const playedGrp=grpIds.filter(id=>_hasFullResult(res[id]));
+  const playedMata=mataIds.filter(id=>_hasFullResult(res[id]));
+  if (!playedMata.length || !playedGrp.length) return null;
+  const ptsOver=ids=>users.map(u=>{ let pts=0; ids.forEach(id=>{ const pt=calcPontos(allPals[u.uid]?.[id],res[id],id); if(pt!==null)pts+=pt; }); return { uid:u.uid, u, pts }; });
+  const rankOf=arr=>{ const s=[...arr].sort((a,b)=>b.pts-a.pts); const pos={}; s.forEach((r,i)=>pos[r.uid]=i+1); return pos; };
+  const grpPos=rankOf(ptsOver(playedGrp));
+  const fullPos=rankOf(ptsOver([...playedGrp,...playedMata]));
+  const rows=users.map(u=>({ u, before:grpPos[u.uid], after:fullPos[u.uid], delta:grpPos[u.uid]-fullPos[u.uid] })).filter(r=>r.before&&r.after);
+  return { up:[...rows].sort((a,b)=>b.delta-a.delta)[0], down:[...rows].sort((a,b)=>a.delta-b.delta)[0], rows };
+}
+
+// Estatísticas por seleção: soma de pontos que cada seleção rendeu ao bolão e a taxa
+// de acerto dos jogos em que jogou (baixa = "seleção que mais enganou").
+function _rzSelecoes(analiseJogos, res){
+  const teams={};
+  Object.entries(analiseJogos).forEach(([gid,d])=>{
+    if(!d.game || !d.palpites.length) return;
+    const t=_gxGameTeams(gid,res);
+    const acertos=d.exatos+d.venc_saldo+d.apenas_venc;
+    const pts=d.palpites.reduce((s,p)=>s+(p.pts||0),0);
+    [t.h,t.a].forEach(name=>{ if(!name) return;
+      const e=teams[name]||(teams[name]={pts:0,palpites:0,acertos:0,jogos:0});
+      e.pts+=pts; e.palpites+=d.palpites.length; e.acertos+=acertos; e.jogos++; });
+  });
+  return Object.entries(teams).map(([name,e])=>({ name, ...e, acertoPct: e.palpites? e.acertos/e.palpites*100 : 0 }));
+}
+
+// ── RENDERIZAÇÃO ─────────────────────────────────────────────────────────────
+
+function renderResumao(){
+  const host=document.getElementById('stats-tab-outras');
+  if (!host) return;
+  const d=_graficosData;
+  const hero=`<div class="rz-hero"><h2>🏆 Resumão do Bolão</h2>
+    <p>Os números, lendas, azarões e histórias que marcaram nosso bolão.</p></div>`;
+  if (!d || !Array.isArray(d.jogosComResultado) || !d.jogosComResultado.length){
+    host.innerHTML = hero + _gxCard('🏆 Resumão do Bolão',
+      _gxEmpty('O Resumão ganha vida assim que os primeiros jogos tiverem resultado. Volte depois das primeiras partidas! ⚽'));
+    return;
+  }
+  try {
+    let html = hero;
+    html += _rzOverviewCard(d);
+    html += _rzPhaseRankingCard(d);
+    html += _rzExatosCard(d);
+    html += _rzSaldoCard(d);
+    html += _rzVencedorCard(d);
+    html += _rzLeadershipCard(d);
+    html += _rzConsistencyCard(d);
+    html += _rzOppositionCard(d);
+    html += _rzBoldnessCard(d);
+    html += _rzTurnaroundCard(d);
+    html += _rzSelecoesCard(d);
+    html += _rzHallCard(d);
+    html += _rzChampCard(d);
+    html += _rzNarrativeCard(d);
+    html += renderGxCompleteness({ users:d.users, res:d.res, allPals:d.allPals });
+    host.innerHTML = html;
+    _addStatShareButtons(host);
+  } catch(e){
+    host.innerHTML = hero + `<div class="alert alert-error">Erro ao montar o Resumão: ${esc(errMsg(e))}</div>`;
+    console.error('renderResumao', e);
+  }
+}
+
+// Números gerais do bolão (topo).
+function _rzOverviewCard(d){
+  const totalJogos=d.jogosComResultado.length;
+  const totalExatos=Object.values(d.analiseJogos).reduce((a,b)=>a+b.exatos,0);
+  const totalPalpites=Object.values(d.analiseJogos).reduce((a,b)=>a+b.palpites.length,0);
+  const lider=d.ranking[0];
+  return `<div class="card"><div class="card-title">📋 O bolão em números</div>
+    <div class="stats-grid" style="margin-bottom:0">
+      <div class="stat-card"><div class="val">${d.users.length}</div><div class="lbl">Participantes</div></div>
+      <div class="stat-card"><div class="val">${totalJogos}</div><div class="lbl">Jogos com resultado</div></div>
+      <div class="stat-card"><div class="val">${totalExatos}</div><div class="lbl">Placares exatos</div></div>
+      <div class="stat-card"><div class="val">${totalPalpites}</div><div class="lbl">Palpites contados</div></div>
+    </div>
+    ${lider?`<div class="rz-phase-leader" style="margin-top:14px;margin-bottom:0">👑 Na liderança geral: <b>${_rzName(lider)}</b> com <b>${lider.pontos} pts</b> (${lider.exatos} exato${lider.exatos!==1?'s':''}).</div>`:''}
+  </div>`;
+}
+
+// 1. Top 10 por fase, com chips para alternar.
+function _rzPhaseRankingCard(d){
+  const phases=_rzPhases();
+  const computed=phases.map(ph=>({ ph, ...(_rzPhaseRanking(ph.ids, d.users, d.allPals, d.res)) }));
+  const withData=computed.filter(c=>c.rows.length>0);
+  if (!withData.length) return _gxCard('🏁 Top 10 Pontuadores por Fase',
+    _gxEmpty('Nenhuma fase tem resultado lançado ainda.'), 'Quem mais pontuou em cada rodada de grupos e no mata-mata.');
+  const first=withData[0].ph.key;
+  const chips=withData.map(c=>`<button class="gx-chip rz-phase-chip${c.ph.key===first?' active':''}" data-rzphase="${c.ph.key}" onclick="_rzPhaseTab(this)">${c.ph.emoji} ${esc(c.ph.label)}</button>`).join('');
+  const panels=withData.map(c=>{
+    const top=c.rows.slice(0,10), max=top[0].pts, leader=top[0];
+    const body=top.map((r,i)=>_rzRankRow(r.u, r.pts, max, `${r.jogos}J`, i===0?'var(--gold)':'var(--accent)', i)).join('');
+    return `<div class="rz-phase-panel" data-rzphase="${c.ph.key}" style="display:${c.ph.key===first?'block':'none'}">
+      <div class="rz-phase-leader">👑 Líder da fase: <b>${_rzName(leader.u)}</b> — ${leader.pts} pts em ${leader.jogos} jogo(s)</div>
+      <div class="rz-rows">${body}</div>
+      <div class="rz-note">${c.playedCount} jogo(s) com resultado nesta fase · valor = pontos, "J" = jogos considerados.</div>
+    </div>`;
+  }).join('');
+  return _gxCard('🏁 Top 10 Pontuadores por Fase', `<div class="gx-chips">${chips}</div>${panels}`,
+    'Quem mais pontuou em cada rodada de grupos e no mata-mata. Toque nos chips para alternar.');
+}
+function _rzPhaseTab(btn){
+  const card=btn.closest('.card'); if(!card) return;
+  const key=btn.dataset.rzphase;
+  card.querySelectorAll('.rz-phase-chip').forEach(b=>b.classList.toggle('active', b===btn));
+  card.querySelectorAll('.rz-phase-panel').forEach(p=>p.style.display=(p.dataset.rzphase===key)?'block':'none');
+}
+
+// 2. Mestres do placar exato.
+function _rzExatosCard(d){
+  const rows=_rzExatos(d.ranking, d.userAccStats).slice(0,10);
+  if (!rows.length) return _gxCard('🎯 Mestres do Placar Exato',
+    _gxEmpty('Ninguém cravou um placar exato ainda — quem será o primeiro? 👀'), 'Quem mais acertou o placar na mosca.');
+  const max=rows[0].exatos;
+  const body=rows.map((r,i)=>_rzRankRow(r.u, r.exatos, max, `${r.pct.toFixed(0)}%`, 'var(--gold)', i,
+    r.streak>=2?`🔥 ${r.streak} seguidos`:'')).join('');
+  return _gxCard('🎯 Mestres do Placar Exato', `<div class="rz-rows">${body}</div>
+    <div class="rz-note">Valor = placares exatos · % sobre os jogos com resultado que palpitou · 🔥 = melhor sequência de exatos seguidos.</div>`,
+    'Quem mais cravou o resultado exato.');
+}
+
+// 3. Especialistas em saldo.
+function _rzSaldoCard(d){
+  const rows=_rzSaldo(d.ranking, d.allPals, d.res).slice(0,10);
+  if (!rows.length) return _gxCard('📐 Especialistas em Saldo',
+    _gxEmpty('Ainda não houve acertos de vencedor + saldo sem cravar o placar.'), 'Acertou o vencedor e a diferença de gols, sem cravar o placar.');
+  const max=rows[0].saldo, ex=rows[0].ex;
+  const body=rows.map((r,i)=>_rzRankRow(r.u, r.saldo, max, `${r.pct.toFixed(0)}%`, 'var(--accent)', i)).join('');
+  const exHtml = ex ? `<div class="rz-note" style="text-align:left">💡 Exemplo — <b>${_rzName(rows[0].u)}</b> apostou <b>${esc(ex.palpite)}</b> em <b>${esc(ex.jogo)}</b> e o jogo terminou <b>${esc(ex.real)}</b>: errou o placar, mas acertou o saldo.</div>` : '';
+  return _gxCard('📐 Especialistas em Saldo', `<div class="rz-rows">${body}</div>
+    <div class="rz-note">Valor = acertos de vencedor + saldo · % sobre os jogos que palpitou.</div>${exHtml}`,
+    'Acertaram o vencedor e a diferença de gols, mesmo sem cravar o placar.');
+}
+
+// 4. Caçadores de vencedor.
+function _rzVencedorCard(d){
+  const rows=_rzVencedor(d.users, d.allPals, d.res, d.jogosComResultado).slice(0,10);
+  if (!rows.length) return _gxCard('🏹 Caçadores de Vencedor',
+    _gxEmpty('Sem acertos de resultado ainda.'), 'Quem mais acertou quem venceu (ou o empate).');
+  const max=rows[0].venc;
+  const body=rows.map((r,i)=>_rzRankRow(r.u, r.venc, max, `${r.pct.toFixed(0)}%`, 'var(--green)', i,
+    `${r.vit}V · ${r.emp}E`)).join('');
+  return _gxCard('🏹 Caçadores de Vencedor', `<div class="rz-rows">${body}</div>
+    <div class="rz-note">Valor = jogos em que acertou o resultado · % = aproveitamento · badge = vitórias (V) e empates (E) acertados.</div>`,
+    'Quem mais acertou o vencedor do jogo — incluindo empates.');
+}
+
+// 6. Mais tempo no topo.
+function _rzLeadershipCard(d){
+  const { rows, total }=_rzLeadership(d.users, d.allPals, d.res);
+  if (!rows.length) return _gxCard('👑 Mais Tempo na Liderança',
+    _gxEmpty('A liderança ainda vai começar a rodar assim que houver resultados.'), 'Quem passou mais jogos no topo do ranking.');
+  const top=rows.slice(0,10), max=top[0].steps;
+  const body=top.map((r,i)=>_rzRankRow(r.u, r.steps, max, `de ${total}`, 'var(--gold)', i,
+    r.run>=2?`sequência ${r.run}`:'')).join('');
+  const first=rows[0];
+  const sinceTxt=first.since?` Assumiu a ponta pela 1ª vez em <b>${esc(first.since.date||first.since.id)}</b>.`:'';
+  return _gxCard('👑 Mais Tempo na Liderança', `<div class="rz-rows">${body}</div>
+    <div class="rz-note" style="text-align:left">Reconstruído jogo a jogo, em ordem cronológica (não há histórico salvo). Valor = jogos em que esteve em 1º de ${total} · badge = maior sequência consecutiva na ponta.${sinceTxt}</div>`,
+    'Quem passou mais tempo no topo do ranking ao longo da Copa.');
+}
+
+// 7. Consistência (desvio padrão + índice combinado).
+function _rzConsistencyCard(d){
+  const rows=_rzConsistency(d.users, d.allPals, d.res).slice(0,10);
+  if (!rows.length) return _gxCard('🧱 Regularidade (Desvio Padrão)',
+    _gxEmpty('Precisa de pelo menos 2 fases jogadas para medir a regularidade.'), 'Quem mais equilibrou boa média com baixa oscilação.');
+  const max=rows[0].idx;
+  const body=rows.map((r,i)=>_rzRankRow(r.u, r.idx.toFixed(1), max, `σ ${r.std.toFixed(1)}`, 'var(--accent)', i,
+    `μ ${r.mean.toFixed(1)}`)).join('');
+  return _gxCard('🧱 Regularidade (Desvio Padrão)', `<div class="rz-rows">${body}</div>
+    <div class="rz-note" style="text-align:left">Valor = índice de consistência = <b>média ÷ (1 + desvio padrão)</b> dos pontos por fase. Badge μ = média por fase · σ = desvio padrão. Índice alto = pontua bem <b>e</b> de forma constante (não premia quem só oscila pouco por pontuar pouco).</div>`,
+    'Quem manteve boa pontuação sem sobe-e-desce entre as fases.');
+}
+
+// 5. O oposto de cada jogador.
+function _rzOppositionCard(d){
+  const { rows, globalPair, globalTwin, minCommon }=_rzOpposition(d.users, d.allPals);
+  if (!rows.length) return _gxCard('⚔️ O Oposto de Cada Jogador',
+    _gxEmpty(`Ainda não há participantes com pelo menos ${minCommon} palpites em comum.`), 'A pessoa que mais apostou diferente de cada um.');
+  const duo = globalPair ? `<div class="rz-duo">⚔️ Dupla mais oposta do bolão: <span>${_rzName(globalPair.a)} ↔ ${_rzName(globalPair.b)}</span> <span class="pct">${globalPair.pct.toFixed(0)}% diferentes</span></div>`
+    + (globalTwin?`<div class="rz-duo" style="margin-top:8px">🤝 Gêmeos de palpite: <span>${_rzName(globalTwin.a)} ↔ ${_rzName(globalTwin.b)}</span> <span style="color:var(--green)">${(100-globalTwin.pct).toFixed(0)}% parecidos</span></div>`:'') : '';
+  const list = rows.slice(0,20).map(r=>`<div class="rz-row">
+      <div class="rz-row-main"><div class="rz-row-name">${_rzName(r.u)} <span style="color:var(--text-muted)">↔</span> ${_rzName(r.other)}</div>
+        <div class="rz-row-track"><div class="rz-row-fill" style="width:${Math.max(4,r.pct).toFixed(1)}%;background:var(--orange)"></div></div></div>
+      <div class="rz-row-val" style="color:var(--orange)">${r.pct.toFixed(0)}%<span class="rz-row-sub">${r.common}J</span></div>
+    </div>`).join('');
+  return _gxCard('⚔️ O Oposto de Cada Jogador', `${duo}<div class="rz-rows" style="margin-top:10px">${list}</div>
+    <div class="rz-note" style="text-align:left">Índice de oposição por jogo em comum: distância de placar (|Δcasa|+|Δfora|) + peso extra quando apostam em vencedores diferentes. Mostra o maior "oposto" de cada um (mín. ${minCommon} jogos em comum · "J").</div>`,
+    'Para cada participante, quem mais apostou diferente dele.');
+}
+
+// Índice de ousadia (mais ousados vs. mais conservadores).
+function _rzBoldnessCard(d){
+  const arr=_rzBoldness(d.users, d.allPals);
+  if (arr.length<2) return _gxCard('🎲 Ousadia vs. Manada',
+    _gxEmpty('Sem palpites suficientes para comparar com a média do grupo.'), 'Quem foge da média do grupo e quem segue a manada.');
+  const bold=arr.slice(0,10), max=bold[0].ousadia;
+  const cons=arr.slice().reverse().slice(0,5);
+  const boldBody=bold.map((r,i)=>_rzRankRow(r.u, r.ousadia.toFixed(2), max, `${r.jogos}J`, 'var(--orange)', i)).join('');
+  const consBody=cons.map((r,i)=>_rzRankRow(r.u, r.ousadia.toFixed(2), max, `${r.jogos}J`, '#60A5FA', i)).join('');
+  return _gxCard('🎲 Ousadia vs. Manada', `
+    <div style="font-size:0.78rem;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.4px;margin:2px 0 8px">🚀 Mais ousados (longe da média)</div>
+    <div class="rz-rows">${boldBody}</div>
+    <div style="font-size:0.78rem;font-weight:700;color:#60A5FA;text-transform:uppercase;letter-spacing:.4px;margin:16px 0 8px">🛡️ Mais conservadores (colados na média)</div>
+    <div class="rz-rows">${consBody}</div>
+    <div class="rz-note" style="text-align:left">Valor = distância média entre o palpite da pessoa e a média de gols do grupo em cada jogo (só jogos com 3+ palpites).</div>`,
+    'Quem mais aposta contra a maioria — e quem segue a manada.');
+}
+
+// Viradas entre grupos e mata-mata.
+function _rzTurnaroundCard(d){
+  const t=_rzTurnaround(d.users, d.allPals, d.res);
+  if (!t || !t.up) return _gxCard('📈 Viradas do Mata-mata',
+    _gxEmpty('As viradas aparecem quando o mata-mata começar a ter resultados.'), 'Quem mais subiu (e desceu) do fim dos grupos para o mata-mata.');
+  const up=t.up, down=t.down;
+  const fmt=(r,arrowUp)=>`<div class="rz-mini">
+    <div class="rz-mini-lbl">${arrowUp?'🚀 Maior arrancada':'🧊 Maior queda'}</div>
+    <div class="rz-mini-val" style="color:${arrowUp?'var(--green)':'var(--red)'}">${_rzName(r.u)}</div>
+    <div class="rz-mini-sub">${r.delta>0?'subiu '+r.delta:r.delta<0?'caiu '+Math.abs(r.delta):'manteve'} · ${r.before}º → ${r.after}º</div>
+  </div>`;
+  return _gxCard('📈 Viradas do Mata-mata', `<div class="rz-mini-grid">${fmt(up,true)}${up!==down?fmt(down,false):''}</div>
+    <div class="rz-note">Compara a posição no ranking só com a fase de grupos vs. com o mata-mata incluído.</div>`,
+    'Quem mais subiu e caiu no ranking do fim dos grupos para o mata-mata.');
+}
+
+// Estatísticas por seleção + jogos que marcaram.
+function _rzSelecoesCard(d){
+  const arr=_rzSelecoes(d.analiseJogos, d.res).filter(t=>t.jogos>0);
+  // Jogo mais difícil (menor taxa de acerto) e mais fácil (maior).
+  const dif=Object.entries(d.analiseJogos).filter(([,x])=>x.palpites.length>0)
+    .map(([gid,x])=>({ gid, game:x.game, pct:(x.exatos+x.venc_saldo+x.apenas_venc)/x.palpites.length*100, tot:x.palpites.length }))
+    .sort((a,b)=>a.pct-b.pct);
+  if (!arr.length && !dif.length) return _gxCard('🌍 Seleções & Jogos que Marcaram',
+    _gxEmpty('Sem dados suficientes por seleção ainda.'));
+  const maisPontos=arr.slice().sort((a,b)=>b.pts-a.pts)[0];
+  const maisEnganou=arr.filter(t=>t.palpites>=Math.max(3,d.users.length)).sort((a,b)=>a.acertoPct-b.acertoPct)[0] || arr.slice().sort((a,b)=>a.acertoPct-b.acertoPct)[0];
+  const zebra=dif[0], consenso=dif[dif.length-1];
+  const tName=n=>`${teamFlag(n)} ${esc(n)}`;
+  const gName=g=>g?`${esc(g.h)} × ${esc(g.a)}`:'—';
+  const cells=[];
+  if (maisPontos) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">💰 Seleção que mais rendeu pontos</div><div class="rz-mini-val">${tName(maisPontos.name)}</div><div class="rz-mini-sub">${maisPontos.pts} pts somados no bolão</div></div>`);
+  if (maisEnganou) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">🃏 Seleção que mais enganou</div><div class="rz-mini-val">${tName(maisEnganou.name)}</div><div class="rz-mini-sub">só ${maisEnganou.acertoPct.toFixed(0)}% de acerto nos seus jogos</div></div>`);
+  if (zebra) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">🦓 Maior zebra do bolão</div><div class="rz-mini-val">${gName(zebra.game)}</div><div class="rz-mini-sub">só ${zebra.pct.toFixed(0)}% acertaram o vencedor</div></div>`);
+  if (consenso && consenso!==zebra) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">✅ Quase todo mundo acertou</div><div class="rz-mini-val">${gName(consenso.game)}</div><div class="rz-mini-sub">${consenso.pct.toFixed(0)}% acertaram o vencedor</div></div>`);
+  return _gxCard('🌍 Seleções & Jogos que Marcaram', `<div class="rz-mini-grid">${cells.join('')}</div>`,
+    'As seleções e partidas que mais mexeram com o bolão.');
+}
+
+// Hall da Fama: premiações simbólicas reunindo vários rankings.
+function _rzHallCard(d){
+  const totalJogos=d.jogosComResultado.length;
+  const minG=Math.max(1, Math.min(5, Math.ceil(totalJogos/3)));
+  const elig=d.ranking.filter(u=>u.jogos>=minG);
+  const base=elig.length?elig:d.ranking;
+  const oraculo=base.map(u=>({u,pct:u.jogos?(u.exatos+u.venc_saldo+u.apenas_venc)/u.jogos*100:0})).sort((a,b)=>b.pct-a.pct)[0];
+  const sniper=base.map(u=>({u,pct:u.jogos?u.exatos/u.jogos*100:0})).sort((a,b)=>b.pct-a.pct)[0];
+  const consist=_rzConsistency(d.users, d.allPals, d.res)[0];
+  const turn=_rzTurnaround(d.users, d.allPals, d.res);
+  const mata=_rzPhaseRanking(Array.from(_MATA_IDS), d.users, d.allPals, d.res).rows[0];
+  const tartaruga=d.ranking.map(u=>({u,pontuou:u.exatos+u.venc_saldo+u.apenas_venc})).sort((a,b)=>b.pontuou-a.pontuou)[0];
+  const bold=_rzBoldness(d.users, d.allPals)[0];
+  const opp=_rzOpposition(d.users, d.allPals);
+  const cards=[];
+  if (oraculo&&oraculo.pct>0) cards.push(_rzHall('🧙','Oráculo da Copa', _rzName(oraculo.u), `${oraculo.pct.toFixed(0)}% de acerto geral`));
+  if (sniper&&sniper.pct>0) cards.push(_rzHall('🎯','Sniper', _rzName(sniper.u), `${sniper.pct.toFixed(0)}% de placares exatos`));
+  if (consist) cards.push(_rzHall('🧱','Regularidade Absurda', _rzName(consist.u), `índice ${consist.idx.toFixed(1)}`));
+  if (turn&&turn.up&&turn.up.delta>0) cards.push(_rzHall('🚀','Arrancada Final', _rzName(turn.up.u), `subiu ${turn.up.delta} no mata-mata`));
+  if (mata) cards.push(_rzHall('🧊','Sangue Frio', _rzName(mata.u), `${mata.pts} pts no mata-mata`));
+  if (tartaruga&&tartaruga.pontuou>0) cards.push(_rzHall('🐢','Devagar e Sempre', _rzName(tartaruga.u), `pontuou em ${tartaruga.pontuou} jogos`));
+  if (bold) cards.push(_rzHall('🎲','Apostador Raiz', _rzName(bold.u), `o mais fora da média`));
+  if (opp.globalTwin) cards.push(_rzHall('🤝','Gêmeos de Palpite', `${_rzName(opp.globalTwin.a)} & ${_rzName(opp.globalTwin.b)}`, `${(100-opp.globalTwin.pct).toFixed(0)}% parecidos`));
+  if (opp.globalPair) cards.push(_rzHall('⚔️','Rivais Naturais', `${_rzName(opp.globalPair.a)} & ${_rzName(opp.globalPair.b)}`, `${opp.globalPair.pct.toFixed(0)}% diferentes`));
+  if (!cards.length) return _gxCard('🏛️ Hall da Fama', _gxEmpty('As premiações aparecem conforme os jogos vão sendo disputados.'));
+  return _gxCard('🏛️ Hall da Fama', `<div class="rz-hall-grid">${cards.join('')}</div>`,
+    'Premiações simbólicas da Copa — cada troféu vem de um ranking diferente.');
+}
+
+// Palpites de campeão (só depois de bloqueado/definido).
+function _rzChampCard(d){
+  const votes={};
+  d.users.forEach(u=>{ const t=d.champPicks[u.uid]; if(t) votes[t]=(votes[t]||0)+1; });
+  const arr=Object.entries(votes).sort((a,b)=>b[1]-a[1]);
+  const total=arr.reduce((s,[,v])=>s+v,0);
+  const champ=_getFinalChampion(d.res);
+  const revealed=(currentUserDoc?.role==='admin') || CFG.campeao_locked===true || !!champ;
+  if (!revealed) return _gxCard('🏆 Palpites de Campeão',
+    _gxEmpty('Visível após o bloqueio das escolhas de campeão pelo admin. 🔒'));
+  if (!arr.length) return _gxCard('🏆 Palpites de Campeão', _gxEmpty('Ninguém escolheu um campeão ainda.'));
+  const max=arr[0][1];
+  const rows=arr.map(([team,count])=>{
+    const isW=team===champ, pct=total?Math.round(count/total*100):0;
+    return `<div class="champ-stat-row">
+      <div class="champ-stat-team">${teamFlag(team)} ${esc(team)}${isW?' ✅':''}</div>
+      <div class="champ-stat-bar-wrap"><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round(count/max*100)}%;${isW?'background:var(--green)':''}"></div></div></div>
+      <span class="champ-stat-count">${count} (${pct}%)</span></div>`;
+  }).join('');
+  const head=champ?`<div class="alert alert-success" style="margin-bottom:12px;font-size:0.82rem">🏆 Campeã definida: <b>${teamFlag(champ)} ${esc(champ)}</b></div>`:'';
+  return _gxCard(`🏆 Palpites de Campeão (${total})`, head+rows, 'Em quem o bolão apostou para levantar a taça.');
+}
+
+// A história do bolão em frases automáticas.
+function _rzNarrativeCard(d){
+  const linhas=[];
+  const lead=_rzLeadership(d.users, d.allPals, d.res);
+  if (lead.rows.length) linhas.push(['👑', `<b>${_rzName(lead.rows[0].u)}</b> foi quem mais tempo passou na liderança: ${lead.rows[0].steps} de ${lead.total} jogos no topo.`]);
+  const turn=_rzTurnaround(d.users, d.allPals, d.res);
+  if (turn&&turn.up&&turn.up.delta>0) linhas.push(['🚀', `A melhor arrancada no mata-mata foi de <b>${_rzName(turn.up.u)}</b>, que subiu ${turn.up.delta} posiç${turn.up.delta>1?'ões':'ão'}.`]);
+  const exato=_rzExatos(d.ranking, d.userAccStats)[0];
+  if (exato) linhas.push(['🎯', `O rei dos placares exatos foi <b>${_rzName(exato.u)}</b>, com ${exato.exatos} cravada${exato.exatos>1?'s':''}.`]);
+  const opp=_rzOpposition(d.users, d.allPals);
+  if (opp.globalPair) linhas.push(['⚔️', `A dupla mais oposta foi <b>${_rzName(opp.globalPair.a)}</b> e <b>${_rzName(opp.globalPair.b)}</b> — ${opp.globalPair.pct.toFixed(0)}% de palpites diferentes.`]);
+  if (opp.globalTwin) linhas.push(['🤝', `Já os "gêmeos de palpite" foram <b>${_rzName(opp.globalTwin.a)}</b> e <b>${_rzName(opp.globalTwin.b)}</b>, quase sempre no mesmo palpite.`]);
+  const dif=Object.entries(d.analiseJogos).filter(([,x])=>x.palpites.length>0)
+    .map(([gid,x])=>({ game:x.game, pct:(x.exatos+x.venc_saldo+x.apenas_venc)/x.palpites.length*100 })).sort((a,b)=>a.pct-b.pct)[0];
+  if (dif&&dif.game) linhas.push(['🦓', `O jogo que mais derrubou palpites foi <b>${esc(dif.game.h)} × ${esc(dif.game.a)}</b>: só ${dif.pct.toFixed(0)}% acertaram o vencedor.`]);
+  const champ=_getFinalChampion(d.res);
+  if (champ) linhas.push(['🏆', `E a taça ficou com <b>${teamFlag(champ)} ${esc(champ)}</b> — parabéns a quem cravou!`]);
+  if (!linhas.length) return '';
+  const body=linhas.map(([em,txt])=>`<div class="rz-narr-line"><span class="em">${em}</span><span>${txt}</span></div>`).join('');
+  return _gxCard('📖 A história do bolão em números', `<div class="rz-narr">${body}</div>`,
+    'Um resuminho narrado, montado automaticamente a partir dos dados.');
 }
 
 // ════════════════════════════════════════════
