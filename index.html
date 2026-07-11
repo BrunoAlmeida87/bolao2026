@@ -3157,11 +3157,15 @@ async function loadChampionPick(uid) {
   } catch(_) { return null; }
 }
 
-function computeRanking(users, resultados, allPalpites, championPicks={}) {
+// championOverride (opcional): quando informado (ex.: campeão escolhido no
+// simulador), substitui a campeã detectada pela Final — permite simular o bônus
+// de campeão sem precisar simular o placar da própria Final. Passe null/undefined
+// para manter o comportamento normal (campeã = vencedora de FIN1).
+function computeRanking(users, resultados, allPalpites, championPicks={}, championOverride) {
   const jogosComResultado = Object.keys(resultados).filter(id=>
     resultados[id].h_real!==undefined && resultados[id].a_real!==undefined
   );
-  const champion = _getFinalChampion(resultados);
+  const champion = championOverride !== undefined ? championOverride : _getFinalChampion(resultados);
   const ptsCampeao = CFG.pts_campeao ?? 0;
   return users
     .filter(u=>u.ativo!==false)
@@ -5968,6 +5972,29 @@ let _simUsers = [], _simResOfficial = {}, _simAllPals = {}, _simChampPicks = {};
 let _simWave = [];      // [{game, start}] da leva atual de próximos jogos
 let _simDraft = {};     // { gameId: {h, a} } — placares digitados (0–20)
 let _simOffPos = {};    // uid → posição no ranking OFICIAL atual (base do ↑↓)
+let _simChampionPick = ''; // campeã escolhida no dropdown do simulador ('' = nenhuma)
+
+// Seleções ainda na disputa do título, com base nos resultados MESCLADOS
+// (oficiais + simulados). Uma seleção sai da lista assim que PERDE um jogo de
+// mata-mata (o perdedor de cada partida decidida é eliminado). Enquanto o
+// mata-mata não define participantes reais, usa todas as seleções (fase de
+// grupos). Retorna nomes ordenados alfabeticamente.
+function _simAliveTeams(mergedRes) {
+  const all = new Set(_getAllTeams());
+  const eliminated = new Set();
+  const reached = new Set();
+  Object.values(ELIM_DATA).forEach(ph => ph.games.forEach(g => {
+    const { h, a } = _getResolvedTeamsForGame(g, mergedRes);
+    [h, a].forEach(t => { if (t && all.has(t)) reached.add(t); });
+    const r = mergedRes[g.id];
+    if (!_hasFullResult(r)) return;
+    const win = _winnerOf(r, h, a);
+    if (!win) return; // empate sem pênaltis definidos → ninguém eliminado
+    [h, a].forEach(t => { if (t && all.has(t) && t !== win) eliminated.add(t); });
+  }));
+  const pool = reached.size ? reached : all; // sem mata-mata resolvido → todas
+  return [...pool].filter(t => !eliminated.has(t)).sort((a, b) => a.localeCompare(b, 'pt'));
+}
 
 async function renderSimulador() {
   const cont = document.getElementById('simulador-content');
@@ -5978,6 +6005,7 @@ async function renderSimulador() {
     const { allPals, champPicks } = await _fetchPalsCached(users);
     _simUsers = users; _simResOfficial = res; _simAllPals = allPals; _simChampPicks = champPicks;
     _simDraft = {};
+    _simChampionPick = '';
     // Só jogos com palpite já BLOQUEADO e que estão para acontecer (ainda SEM placar
     // final). Jogos com palpite aberto ficam de fora (não dá pra simular o que as
     // pessoas ainda estão preenchendo); jogos já decididos também saem.
@@ -6012,6 +6040,14 @@ async function renderSimulador() {
       <div style="display:flex;align-items:flex-start;gap:9px;background:rgba(30,144,255,.1);border:1px solid rgba(30,144,255,.35);border-radius:12px;padding:11px 14px;margin-bottom:14px">
         <span style="font-size:1.2rem;line-height:1">🧪</span>
         <span style="font-size:0.84rem;line-height:1.4">Digite placares hipotéticos para os próximos jogos e veja o ranking se atualizar na hora. <b>É só simulação</b> — nada aqui altera os resultados oficiais nem aparece para outras pessoas.</span>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:6px">🏆 Campeã da Copa (simulação)</div>
+        <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px">
+          Escolha a campeã entre as seleções <b>ainda na disputa</b>. Quem cravou essa campeã ganha
+          <b style="color:var(--gold)">+${CFG.pts_campeao ?? 50} pts</b> no ranking simulado. Uma seleção sai da lista assim que perde no mata-mata (inclusive nos placares que você simular).
+        </div>
+        <div id="sim-champion"></div>
       </div>
       <div class="card" style="margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
@@ -6081,12 +6117,46 @@ function simOnInput(gid) {
 
 function simReset() {
   _simDraft = {};
+  _simChampionPick = '';
   _simWave.forEach(({ game }) => {
     const h = document.getElementById('sim_h_' + game.id), a = document.getElementById('sim_a_' + game.id);
     if (h) h.value = ''; if (a) a.value = '';
     const tag = document.getElementById('sim-tag-' + game.id); if (tag) tag.innerHTML = '';
   });
   _simRecompute();
+}
+
+// Escolha da campeã no dropdown do simulador.
+function simSetChampion(val) {
+  _simChampionPick = val || '';
+  _simRecompute();
+}
+
+// (Re)desenha o dropdown de campeã com as seleções ainda vivas (base: resultados
+// mesclados). Se a campeã escolhida caiu numa simulação, limpa a escolha.
+function _simRenderChampionSelect(mergedRes) {
+  const host = document.getElementById('sim-champion');
+  if (!host) return;
+  const alive = _simAliveTeams(mergedRes);
+  if (_simChampionPick && !alive.includes(_simChampionPick)) _simChampionPick = '';
+  const pickCount = {};
+  Object.values(_simChampPicks || {}).forEach(t => { if (t) pickCount[t] = (pickCount[t] || 0) + 1; });
+  const opts = ['<option value=""' + (_simChampionPick === '' ? ' selected' : '') + '>— Nenhuma (sem bônus) —</option>']
+    .concat(alive.map(t => {
+      const n = pickCount[t] || 0;
+      return `<option value="${esc(t)}"${t === _simChampionPick ? ' selected' : ''}>${esc(t)}${n ? ` — ${n} cravaram` : ''}</option>`;
+    }));
+  let note = '';
+  if (!alive.length) {
+    note = `<div style="margin-top:9px;font-size:0.8rem;color:var(--text-muted)">Nenhuma seleção definida na disputa ainda. Simule os jogos do mata-mata para ver quem segue viva.</div>`;
+  } else if (_simChampionPick) {
+    const n = pickCount[_simChampionPick] || 0;
+    note = `<div style="margin-top:9px;font-size:0.8rem;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.28);border-radius:9px;padding:9px 11px;line-height:1.45">
+      🏆 <b>${teamFlag(_simChampionPick)} ${esc(_simChampionPick)}</b> campeã na simulação — ${n > 0
+        ? `<b style="color:var(--gold)">+${CFG.pts_campeao ?? 50} pts</b> para ${n} participante(s) que cravaram.`
+        : 'ninguém cravou essa campeã, então ninguém leva o bônus.'}</div>`;
+  }
+  host.innerHTML = `<select class="gx-select" style="margin-bottom:0" onchange="simSetChampion(this.value)" aria-label="Campeã simulada">${opts.join('')}</select>${note}`;
 }
 
 function _simRecompute() {
@@ -6102,7 +6172,13 @@ function _simRecompute() {
       nSim++;
     }
   });
-  const simRank = computeRanking(_simUsers, merged, _simAllPals, _simChampPicks);
+  // Atualiza o dropdown de campeã conforme os times ainda vivos (pode limpar a
+  // escolha se a seleção perdeu em algum placar simulado) e aplica o bônus.
+  _simRenderChampionSelect(merged);
+  const _championOverride = _simChampionPick || undefined;
+  const _ptsCampeao = CFG.pts_campeao ?? 0;
+  const _offChampion = _getFinalChampion(_simResOfficial);
+  const simRank = computeRanking(_simUsers, merged, _simAllPals, _simChampPicks, _championOverride);
   const simPos = _rankPositionsTieAware(simRank);
   // Posição por adensamento (ranking denso): empatados no mesmo nível
   // (1,1,1,2,2,3...). Igual ao "≈ pos" do ranking oficial — só dividem o nível
@@ -6124,8 +6200,11 @@ function _simRecompute() {
     // Pontos que esta pessoa ganha com os placares simulados deste momento.
     let gain = 0;
     simGids.forEach(gid => { const p = _simAllPals[u.uid] && _simAllPals[u.uid][gid]; const pts = calcPontos(p, merged[gid], gid); if (pts != null) gain += pts; });
-    const gainHtml = (simGids.length > 0 && gain > 0)
-      ? `<div style="color:var(--green);font-weight:700;font-size:0.7rem;line-height:1.1" title="Pontos ganhos com os placares simulados">+${gain}</div>` : '';
+    // Bônus de campeã escolhida no dropdown (se essa pessoa cravou a seleção e ela
+    // ainda não era a campeã oficial).
+    if (_simChampionPick && u.campeao === _simChampionPick && _offChampion !== _simChampionPick) gain += _ptsCampeao;
+    const gainHtml = (gain > 0)
+      ? `<div style="color:var(--green);font-weight:700;font-size:0.7rem;line-height:1.1" title="Pontos ganhos na simulação (placares + bônus de campeã)">+${gain}</div>` : '';
     const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '';
     rows += `<tr class="${isMe ? 'is-me' : ''}" data-uid="${u.uid}">
       <td><span class="rank-pos ${posClass}">${pos}</span></td>
@@ -6146,7 +6225,7 @@ function _simRecompute() {
         <thead><tr><th>#</th><th title="Posição adensada: empates reais ficam no mesmo nível após aplicar os critérios de desempate" style="color:var(--text-muted)">≈ pos</th><th title="Variação de posição vs ranking oficial + pontos ganhos com os placares simulados">↑↓ / pts</th><th style="min-width:120px">Participante</th><th>Pontos</th><th>Exatos</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
-    <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">${nSim > 0 ? ('🧪 ' + nSim + ' jogo(s) simulado(s) aplicado(s) ao ranking.') : 'Nenhum placar simulado ainda — ranking igual ao oficial.'}</div>`;
+    <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">${nSim > 0 ? ('🧪 ' + nSim + ' jogo(s) simulado(s) aplicado(s) ao ranking.') : 'Nenhum placar simulado ainda — ranking igual ao oficial.'}${_simChampionPick ? ` · 🏆 <b style="color:var(--gold)">${esc(_simChampionPick)}</b> campeã simulada.` : ''}</div>`;
 
   _simPlayFlip(el, _flipFirst);
 }
