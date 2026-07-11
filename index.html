@@ -9000,10 +9000,12 @@ function _rzGameOpp(pa, pb){
 }
 // Para cada participante, acha o "oposto" (maior índice médio). Também devolve a
 // dupla mais oposta e a mais parecida do bolão inteiro.
-function _rzOpposition(users, allPals, minCommon=3){
+function _rzOpposition(users, allPals, res, minCommon=3){
   const valid={};
+  // Só compara palpites de jogos JÁ com resultado — nunca expõe palpites de
+  // partidas futuras/ainda privadas ao medir semelhança/divergência entre duplas.
   users.forEach(u=>{ const src=allPals[u.uid]||{}, out={};
-    Object.keys(src).forEach(gid=>{ const p=src[gid]; if(p&&p.h!==undefined&&p.a!==undefined) out[gid]=p; });
+    Object.keys(src).forEach(gid=>{ const p=src[gid]; if(p&&p.h!==undefined&&p.a!==undefined&&_hasFullResult(res[gid])) out[gid]=p; });
     valid[u.uid]=out; });
   const perUser={}; let globalPair=null, globalTwin=null;
   for (let i=0;i<users.length;i++) for (let j=i+1;j<users.length;j++){
@@ -9026,9 +9028,11 @@ function _rzOpposition(users, allPals, minCommon=3){
 // desempate do ranking oficial). Não há histórico persistido — esta é a melhor
 // granularidade possível: "jogos como líder". Conta também a maior sequência
 // consecutiva na ponta e quando cada um assumiu a liderança pela 1ª vez.
-function _rzLeadership(users, allPals, res){
+function _rzLeadership(users, allPals, res, champPicks={}){
   const played = ALL_GAMES.filter(g=>_hasFullResult(res[g.id]))
     .sort((a,b)=> _parseGameDate(a.date)-_parseGameDate(b.date) || (FIFA_MATCH_NO[a.id]||0)-(FIFA_MATCH_NO[b.id]||0));
+  const champ=_getFinalChampion(res);          // campeã (se a Final já saiu)
+  const ptsCampeao=CFG.pts_campeao ?? 0;
   const cum={}; users.forEach(u=>cum[u.uid]={pts:0,ex:0,vs:0,av:0});
   const steps={}, maxRun={}, curRun={}, since={};
   let prev=null;
@@ -9040,6 +9044,9 @@ function _rzLeadership(users, allPals, res){
       const t=_hitType(p,res[g.id]);
       if(t==='exato')c.ex++; else if(t==='saldo')c.vs++; else if(t==='vencedor')c.av++;
     });
+    // Bônus de campeão entra ao processar a Final (mesmo critério do computeRanking),
+    // para que o líder pós-final reflita quem cravou a campeã.
+    if (champ && g.id==='FIN1' && ptsCampeao) users.forEach(u=>{ if(champPicks[u.uid]===champ) cum[u.uid].pts+=ptsCampeao; });
     let leader=null, bp=-1,be=-1,bv=-1,ba=-1;
     users.forEach(u=>{ const c=cum[u.uid];
       const better = c.pts>bp || (c.pts===bp && (c.ex>be || (c.ex===be && (c.vs>bv || (c.vs===bv && c.av>ba)))));
@@ -9081,10 +9088,12 @@ function _rzConsistency(users, allPals, res){
 
 // Ousadia vs. média do grupo: por jogo com >=3 palpites, mede a distância do palpite
 // de cada um à média de gols do grupo naquele jogo. Alto = ousado; baixo = conservador.
-function _rzBoldness(users, allPals){
+function _rzBoldness(users, allPals, res){
   const games={};
+  // Média do grupo calculada só sobre jogos com resultado — evita usar palpites
+  // ainda privados de partidas futuras.
   users.forEach(u=>{ const pals=allPals[u.uid]||{};
-    Object.keys(pals).forEach(gid=>{ const p=pals[gid]; if(p.h===undefined||p.a===undefined) return;
+    Object.keys(pals).forEach(gid=>{ const p=pals[gid]; if(p.h===undefined||p.a===undefined||!_hasFullResult(res[gid])) return;
       const g=games[gid]||(games[gid]={sH:0,sA:0,n:0}); g.sH+=parseInt(p.h)||0; g.sA+=parseInt(p.a)||0; g.n++; }); });
   return users.map(u=>{
     const pals=allPals[u.uid]||{}; let sum=0,n=0;
@@ -9096,16 +9105,19 @@ function _rzBoldness(users, allPals){
 
 // Viradas: compara a posição no ranking considerando só a fase de grupos vs. o
 // ranking com o mata-mata incluído. delta>0 = subiu com o mata-mata.
-function _rzTurnaround(users, allPals, res){
+function _rzTurnaround(users, allPals, res, champPicks={}){
   const grpIds=Object.values(GRUPOS_DATA).flatMap(g=>g.games.map(x=>x.id));
   const mataIds=Array.from(_MATA_IDS);
   const playedGrp=grpIds.filter(id=>_hasFullResult(res[id]));
   const playedMata=mataIds.filter(id=>_hasFullResult(res[id]));
   if (!playedMata.length || !playedGrp.length) return null;
-  const ptsOver=ids=>users.map(u=>{ let pts=0; ids.forEach(id=>{ const pt=calcPontos(allPals[u.uid]?.[id],res[id],id); if(pt!==null)pts+=pt; }); return { uid:u.uid, u, pts }; });
-  const rankOf=arr=>{ const s=[...arr].sort((a,b)=>b.pts-a.pts); const pos={}; s.forEach((r,i)=>pos[r.uid]=i+1); return pos; };
-  const grpPos=rankOf(ptsOver(playedGrp));
-  const fullPos=rankOf(ptsOver([...playedGrp,...playedMata]));
+  // Posições via computeRanking sobre um recorte dos resultados, aplicando os
+  // mesmos desempates oficiais (exatos → saldo → vencedor → campeão) em vez de
+  // ordenar só por pontos (que deixava empates na ordem arbitrária da lista).
+  const subRes=ids=>{ const o={}; ids.forEach(id=>{ if(res[id]) o[id]=res[id]; }); return o; };
+  const posOf=ids=>{ const pos={}; computeRanking(users, subRes(ids), allPals, champPicks).forEach((u,i)=>pos[u.uid]=i+1); return pos; };
+  const grpPos=posOf(playedGrp);                       // só grupos (sem Final → sem bônus)
+  const fullPos=posOf([...playedGrp,...playedMata]);   // grupos + mata (com bônus se a Final saiu)
   const rows=users.map(u=>({ u, before:grpPos[u.uid], after:fullPos[u.uid], delta:grpPos[u.uid]-fullPos[u.uid] })).filter(r=>r.before&&r.after);
   return { up:[...rows].sort((a,b)=>b.delta-a.delta)[0], down:[...rows].sort((a,b)=>a.delta-b.delta)[0], rows };
 }
@@ -9250,7 +9262,7 @@ function _rzVencedorCard(d){
 
 // 6. Mais tempo no topo.
 function _rzLeadershipCard(d){
-  const { rows, total }=_rzLeadership(d.users, d.allPals, d.res);
+  const { rows, total }=_rzLeadership(d.users, d.allPals, d.res, d.champPicks);
   if (!rows.length) return _gxCard('👑 Mais Tempo na Liderança',
     _gxEmpty('A liderança ainda vai começar a rodar assim que houver resultados.'), 'Quem passou mais jogos no topo do ranking.');
   const top=rows.slice(0,10), max=top[0].steps;
@@ -9278,7 +9290,7 @@ function _rzConsistencyCard(d){
 
 // 5. O oposto de cada jogador.
 function _rzOppositionCard(d){
-  const { rows, globalPair, globalTwin, minCommon }=_rzOpposition(d.users, d.allPals);
+  const { rows, globalPair, globalTwin, minCommon }=_rzOpposition(d.users, d.allPals, d.res);
   if (!rows.length) return _gxCard('⚔️ O Oposto de Cada Jogador',
     _gxEmpty(`Ainda não há participantes com pelo menos ${minCommon} palpites em comum.`), 'A pessoa que mais apostou diferente de cada um.');
   const duo = globalPair ? `<div class="rz-duo">⚔️ Dupla mais oposta do bolão: <span>${_rzName(globalPair.a)} ↔ ${_rzName(globalPair.b)}</span> <span class="pct">${globalPair.pct.toFixed(0)}% diferentes</span></div>`
@@ -9295,7 +9307,7 @@ function _rzOppositionCard(d){
 
 // Índice de ousadia (mais ousados vs. mais conservadores).
 function _rzBoldnessCard(d){
-  const arr=_rzBoldness(d.users, d.allPals);
+  const arr=_rzBoldness(d.users, d.allPals, d.res);
   if (arr.length<2) return _gxCard('🎲 Ousadia vs. Manada',
     _gxEmpty('Sem palpites suficientes para comparar com a média do grupo.'), 'Quem foge da média do grupo e quem segue a manada.');
   const bold=arr.slice(0,10), max=bold[0].ousadia;
@@ -9313,7 +9325,7 @@ function _rzBoldnessCard(d){
 
 // Viradas entre grupos e mata-mata.
 function _rzTurnaroundCard(d){
-  const t=_rzTurnaround(d.users, d.allPals, d.res);
+  const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks);
   if (!t || !t.up) return _gxCard('📈 Viradas do Mata-mata',
     _gxEmpty('As viradas aparecem quando o mata-mata começar a ter resultados.'), 'Quem mais subiu (e desceu) do fim dos grupos para o mata-mata.');
   const up=t.up, down=t.down;
@@ -9359,11 +9371,11 @@ function _rzHallCard(d){
   const oraculo=base.map(u=>({u,pct:u.jogos?(u.exatos+u.venc_saldo+u.apenas_venc)/u.jogos*100:0})).sort((a,b)=>b.pct-a.pct)[0];
   const sniper=base.map(u=>({u,pct:u.jogos?u.exatos/u.jogos*100:0})).sort((a,b)=>b.pct-a.pct)[0];
   const consist=_rzConsistency(d.users, d.allPals, d.res)[0];
-  const turn=_rzTurnaround(d.users, d.allPals, d.res);
+  const turn=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks);
   const mata=_rzPhaseRanking(Array.from(_MATA_IDS), d.users, d.allPals, d.res).rows[0];
   const tartaruga=d.ranking.map(u=>({u,pontuou:u.exatos+u.venc_saldo+u.apenas_venc})).sort((a,b)=>b.pontuou-a.pontuou)[0];
-  const bold=_rzBoldness(d.users, d.allPals)[0];
-  const opp=_rzOpposition(d.users, d.allPals);
+  const bold=_rzBoldness(d.users, d.allPals, d.res)[0];
+  const opp=_rzOpposition(d.users, d.allPals, d.res);
   const cards=[];
   if (oraculo&&oraculo.pct>0) cards.push(_rzHall('🧙','Oráculo da Copa', _rzName(oraculo.u), `${oraculo.pct.toFixed(0)}% de acerto geral`));
   if (sniper&&sniper.pct>0) cards.push(_rzHall('🎯','Sniper', _rzName(sniper.u), `${sniper.pct.toFixed(0)}% de placares exatos`));
@@ -9405,13 +9417,13 @@ function _rzChampCard(d){
 // A história do bolão em frases automáticas.
 function _rzNarrativeCard(d){
   const linhas=[];
-  const lead=_rzLeadership(d.users, d.allPals, d.res);
+  const lead=_rzLeadership(d.users, d.allPals, d.res, d.champPicks);
   if (lead.rows.length) linhas.push(['👑', `<b>${_rzName(lead.rows[0].u)}</b> foi quem mais tempo passou na liderança: ${lead.rows[0].steps} de ${lead.total} jogos no topo.`]);
-  const turn=_rzTurnaround(d.users, d.allPals, d.res);
+  const turn=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks);
   if (turn&&turn.up&&turn.up.delta>0) linhas.push(['🚀', `A melhor arrancada no mata-mata foi de <b>${_rzName(turn.up.u)}</b>, que subiu ${turn.up.delta} posiç${turn.up.delta>1?'ões':'ão'}.`]);
   const exato=_rzExatos(d.ranking, d.userAccStats)[0];
   if (exato) linhas.push(['🎯', `O rei dos placares exatos foi <b>${_rzName(exato.u)}</b>, com ${exato.exatos} cravada${exato.exatos>1?'s':''}.`]);
-  const opp=_rzOpposition(d.users, d.allPals);
+  const opp=_rzOpposition(d.users, d.allPals, d.res);
   if (opp.globalPair) linhas.push(['⚔️', `A dupla mais oposta foi <b>${_rzName(opp.globalPair.a)}</b> e <b>${_rzName(opp.globalPair.b)}</b> — ${opp.globalPair.pct.toFixed(0)}% de palpites diferentes.`]);
   if (opp.globalTwin) linhas.push(['🤝', `Já os "gêmeos de palpite" foram <b>${_rzName(opp.globalTwin.a)}</b> e <b>${_rzName(opp.globalTwin.b)}</b>, quase sempre no mesmo palpite.`]);
   const dif=Object.entries(d.analiseJogos).filter(([,x])=>x.palpites.length>0)
