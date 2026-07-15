@@ -1590,6 +1590,16 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cer-fact-label{color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:.82rem;margin-top:12px}
 .cer-fact-name{color:var(--white);font-weight:800;font-size:1.85rem;line-height:1.2;margin:6px 0 4px}
 .cer-fact-detail{color:var(--text-muted);font-size:1rem;line-height:1.45}
+.cer-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.cer-cell{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:14px;padding:16px 10px}
+.cer-cell-v{color:var(--gold);font-weight:800;font-size:2rem;line-height:1}
+.cer-cell-l{color:var(--text-muted);font-size:.78rem;margin-top:4px}
+.cer-bars{margin-top:18px;display:flex;flex-direction:column;gap:9px}
+.cer-bar-row{display:flex;align-items:center;gap:8px}
+.cer-bar-nm{flex:0 0 40%;text-align:right;font-size:.82rem;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cer-bar-track{flex:1;height:12px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden}
+.cer-bar-fill{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--orange));border-radius:6px}
+.cer-bar-n{flex:0 0 auto;font-size:.8rem;font-weight:700;color:var(--gold);min-width:18px;text-align:left}
 @keyframes cerFactIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title{animation:none}}
 </style>
@@ -2137,7 +2147,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <button class="cerimonia-close" onclick="_cerimoniaStop()">✕ Fechar</button>
   <div id="cerimonia-stage" class="cerimonia-stage"></div>
 </div>
-<audio id="cerimonia-audio" preload="none" crossorigin="anonymous"></audio>
+<audio id="cerimonia-audio" preload="none"></audio>
 
 <!-- TOAST -->
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -18073,18 +18083,67 @@ async function _cerimoniaBuildData(){
   return { users, res, allPals, champPicks, ranking, userAccStats, analiseJogos, jogosComResultado };
 }
 
-// Monta os cards de curiosidades reusando as calculadoras _rz* do Resumão.
-// Cada gerador é envolto em try/catch e pulado se não houver dados suficientes.
+// Monta os cards de curiosidades da cerimônia, reusando as calculadoras _rz* do
+// Resumão + alguns cálculos inline. Cada gerador é envolto em try/catch e pulado
+// se não houver dados. Cards podem ter `name`/`detail` (opcionais) e `extra` (HTML
+// rico, ex.: grid de números ou mini-barras). Ordem = arco narrativo do encerramento.
 function _cerimoniaFacts(d){
   const facts = []; const add = fn => { try { const r = fn(); if(r) facts.push(r); } catch(_){} };
-  add(()=>{ const x=_rzExatos(d.ranking, d.userAccStats)[0]; return x && {emoji:'🎯', label:'Rei dos placares exatos', name:_rzName(x.u), detail:`${x.exatos} placar${x.exatos>1?'es':''} cravado${x.exatos>1?'s':''}`}; });
-  add(()=>{ const x=_rzConsistency(d.users, d.allPals, d.res)[0]; return x && {emoji:'🧱', label:'O mais consistente', name:_rzName(x.u), detail:`desvio padrão σ ${x.std.toFixed(1)} · média ${x.mean.toFixed(0)} pts/fase`}; });
+  const flag = t => { try { return (typeof teamFlag==='function') ? teamFlag(t)+' ' : ''; } catch(_){ return ''; } };
+
+  // 📋 Abertura: o bolão em números (grid rico)
+  add(()=>{
+    const totalJogos = d.jogosComResultado.length;
+    const totalExatos = Object.values(d.analiseJogos).reduce((a,b)=>a+b.exatos,0);
+    const totalPalpites = Object.values(d.analiseJogos).reduce((a,b)=>a+b.palpites.length,0);
+    if(!totalJogos) return null;
+    const cell = (v,l) => `<div class="cer-cell"><div class="cer-cell-v">${v}</div><div class="cer-cell-l">${l}</div></div>`;
+    return { emoji:'📋', label:'O bolão em números', extra:`<div class="cer-grid">
+      ${cell(d.users.length,'participantes')}${cell(totalJogos,'jogos com resultado')}
+      ${cell(totalExatos,'placares exatos')}${cell(totalPalpites,'palpites contados')}</div>` };
+  });
+  // 👑 Mais tempo na liderança
   add(()=>{ const l=_rzLeadership(d.users, d.allPals, d.res, d.champPicks); const x=l.rows[0]; return x && {emoji:'👑', label:'Mais tempo na liderança', name:_rzName(x.u), detail:`${x.steps} de ${l.total} jogos no topo`}; });
+  // 🎯 Rei dos exatos
+  add(()=>{ const x=_rzExatos(d.ranking, d.userAccStats)[0]; return x && {emoji:'🎯', label:'Rei dos placares exatos', name:_rzName(x.u), detail:`${x.exatos} placar${x.exatos>1?'es':''} cravado${x.exatos>1?'s':''}`}; });
+  // 🎯 Sniper — melhor aproveitamento de exatos (mín. 10 jogos)
+  add(()=>{ const c=d.ranking.filter(u=>u.jogos>=10).map(u=>({u,pct:u.exatos/u.jogos*100})).sort((a,b)=>b.pct-a.pct)[0]; return c && c.pct>0 && {emoji:'🎯', label:'Sniper — mira de precisão', name:_rzName(c.u), detail:`${c.pct.toFixed(0)}% dos palpites foram placar exato`}; });
+  // 🧙 Oráculo — melhor % de acerto geral (mín. 10 jogos)
+  add(()=>{ const c=d.ranking.filter(u=>u.jogos>=10).map(u=>({u,pct:(u.exatos+u.venc_saldo+u.apenas_venc)/u.jogos*100})).sort((a,b)=>b.pct-a.pct)[0]; return c && {emoji:'🧙', label:'Oráculo da Copa', name:_rzName(c.u), detail:`${c.pct.toFixed(0)}% de acerto de resultado`}; });
+  // 🧱 Mais consistente (desvio padrão)
+  add(()=>{ const x=_rzConsistency(d.users, d.allPals, d.res)[0]; return x && {emoji:'🧱', label:'O mais consistente', name:_rzName(x.u), detail:`desvio padrão σ ${x.std.toFixed(1)} · média ${x.mean.toFixed(0)} pts/fase`}; });
+  // 🔥 Maior sequência de acertos
+  add(()=>{ let best=null; d.users.forEach(u=>{ const s=d.userAccStats[u.uid]; if(s && s.maxStreak>(best?best.n:0)) best={u,n:s.maxStreak}; }); return best && best.n>=3 && {emoji:'🔥', label:'Maior sequência de acertos', name:_rzName(best.u), detail:`${best.n} jogos seguidos pontuando`}; });
+  // 🎲 Mais ousado
   add(()=>{ const x=_rzBoldness(d.users, d.allPals, d.res)[0]; return x && {emoji:'🎲', label:'O palpiteiro mais ousado', name:_rzName(x.u), detail:`fugiu ${x.ousadia.toFixed(1)} gols da média do grupo`}; });
+  // 🐑 Mais na média (conservador)
+  add(()=>{ const arr=_rzBoldness(d.users, d.allPals, d.res); const x=arr[arr.length-1]; return arr.length>2 && x && {emoji:'🐑', label:'O mais "na média"', name:_rzName(x.u), detail:`só ${x.ousadia.toFixed(1)} gols de distância da manada`}; });
+  // 🚀 Maior arrancada no mata-mata
   add(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); return t && t.up && t.up.delta>0 && {emoji:'🚀', label:'Maior arrancada no mata-mata', name:_rzName(t.up.u), detail:`subiu ${t.up.delta} posiç${t.up.delta>1?'ões':'ão'}`}; });
+  // 🧊 Maior tombo no mata-mata
+  add(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); return t && t.down && t.down.delta<0 && {emoji:'🧊', label:'Maior tombo no mata-mata', name:_rzName(t.down.u), detail:`caiu ${Math.abs(t.down.delta)} posiç${Math.abs(t.down.delta)>1?'ões':'ão'}`}; });
+  // 📐 Especialista em saldo
+  add(()=>{ const x=_rzSaldo(d.ranking, d.allPals, d.res)[0]; return x && {emoji:'📐', label:'Especialista em saldo', name:_rzName(x.u), detail:`${x.saldo} acerto${x.saldo>1?'s':''} de vencedor + saldo de gols`}; });
+  // ⚔️ Dupla mais oposta
   add(()=>{ const o=_rzOpposition(d.users, d.allPals, d.res); return o.globalPair && {emoji:'⚔️', label:'A dupla mais oposta', name:`${_rzName(o.globalPair.a)} × ${_rzName(o.globalPair.b)}`, detail:`${o.globalPair.pct.toFixed(0)}% de palpites diferentes`}; });
+  // 🤝 Gêmeos de palpite
   add(()=>{ const o=_rzOpposition(d.users, d.allPals, d.res); return o.globalTwin && {emoji:'🤝', label:'Gêmeos de palpite', name:`${_rzName(o.globalTwin.a)} & ${_rzName(o.globalTwin.b)}`, detail:`quase sempre no mesmo palpite`}; });
+  // 💰 Seleção que mais rendeu pontos
+  add(()=>{ const s=_rzSelecoes(d.analiseJogos, d.res).sort((a,b)=>b.pts-a.pts)[0]; return s && {emoji:'💰', label:'Seleção que mais rendeu', name:`${flag(s.name)}${esc(s.name)}`, detail:`${s.pts} pts distribuídos ao bolão`}; });
+  // 🃏 Seleção que mais enganou
+  add(()=>{ const s=_rzSelecoes(d.analiseJogos, d.res).filter(x=>x.jogos>=2).sort((a,b)=>a.acertoPct-b.acertoPct)[0]; return s && {emoji:'🃏', label:'Seleção que mais enganou', name:`${flag(s.name)}${esc(s.name)}`, detail:`só ${s.acertoPct.toFixed(0)}% de acerto nos jogos dela`}; });
+  // 🦓 Maior zebra do bolão
   add(()=>{ const dif=Object.entries(d.analiseJogos).filter(([,x])=>x.palpites.length>0).map(([,x])=>({game:x.game, pct:(x.exatos+x.venc_saldo+x.apenas_venc)/x.palpites.length*100})).sort((a,b)=>a.pct-b.pct)[0]; return dif && dif.game && {emoji:'🦓', label:'Maior zebra do bolão', name:`${esc(dif.game.h)} × ${esc(dif.game.a)}`, detail:`só ${dif.pct.toFixed(0)}% acertaram o vencedor`}; });
+  // 🥅 Jogo que quase todos cravaram
+  add(()=>{ const best=Object.values(d.analiseJogos).filter(x=>x.game && x.exatos>0).sort((a,b)=>b.exatos-a.exatos)[0]; return best && {emoji:'🥅', label:'Jogo que quase todos cravaram', name:`${esc(best.game.h)} × ${esc(best.game.a)}`, detail:`${best.exatos} pessoa${best.exatos>1?'s':''} acertaram o placar exato`}; });
+  // 🏆 Seleção mais escolhida como campeã (com mini-barras)
+  add(()=>{
+    const cnt={}; Object.values(d.champPicks||{}).forEach(t=>{ if(t) cnt[t]=(cnt[t]||0)+1; });
+    const arr=Object.entries(cnt).sort((a,b)=>b[1]-a[1]); if(!arr.length) return null;
+    const max=arr[0][1]; const total=arr.reduce((s,x)=>s+x[1],0);
+    const bars=arr.slice(0,3).map(([t,n])=>`<div class="cer-bar-row"><span class="cer-bar-nm">${flag(t)}${esc(t)}</span><span class="cer-bar-track"><span class="cer-bar-fill" style="width:${Math.round(n/max*100)}%"></span></span><span class="cer-bar-n">${n}</span></div>`).join('');
+    return { emoji:'🏆', label:'Seleção mais escolhida p/ campeã', name:`${flag(arr[0][0])}${esc(arr[0][0])}`, detail:`${arr[0][1]} de ${total} palpites de campeão`, extra:`<div class="cer-bars">${bars}</div>` };
+  });
   return facts;
 }
 
@@ -18100,7 +18159,7 @@ function _cerimoniaStart(data){
   stageEl.innerHTML = `<div class="cer-start-card">
     <div style="font-size:3rem">🎬</div>
     <h2>Cerimônia de Encerramento</h2>
-    <p>${esc(CFG.nome_bolao||'Bolão')} · Copa 2026<br>${hasUrl?'Com música, ':''}curiosidades, a corrida do ranking e o anúncio do grande campeão.</p>
+    <p>${esc(CFG.nome_bolao||'Bolão')} · Copa 2026<br>${hasUrl?'Com música, ':''}as maiores curiosidades do bolão e o anúncio do grande campeão.</p>
     <button class="cer-btn-play" onclick="_cerimoniaBegin()">▶️ Iniciar cerimônia</button>
     ${hasUrl?'<div style="font-size:.72rem;color:var(--text-muted);margin-top:14px">🔊 Toque para liberar o som</div>':''}
   </div>`;
@@ -18111,7 +18170,15 @@ async function _cerimoniaBegin(){
   const st = _cerimoniaState; if(!st) return;
   const audio = document.getElementById('cerimonia-audio');
   const url = CFG.cerimonia_audio_url;
-  if(audio && url){ try { audio.src = url; audio.currentTime = 0; audio.volume = 1; audio.play().catch(()=>{}); } catch(_){} }
+  if(audio && url){
+    try {
+      // Sem CORS: o Firebase Storage não devolve Access-Control-Allow-Origin, então
+      // crossOrigin precisa ficar nulo — senão o navegador bloqueia o carregamento.
+      audio.crossOrigin = null;
+      audio.src = url; audio.currentTime = 0; audio.volume = 1;
+      audio.play().catch(err => console.warn('[cerimonia] áudio não tocou:', err && err.message));
+    } catch(_){}
+  }
   const stageEl = document.getElementById('cerimonia-stage');
   if(stageEl) stageEl.innerHTML = '<div class="spinner"></div>';
   let d; try { d = await _cerimoniaBuildData(); } catch(e){ if(stageEl) stageEl.innerHTML = `<div class="alert alert-error">Erro ao carregar os dados do bolão.</div>`; return; }
@@ -18132,61 +18199,23 @@ function _cerStageIntro(d){
 function _cerStageFacts(d){
   const facts = _cerimoniaFacts(d);
   const stageEl = document.getElementById('cerimonia-stage');
-  if(!facts.length || !stageEl){ _cerStageCorrida(d); return; }
-  const per = 5200; let i = 0;
+  if(!facts.length || !stageEl){ _cerStageReveal(d); return; }
+  const per = 4800; let i = 0;
   const showOne = ()=>{
     if(!_cerimoniaState || _cerimoniaState.closed) return;
-    if(i >= facts.length){ _cerStageCorrida(d); return; }
+    if(i >= facts.length){ _cerStageReveal(d); return; }
     const f = facts[i];
     _cerSetStageLabel(`Curiosidades · ${i+1}/${facts.length}`);
     stageEl.innerHTML = `<div class="cer-fact">
       <div class="cer-fact-emoji">${f.emoji}</div>
       <div class="cer-fact-label">${f.label}</div>
-      <div class="cer-fact-name">${f.name}</div>
-      <div class="cer-fact-detail">${f.detail}</div></div>`;
+      ${f.name ? `<div class="cer-fact-name">${f.name}</div>` : ''}
+      ${f.detail ? `<div class="cer-fact-detail">${f.detail}</div>` : ''}
+      ${f.extra || ''}</div>`;
     i++;
     _cerTimer(showOne, per);
   };
   showOne();
-}
-
-// Estágio Corrida: usa as funções PURAS do bar-chart race num canvas próprio
-// (sem tocar no singleton _corridaState nem no #corrida-canvas da aba).
-function _cerStageCorrida(d){
-  const full = _corridaBuild(d.users, d.res, d.allPals);
-  if(!full || full.frames.length < 2){ _cerStageReveal(d); return; }
-  // A corrida desenha seus próprios rótulos (nº do jogo + data) no canvas; limpa
-  // o rótulo do overlay para não sobrepor no canto superior.
-  _cerSetStageLabel('');
-  const stageEl = document.getElementById('cerimonia-stage'); if(stageEl) stageEl.innerHTML = '';
-  const cv = document.getElementById('cerimonia-canvas'); if(!cv){ _cerStageReveal(d); return; }
-  const { ctx, w, h } = _cerimoniaSizeCanvas(cv);
-  const topN = Math.min(full.n, 8);
-  const rowH = Math.max(34, Math.min(54, Math.round((h*0.62)/(topN+1))));
-  const pinExtra = rowH + 22;
-  const padTop = Math.max(78, Math.round((h - (topN*rowH + pinExtra)) / 2));
-  const stgeo = { cssW:w, cssH:h, rowH, view:'top', topN, data:full, pinUids:[full.meUid], padTop, padBottom:20 };
-  const geo = _corridaGeo(stgeo);
-  const last = full.frames.length - 1;
-  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const paintAt = seg => {
-    const fi = Math.min(last, Math.round(seg));
-    const fr = full.frames[fi];
-    const arr = _corridaInterp(full, seg);
-    _corridaPaint(ctx, geo, full, arr, { date:fr.date, plainLabel:fr.plainLabel, top3:true, pinUids:[full.meUid], gameNo:fi+1, gameTot:full.frames.length });
-  };
-  if(reduce){ paintAt(last); _cerTimer(()=>_cerStageReveal(d), 3500); return; }
-  const dur = Math.max(24000, Math.min(60000, 3500*last)); // ~24–60s conforme nº de jogos
-  const stepDur = dur/last;
-  const t0 = performance.now();
-  const draw = now => {
-    if(!_cerimoniaState || _cerimoniaState.closed) return;
-    const seg = Math.min(last, (now - t0)/stepDur);
-    paintAt(seg);
-    if(seg >= last){ _cerimoniaState.raf = null; _cerTimer(()=>_cerStageReveal(d), 2500); return; }
-    _cerimoniaState.raf = requestAnimationFrame(draw);
-  };
-  _cerimoniaState.raf = requestAnimationFrame(draw);
 }
 
 // Estágio final: o reveal do campeão (reusa a festa de fogos + pódio).
