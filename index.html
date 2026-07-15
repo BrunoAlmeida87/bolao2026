@@ -18414,6 +18414,9 @@ function _cerViewerStats(d){
   const me = d.ranking[idx];
   const champ = d.ranking[0];
   const atras = champ ? Math.max(0, (champ.pontos||0) - (me.pontos||0)) : 0;
+  // Posição OFICIAL com empates (1,2,2,4…), igual à tabela do ranking e aos prêmios —
+  // não o índice bruto do array, que erraria a posição de quem está empatado.
+  const pos = (_rankPositionsTieAware(d.ranking)[idx]) || (idx+1);
   // Melhor fase do jogador (mais pontos somados numa fase com resultado).
   let bestPhase = null;
   _CER_PHASE_DEFS.forEach(def=>{
@@ -18423,7 +18426,7 @@ function _cerViewerStats(d){
     ids.forEach(id=>{ const p=d.allPals[uid] && d.allPals[uid][id]; if(!p) return; any=true; const s=calcPontos(p,d.res[id],id); if(s!=null) pts+=s; });
     if(any && (!bestPhase || pts>bestPhase.pts)) bestPhase = { title:def.title, pts };
   });
-  return { me, pos: idx+1, total: d.ranking.length, atras, bestPhase, acertouCampeao: !!me.acertou_campeao };
+  return { me, pos, total: d.ranking.length, atras, bestPhase, acertouCampeao: !!me.acertou_campeao };
 }
 function _cerViewerPanelHTML(v){
   const posEmoji = v.pos===1 ? '👑' : (v.pos<=3 ? '🏅' : '🎯');
