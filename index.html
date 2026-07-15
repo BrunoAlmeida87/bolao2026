@@ -1546,6 +1546,30 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 @media(max-width:768px){
   .transp-grid{grid-template-columns:1fr}
 }
+
+/* ══ Celebração do campeão do bolão (fogos + confete + pódio) ══ */
+.celebra-overlay{position:fixed;inset:0;z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 50% 40%,rgba(10,22,40,.82),rgba(0,0,0,.92))}
+.celebra-overlay.hidden{display:none}
+#celebra-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.celebra-card{position:relative;z-index:2;width:100%;max-width:420px;background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1.5px solid var(--gold);border-radius:22px;padding:26px 22px 24px;text-align:center;box-shadow:0 0 60px rgba(255,215,0,.35),0 20px 50px rgba(0,0,0,.5);animation:celebraCardIn .6s cubic-bezier(.2,1.3,.4,1) both}
+.celebra-close{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;line-height:1;padding:4px}
+.celebra-close:hover{color:var(--white)}
+.celebra-trophy{font-size:3.4rem;line-height:1;filter:drop-shadow(0 4px 14px rgba(255,215,0,.6));animation:celebraTrophy 2.4s ease-in-out infinite}
+.celebra-kicker{color:var(--gold);font-weight:800;letter-spacing:.08em;font-size:.78rem;text-transform:uppercase;margin-top:10px}
+.celebra-name{color:var(--white);font-weight:800;font-size:1.9rem;line-height:1.15;margin:6px 0 2px;text-shadow:0 2px 12px rgba(255,215,0,.4)}
+.celebra-pts{color:var(--gold);font-weight:700;font-size:1.05rem}
+.celebra-podium{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin:20px 0 6px;min-height:112px}
+.celebra-step{flex:1;max-width:110px;border-radius:12px 12px 0 0;padding:8px 6px 10px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;opacity:0;transform:translateY(14px);transition:opacity .45s ease,transform .45s cubic-bezier(.2,1.2,.4,1)}
+.celebra-step.show{opacity:1;transform:translateY(0)}
+.celebra-step .cs-medal{font-size:1.2rem;line-height:1}
+.celebra-step .cs-nm{font-size:.8rem;font-weight:700;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.celebra-step .cs-pt{font-size:.72rem;color:var(--text-muted)}
+.celebra-step.s1{background:linear-gradient(180deg,rgba(255,215,0,.35),rgba(255,215,0,.12));border:1px solid var(--gold);height:104px}
+.celebra-step.s2{background:linear-gradient(180deg,rgba(192,192,192,.3),rgba(192,192,192,.08));border:1px solid rgba(192,192,192,.5);height:86px}
+.celebra-step.s3{background:linear-gradient(180deg,rgba(205,127,50,.3),rgba(205,127,50,.08));border:1px solid rgba(205,127,50,.5);height:72px}
+@keyframes celebraCardIn{from{opacity:0;transform:scale(.82) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes celebraTrophy{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-6px) rotate(4deg)}}
+@media(prefers-reduced-motion:reduce){.celebra-card{animation:none}.celebra-trophy{animation:none}.celebra-step{transition:none}}
 </style>
 </head>
 <body>
@@ -2071,6 +2095,19 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 <!-- OFFLINE BANNER -->
 <div id="offline-banner" role="alert" style="display:none;position:fixed;bottom:68px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,.96);color:#fff;border:1px solid var(--orange);padding:7px 18px;border-radius:20px;font-size:0.82rem;font-weight:600;z-index:200;white-space:nowrap;pointer-events:none">📵 Sem conexão — exibindo dados em cache</div>
 
+<!-- CELEBRAÇÃO DO CAMPEÃO DO BOLÃO -->
+<div id="celebra-overlay" class="celebra-overlay hidden" onclick="if(event.target===this)_celebraStop()">
+  <canvas id="celebra-canvas"></canvas>
+  <div class="celebra-card" role="dialog" aria-modal="true" aria-label="Campeão do bolão">
+    <button class="celebra-close" onclick="_celebraStop()" aria-label="Fechar">✕</button>
+    <div class="celebra-trophy">🏆</div>
+    <div class="celebra-kicker">Campeão do Bolão 2026</div>
+    <div class="celebra-name" id="celebra-name">—</div>
+    <div class="celebra-pts" id="celebra-pts"></div>
+    <div class="celebra-podium" id="celebra-podium"></div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
@@ -2579,6 +2616,29 @@ function _stopAppReloadListener() {
   _appReloadInit = false; _appReloadRev = null;
 }
 
+// ── Celebração do campeão do bolão (broadcast) ───────────────────────────────
+// Documento único (config/celebracao) observado por todos os clientes logados.
+// Quando o admin clica em "Anunciar Campeão do Bolão", anunciarCampeaoBolao()
+// incrementa 'rev' e grava o pódio. Cada cliente dispara a animação de fogos uma
+// única vez por 'rev' (controle em localStorage, ver maybeShowCelebration).
+// Diferente do version/app_reload, NÃO ignoramos o primeiro snapshot: quem abrir
+// o app já com um anúncio ativo também vê a festa (1×).
+let _celebracaoUnsub = null;
+
+function _startCelebracaoListener() {
+  if (_celebracaoUnsub) return; // já ativo
+  try {
+    _celebracaoUnsub = db_.collection('config').doc('celebracao').onSnapshot(snap => {
+      const data = snap.exists ? (snap.data() || {}) : null;
+      if (data && data.announced) maybeShowCelebration(data);
+    }, _err => { /* listener falhou (offline/permissão) — celebração não é crítica */ });
+  } catch(_) { /* best-effort */ }
+}
+
+function _stopCelebracaoListener() {
+  if (_celebracaoUnsub) { try { _celebracaoUnsub(); } catch(_){} _celebracaoUnsub = null; }
+}
+
 // Admin força todos os clientes logados a recarregar (incrementa config/app_reload.rev).
 async function forceAppReloadAll() {
   if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin pode forçar atualização.','error'); return; }
@@ -2782,6 +2842,7 @@ async function handleAuthState(user) {
       showApp();
       _startVersionListener();
       _startAppReloadListener();
+      _startCelebracaoListener();
       _restorePageFromHash();
       _bootGlobalTicker();
     } catch(e) {
@@ -2792,6 +2853,7 @@ async function handleAuthState(user) {
     currentUser = null; currentUserDoc = null;
     _stopVersionListener();
     _stopAppReloadListener();
+    _stopCelebracaoListener();
     showLoading(false); showAuth();
   }
 }
@@ -3193,6 +3255,172 @@ function computeRanking(users, resultados, allPalpites, championPicks={}, champi
     // Desempate: pontos → exatos → venc+saldo → vencedor → acertou o campeão.
     // Persistindo o empate em todos os critérios, o prêmio é dividido (ver Regras).
     .sort((a,b)=>b.pontos-a.pontos||b.exatos-a.exatos||b.venc_saldo-a.venc_saldo||b.apenas_venc-a.apenas_venc||((b.acertou_campeao?1:0)-(a.acertou_campeao?1:0)));
+}
+
+// ── Corrida pelo título do bolão ─────────────────────────────────────────────
+// A partir do ranking atual, calcula quanto cada participante AINDA pode somar
+// (teto SUPERIOR) e usa isso para responder duas perguntas da "reta final":
+//   • contenders — quem ainda tem chance matemática de ser campeão do bolão;
+//   • clinched   — uid do líder se ele já está matematicamente garantido (senão null).
+// O teto é sempre um LIMITE SUPERIOR, então nunca elimina alguém por engano:
+//   - jogos restantes em que o usuário TEM palpite salvo → soma placar exato;
+//   - se allPals estiver indisponível (caminho de cache do dashboard), usa teto
+//     flat (todos os jogos restantes × exato) — ainda é upper bound seguro;
+//   - bônus de campeão somado enquanto a Final (FIN1) não foi jogada e o usuário
+//     ainda não garantiu o acerto (v1 conservador: não checa eliminação da seleção).
+function computeTitleRace(ranking, res, allPals, champPicks) {
+  const finalDecidida = _hasFullResult(res['FIN1']);
+  const jogosRestantes = ALL_GAMES.filter(g => !_hasFullResult(res[g.id]));
+  const ptsEmJogo = jogosRestantes.reduce((acc, g) => acc + _ptsForType('exato', _isMataGame(g.id)), 0);
+  const ptsCampeao = CFG.pts_campeao ?? 0;
+
+  const ceilingByUid = {};
+  ranking.forEach(u => {
+    let ceil = 0;
+    const pals = allPals && allPals[u.uid];
+    jogosRestantes.forEach(g => {
+      // Sem snapshot de palpites (cache): assume que pode pontuar em todos (flat).
+      const temPalpite = pals ? !!(pals[g.id] && pals[g.id].h !== undefined && pals[g.id].a !== undefined) : true;
+      if (temPalpite) ceil += _ptsForType('exato', _isMataGame(g.id));
+    });
+    // Bônus de campeão ainda disponível (Final não decidida e ainda não acertou).
+    if (!finalDecidida && !u.acertou_campeao && u.campeao) ceil += ptsCampeao;
+    ceilingByUid[u.uid] = ceil;
+  });
+
+  const leader = ranking[0] || null;
+  const leaderPts = leader ? leader.pontos : 0;
+
+  // Candidatos: teto do usuário alcança ao menos a pontuação ATUAL do líder.
+  // O próprio líder entra sempre. Direção inclusiva de propósito (não descarta
+  // ninguém que ainda tenha chance matemática, mesmo que remota).
+  const contenders = ranking
+    .filter((u, i) => i === 0 || (u.pontos + (ceilingByUid[u.uid] || 0) >= leaderPts))
+    .map(u => u.uid);
+
+  // Título encaminhado: líder estritamente acima do MELHOR cenário de todos os
+  // demais (empate no limite ⇒ ainda em disputa, não encaminhado).
+  let clinched = null;
+  if (leader && ranking.length > 1) {
+    const bestOther = Math.max(...ranking.slice(1).map(u => u.pontos + (ceilingByUid[u.uid] || 0)));
+    if (leaderPts > bestOther) clinched = leader.uid;
+  } else if (leader) {
+    clinched = leader.uid; // único participante
+  }
+
+  return { ceilingByUid, contenders, clinched, finalDecidida, ptsEmJogo, jogosRestantes: jogosRestantes.length };
+}
+
+// Monta o painel "Reta Final" do dashboard (ou '' se ainda for cedo). Mostra o
+// estado do título (encaminhado × em disputa), banner de suspense na final,
+// barra de tensão líder×vice, lista de candidatos e cenários de campeão.
+// Reusa computeTitleRace, _simAliveTeams e computeRanking(championOverride) —
+// sem novos dados. Só aparece a partir do 1º resultado de mata-mata (reta final).
+function _buildRetaFinalPanel(ranking, res, allPals, champPicks, users) {
+  if (!ranking || ranking.length < 2) return '';
+  const mataIniciou = [..._MATA_IDS].some(id => _hasFullResult(res[id]));
+  if (!mataIniciou) return '';
+
+  const tr = computeTitleRace(ranking, res, allPals, champPicks);
+  const nm = u => esc(u.apelido || u.nome || '—');
+  const leader = ranking[0];
+  const vice = ranking[1];
+  const gap = leader.pontos - vice.pontos;
+  const contenders = tr.contenders.map(uid => ranking.find(u => u.uid === uid)).filter(Boolean);
+
+  // ── Selo de estado ──
+  let seloHtml;
+  if (tr.clinched) {
+    const champ = ranking.find(u => u.uid === tr.clinched) || leader;
+    seloHtml = `<div style="background:linear-gradient(135deg,rgba(255,215,0,.22),rgba(255,140,0,.10));border:1px solid var(--gold);border-radius:12px;padding:14px 16px;text-align:center;margin-bottom:12px">
+      <div style="font-size:1.6rem;line-height:1">👑</div>
+      <div style="color:var(--gold);font-weight:800;font-size:1.05rem;margin-top:4px">Título encaminhado!</div>
+      <div style="color:var(--text-muted);font-size:0.85rem;margin-top:2px"><b style="color:var(--white)">${nm(champ)}</b> não pode mais ser alcançado${tr.finalDecidida ? '' : ' — matematicamente campeão do bolão'}.</div>
+    </div>`;
+  } else {
+    seloHtml = `<div style="background:rgba(30,144,255,.10);border:1px solid var(--accent);border-radius:12px;padding:14px 16px;text-align:center;margin-bottom:12px">
+      <div style="font-size:1.5rem;line-height:1">🔥</div>
+      <div style="color:var(--accent);font-weight:800;font-size:1.05rem;margin-top:4px">Disputa em aberto</div>
+      <div style="color:var(--text-muted);font-size:0.85rem;margin-top:2px"><b style="color:var(--white)">${contenders.length}</b> ainda ${contenders.length===1?'pode':'podem'} ser campeão do bolão · <b style="color:var(--white)">${tr.ptsEmJogo}</b> pts ainda em jogo</div>
+    </div>`;
+  }
+
+  // ── Banner de suspense (final iminente e título ainda indefinido) ──
+  let suspenseHtml = '';
+  if (!tr.finalDecidida && !tr.clinched && tr.jogosRestantes <= 3) {
+    suspenseHtml = `<div class="alert alert-warning" style="margin:0 0 12px">
+      ⏳ <b>Tudo em jogo na final!</b> Falta${tr.jogosRestantes!==1?'m':''} só ${tr.jogosRestantes} jogo${tr.jogosRestantes!==1?'s':''} e o título do bolão ainda pode mudar de mãos.
+    </div>`;
+  }
+
+  // ── Barra de tensão: pontos do líder (preenchida) × melhor caso do vice (marca) ──
+  const viceMax = vice.pontos + (tr.ceilingByUid[vice.uid] || 0);
+  const scaleMax = Math.max(leader.pontos, viceMax, 1);
+  const pctLeader = Math.round(leader.pontos / scaleMax * 100);
+  const pctVice = Math.round(viceMax / scaleMax * 100);
+  const tensaoHtml = `<div style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:5px">
+      <span>🥇 ${nm(leader)} <b style="color:var(--gold)">${leader.pontos}</b> pts</span>
+      <span style="color:var(--text-muted)">${gap>0 ? 'vantagem de <b style="color:var(--white)">'+gap+'</b> pts' : '<b style="color:var(--white)">empate</b> na ponta'}</span>
+    </div>
+    <div style="height:12px;border-radius:6px;background:rgba(255,255,255,.08);position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;bottom:0;left:0;width:${pctLeader}%;background:linear-gradient(90deg,var(--gold),var(--orange))"></div>
+      <div style="position:absolute;top:-2px;bottom:-2px;left:calc(${pctVice}% - 1px);width:2px;background:var(--accent)"></div>
+    </div>
+    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:5px">Barra dourada = pontos do líder · marca azul = teto do vice (${nm(vice)} pode chegar a <b style="color:var(--white)">${viceMax}</b> pts)</div>
+  </div>`;
+
+  // ── Lista de candidatos ──
+  const candRows = contenders.slice(0,6).map((u,i) => {
+    const teto = u.pontos + (tr.ceilingByUid[u.uid] || 0);
+    const atras = leader.pontos - u.pontos;
+    const isMe = u.uid === currentUser.uid;
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'º';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;${isMe?'background:rgba(255,215,0,.10)':''}">
+      <span style="width:26px;text-align:center;font-weight:700;color:var(--text-muted)">${medal}</span>
+      <span style="flex:1;font-weight:${isMe?'800':'600'};color:${isMe?'var(--gold)':'var(--white)'}">${nm(u)}${isMe?' (você)':''}</span>
+      <span style="font-size:0.8rem;color:var(--text-muted)">${i===0?'<b style="color:var(--gold)">líder</b>':('−'+atras+' pts')}</span>
+      <span style="font-size:0.78rem;color:var(--text-muted);min-width:66px;text-align:right">máx <b style="color:var(--white)">${teto}</b></span>
+    </div>`;
+  }).join('');
+  const candHtml = `<div style="margin-bottom:${(!tr.finalDecidida)?'4px':'0'}">
+    <div style="font-size:0.8rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">Quem ainda pode ganhar</div>
+    ${candRows}
+    ${contenders.length>6 ? `<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-top:4px">+${contenders.length-6} com chance matemática</div>`:''}
+  </div>`;
+
+  // ── Cenários de campeão (só enquanto a Final não foi jogada) ──
+  let cenariosHtml = '';
+  if (!tr.finalDecidida && allPals && champPicks && Object.keys(champPicks).length) {
+    const alive = new Set(_simAliveTeams(res));
+    const pickedAlive = [...new Set(Object.values(champPicks).filter(t => t && alive.has(t)))];
+    if (pickedAlive.length) {
+      const curLeaderUid = leader.uid;
+      const scen = pickedAlive.map(team => {
+        const r2 = computeRanking(users, res, allPals, champPicks, team);
+        const w = r2[0];
+        return { team, w, changes: !!(w && w.uid !== curLeaderUid) };
+      }).filter(s => s.w);
+      scen.sort((a,b) => (b.changes?1:0)-(a.changes?1:0));
+      const top = scen.slice(0,4);
+      if (top.length) {
+        const rows = top.map(s => `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:0.82rem">
+          <span style="flex:1;color:var(--text-muted)">Se <b style="color:var(--white)">${esc(s.team)}</b> for campeã</span>
+          <span style="color:var(--text-muted)">→</span>
+          <span style="font-weight:700;color:${s.changes?'var(--orange)':'var(--gold)'}">${nm(s.w)}${s.changes?' assume':' segue líder'}</span>
+        </div>`).join('');
+        cenariosHtml = `<div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--text-muted);margin:10px 0 4px">🔮 E se… <span style="font-weight:400">(bônus de campeão: +${CFG.pts_campeao} pts)</span></div>
+          ${rows}
+        </div>`;
+      }
+    }
+  }
+
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="card-title" style="margin-bottom:12px">🎯 Reta Final</div>
+    ${seloHtml}${suspenseHtml}${tensaoHtml}${candHtml}${cenariosHtml}
+  </div>`;
 }
 
 // Retorna { deltas, denseDeltas }: mapas uid→posição_anterior (tradicional e
@@ -4172,6 +4400,10 @@ async function renderDashboard() {
           <div class="dash-kpi-sub">${_myExatos} exato${_myExatos!==1?'s':''} · ${_kpiIsLeader?'<b style="color:var(--gold)">Líder!</b>':(_kpiGap>0?'-'+_kpiGap+' pts p/ 1º':'0 pts p/ 1º')}</div>
         </div>
       </div>`;
+
+    // Painel "Reta Final" — expectativa de quem pode ser campeão do bolão
+    // (aparece só a partir do 1º resultado de mata-mata; vazio antes disso).
+    html += _buildRetaFinalPanel(ranking, res, allPals, champPicks, users);
 
     // Manchetes da Análise da IA (carrossel animado) — preenchido após o render.
     html += `<div id="dash-ai-news"></div>`;
@@ -13280,6 +13512,15 @@ async function renderAdminConfig() {
       </div>
     </div>
     <div class="card">
+      <div class="card-title" style="margin-bottom:8px">🎉 Anunciar Campeão do Bolão</div>
+      <p class="text-muted" style="font-size:0.85rem;margin-bottom:14px">Quando o bolão terminar, anuncie o campeão: <b>todos os participantes logados</b> verão uma animação de fogos com o pódio, uma única vez. Use "Testar" para ver só no seu aparelho, sem avisar ninguém.</p>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="anunciarCampeaoBolao()">🎆 Anunciar campeão para todos</button>
+        <button class="btn btn-secondary" onclick="testarCelebracao()">👁️ Testar animação (só eu)</button>
+        <button class="btn btn-secondary" onclick="encerrarCelebracao()">⏹️ Encerrar celebração</button>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-title" style="margin-bottom:8px">📰 Ticker de Curiosidades</div>
       <p class="text-muted" style="font-size:0.85rem;margin-bottom:14px">
         Faixa rolante no rodapé com <b>dados personalizados para cada usuário</b> (posição, rival, aproveitamento)
@@ -14054,6 +14295,73 @@ async function toggleCampeaoLock(lock) {
     } catch(_) {}
     showToast(lock?'🔒 Palpite de campeão bloqueado':'🔓 Palpite de campeão desbloqueado', lock?'warning':'success');
     renderAdminConfig();
+  } catch(e) {
+    showToast('Erro: '+e.message,'error');
+  }
+}
+
+// Admin anuncia o campeão do bolão → dispara a animação de fogos para TODOS os
+// clientes logados (grava config/celebracao com rev incrementado + pódio atual).
+async function anunciarCampeaoBolao() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin pode anunciar.','error'); return; }
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals, champPicks } = await _fetchPals(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    if (!ranking.length) { showToast('Sem participantes para anunciar.','warning'); return; }
+    const champ = ranking[0];
+    const nm = u => u.apelido || u.nome || '—';
+    const top3 = ranking.slice(0,3).map(u => ({ apelido: u.apelido || null, nome: u.nome || null, pontos: u.pontos }));
+    if (!confirm(`Anunciar ${nm(champ)} (${champ.pontos} pts) como CAMPEÃO DO BOLÃO?\n\nTodos os participantes logados verão a animação de fogos agora — uma única vez.`)) return;
+    const FV = firebase.firestore.FieldValue;
+    await db_.collection('config').doc('celebracao').set({
+      announced: true,
+      rev: FV.increment(1),
+      championUid: champ.uid,
+      championApelido: nm(champ),
+      championPontos: champ.pontos,
+      top3,
+      at: FV.serverTimestamp(),
+      byUid: currentUser?.uid || null
+    }, { merge: true });
+    try {
+      await db_.collection('audit').add({
+        type: 'celebracao_anuncio',
+        adminUid: currentUser?.uid || null,
+        adminEmail: currentUser?.email || null,
+        championUid: champ.uid,
+        at: FV.serverTimestamp()
+      });
+    } catch(_) {}
+    showToast('🎆 Campeão anunciado para todos!','success');
+  } catch(e) {
+    showToast('Erro ao anunciar: '+e.message,'error');
+  }
+}
+
+// Toca a animação só neste aparelho, sem gravar nada (ensaio do admin).
+async function testarCelebracao() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals, champPicks } = await _fetchPals(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const top3 = ranking.slice(0,3).map(u => ({ apelido: u.apelido || null, nome: u.nome || null, pontos: u.pontos }));
+    _celebraStart({ top3, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
+  } catch(e) {
+    showToast('Erro ao testar: '+e.message,'error');
+  }
+}
+
+// Encerra a celebração (announced=false) — para de disparar para quem abrir depois.
+async function encerrarCelebracao() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin pode alterar.','error'); return; }
+  if (!confirm('Encerrar a celebração? Novos acessos não verão mais a animação (quem já viu não é afetado).')) return;
+  try {
+    await db_.collection('config').doc('celebracao').set({ announced: false }, { merge: true });
+    showToast('⏹️ Celebração encerrada.','success');
   } catch(e) {
     showToast('Erro: '+e.message,'error');
   }
@@ -17486,6 +17794,142 @@ function _corridaStop() {
   if (st.raf) cancelAnimationFrame(st.raf);
   st.raf = null; st.playing = false;
   if (st._onResize) window.removeEventListener('resize', st._onResize);
+}
+
+// ════════════════════════════════════════════
+// CELEBRAÇÃO DO CAMPEÃO DO BOLÃO (fogos + confete + pódio)
+// ════════════════════════════════════════════
+let _celebraState = null;
+const _CELEBRA_COLORS = ['#FFD700','#1E90FF','#00C851','#FF8C00','#FF4444','#FFFFFF'];
+
+function _celebraSizeCanvas(cv){
+  const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+  const w = window.innerWidth, h = window.innerHeight;
+  cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  cv.style.width = w+'px'; cv.style.height = h+'px';
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return { ctx, w, h };
+}
+
+function _celebraSpawnConfetti(st, n){
+  for(let i=0;i<n;i++){
+    st.parts.push({ kind:'confetti',
+      x: Math.random()*st.w, y: -20 - Math.random()*st.h*0.3,
+      vx: (Math.random()-0.5)*40, vy: 60 + Math.random()*80,
+      size: 5 + Math.random()*6, rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*6,
+      color: _CELEBRA_COLORS[(Math.random()*_CELEBRA_COLORS.length)|0] });
+  }
+}
+
+function _celebraFirework(st){
+  const cx = st.w*(0.2+Math.random()*0.6), cy = st.h*(0.15+Math.random()*0.35);
+  const color = _CELEBRA_COLORS[(Math.random()*_CELEBRA_COLORS.length)|0];
+  const count = 34 + (Math.random()*20|0);
+  for(let i=0;i<count;i++){
+    const ang = (Math.PI*2*i)/count, spd = 60 + Math.random()*90;
+    st.parts.push({ kind:'spark', x:cx, y:cy, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
+      size: 2.5+Math.random()*2, color, life:1, decay: 0.5+Math.random()*0.4 });
+  }
+}
+
+function _celebraLoop(now){
+  const st = _celebraState; if(!st) return;
+  const dt = Math.min(0.05, (now - st.last)/1000); st.last = now; st.t += dt;
+  const { ctx, w, h } = st;
+  ctx.clearRect(0,0,w,h);
+  if(st.t < 12){ st.fwTimer -= dt; if(st.fwTimer<=0){ _celebraFirework(st); st.fwTimer = 0.5 + Math.random()*0.6; } }
+  if(st.t < 6){ st.confTimer -= dt; if(st.confTimer<=0){ _celebraSpawnConfetti(st, 8); st.confTimer = 0.12; } }
+  const g = 90;
+  st.parts = st.parts.filter(p=>{
+    p.vy += g*dt*(p.kind==='spark'?0.6:1);
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    if(p.kind==='confetti'){ p.rot += p.vr*dt; if(p.y > h+30) return false; }
+    else { p.life -= dt*p.decay; if(p.life<=0) return false; }
+    ctx.globalAlpha = p.kind==='spark' ? Math.max(0,p.life) : 0.9;
+    ctx.fillStyle = p.color;
+    if(p.kind==='confetti'){
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+      ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size*0.6); ctx.restore();
+    } else { ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); }
+    return true;
+  });
+  ctx.globalAlpha = 1;
+  // Encerra o loop quando já passou do tempo de fogos e não há mais partículas.
+  if(st.t >= 12 && st.parts.length === 0){ st.raf = null; return; }
+  st.raf = requestAnimationFrame(_celebraLoop);
+}
+
+// Revela o pódio 3º→2º→1º com atraso e estoura fogos ao cravar o 1º.
+function _celebraRevealPodium(top3){
+  const box = document.getElementById('celebra-podium'); if(!box) return;
+  const medals = ['🥇','🥈','🥉'];
+  const layout = [ {i:1,cls:'s2'}, {i:0,cls:'s1'}, {i:2,cls:'s3'} ]; // 2º | 1º | 3º
+  box.innerHTML = layout.map(({i,cls})=>{
+    const u = top3[i];
+    if(!u) return `<div class="celebra-step ${cls}" data-i="${i}" style="visibility:hidden"></div>`;
+    return `<div class="celebra-step ${cls}" data-i="${i}">
+      <div class="cs-medal">${medals[i]}</div>
+      <div class="cs-nm">${esc(u.apelido||u.nome||'—')}</div>
+      <div class="cs-pt">${u.pontos!=null?u.pontos+' pts':''}</div>
+    </div>`;
+  }).join('');
+  const order = [2,1,0]; // revela 3º, depois 2º, depois 1º
+  order.forEach((i, k)=>{
+    setTimeout(()=>{
+      const el = box.querySelector(`.celebra-step[data-i="${i}"]`);
+      if(el) el.classList.add('show');
+      if(k===order.length-1 && _celebraState){ for(let b=0;b<3;b++) setTimeout(()=>{ if(_celebraState) _celebraFirework(_celebraState); }, b*160); }
+    }, 400 + k*650);
+  });
+}
+
+// Inicia a celebração. data = { championApelido, championPontos, top3:[{apelido,nome,pontos}] }
+function _celebraStart(data){
+  const overlay = document.getElementById('celebra-overlay');
+  const cv = document.getElementById('celebra-canvas');
+  if(!overlay || !cv) return;
+  data = data || {};
+  const top3 = Array.isArray(data.top3) ? data.top3 : [];
+  const champ = top3[0] || { apelido: data.championApelido, pontos: data.championPontos };
+  document.getElementById('celebra-name').textContent = (champ && (champ.apelido||champ.nome)) || data.championApelido || '—';
+  const pts = (champ && champ.pontos != null) ? champ.pontos : data.championPontos;
+  document.getElementById('celebra-pts').textContent = (pts != null) ? (pts + ' pontos') : '';
+  overlay.classList.remove('hidden');
+
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce){ _celebraState = null; _celebraRevealPodium(top3); return; } // card estático, sem partículas
+  const { ctx, w, h } = _celebraSizeCanvas(cv);
+  if(_celebraState && _celebraState.raf) cancelAnimationFrame(_celebraState.raf);
+  _celebraState = { ctx, w, h, parts:[], t:0, last: performance.now(), fwTimer:0.2, confTimer:0, raf:null,
+    _onResize: ()=>{ if(!_celebraState) return; const d=_celebraSizeCanvas(cv); _celebraState.ctx=d.ctx; _celebraState.w=d.w; _celebraState.h=d.h; } };
+  window.addEventListener('resize', _celebraState._onResize);
+  _celebraRevealPodium(top3);
+  _celebraSpawnConfetti(_celebraState, 60);
+  _celebraState.raf = requestAnimationFrame(_celebraLoop);
+}
+
+function _celebraStop(){
+  const overlay = document.getElementById('celebra-overlay');
+  if(overlay) overlay.classList.add('hidden');
+  const st = _celebraState;
+  if(st){
+    if(st.raf) cancelAnimationFrame(st.raf);
+    if(st._onResize) window.removeEventListener('resize', st._onResize);
+    if(st.ctx) st.ctx.clearRect(0,0,st.w,st.h);
+  }
+  _celebraState = null;
+}
+
+// Toca a celebração no máximo 1× por anúncio (rev). Guarda o rev já visto em
+// localStorage para não repetir em reload; novo rev ⇒ toca de novo.
+function maybeShowCelebration(data){
+  if(!data || !data.announced) return;
+  const rev = String(data.rev != null ? data.rev : '1');
+  try {
+    if(localStorage.getItem('bolao_celebra_visto_rev') === rev) return;
+    localStorage.setItem('bolao_celebra_visto_rev', rev);
+  } catch(_){ /* localStorage indisponível: toca mesmo assim */ }
+  _celebraStart(data);
 }
 
 // ════════════════════════════════════════════
