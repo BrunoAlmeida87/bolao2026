@@ -1600,8 +1600,41 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cer-bar-track{flex:1;height:12px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden}
 .cer-bar-fill{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--orange));border-radius:6px}
 .cer-bar-n{flex:0 0 auto;font-size:.8rem;font-weight:700;color:var(--gold);min-width:18px;text-align:left}
+/* Destaques por fase (rodadas 1/2/3 + mata-mata): cards que encolhem e formam uma grade */
+.cer-phases{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:500px}
+.cer-phase-active{width:100%;min-height:1px;display:flex;justify-content:center}
+.cer-phase-card{width:100%;background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1.5px solid var(--gold);border-radius:18px;padding:16px 14px;box-shadow:0 0 40px rgba(255,215,0,.22);animation:cerFactIn .55s cubic-bezier(.2,1.2,.4,1) both}
+.cer-phase-card.cer-phase-out{animation:cerPhaseOut .5s ease forwards}
+.cer-phase-head{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:12px}
+.cer-phase-emoji{font-size:2rem;line-height:1;filter:drop-shadow(0 3px 10px rgba(255,215,0,.4))}
+.cer-phase-title{color:var(--gold);font-weight:800;font-size:1.15rem;line-height:1.1;text-align:left}
+.cer-phase-sub{color:var(--text-muted);font-size:.72rem;text-align:left;margin-top:1px}
+.cer-phase-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cer-phase-col{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:9px 8px}
+.cer-phase-col.best{border-color:rgba(255,215,0,.4)}
+.cer-phase-col.worst{border-color:rgba(100,181,246,.35)}
+.cer-phase-col-h{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;margin-bottom:7px;text-align:center}
+.cer-phase-col.best .cer-phase-col-h{color:var(--gold)}
+.cer-phase-col.worst .cer-phase-col-h{color:#64B5F6}
+.cer-phase-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.82rem}
+.cer-phase-row .rk{flex:0 0 18px;text-align:center;font-size:.92rem}
+.cer-phase-row .nm{flex:1;color:var(--white);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.cer-phase-row .pt{flex:0 0 auto;font-weight:800;font-size:.8rem}
+.cer-phase-col.best .pt{color:var(--gold)}
+.cer-phase-col.worst .pt{color:#64B5F6}
+.cer-phase-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%}
+.cer-phase-thumb{background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1px solid var(--border);border-radius:12px;padding:8px 8px 9px;opacity:0;transform:scale(.72);transition:opacity .4s ease,transform .45s cubic-bezier(.2,1.3,.4,1)}
+.cer-phase-thumb.show{opacity:1;transform:scale(1)}
+.cpt-title{font-size:.74rem;font-weight:800;color:var(--gold);text-align:center;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cpt-cols{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cpt-col{min-width:0}
+.cpt-h{font-size:.72rem;text-align:center;margin-bottom:3px}
+.cpt-row{display:flex;gap:4px;font-size:.62rem;line-height:1.5;min-width:0}
+.cpt-row .n{flex:1;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cpt-row .p{flex:0 0 auto;font-weight:700;color:var(--text-muted)}
 @keyframes cerFactIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
-@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title{animation:none}}
+@keyframes cerPhaseOut{to{opacity:0;transform:scale(.82) translateY(-10px)}}
+@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card{animation:none}.cer-phase-thumb{transition:none}}
 </style>
 </head>
 <body>
@@ -17946,7 +17979,8 @@ function _celebraLoop(now){
   const dt = Math.min(0.05, (now - st.last)/1000); st.last = now; st.t += dt;
   const { ctx, w, h } = st;
   ctx.clearRect(0,0,w,h);
-  if(st.t < 12){ st.fwTimer -= dt; if(st.fwTimer<=0){ _celebraFirework(st); st.fwTimer = 0.5 + Math.random()*0.6; } }
+  // continuous=true (cerimônia): mantém os fogos rolando indefinidamente no pódio.
+  if(st.continuous || st.t < 12){ st.fwTimer -= dt; if(st.fwTimer<=0){ _celebraFirework(st); st.fwTimer = (st.continuous?0.7:0.5) + Math.random()*0.7; } }
   if(st.t < 6){ st.confTimer -= dt; if(st.confTimer<=0){ _celebraSpawnConfetti(st, 8); st.confTimer = 0.12; } }
   const g = 90;
   st.parts = st.parts.filter(p=>{
@@ -17964,7 +17998,8 @@ function _celebraLoop(now){
   });
   ctx.globalAlpha = 1;
   // Encerra o loop quando já passou do tempo de fogos e não há mais partículas.
-  if(st.t >= 12 && st.parts.length === 0){ st.raf = null; return; }
+  // (continuous nunca encerra sozinho — só ao fechar a cerimônia.)
+  if(!st.continuous && st.t >= 12 && st.parts.length === 0){ st.raf = null; return; }
   st.raf = requestAnimationFrame(_celebraLoop);
 }
 
@@ -18009,7 +18044,7 @@ function _celebraStart(data){
   if(reduce){ _celebraState = null; _celebraRevealPodium(top3); return; } // card estático, sem partículas
   const { ctx, w, h } = _celebraSizeCanvas(cv);
   if(_celebraState && _celebraState.raf) cancelAnimationFrame(_celebraState.raf);
-  _celebraState = { ctx, w, h, parts:[], t:0, last: performance.now(), fwTimer:0.2, confTimer:0, raf:null,
+  _celebraState = { ctx, w, h, parts:[], t:0, last: performance.now(), fwTimer:0.2, confTimer:0, raf:null, continuous: !!data.continuous,
     _onResize: ()=>{ if(!_celebraState) return; const d=_celebraSizeCanvas(cv); _celebraState.ctx=d.ctx; _celebraState.w=d.w; _celebraState.h=d.h; } };
   window.addEventListener('resize', _celebraState._onResize);
   _celebraRevealPodium(top3);
@@ -18147,11 +18182,196 @@ function _cerimoniaFacts(d){
   return facts;
 }
 
+// ── Fogos leves na canvas da cerimônia (estágios de curiosidades e cards) ──────
+// Loop próprio (independente da festa do pódio, que usa outra canvas). Fica atrás
+// dos cards. Usado para "estourar poucos fogos" a cada card mostrado.
+function _cerFwEnsure(){
+  const st = _cerimoniaState; if(!st) return null;
+  if(st.fw) return st.fw;
+  const cv = document.getElementById('cerimonia-canvas'); if(!cv) return null;
+  const d = _cerimoniaSizeCanvas(cv);
+  const fw = { ctx:d.ctx, w:d.w, h:d.h, parts:[], last:performance.now(), raf:null,
+    _onResize: ()=>{ const s=_cerimoniaState; if(!s||!s.fw) return; const dd=_cerimoniaSizeCanvas(cv); s.fw.ctx=dd.ctx; s.fw.w=dd.w; s.fw.h=dd.h; } };
+  window.addEventListener('resize', fw._onResize);
+  st.fw = fw;
+  const loop = (now)=>{
+    const s=_cerimoniaState; if(!s||!s.fw) return;
+    const f=s.fw; const dt=Math.min(0.05,(now-f.last)/1000); f.last=now;
+    const {ctx,w,h}=f; ctx.clearRect(0,0,w,h);
+    f.parts = f.parts.filter(p=>{
+      p.vy += 90*dt*0.6; p.x += p.vx*dt; p.y += p.vy*dt; p.life -= dt*p.decay;
+      if(p.life<=0) return false;
+      ctx.globalAlpha = Math.max(0,p.life); ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); return true;
+    });
+    ctx.globalAlpha = 1;
+    f.raf = requestAnimationFrame(loop);
+  };
+  fw.raf = requestAnimationFrame(loop);
+  return fw;
+}
+function _cerFwBurst(n){
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce) return;
+  const fw = _cerFwEnsure(); if(!fw) return;
+  n = n || 1;
+  for(let b=0;b<n;b++){
+    const cx = fw.w*(0.18+Math.random()*0.64), cy = fw.h*(0.14+Math.random()*0.4);
+    const color = _CELEBRA_COLORS[(Math.random()*_CELEBRA_COLORS.length)|0];
+    const count = 24 + (Math.random()*16|0);
+    for(let i=0;i<count;i++){ const ang=(Math.PI*2*i)/count, spd=52+Math.random()*80;
+      fw.parts.push({ x:cx, y:cy, vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd, size:2.2+Math.random()*1.8, color, life:1, decay:0.5+Math.random()*0.4 }); }
+  }
+}
+function _cerFwStop(){
+  const st=_cerimoniaState; if(!st||!st.fw) return;
+  const fw=st.fw; if(fw.raf) cancelAnimationFrame(fw.raf); if(fw._onResize) window.removeEventListener('resize', fw._onResize);
+  if(fw.ctx) fw.ctx.clearRect(0,0,fw.w,fw.h); st.fw=null;
+}
+
+// ── Wake Lock: impede a tela do celular de apagar durante a cerimônia ──────────
+let _cerWakeLock = null;
+async function _cerAcquireWakeLock(){
+  try {
+    if('wakeLock' in navigator && navigator.wakeLock && navigator.wakeLock.request){
+      _cerWakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch(_){ /* navegador pode recusar sem HTTPS/gesto — não é crítico */ }
+}
+function _cerReleaseWakeLock(){
+  try { if(_cerWakeLock && _cerWakeLock.release) _cerWakeLock.release(); } catch(_){}
+  _cerWakeLock = null;
+}
+// Reaquire ao voltar o foco (o Wake Lock é liberado quando a aba fica oculta).
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && _cerimoniaState && !_cerimoniaState.closed && !_cerWakeLock){ _cerAcquireWakeLock(); }
+});
+
+// ── Classificação por fase (rodadas 1/2/3 e mata-mata) ────────────────────────
+// Definição das 4 fases destacadas na cerimônia. As rodadas de grupos usam o
+// campo r dos jogos; o mata-mata reúne todos os jogos das eliminatórias.
+const _CER_PHASE_DEFS = [
+  { key:'r1',   emoji:'1️⃣', title:'1ª Rodada', titleShort:'1ª Rodada',  sub:'Fase de grupos',    pick:g=>g.r===1 },
+  { key:'r2',   emoji:'2️⃣', title:'2ª Rodada', titleShort:'2ª Rodada',  sub:'Fase de grupos',    pick:g=>g.r===2 },
+  { key:'r3',   emoji:'3️⃣', title:'3ª Rodada', titleShort:'3ª Rodada',  sub:'Fase de grupos',    pick:g=>g.r===3 },
+  { key:'mata', emoji:'⚔️', title:'Mata-mata',  titleShort:'Mata-mata',  sub:'Fase eliminatória', mata:true },
+];
+function _cerPhaseGameIds(def){
+  if(def.mata) return Object.values(ELIM_DATA).flatMap(e=>e.games.map(g=>g.id));
+  return Object.values(GRUPOS_DATA).flatMap(g=>g.games).filter(def.pick).map(g=>g.id);
+}
+// Soma os pontos que cada participante fez nos jogos (com resultado) da fase.
+// Retorna { best:[3], worst:[3], total, jogos } ou null se a fase não tem resultado.
+function _cerPhaseStandings(d, gameIds){
+  const ids = gameIds.filter(id => d.res[id] && _hasFullResult(d.res[id]));
+  if(!ids.length) return null;
+  const rows = [];
+  d.users.forEach(u=>{
+    let pts=0, hasAny=false;
+    ids.forEach(id=>{
+      const p = d.allPals[u.uid] && d.allPals[u.uid][id];
+      if(!p) return;
+      hasAny = true;
+      const s = calcPontos(p, d.res[id], id);
+      if(s!=null) pts += s;
+    });
+    if(hasAny) rows.push({ u, pts });
+  });
+  if(!rows.length) return null;
+  const byName = (a,b)=>_rzName(a.u).localeCompare(_rzName(b.u));
+  const best  = rows.slice().sort((a,b)=> b.pts-a.pts || byName(a,b)).slice(0,3);
+  const worst = rows.slice().sort((a,b)=> a.pts-b.pts || byName(a,b)).slice(0,3);
+  return { best, worst, total: rows.length, jogos: ids.length };
+}
+function _cerPhaseRankRows(list, kind){
+  const medals = ['🥇','🥈','🥉'];
+  return list.map((r,idx)=>`<div class="cer-phase-row">
+    <span class="rk">${kind==='best' ? (medals[idx]||(idx+1)) : '🧊'}</span>
+    <span class="nm">${_rzName(r.u)}</span>
+    <span class="pt">${r.pts}</span></div>`).join('');
+}
+function _cerPhaseCardHTML(def, st){
+  const showWorst = st.total > 3;
+  const best = `<div class="cer-phase-col best">
+      <div class="cer-phase-col-h">🏆 Top 3</div>${_cerPhaseRankRows(st.best,'best')}</div>`;
+  const worst = showWorst ? `<div class="cer-phase-col worst">
+      <div class="cer-phase-col-h">🧊 Piores 3</div>${_cerPhaseRankRows(st.worst,'worst')}</div>` : '';
+  return `<div class="cer-phase-card">
+    <div class="cer-phase-head">
+      <span class="cer-phase-emoji">${def.emoji}</span>
+      <div><div class="cer-phase-title">${esc(def.title)}</div>
+      <div class="cer-phase-sub">${esc(def.sub)} · ${st.jogos} jogo${st.jogos>1?'s':''}</div></div>
+    </div>
+    <div class="cer-phase-cols"${showWorst?'':' style="grid-template-columns:1fr"'}>${best}${worst}</div>
+  </div>`;
+}
+function _cerPhaseThumbHTML(def, st){
+  const showWorst = st.total > 3;
+  const col = (list, cls, head) => `<div class="cpt-col"><div class="cpt-h ${cls}">${head}</div>${
+    list.map(r=>`<div class="cpt-row"><span class="n">${_rzName(r.u)}</span><span class="p">${r.pts}</span></div>`).join('')
+  }</div>`;
+  return `<div class="cpt-title">${def.emoji} ${esc(def.titleShort)}</div>
+    <div class="cpt-cols"${showWorst?'':' style="grid-template-columns:1fr"'}>
+      ${col(st.best,'up','🏆')}${showWorst?col(st.worst,'dn','🧊'):''}
+    </div>`;
+}
+// Estágio: mostra os cards de fase um a um (com fogos), encolhendo cada um para
+// uma grade que se acumula na tela; ao fim, a grade completa fica alguns segundos.
+function _cerStagePhases(d){
+  if(!_cerimoniaState || _cerimoniaState.closed) return;
+  const stageEl = document.getElementById('cerimonia-stage');
+  if(!stageEl){ _cerStageReveal(d); return; }
+  const phases = _CER_PHASE_DEFS
+    .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
+    .filter(x=>x.st);
+  if(!phases.length){ _cerStageReveal(d); return; }
+  _cerSetStageLabel('Destaques por fase');
+  stageEl.innerHTML = `<div class="cer-phases">
+    <div class="cer-phase-active" id="cer-phase-active"></div>
+    <div class="cer-phase-grid" id="cer-phase-grid"></div>
+  </div>`;
+  const activeEl = document.getElementById('cer-phase-active');
+  const gridEl   = document.getElementById('cer-phase-grid');
+  const HOLD = 4400, OUT = 520;
+  let i = 0;
+  const showNext = ()=>{
+    if(!_cerimoniaState || _cerimoniaState.closed) return;
+    if(i >= phases.length){
+      _cerSetStageLabel('Todos os destaques');
+      _cerTimer(()=>_cerStageReveal(d), 3800); // grade completa fica na tela alguns segundos
+      return;
+    }
+    const { def, st } = phases[i];
+    _cerSetStageLabel(`Destaques por fase · ${i+1}/${phases.length}`);
+    if(activeEl) activeEl.innerHTML = _cerPhaseCardHTML(def, st);
+    _cerFwBurst(2 + (Math.random()*2|0)); // poucos fogos a cada card
+    _cerTimer(()=>{
+      if(!_cerimoniaState || _cerimoniaState.closed) return;
+      const card = activeEl && activeEl.firstElementChild;
+      if(card) card.classList.add('cer-phase-out');
+      _cerTimer(()=>{
+        if(!_cerimoniaState || _cerimoniaState.closed) return;
+        if(activeEl) activeEl.innerHTML = '';
+        if(gridEl){
+          const thumb = document.createElement('div');
+          thumb.className = 'cer-phase-thumb';
+          thumb.innerHTML = _cerPhaseThumbHTML(def, st);
+          gridEl.appendChild(thumb);
+          requestAnimationFrame(()=>thumb.classList.add('show'));
+        }
+        i++;
+        showNext();
+      }, OUT);
+    }, HOLD);
+  };
+  showNext();
+}
+
 // Abre o overlay no estágio "Iniciar" (aguarda o toque do usuário p/ liberar o som).
 function _cerimoniaStart(data){
   const ov = document.getElementById('cerimonia-overlay'); if(!ov) return;
-  if(_cerimoniaState){ _cerimoniaState.closed = true; _cerimoniaState.timers.forEach(t=>clearTimeout(t)); if(_cerimoniaState.raf) cancelAnimationFrame(_cerimoniaState.raf); }
-  _cerimoniaState = { timers:[], raf:null, data:null, closed:false };
+  if(_cerimoniaState){ _cerFwStop(); _cerimoniaState.closed = true; _cerimoniaState.timers.forEach(t=>clearTimeout(t)); if(_cerimoniaState.raf) cancelAnimationFrame(_cerimoniaState.raf); }
+  _cerimoniaState = { timers:[], raf:null, data:null, closed:false, fw:null };
   ov.classList.remove('hidden');
   _cerSetStageLabel('Cerimônia de encerramento');
   const hasUrl = !!CFG.cerimonia_audio_url;
@@ -18159,7 +18379,7 @@ function _cerimoniaStart(data){
   stageEl.innerHTML = `<div class="cer-start-card">
     <div style="font-size:3rem">🎬</div>
     <h2>Cerimônia de Encerramento</h2>
-    <p>${esc(CFG.nome_bolao||'Bolão')} · Copa 2026<br>${hasUrl?'Com música, ':''}as maiores curiosidades do bolão e o anúncio do grande campeão.</p>
+    <p>${esc(CFG.nome_bolao||'Bolão')} · Copa 2026<br>${hasUrl?'Com música, ':''}as maiores curiosidades, os destaques de cada fase e o anúncio do grande campeão.</p>
     <button class="cer-btn-play" onclick="_cerimoniaBegin()">▶️ Iniciar cerimônia</button>
     ${hasUrl?'<div style="font-size:.72rem;color:var(--text-muted);margin-top:14px">🔊 Toque para liberar o som</div>':''}
   </div>`;
@@ -18168,6 +18388,7 @@ function _cerimoniaStart(data){
 // Toque do usuário: libera o áudio, busca os dados e inicia a sequência.
 async function _cerimoniaBegin(){
   const st = _cerimoniaState; if(!st) return;
+  _cerAcquireWakeLock(); // gesto do usuário: momento válido p/ manter a tela acesa
   const audio = document.getElementById('cerimonia-audio');
   const url = CFG.cerimonia_audio_url;
   if(audio && url){
@@ -18199,11 +18420,11 @@ function _cerStageIntro(d){
 function _cerStageFacts(d){
   const facts = _cerimoniaFacts(d);
   const stageEl = document.getElementById('cerimonia-stage');
-  if(!facts.length || !stageEl){ _cerStageReveal(d); return; }
+  if(!facts.length || !stageEl){ _cerStagePhases(d); return; }
   const per = 4800; let i = 0;
   const showOne = ()=>{
     if(!_cerimoniaState || _cerimoniaState.closed) return;
-    if(i >= facts.length){ _cerStageReveal(d); return; }
+    if(i >= facts.length){ _cerStagePhases(d); return; }
     const f = facts[i];
     _cerSetStageLabel(`Curiosidades · ${i+1}/${facts.length}`);
     stageEl.innerHTML = `<div class="cer-fact">
@@ -18212,6 +18433,7 @@ function _cerStageFacts(d){
       ${f.name ? `<div class="cer-fact-name">${f.name}</div>` : ''}
       ${f.detail ? `<div class="cer-fact-detail">${f.detail}</div>` : ''}
       ${f.extra || ''}</div>`;
+    _cerFwBurst(1 + (Math.random()*2|0)); // poucos fogos a cada curiosidade
     i++;
     _cerTimer(showOne, per);
   };
@@ -18222,16 +18444,20 @@ function _cerStageFacts(d){
 function _cerStageReveal(d){
   if(!_cerimoniaState || _cerimoniaState.closed) return;
   _cerSetStageLabel('O grande campeão do bolão');
+  _cerFwStop(); // a festa do pódio assume a partir daqui (canvas própria, por cima)
   const cv = document.getElementById('cerimonia-canvas'); if(cv){ const c = cv.getContext('2d'); if(c) c.clearRect(0,0,cv.width,cv.height); }
   const stageEl = document.getElementById('cerimonia-stage'); if(stageEl) stageEl.innerHTML = '';
   const top3 = (d.ranking||[]).slice(0,3).map(u=>({ apelido:u.apelido||null, nome:u.nome||null, pontos:u.pontos }));
   // Fechar o reveal encerra a cerimônia inteira (música + overlay).
   _celebraOnClose = ()=>{ _celebraOnClose = null; _cerimoniaStop(); };
-  _celebraStart({ top3, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
+  // continuous=true: os fogos seguem rolando enquanto o pódio fica na tela.
+  _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
 }
 
 function _cerimoniaStop(){
   _celebraOnClose = null;
+  _cerFwStop();
+  _cerReleaseWakeLock();
   const st = _cerimoniaState;
   if(st){ st.closed = true; st.timers.forEach(t=>clearTimeout(t)); if(st.raf) cancelAnimationFrame(st.raf); }
   const audio = document.getElementById('cerimonia-audio');
