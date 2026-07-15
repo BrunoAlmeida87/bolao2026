@@ -1570,6 +1570,28 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 @keyframes celebraCardIn{from{opacity:0;transform:scale(.82) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes celebraTrophy{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-6px) rotate(4deg)}}
 @media(prefers-reduced-motion:reduce){.celebra-card{animation:none}.celebra-trophy{animation:none}.celebra-step{transition:none}}
+
+/* ══ Cerimônia de encerramento (intro → cards → corrida → reveal, com música) ══ */
+.cerimonia-overlay{position:fixed;inset:0;z-index:590;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 30%,rgba(10,22,40,.94),rgba(0,0,0,.98))}
+.cerimonia-overlay.hidden{display:none}
+#cerimonia-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.cerimonia-stage{position:relative;z-index:2;width:100%;max-width:520px;padding:22px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:64vh}
+.cerimonia-close{position:absolute;top:12px;right:14px;z-index:5;background:rgba(0,0,0,.4);border:1px solid var(--border);color:var(--text-muted);font-size:.78rem;font-weight:700;padding:6px 12px;border-radius:20px;cursor:pointer}
+.cerimonia-close:hover{color:var(--white)}
+.cer-stage-label{position:absolute;top:16px;left:16px;z-index:5;color:var(--text-muted);font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.cer-start-card{background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1.5px solid var(--gold);border-radius:22px;padding:30px 26px;max-width:420px;box-shadow:0 0 50px rgba(255,215,0,.3)}
+.cer-start-card h2{color:var(--gold);font-size:1.45rem;margin:8px 0 6px}
+.cer-start-card p{color:var(--text-muted);font-size:.88rem;line-height:1.55;margin:0 0 20px}
+.cer-btn-play{background:linear-gradient(135deg,var(--gold),var(--orange));color:#1a1200;border:none;font-weight:800;font-size:1.05rem;padding:14px 30px;border-radius:30px;cursor:pointer;box-shadow:0 6px 20px rgba(255,140,0,.4)}
+.cer-intro-title{font-size:2rem;font-weight:800;color:var(--gold);text-shadow:0 2px 20px rgba(255,215,0,.5);animation:celebraCardIn .8s ease both}
+.cer-intro-sub{color:var(--text-muted);font-size:1rem;margin-top:8px}
+.cer-fact{animation:cerFactIn .6s cubic-bezier(.2,1.2,.4,1) both;width:100%;max-width:460px}
+.cer-fact-emoji{font-size:3.4rem;line-height:1;filter:drop-shadow(0 4px 14px rgba(255,215,0,.4))}
+.cer-fact-label{color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:.82rem;margin-top:12px}
+.cer-fact-name{color:var(--white);font-weight:800;font-size:1.85rem;line-height:1.2;margin:6px 0 4px}
+.cer-fact-detail{color:var(--text-muted);font-size:1rem;line-height:1.45}
+@keyframes cerFactIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title{animation:none}}
 </style>
 </head>
 <body>
@@ -2108,6 +2130,15 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   </div>
 </div>
 
+<!-- CERIMÔNIA DE ENCERRAMENTO (sequência completa com música) -->
+<div id="cerimonia-overlay" class="cerimonia-overlay hidden">
+  <canvas id="cerimonia-canvas"></canvas>
+  <div id="cerimonia-stage-label" class="cer-stage-label"></div>
+  <button class="cerimonia-close" onclick="_cerimoniaStop()">✕ Fechar</button>
+  <div id="cerimonia-stage" class="cerimonia-stage"></div>
+</div>
+<audio id="cerimonia-audio" preload="none" crossorigin="anonymous"></audio>
+
 <!-- TOAST -->
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
@@ -2350,7 +2381,8 @@ let CFG = {
   ticker_enabled:false,
   nome_bolao:'Bolão ICN Copa 2026',
   valor_participacao:50,
-  qrcode_whatsapp:''
+  qrcode_whatsapp:'',
+  cerimonia_audio_url:''
 };
 
 // Horários dos jogos (Brasília - fuso -3)
@@ -2843,6 +2875,7 @@ async function handleAuthState(user) {
       _startVersionListener();
       _startAppReloadListener();
       _startCelebracaoListener();
+      _startCerimoniaListener();
       _restorePageFromHash();
       _bootGlobalTicker();
     } catch(e) {
@@ -2854,6 +2887,7 @@ async function handleAuthState(user) {
     _stopVersionListener();
     _stopAppReloadListener();
     _stopCelebracaoListener();
+    _stopCerimoniaListener();
     showLoading(false); showAuth();
   }
 }
@@ -13521,6 +13555,18 @@ async function renderAdminConfig() {
       </div>
     </div>
     <div class="card">
+      <div class="card-title" style="margin-bottom:8px">🎬 Cerimônia de Encerramento</div>
+      <p class="text-muted" style="font-size:0.85rem;margin-bottom:12px">A cerimônia completa: <b>música ao fundo</b>, cards de curiosidades, a corrida do ranking e o anúncio do grande campeão. Dispara para <b>todos os participantes logados</b> (cada um dá um toque em "Iniciar" para liberar o som). Diferente do "Anunciar campeão", que é só a festa de fogos.</p>
+      <div class="form-group"><label>URL da música (MP3) — Firebase Storage</label><input id="cfg-cerimonia-audio" value="${esc(CFG.cerimonia_audio_url||'')}" placeholder="https://firebasestorage.googleapis.com/.../tema.mp3?alt=media&token=..."></div>
+      <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">Suba o MP3 no Firebase Storage, gere a URL de download (com <code>?alt=media&token=…</code>) e cole aqui. A música é responsabilidade sua quanto a direitos autorais.</p>
+      <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaAudio()">💾 Salvar música</button></div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="iniciarCerimoniaBolao()">🎬 Iniciar cerimônia para todos</button>
+        <button class="btn btn-secondary" onclick="testarCerimonia()">👁️ Testar (só eu)</button>
+        <button class="btn btn-secondary" onclick="encerrarCerimonia()">⏹️ Encerrar</button>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-title" style="margin-bottom:8px">📰 Ticker de Curiosidades</div>
       <p class="text-muted" style="font-size:0.85rem;margin-bottom:14px">
         Faixa rolante no rodapé com <b>dados personalizados para cada usuário</b> (posição, rival, aproveitamento)
@@ -14365,6 +14411,55 @@ async function encerrarCelebracao() {
   } catch(e) {
     showToast('Erro: '+e.message,'error');
   }
+}
+
+// ── Cerimônia de Encerramento (admin) ────────────────────────────────────────
+// Salva a URL da música (Firebase Storage) em config/geral.
+async function saveCerimoniaAudio() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  const url = (document.getElementById('cfg-cerimonia-audio')?.value || '').trim();
+  try {
+    await db_.collection('config').doc('geral').set({ cerimonia_audio_url: url }, { merge: true });
+    CFG.cerimonia_audio_url = url;
+    showToast(url ? '🔊 Música da cerimônia salva!' : 'Música removida.', 'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// Dispara a cerimônia completa para TODOS os clientes logados (config/cerimonia).
+async function iniciarCerimoniaBolao() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin pode iniciar.','error'); return; }
+  const semMusica = !CFG.cerimonia_audio_url;
+  const msg = `Iniciar a CERIMÔNIA DE ENCERRAMENTO para todos os participantes logados agora?\n\n${semMusica ? '⚠️ Nenhuma música configurada — a cerimônia roda sem áudio.\n\n' : ''}Cada pessoa dará um toque em "Iniciar" para começar (uma única vez).`;
+  if (!confirm(msg)) return;
+  try {
+    const FV = firebase.firestore.FieldValue;
+    await db_.collection('config').doc('cerimonia').set({
+      active: true, rev: FV.increment(1), at: FV.serverTimestamp(), byUid: currentUser?.uid || null
+    }, { merge: true });
+    try {
+      await db_.collection('audit').add({
+        type: 'cerimonia_inicio', adminUid: currentUser?.uid || null,
+        adminEmail: currentUser?.email || null, at: FV.serverTimestamp()
+      });
+    } catch(_){}
+    showToast('🎬 Cerimônia iniciada para todos!','success');
+  } catch(e) { showToast('Erro ao iniciar: '+e.message,'error'); }
+}
+
+// Ensaia a cerimônia só neste aparelho (sem gravar nada / sem avisar ninguém).
+function testarCerimonia() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  _cerimoniaStart({});
+}
+
+// Encerra a cerimônia (active=false) — novos acessos não veem mais.
+async function encerrarCerimonia() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin pode alterar.','error'); return; }
+  if (!confirm('Encerrar a cerimônia? Novos acessos não verão mais (quem já viu não é afetado).')) return;
+  try {
+    await db_.collection('config').doc('cerimonia').set({ active: false }, { merge: true });
+    showToast('⏹️ Cerimônia encerrada.','success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
 async function saveCFGAdmin() {
@@ -17800,6 +17895,10 @@ function _corridaStop() {
 // CELEBRAÇÃO DO CAMPEÃO DO BOLÃO (fogos + confete + pódio)
 // ════════════════════════════════════════════
 let _celebraState = null;
+// Callback opcional disparado quando a festa de fogos é fechada. Usado pela
+// Cerimônia de Encerramento para, ao fechar o reveal, encerrar a cerimônia inteira
+// (música + overlay). Fica null fora da cerimônia (anúncio simples não usa).
+let _celebraOnClose = null;
 const _CELEBRA_COLORS = ['#FFD700','#1E90FF','#00C851','#FF8C00','#FF4444','#FFFFFF'];
 
 function _celebraSizeCanvas(cv){
@@ -17918,6 +18017,8 @@ function _celebraStop(){
     if(st.ctx) st.ctx.clearRect(0,0,st.w,st.h);
   }
   _celebraState = null;
+  // Se a festa foi aberta como estágio final da cerimônia, fechá-la encerra tudo.
+  const cb = _celebraOnClose; _celebraOnClose = null; if(cb) { try{ cb(); }catch(_){} }
 }
 
 // Toca a celebração no máximo 1× por anúncio (rev). Guarda o rev já visto em
@@ -17931,6 +18032,210 @@ function maybeShowCelebration(data){
   } catch(_){ /* localStorage indisponível: toca mesmo assim */ }
   _celebraStart(data);
 }
+
+// ════════════════════════════════════════════
+// CERIMÔNIA DE ENCERRAMENTO (música → intro → cards → corrida → reveal)
+// ════════════════════════════════════════════
+let _cerimoniaState = null;
+
+function _cerimoniaSizeCanvas(cv){
+  const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+  const w = window.innerWidth, h = window.innerHeight;
+  cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  cv.style.width = w+'px'; cv.style.height = h+'px';
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return { ctx, w, h };
+}
+
+function _cerTimer(fn, ms){ const id = setTimeout(fn, ms); if(_cerimoniaState) _cerimoniaState.timers.push(id); return id; }
+function _cerSetStageLabel(txt){ const el = document.getElementById('cerimonia-stage-label'); if(el) el.textContent = txt || ''; }
+
+// Reúne os mesmos dados que a aba Estatísticas/Resumão usa (mesmo custo de leituras).
+async function _cerimoniaBuildData(){
+  const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+  const users = allUsers.filter(u=>u.ativo!==false);
+  const { allPals, champPicks } = await _fetchPalsCached(users);
+  const jogosComResultado = Object.keys(res).filter(id=>_hasFullResult(res[id]));
+  const ranking = computeRanking(users, res, allPals, champPicks);
+  const userAccStats = {}; users.forEach(u=>{ userAccStats[u.uid] = calcUserAccuracyStats(u.uid, allPals, res); });
+  const analiseJogos = {};
+  jogosComResultado.forEach(jid=>{
+    analiseJogos[jid] = { exatos:0, venc_saldo:0, apenas_venc:0, erros:0, palpites:[] };
+    ALL_GAMES.forEach(g=>{ if(g.id===jid) analiseJogos[jid].game=g; });
+    users.forEach(u=>{
+      const p = allPals[u.uid]?.[jid]; if(!p) return;
+      const t = _hitType(p,res[jid]); const pts = calcPontos(p,res[jid],jid);
+      analiseJogos[jid].palpites.push({user:u,palpite:p,pts});
+      if(t==='exato') analiseJogos[jid].exatos++; else if(t==='saldo') analiseJogos[jid].venc_saldo++;
+      else if(t==='vencedor') analiseJogos[jid].apenas_venc++; else analiseJogos[jid].erros++;
+    });
+  });
+  return { users, res, allPals, champPicks, ranking, userAccStats, analiseJogos, jogosComResultado };
+}
+
+// Monta os cards de curiosidades reusando as calculadoras _rz* do Resumão.
+// Cada gerador é envolto em try/catch e pulado se não houver dados suficientes.
+function _cerimoniaFacts(d){
+  const facts = []; const add = fn => { try { const r = fn(); if(r) facts.push(r); } catch(_){} };
+  add(()=>{ const x=_rzExatos(d.ranking, d.userAccStats)[0]; return x && {emoji:'🎯', label:'Rei dos placares exatos', name:_rzName(x.u), detail:`${x.exatos} placar${x.exatos>1?'es':''} cravado${x.exatos>1?'s':''}`}; });
+  add(()=>{ const x=_rzConsistency(d.users, d.allPals, d.res)[0]; return x && {emoji:'🧱', label:'O mais consistente', name:_rzName(x.u), detail:`desvio padrão σ ${x.std.toFixed(1)} · média ${x.mean.toFixed(0)} pts/fase`}; });
+  add(()=>{ const l=_rzLeadership(d.users, d.allPals, d.res, d.champPicks); const x=l.rows[0]; return x && {emoji:'👑', label:'Mais tempo na liderança', name:_rzName(x.u), detail:`${x.steps} de ${l.total} jogos no topo`}; });
+  add(()=>{ const x=_rzBoldness(d.users, d.allPals, d.res)[0]; return x && {emoji:'🎲', label:'O palpiteiro mais ousado', name:_rzName(x.u), detail:`fugiu ${x.ousadia.toFixed(1)} gols da média do grupo`}; });
+  add(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); return t && t.up && t.up.delta>0 && {emoji:'🚀', label:'Maior arrancada no mata-mata', name:_rzName(t.up.u), detail:`subiu ${t.up.delta} posiç${t.up.delta>1?'ões':'ão'}`}; });
+  add(()=>{ const o=_rzOpposition(d.users, d.allPals, d.res); return o.globalPair && {emoji:'⚔️', label:'A dupla mais oposta', name:`${_rzName(o.globalPair.a)} × ${_rzName(o.globalPair.b)}`, detail:`${o.globalPair.pct.toFixed(0)}% de palpites diferentes`}; });
+  add(()=>{ const o=_rzOpposition(d.users, d.allPals, d.res); return o.globalTwin && {emoji:'🤝', label:'Gêmeos de palpite', name:`${_rzName(o.globalTwin.a)} & ${_rzName(o.globalTwin.b)}`, detail:`quase sempre no mesmo palpite`}; });
+  add(()=>{ const dif=Object.entries(d.analiseJogos).filter(([,x])=>x.palpites.length>0).map(([,x])=>({game:x.game, pct:(x.exatos+x.venc_saldo+x.apenas_venc)/x.palpites.length*100})).sort((a,b)=>a.pct-b.pct)[0]; return dif && dif.game && {emoji:'🦓', label:'Maior zebra do bolão', name:`${esc(dif.game.h)} × ${esc(dif.game.a)}`, detail:`só ${dif.pct.toFixed(0)}% acertaram o vencedor`}; });
+  return facts;
+}
+
+// Abre o overlay no estágio "Iniciar" (aguarda o toque do usuário p/ liberar o som).
+function _cerimoniaStart(data){
+  const ov = document.getElementById('cerimonia-overlay'); if(!ov) return;
+  if(_cerimoniaState){ _cerimoniaState.closed = true; _cerimoniaState.timers.forEach(t=>clearTimeout(t)); if(_cerimoniaState.raf) cancelAnimationFrame(_cerimoniaState.raf); }
+  _cerimoniaState = { timers:[], raf:null, data:null, closed:false };
+  ov.classList.remove('hidden');
+  _cerSetStageLabel('Cerimônia de encerramento');
+  const hasUrl = !!CFG.cerimonia_audio_url;
+  const stageEl = document.getElementById('cerimonia-stage');
+  stageEl.innerHTML = `<div class="cer-start-card">
+    <div style="font-size:3rem">🎬</div>
+    <h2>Cerimônia de Encerramento</h2>
+    <p>${esc(CFG.nome_bolao||'Bolão')} · Copa 2026<br>${hasUrl?'Com música, ':''}curiosidades, a corrida do ranking e o anúncio do grande campeão.</p>
+    <button class="cer-btn-play" onclick="_cerimoniaBegin()">▶️ Iniciar cerimônia</button>
+    ${hasUrl?'<div style="font-size:.72rem;color:var(--text-muted);margin-top:14px">🔊 Toque para liberar o som</div>':''}
+  </div>`;
+}
+
+// Toque do usuário: libera o áudio, busca os dados e inicia a sequência.
+async function _cerimoniaBegin(){
+  const st = _cerimoniaState; if(!st) return;
+  const audio = document.getElementById('cerimonia-audio');
+  const url = CFG.cerimonia_audio_url;
+  if(audio && url){ try { audio.src = url; audio.currentTime = 0; audio.volume = 1; audio.play().catch(()=>{}); } catch(_){} }
+  const stageEl = document.getElementById('cerimonia-stage');
+  if(stageEl) stageEl.innerHTML = '<div class="spinner"></div>';
+  let d; try { d = await _cerimoniaBuildData(); } catch(e){ if(stageEl) stageEl.innerHTML = `<div class="alert alert-error">Erro ao carregar os dados do bolão.</div>`; return; }
+  if(st.closed) return;
+  st.data = d;
+  _cerStageIntro(d);
+}
+
+function _cerStageIntro(d){
+  _cerSetStageLabel('Cerimônia de encerramento');
+  const stageEl = document.getElementById('cerimonia-stage'); if(!stageEl) return;
+  stageEl.innerHTML = `<div class="cer-intro"><div style="font-size:3.5rem">🏆</div>
+    <div class="cer-intro-title">Cerimônia de Encerramento</div>
+    <div class="cer-intro-sub">${esc(CFG.nome_bolao||'Bolão')} · Copa 2026</div></div>`;
+  _cerTimer(()=>_cerStageFacts(d), 5000);
+}
+
+function _cerStageFacts(d){
+  const facts = _cerimoniaFacts(d);
+  const stageEl = document.getElementById('cerimonia-stage');
+  if(!facts.length || !stageEl){ _cerStageCorrida(d); return; }
+  const per = 5200; let i = 0;
+  const showOne = ()=>{
+    if(!_cerimoniaState || _cerimoniaState.closed) return;
+    if(i >= facts.length){ _cerStageCorrida(d); return; }
+    const f = facts[i];
+    _cerSetStageLabel(`Curiosidades · ${i+1}/${facts.length}`);
+    stageEl.innerHTML = `<div class="cer-fact">
+      <div class="cer-fact-emoji">${f.emoji}</div>
+      <div class="cer-fact-label">${f.label}</div>
+      <div class="cer-fact-name">${f.name}</div>
+      <div class="cer-fact-detail">${f.detail}</div></div>`;
+    i++;
+    _cerTimer(showOne, per);
+  };
+  showOne();
+}
+
+// Estágio Corrida: usa as funções PURAS do bar-chart race num canvas próprio
+// (sem tocar no singleton _corridaState nem no #corrida-canvas da aba).
+function _cerStageCorrida(d){
+  const full = _corridaBuild(d.users, d.res, d.allPals);
+  if(!full || full.frames.length < 2){ _cerStageReveal(d); return; }
+  // A corrida desenha seus próprios rótulos (nº do jogo + data) no canvas; limpa
+  // o rótulo do overlay para não sobrepor no canto superior.
+  _cerSetStageLabel('');
+  const stageEl = document.getElementById('cerimonia-stage'); if(stageEl) stageEl.innerHTML = '';
+  const cv = document.getElementById('cerimonia-canvas'); if(!cv){ _cerStageReveal(d); return; }
+  const { ctx, w, h } = _cerimoniaSizeCanvas(cv);
+  const topN = Math.min(full.n, 8);
+  const rowH = Math.max(34, Math.min(54, Math.round((h*0.62)/(topN+1))));
+  const pinExtra = rowH + 22;
+  const padTop = Math.max(78, Math.round((h - (topN*rowH + pinExtra)) / 2));
+  const stgeo = { cssW:w, cssH:h, rowH, view:'top', topN, data:full, pinUids:[full.meUid], padTop, padBottom:20 };
+  const geo = _corridaGeo(stgeo);
+  const last = full.frames.length - 1;
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const paintAt = seg => {
+    const fi = Math.min(last, Math.round(seg));
+    const fr = full.frames[fi];
+    const arr = _corridaInterp(full, seg);
+    _corridaPaint(ctx, geo, full, arr, { date:fr.date, plainLabel:fr.plainLabel, top3:true, pinUids:[full.meUid], gameNo:fi+1, gameTot:full.frames.length });
+  };
+  if(reduce){ paintAt(last); _cerTimer(()=>_cerStageReveal(d), 3500); return; }
+  const dur = Math.max(24000, Math.min(60000, 3500*last)); // ~24–60s conforme nº de jogos
+  const stepDur = dur/last;
+  const t0 = performance.now();
+  const draw = now => {
+    if(!_cerimoniaState || _cerimoniaState.closed) return;
+    const seg = Math.min(last, (now - t0)/stepDur);
+    paintAt(seg);
+    if(seg >= last){ _cerimoniaState.raf = null; _cerTimer(()=>_cerStageReveal(d), 2500); return; }
+    _cerimoniaState.raf = requestAnimationFrame(draw);
+  };
+  _cerimoniaState.raf = requestAnimationFrame(draw);
+}
+
+// Estágio final: o reveal do campeão (reusa a festa de fogos + pódio).
+function _cerStageReveal(d){
+  if(!_cerimoniaState || _cerimoniaState.closed) return;
+  _cerSetStageLabel('O grande campeão do bolão');
+  const cv = document.getElementById('cerimonia-canvas'); if(cv){ const c = cv.getContext('2d'); if(c) c.clearRect(0,0,cv.width,cv.height); }
+  const stageEl = document.getElementById('cerimonia-stage'); if(stageEl) stageEl.innerHTML = '';
+  const top3 = (d.ranking||[]).slice(0,3).map(u=>({ apelido:u.apelido||null, nome:u.nome||null, pontos:u.pontos }));
+  // Fechar o reveal encerra a cerimônia inteira (música + overlay).
+  _celebraOnClose = ()=>{ _celebraOnClose = null; _cerimoniaStop(); };
+  _celebraStart({ top3, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
+}
+
+function _cerimoniaStop(){
+  _celebraOnClose = null;
+  const st = _cerimoniaState;
+  if(st){ st.closed = true; st.timers.forEach(t=>clearTimeout(t)); if(st.raf) cancelAnimationFrame(st.raf); }
+  const audio = document.getElementById('cerimonia-audio');
+  if(audio){ try { audio.pause(); audio.currentTime = 0; } catch(_){} }
+  const cv = document.getElementById('cerimonia-canvas'); if(cv){ const c = cv.getContext('2d'); if(c) c.clearRect(0,0,cv.width,cv.height); }
+  const ov = document.getElementById('cerimonia-overlay'); if(ov) ov.classList.add('hidden');
+  _celebraStop();
+  _cerimoniaState = null;
+}
+
+// Broadcast: toca a cerimônia no máx. 1× por disparo (rev), como a celebração.
+function maybeShowCerimonia(data){
+  if(!data || !data.active) return;
+  const rev = String(data.rev != null ? data.rev : '1');
+  try {
+    if(localStorage.getItem('bolao_cerimonia_visto_rev') === rev) return;
+    localStorage.setItem('bolao_cerimonia_visto_rev', rev);
+  } catch(_){ /* localStorage indisponível */ }
+  _cerimoniaStart(data);
+}
+
+// Listener em tempo real (espelha _startCelebracaoListener).
+let _cerimoniaUnsub = null;
+function _startCerimoniaListener(){
+  if(_cerimoniaUnsub) return;
+  try {
+    _cerimoniaUnsub = db_.collection('config').doc('cerimonia').onSnapshot(snap => {
+      const data = snap.exists ? (snap.data() || {}) : null;
+      if(data && data.active) maybeShowCerimonia(data);
+    }, _err => { /* best-effort */ });
+  } catch(_){}
+}
+function _stopCerimoniaListener(){ if(_cerimoniaUnsub){ try{ _cerimoniaUnsub(); }catch(_){} _cerimoniaUnsub = null; } }
 
 // ════════════════════════════════════════════
 // MODO OFFLINE
