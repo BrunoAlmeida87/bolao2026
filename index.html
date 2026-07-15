@@ -1569,7 +1569,20 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .celebra-step.s3{background:linear-gradient(180deg,rgba(205,127,50,.3),rgba(205,127,50,.08));border:1px solid rgba(205,127,50,.5);height:72px}
 @keyframes celebraCardIn{from{opacity:0;transform:scale(.82) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes celebraTrophy{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-6px) rotate(4deg)}}
-@media(prefers-reduced-motion:reduce){.celebra-card{animation:none}.celebra-trophy{animation:none}.celebra-step{transition:none}}
+/* Painel personalizado do jogador logado (abaixo do pódio) */
+.celebra-viewer{margin-top:0}
+.celebra-viewer:not(:empty){margin-top:14px;padding-top:12px;border-top:1px solid var(--border);text-align:left;animation:cerFactIn .5s ease both}
+.cv-title{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--gold);margin-bottom:8px;text-align:center}
+.cv-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 2px;font-size:.86rem}
+.cv-k{color:var(--text-muted)}
+.cv-v{color:var(--white);font-weight:800;text-align:right}
+.cv-sub{color:var(--text-muted);font-weight:600;font-size:.76rem}
+/* Botão flutuante de parar a gravação de vídeo da cerimônia */
+.cer-rec-stop{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:700;background:linear-gradient(135deg,#FF4444,#c0392b);color:#fff;border:none;font-weight:800;font-size:.82rem;padding:9px 16px;border-radius:22px;cursor:pointer;box-shadow:0 6px 20px rgba(255,68,68,.45);display:flex;align-items:center;gap:7px}
+.cer-rec-stop.hidden{display:none}
+.cer-rec-dot{width:10px;height:10px;border-radius:50%;background:#fff;animation:cerRecBlink 1s steps(2) infinite}
+@keyframes cerRecBlink{0%{opacity:1}50%{opacity:.25}100%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.celebra-card{animation:none}.celebra-trophy{animation:none}.celebra-step{transition:none}.celebra-viewer:not(:empty){animation:none}.cer-rec-dot{animation:none}}
 
 /* ══ Cerimônia de encerramento (intro → cards → corrida → reveal, com música) ══ */
 .cerimonia-overlay{position:fixed;inset:0;z-index:590;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 30%,rgba(10,22,40,.94),rgba(0,0,0,.98))}
@@ -2170,8 +2183,12 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
     <div class="celebra-name" id="celebra-name">—</div>
     <div class="celebra-pts" id="celebra-pts"></div>
     <div class="celebra-podium" id="celebra-podium"></div>
+    <div class="celebra-viewer" id="celebra-viewer"></div>
   </div>
 </div>
+
+<!-- Botão flutuante: parar a gravação de vídeo da cerimônia (só admin, ao gravar) -->
+<button id="cer-rec-stop" class="cer-rec-stop hidden" onclick="_cerStopRecording()"><span class="cer-rec-dot"></span>Parar gravação e baixar</button>
 
 <!-- CERIMÔNIA DE ENCERRAMENTO (sequência completa com música) -->
 <div id="cerimonia-overlay" class="cerimonia-overlay hidden">
@@ -13608,6 +13625,10 @@ async function renderAdminConfig() {
         <button class="btn btn-secondary" onclick="testarCerimonia()">👁️ Testar (só eu)</button>
         <button class="btn btn-secondary" onclick="encerrarCerimonia()">⏹️ Encerrar</button>
       </div>
+      <p class="text-muted" style="font-size:0.78rem;margin:12px 0 8px">🎥 <b>Exportar em vídeo:</b> grava a cerimônia (imagem + som) num arquivo <code>.webm</code> para você rever quantas vezes quiser. Ao clicar, o navegador pede para compartilhar a tela/aba — escolha <b>esta aba</b> e marque <b>"compartilhar áudio"</b>. A gravação começa e a cerimônia roda só no seu aparelho; ao terminar, clique em "Parar" (ou feche a cerimônia) para baixar. Funciona melhor no <b>Chrome/Edge no computador</b>.</p>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="exportarCerimoniaVideo()">🎥 Gravar cerimônia em vídeo (só eu)</button>
+      </div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:8px">📰 Ticker de Curiosidades</div>
@@ -14503,6 +14524,70 @@ async function encerrarCerimonia() {
     await db_.collection('config').doc('cerimonia').set({ active: false }, { merge: true });
     showToast('⏹️ Cerimônia encerrada.','success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// ── Exportar a cerimônia em vídeo (captura de tela/aba + áudio) ────────────────
+// Usa getDisplayMedia + MediaRecorder para gravar TUDO que aparece (cards em HTML,
+// fogos no canvas e a música). Roda a cerimônia só neste aparelho. Ao parar, baixa
+// um .webm. É a forma confiável de capturar a cerimônia (que é DOM, não só canvas).
+let _cerRec = null;
+function _cerUpdateRecUI(){
+  const btn = document.getElementById('cer-rec-stop');
+  if(btn) btn.classList.toggle('hidden', !_cerRec);
+}
+async function exportarCerimoniaVideo(){
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  if (_cerRec) { showToast('Já há uma gravação em andamento.','error'); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia || typeof MediaRecorder === 'undefined') {
+    showToast('Seu navegador não suporta gravação. Use o Chrome ou Edge no computador.','error'); return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 30 },
+      audio: true,            // captura o áudio da aba (a música da cerimônia)
+      preferCurrentTab: true  // Chrome: já sugere a aba atual
+    });
+  } catch(e){ showToast('Gravação cancelada.','error'); return; }
+
+  const types = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  const mime = types.find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(_){ return false; } }) || '';
+  const chunks = [];
+  let recorder;
+  try { recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
+  catch(e){ try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){} showToast('Falha ao iniciar a gravação: '+e.message,'error'); return; }
+
+  _cerRec = { recorder, chunks, stream, mime };
+  recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = () => {
+    try {
+      const blob = new Blob(chunks, { type: mime || 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `cerimonia-bolao-${new Date().toISOString().slice(0,10)}.webm`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(_){} }, 30000);
+      showToast('🎥 Vídeo salvo! Confira seus downloads.','success');
+    } catch(e){ showToast('Erro ao salvar o vídeo: '+e.message,'error'); }
+    try { stream.getTracks().forEach(t=>t.stop()); } catch(_){}
+    _cerRec = null; _cerUpdateRecUI();
+  };
+  // Se o usuário parar o compartilhamento pela barra do navegador, encerra tudo.
+  stream.getVideoTracks().forEach(tr => tr.addEventListener('ended', ()=>_cerStopRecording()));
+
+  try { recorder.start(); } catch(e){ try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){} _cerRec=null; showToast('Falha ao iniciar a gravação: '+e.message,'error'); return; }
+  _cerUpdateRecUI();
+  showToast('🔴 Gravando! A cerimônia vai começar — clique em "Parar" quando terminar.','success');
+  _cerimoniaStart({}); // ensaio só neste aparelho
+}
+function _cerStopRecording(){
+  if (!_cerRec) return;
+  const rec = _cerRec.recorder;
+  try {
+    if (rec && rec.state !== 'inactive') { rec.stop(); return; } // onstop faz o download e limpa
+  } catch(_){}
+  try { _cerRec.stream.getTracks().forEach(t=>t.stop()); } catch(_){}
+  _cerRec = null; _cerUpdateRecUI();
 }
 
 async function saveCFGAdmin() {
@@ -18038,6 +18123,8 @@ function _celebraStart(data){
   document.getElementById('celebra-name').textContent = (champ && (champ.apelido||champ.nome)) || data.championApelido || '—';
   const pts = (champ && champ.pontos != null) ? champ.pontos : data.championPontos;
   document.getElementById('celebra-pts').textContent = (pts != null) ? (pts + ' pontos') : '';
+  // Limpa o painel do jogador; a cerimônia o repreenche no reveal (o anúncio simples não).
+  const vEl = document.getElementById('celebra-viewer'); if(vEl) vEl.innerHTML = '';
   overlay.classList.remove('hidden');
 
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -18315,6 +18402,41 @@ function _cerPhaseThumbHTML(def, st){
       ${col(st.best,'up','🏆')}${showWorst?col(st.worst,'dn','🧊'):''}
     </div>`;
 }
+
+// ── Estatísticas personalizadas do jogador logado (abaixo do pódio) ───────────
+// Monta o desempenho de quem está assistindo: posição, pontos, exatos, distância
+// do campeão, melhor fase e acerto do campeão. Retorna null se não der p/ localizar.
+function _cerViewerStats(d){
+  const uid = currentUserDoc && currentUserDoc.uid;
+  if(!uid || !Array.isArray(d.ranking)) return null;
+  const idx = d.ranking.findIndex(u => u.uid === uid);
+  if(idx < 0) return null;
+  const me = d.ranking[idx];
+  const champ = d.ranking[0];
+  const atras = champ ? Math.max(0, (champ.pontos||0) - (me.pontos||0)) : 0;
+  // Melhor fase do jogador (mais pontos somados numa fase com resultado).
+  let bestPhase = null;
+  _CER_PHASE_DEFS.forEach(def=>{
+    const ids = _cerPhaseGameIds(def).filter(id => d.res[id] && _hasFullResult(d.res[id]));
+    if(!ids.length) return;
+    let pts=0, any=false;
+    ids.forEach(id=>{ const p=d.allPals[uid] && d.allPals[uid][id]; if(!p) return; any=true; const s=calcPontos(p,d.res[id],id); if(s!=null) pts+=s; });
+    if(any && (!bestPhase || pts>bestPhase.pts)) bestPhase = { title:def.title, pts };
+  });
+  return { me, pos: idx+1, total: d.ranking.length, atras, bestPhase, acertouCampeao: !!me.acertou_campeao };
+}
+function _cerViewerPanelHTML(v){
+  const posEmoji = v.pos===1 ? '👑' : (v.pos<=3 ? '🏅' : '🎯');
+  const rows = [];
+  rows.push(`<div class="cv-row"><span class="cv-k">${posEmoji} Sua posição</span><span class="cv-v">${v.pos}º <span class="cv-sub">de ${v.total}</span></span></div>`);
+  rows.push(`<div class="cv-row"><span class="cv-k">⭐ Seus pontos</span><span class="cv-v">${v.me.pontos||0}</span></div>`);
+  if((v.me.exatos||0)>0) rows.push(`<div class="cv-row"><span class="cv-k">🎯 Placares exatos</span><span class="cv-v">${v.me.exatos}</span></div>`);
+  if(v.pos>1 && v.atras>0) rows.push(`<div class="cv-row"><span class="cv-k">📊 Atrás do campeão</span><span class="cv-v">${v.atras} pt${v.atras>1?'s':''}</span></div>`);
+  if(v.bestPhase) rows.push(`<div class="cv-row"><span class="cv-k">🔥 Sua melhor fase</span><span class="cv-v">${esc(v.bestPhase.title)} <span class="cv-sub">${v.bestPhase.pts} pts</span></span></div>`);
+  if(v.acertouCampeao) rows.push(`<div class="cv-row"><span class="cv-k">🏆 Palpite de campeão</span><span class="cv-v">Você acertou! 🎉</span></div>`);
+  const quem = esc((currentUserDoc && (currentUserDoc.apelido||currentUserDoc.nome)) || 'você');
+  return `<div class="cv-title">📌 Seu desempenho, ${quem}</div>${rows.join('')}`;
+}
 // Estágio: mostra os cards de fase um a um (com fogos), encolhendo cada um para
 // uma grade que se acumula na tela; ao fim, a grade completa fica alguns segundos.
 function _cerStagePhases(d){
@@ -18452,12 +18574,18 @@ function _cerStageReveal(d){
   _celebraOnClose = ()=>{ _celebraOnClose = null; _cerimoniaStop(); };
   // continuous=true: os fogos seguem rolando enquanto o pódio fica na tela.
   _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
+  // Estatísticas personalizadas de quem está assistindo (abaixo do pódio).
+  try {
+    const vp = document.getElementById('celebra-viewer');
+    if(vp){ const v = _cerViewerStats(d); vp.innerHTML = v ? _cerViewerPanelHTML(v) : ''; }
+  } catch(_){}
 }
 
 function _cerimoniaStop(){
   _celebraOnClose = null;
   _cerFwStop();
   _cerReleaseWakeLock();
+  if(_cerRec) _cerStopRecording(); // fechar a cerimônia finaliza e baixa o vídeo
   const st = _cerimoniaState;
   if(st){ st.closed = true; st.timers.forEach(t=>clearTimeout(t)); if(st.raf) cancelAnimationFrame(st.raf); }
   const audio = document.getElementById('cerimonia-audio');
