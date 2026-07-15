@@ -11049,13 +11049,17 @@ async function renderChaveamentoBilateral() {
       const r = res[gameId]||{};
       const hasRes = r.h_real!==undefined && r.a_real!==undefined;
       const hasPen = r.h_pen!==undefined && r.a_pen!==undefined;
-      const winner = _winnerOf(r, r.h_team||(gameDef?.h)||'?', r.a_team||(gameDef?.a)||'?');
+      // Resolve ambos os lados (propagação provisória inclusa) ANTES de calcular
+      // o vencedor, senão o destaque usaria o placeholder cru ("Venc. S1") e não
+      // bateria com o nome real exibido, deixando o vencedor sem realce.
+      const _hSlot = _resolveBracketSlot(gameDef?.h||'?', r.h_team, res, grpCache);
+      const _aSlot = _resolveBracketSlot(gameDef?.a||'?', r.a_team, res, grpCache);
+      const winner = _winnerOf(r, _hSlot.team, _aSlot.team);
       const mno = FIFA_MATCH_NO[gameId];
       const infoLine = (mno||gameDef?.date) ? `<div class="bil-minfo">${mno?`P${mno}`:''}${mno&&gameDef?.date?' · ':''}${gameDef?.date||''}</div>` : '';
 
       function teamLine(side) {
-        const rawToken = side==='h' ? (gameDef?.h||'?') : (gameDef?.a||'?');
-        const slot = _resolveBracketSlot(rawToken, side==='h' ? r.h_team : r.a_team, res, grpCache);
+        const slot = side==='h' ? _hSlot : _aSlot;
         const resolved = slot.team;
         const isPh = slot.isPlaceholder;
         const provisional = slot.provisional;
@@ -12104,6 +12108,9 @@ async function renderAdminResultados() {
     const res = await _fetchRes();
     const thirdOverrides = await _loadThirdOverrides();
     const thirdPanel = _buildThirdPlaceAdminPanel(res, thirdOverrides);
+    // Cache p/ resolver feeders do mata-mata ("Venc. S1" → seleção real) e
+    // exibir provisoriamente o classificado mesmo antes de "aplicar a fase".
+    const _admBrkCache = {};
     // Sort all games chronologically by date + time
     const sortedGames = ALL_GAMES.slice().sort((a,b)=>{
       const da = _parseGameDate(a.date), db2 = _parseGameDate(b.date);
@@ -12224,8 +12231,12 @@ async function renderAdminResultados() {
       const hasPen = hasHP && hasAP;
       const drawNow = hasVal && parseInt(r.h_real)===parseInt(r.a_real);
       const showPenRow = isElim && (drawNow || hasHP || hasAP);
-      const displayH = esc(r.h_team || game.h);
-      const displayA = esc(r.a_team || game.a);
+      // Resolve o slot: usa a seleção persistida (h_team) ou propaga
+      // provisoriamente o vencedor da fase anterior (ex.: "Venc. S1" → seleção
+      // real), igual ao chaveamento e ao dashboard. Antes, caía no placeholder
+      // cru e as semifinais mostravam "Venc. S1 vs Venc. S2".
+      const displayH = esc(_resolveBracketSlot(game.h, r.h_team, res, _admBrkCache).team);
+      const displayA = esc(_resolveBracketSlot(game.a, r.a_team, res, _admBrkCache).team);
       html += `<div class="result-row" id="row_${game.id}">
         <div class="rr-home">
           <div class="rr-team-name">${displayH}</div>
