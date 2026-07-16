@@ -13947,8 +13947,13 @@ async function renderAdminConfig() {
       <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaOffset()">💾 Salvar ajuste</button></div>
       <div class="btn-group">
         <button class="btn btn-primary" onclick="iniciarCerimoniaBolao()">🎬 Iniciar cerimônia para todos</button>
-        <button class="btn btn-secondary" onclick="testarCerimonia()">👁️ Testar (só eu)</button>
         <button class="btn btn-secondary" onclick="encerrarCerimonia()">⏹️ Encerrar</button>
+      </div>
+      <p class="text-muted" style="font-size:0.78rem;margin:12px 0 6px">👁️ <b>Testes (só no seu aparelho):</b> compare a cerimônia com e sem os efeitos 3D (three.js), ou veja apenas o pódio.</p>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="testarCerimonia(true)">✨ Testar cerimônia com 3D</button>
+        <button class="btn btn-secondary" onclick="testarCerimonia(false)">🎬 Testar cerimônia sem 3D</button>
+        <button class="btn btn-secondary" onclick="testarPodio(true)">🏆 Testar só o pódio</button>
       </div>
       <p class="text-muted" style="font-size:0.78rem;margin:12px 0 8px">🎥 <b>Exportar em vídeo:</b> grava a cerimônia (imagem + som) num arquivo <code>.webm</code> para você rever quantas vezes quiser. Ao clicar, o navegador pede para compartilhar a tela/aba — escolha <b>esta aba</b> e marque <b>"compartilhar áudio"</b>. A gravação começa e a cerimônia roda só no seu aparelho; ao terminar, clique em "Parar" (ou feche a cerimônia) para baixar. Funciona melhor no <b>Chrome/Edge no computador</b>.</p>
       <div class="btn-group">
@@ -14257,9 +14262,31 @@ async function iniciarCerimoniaBolao() {
 }
 
 // Ensaia a cerimônia só neste aparelho (sem gravar nada / sem avisar ninguém).
-function testarCerimonia() {
+// use3d: true força os efeitos 3D (three.js); false roda a versão "normal" (só 2D),
+// para o admin comparar as duas. Zera o cache do gate 3D a cada teste.
+function testarCerimonia(use3d) {
   if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  window.__cerNo3D = (use3d === false);
+  _cer3DLoad = null; // reavalia o gate (liga/desliga o 3D conforme o botão)
   _cerimoniaStart({});
+}
+
+// Mostra só o pódio (reveal do campeão) neste aparelho, pulando abertura e cards.
+async function testarPodio(use3d) {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  window.__cerNo3D = (use3d === false);
+  _cer3DLoad = null; // reavalia o gate (liga/desliga o 3D conforme o botão)
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals, champPicks } = await _fetchPals(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const top3 = ranking.slice(0,3).map(u => ({ apelido: u.apelido || null, nome: u.nome || null, pontos: u.pontos }));
+    _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
+    _cerFx3DPodium(top3); // pódio 3D opcional (no-op sem three.js)
+  } catch(e) {
+    showToast('Erro ao testar o pódio: '+e.message,'error');
+  }
 }
 
 // Encerra a cerimônia (active=false) — novos acessos não veem mais.
@@ -18031,35 +18058,38 @@ function _cer3DBuildPodium(fx, top3){
   const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(-7, 14, 12);
   const glow = new THREE.PointLight(0xffe08a, 0.9, 80); glow.position.set(0, 3, 8);
   fx.scene.add(amb, dir, glow); fx.lights = [amb, dir, glow];
-  const base = -5.6;
+  const S = 0.78;      // escala geral do pódio (menor na tela, sem cortar os rótulos)
+  const base = -4.7;   // linha do chão dos blocos (um pouco mais alta, pódio mais compacto)
+  const bw = 3.4*S, bd = 3.0*S; // largura/profundidade dos blocos
   // ordem visual: 2º (esq) · 1º (centro) · 3º (dir). i = índice em top3.
   const defs = [
-    { i:1, x:-4.2, h:3.6, c:0xC0C0C0, medal:'🥈' },
-    { i:0, x:0,    h:5.4, c:0xFFD700, medal:'🥇' },
-    { i:2, x:4.2,  h:2.8, c:0xCD7F32, medal:'🥉' },
+    { i:1, x:-4.2*S, h:3.6*S, c:0xC0C0C0, medal:'🥈' },
+    { i:0, x:0,      h:5.4*S, c:0xFFD700, medal:'🥇' },
+    { i:2, x:4.2*S,  h:2.8*S, c:0xCD7F32, medal:'🥉' },
   ];
   fx.pillars = [];
   defs.forEach((d,order)=>{
     if(!top3[d.i]) return;
-    const bgeo = new THREE.BoxGeometry(3.4, d.h, 3.0); bgeo.translate(0, d.h/2, 0); // pivô na base
+    const bgeo = new THREE.BoxGeometry(bw, d.h, bd); bgeo.translate(0, d.h/2, 0); // pivô na base
     const bmat = new THREE.MeshStandardMaterial({ color:d.c, metalness:0.65, roughness:0.3, emissive:d.c, emissiveIntensity:0.14 });
     const box = new THREE.Mesh(bgeo, bmat); box.position.set(d.x, base, -3); box.scale.y = 0.001;
     fx.scene.add(box);
     // medalha na face frontal
     const medTex = _cer3DEmojiTexture(THREE, d.medal);
-    const med = new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.7), new THREE.MeshBasicMaterial({ map:medTex, transparent:true, depthWrite:false }));
-    med.position.set(d.x, base + d.h*0.5, -3 + 1.55); med.material.opacity = 0;
+    const medS = 1.7*S;
+    const med = new THREE.Mesh(new THREE.PlaneGeometry(medS,medS), new THREE.MeshBasicMaterial({ map:medTex, transparent:true, depthWrite:false }));
+    med.position.set(d.x, base + d.h*0.5, -3 + bd*0.52); med.material.opacity = 0;
     fx.scene.add(med);
     // rótulo nome+pontos acima do bloco (billboard)
     const u = top3[d.i] || {}; const nm = (u.apelido||u.nome||'—'); const pts = (u.pontos!=null? u.pontos+' pts':'');
     const labTex = _cer3DLabelTexture(THREE, nm, pts, d.c);
-    const lab = new THREE.Mesh(new THREE.PlaneGeometry(4.6,1.58), new THREE.MeshBasicMaterial({ map:labTex, transparent:true, depthWrite:false }));
-    lab.position.set(d.x, base + d.h + 1.5, -3); lab.material.opacity = 0;
+    const lab = new THREE.Mesh(new THREE.PlaneGeometry(4.6*S,1.58*S), new THREE.MeshBasicMaterial({ map:labTex, transparent:true, depthWrite:false }));
+    lab.position.set(d.x, base + d.h + 1.25*S, -3); lab.material.opacity = 0;
     fx.scene.add(lab);
     // coroa no campeão
     let crown = null;
-    if(d.i===0){ crown = new THREE.Mesh(new THREE.PlaneGeometry(2.4,2.4), new THREE.MeshBasicMaterial({ map:_cer3DEmojiTexture(THREE,'👑'), transparent:true, depthWrite:false }));
-      crown.position.set(d.x, base + d.h + 3.2, -3); crown.material.opacity = 0; fx.scene.add(crown); }
+    if(d.i===0){ crown = new THREE.Mesh(new THREE.PlaneGeometry(2.4*S,2.4*S), new THREE.MeshBasicMaterial({ map:_cer3DEmojiTexture(THREE,'👑'), transparent:true, depthWrite:false }));
+      crown.position.set(d.x, base + d.h + 2.6*S, -3); crown.material.opacity = 0; fx.scene.add(crown); }
     fx.pillars.push({ box, med, lab, crown, delay: order*0.2, t:0 });
   });
 }
@@ -18092,8 +18122,8 @@ function _cer3DLoop(now){
   // Câmera: no pódio fica um pouco acima e inclinada p/ baixo (dá volume 3D);
   // na abertura, centralizada com parallax suave.
   if(fx.mode === 'podium'){
-    fx.cam.position.x = Math.sin(now*0.00012)*0.7; fx.cam.position.y = 3.4 + Math.cos(now*0.00010)*0.3; fx.cam.position.z = 18;
-    fx.cam.lookAt(0, -1.4, -3);
+    fx.cam.position.x = Math.sin(now*0.00012)*0.7; fx.cam.position.y = 3.2 + Math.cos(now*0.00010)*0.3; fx.cam.position.z = 18.5;
+    fx.cam.lookAt(0, -1.1, -3);
   } else {
     fx.cam.position.x = Math.sin(now*0.00016)*0.9; fx.cam.position.y = Math.cos(now*0.00013)*0.6; fx.cam.position.z = 20; fx.cam.lookAt(0,0,0);
   }
@@ -18644,15 +18674,18 @@ function _cerPhaseStandings(d, gameIds){
   const worst = rows.slice().sort((a,b)=> a.pts-b.pts || byName(a,b)).slice(0,3);
   return { best, worst, total: rows.length, jogos: ids.length };
 }
-function _cerPhaseThumbHTML(def, st){
+// kind: 'best' = só o pódio da fase; 'worst' = só os piores; ausente = ambos (2 colunas).
+function _cerPhaseThumbHTML(def, st, kind){
   const showWorst = st.total > 3;
   const col = (list, cls, head) => `<div class="cpt-col"><div class="cpt-h ${cls}">${head}</div>${
     list.map(r=>`<div class="cpt-row"><span class="n">${_rzName(r.u)}</span><span class="p">${r.pts}</span></div>`).join('')
   }</div>`;
+  let inner, single;
+  if(kind === 'best'){ inner = col(st.best,'up','🏆'); single = true; }
+  else if(kind === 'worst'){ inner = col(st.worst,'dn','🧊'); single = true; }
+  else { inner = col(st.best,'up','🏆') + (showWorst?col(st.worst,'dn','🧊'):''); single = !showWorst; }
   return `<div class="cpt-title">${def.emoji} ${esc(def.titleShort)}</div>
-    <div class="cpt-cols"${showWorst?'':' style="grid-template-columns:1fr"'}>
-      ${col(st.best,'up','🏆')}${showWorst?col(st.worst,'dn','🧊'):''}
-    </div>`;
+    <div class="cpt-cols"${single?' style="grid-template-columns:1fr"':''}>${inner}</div>`;
 }
 
 // ── Estatísticas personalizadas do jogador logado (abaixo do pódio) ───────────
@@ -18824,15 +18857,28 @@ function _cerStagePhases(d){
     .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
     .filter(x=>x.st);
   if(!phases.length) return; // sem fases: o último card de curiosidade segura a tela
-  _cerSetStageLabel('Destaques por fase');
-  stageEl.innerHTML = `<div class="cer-phases cer-phases-final">
-    <div class="cer-phases-cap">🏅 Top 3 e piores de cada fase</div>
-    <div class="cer-phase-grid">${phases.map(({def,st})=>`<div class="cer-phase-thumb">${_cerPhaseThumbHTML(def,st)}</div>`).join('')}</div>
-  </div>`;
-  // Revela os quadros numa cascata rápida e segura tudo até o pódio.
-  const thumbs = stageEl.querySelectorAll('.cer-phase-thumb');
-  thumbs.forEach((t,i)=> _cerTimer(()=>{ if(_cerimoniaState && !_cerimoniaState.closed) t.classList.add('show'); }, 120 + i*150));
-  _cerFwBurst(4);
+  // Dois cards em sequência p/ uma transição mais fluida: 1) os melhores de cada fase,
+  // 2) os piores de cada fase. O segundo segura a tela até o pódio (agendado por tempo).
+  const hasWorst = phases.some(x => x.st.total > 3);
+  const renderBoard = (kind)=>{
+    if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
+    const el = document.getElementById('cerimonia-stage'); if(!el) return;
+    _cerSetStageLabel(kind==='worst' ? 'Os piores de cada fase' : 'Os melhores de cada fase');
+    const cap = kind==='worst' ? '🧊 Os piores de cada fase' : '🏆 Top 3 de cada fase';
+    el.innerHTML = `<div class="cer-phases cer-phases-final">
+      <div class="cer-phases-cap">${cap}</div>
+      <div class="cer-phase-grid">${phases.map(({def,st})=>`<div class="cer-phase-thumb">${_cerPhaseThumbHTML(def,st,kind)}</div>`).join('')}</div>
+    </div>`;
+    // Revela os quadros numa cascata rápida.
+    el.querySelectorAll('.cer-phase-thumb').forEach((t,i)=> _cerTimer(()=>{ if(_cerimoniaState && !_cerimoniaState.closed) t.classList.add('show'); }, 120 + i*150));
+    _cerFwBurst(4);
+  };
+  renderBoard('best');
+  if(hasWorst){
+    // Depois de alguns segundos com os melhores, transiciona para os piores.
+    const hold = Math.max(4800, (_cerimoniaState.cardPer || 4800) + 1200);
+    _cerTimer(()=> _cerTransitionStage(()=> renderBoard('worst')), hold);
+  }
 }
 
 // Abre o overlay no estágio "Iniciar" (aguarda o toque do usuário p/ liberar o som).
@@ -19034,14 +19080,15 @@ function _cerStageReveal(d){
   // _celebraStart limpa o painel do jogador, então o pódio aparece sozinho primeiro.
   _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
   _cerFx3DPodium(top3); // pódio 3D opcional (blocos + nomes + confete c/ profundidade + raios); no-op se indisponível
-  // Só o pódio por ~5s; depois entram as estatísticas personalizadas de quem assiste.
+  // Só o pódio por ~10s (tempo p/ apreciar o campeão); depois entram as estatísticas
+  // personalizadas de quem assiste.
   _cerTimer(()=>{
     if(!_cerimoniaState || _cerimoniaState.closed) return;
     try {
       const vp = document.getElementById('celebra-viewer');
       if(vp){ const v = _cerViewerStats(d); vp.innerHTML = v ? _cerViewerPanelHTML(v) : ''; }
     } catch(_){}
-  }, 5000);
+  }, 10000);
 }
 
 function _cerimoniaStop(){
