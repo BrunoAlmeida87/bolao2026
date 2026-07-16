@@ -1669,7 +1669,30 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cer-stage-leave{animation:cerStageLeave .5s cubic-bezier(.4,0,.55,1) forwards;pointer-events:none}
 @keyframes cerStageLeave{from{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}to{opacity:0;transform:translateY(-26px) scale(.9);filter:blur(5px)}}
 @media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card,.cer-trailer-beat{animation:none}.cer-phase-thumb{transition:none}.cer-stage-leave{animation-duration:.15s}}
+/* Abertura cinematográfica: roteiro em fonte elegante (Cinzel) + GIF do clímax */
+.cer-open-phrase{font-family:'Cinzel',Georgia,'Times New Roman',serif;color:var(--white);font-weight:700;font-size:1.7rem;line-height:1.4;letter-spacing:.01em;overflow-wrap:anywhere;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+.cer-open-phrase.big{color:var(--gold);font-weight:800;font-size:2.3rem;text-shadow:0 2px 26px rgba(255,215,0,.5)}
+.cer-open-climax-beat{display:flex;flex-direction:column;align-items:center;gap:10px}
+.cer-open-pre{font-family:'Cinzel',Georgia,serif;color:var(--text-muted);font-weight:600;font-size:1.15rem;letter-spacing:.06em}
+.cer-open-climax{font-family:'Cinzel',Georgia,'Times New Roman',serif;color:var(--gold);font-weight:800;font-size:3.1rem;line-height:1.05;letter-spacing:.02em;text-transform:uppercase;text-shadow:0 0 30px rgba(255,215,0,.7),0 3px 24px rgba(255,140,0,.5);animation:cerGloryIn 1s cubic-bezier(.2,1.2,.35,1) both}
+.cer-open-gif-wrap{margin-top:6px;max-width:80%;width:auto}
+.cer-open-gif{display:block;max-width:100%;max-height:34vh;border-radius:16px;border:1.5px solid var(--gold);box-shadow:0 0 34px rgba(255,215,0,.35);animation:cerGifIn .9s ease .2s both}
+@keyframes cerGloryIn{from{opacity:0;transform:scale(.7);filter:blur(6px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
+@keyframes cerGifIn{from{opacity:0;transform:translateY(16px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
+/* Listas ranqueadas (cards de ranking: placar exato, dias na liderança, saldo nas trocas) */
+.cer-rank{margin:16px auto 0;display:flex;flex-direction:column;gap:5px;width:100%;max-width:420px}
+.cer-rank-h{font-size:.74rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;margin:8px 0 2px;text-align:left}
+.cer-rank-h.pos{color:var(--green)}.cer-rank-h.neg{color:#FF6B6B}
+.cer-rank-row{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:11px;padding:8px 12px}
+.cer-rank-rk{flex:0 0 26px;text-align:center;font-size:.95rem}
+.cer-rank-nm{flex:1;color:var(--white);font-weight:700;font-size:.95rem;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cer-rank-v{flex:0 0 auto;color:var(--gold);font-weight:800;font-size:.95rem}
+.cer-rank-v.pos{color:var(--green)}.cer-rank-v.neg{color:#FF6B6B}
+@media(prefers-reduced-motion:reduce){.cer-open-climax,.cer-open-gif{animation:none}}
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&display=swap">
 </head>
 <body>
 
@@ -2463,7 +2486,8 @@ let CFG = {
   nome_bolao:'Bolão ICN Copa 2026',
   valor_participacao:50,
   qrcode_whatsapp:'',
-  cerimonia_audio_url:''
+  cerimonia_audio_url:'',
+  cerimonia_gif_url:''
 };
 
 // Horários dos jogos (Brasília - fuso -3)
@@ -13641,6 +13665,9 @@ async function renderAdminConfig() {
       <div class="form-group"><label>URL da música (MP3) — Firebase Storage</label><input id="cfg-cerimonia-audio" value="${esc(CFG.cerimonia_audio_url||'')}" placeholder="https://firebasestorage.googleapis.com/.../tema.mp3?alt=media&token=..."></div>
       <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">Suba o MP3 no Firebase Storage, gere a URL de download (com <code>?alt=media&token=…</code>) e cole aqui. A música é responsabilidade sua quanto a direitos autorais.</p>
       <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaAudio()">💾 Salvar música</button></div>
+      <div class="form-group"><label>URL do GIF da Cerimônia (aparece no clímax da abertura)</label><input id="cfg-cerimonia-gif" value="${esc(CFG.cerimonia_gif_url||'')}" placeholder="https://.../copa.gif  (ou .webp / .png / .mp4)"></div>
+      <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">Cole a URL de um GIF da Copa (Firebase Storage, Giphy, etc.). Ele surge junto de <b>"Glória Eterna!"</b> no fim da abertura. Deixe em branco para não exibir GIF.</p>
+      <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaGif()">💾 Salvar GIF</button></div>
       <div class="btn-group">
         <button class="btn btn-primary" onclick="iniciarCerimoniaBolao()">🎬 Iniciar cerimônia para todos</button>
         <button class="btn btn-secondary" onclick="testarCerimonia()">👁️ Testar (só eu)</button>
@@ -14507,6 +14534,17 @@ async function saveCerimoniaAudio() {
     await db_.collection('config').doc('geral').set({ cerimonia_audio_url: url }, { merge: true });
     CFG.cerimonia_audio_url = url;
     showToast(url ? '🔊 Música da cerimônia salva!' : 'Música removida.', 'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// Salva a URL do GIF da abertura (exibido no clímax "Glória Eterna!") em config/geral.
+async function saveCerimoniaGif() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  const url = (document.getElementById('cfg-cerimonia-gif')?.value || '').trim();
+  try {
+    await db_.collection('config').doc('geral').set({ cerimonia_gif_url: url }, { merge: true });
+    CFG.cerimonia_gif_url = url;
+    showToast(url ? '🎞️ GIF da cerimônia salvo!' : 'GIF removido.', 'success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
@@ -18292,6 +18330,45 @@ async function _cerFetchEditStats(users, res){
   return stats;
 }
 
+// Constrói as linhas de uma lista ranqueada (extra dos cards de ranking).
+// items: [{medal, nm, v, cls?}] → HTML de .cer-rank-row.
+function _cerRankRows(items){
+  return items.map(it=>`<div class="cer-rank-row"><span class="cer-rank-rk">${it.medal}</span><span class="cer-rank-nm">${it.nm}</span><span class="cer-rank-v${it.cls?' '+it.cls:''}">${it.v}</span></div>`).join('');
+}
+// "O jogo que mudou tudo": reprocessa os jogos finalizados em ordem cronológica e
+// devolve a ÚLTIMA partida que trocou o líder (a virada decisiva), ou null.
+function _cerLeaderChangeGame(d){
+  const played = (ALL_GAMES||[]).filter(g=>_hasFullResult(d.res[g.id]))
+    .sort((a,b)=> _parseGameDate(a.date)-_parseGameDate(b.date) || (FIFA_MATCH_NO[a.id]||0)-(FIFA_MATCH_NO[b.id]||0));
+  if(played.length < 2) return null;
+  const ids = []; let prevLeader = null, lastChange = null;
+  for(const g of played){
+    ids.push(g.id);
+    const rank = _computeRankingForGameIds(d.users, d.res, d.allPals, ids, d.champPicks);
+    const leader = rank[0]; if(!leader) continue;
+    if(prevLeader && leader.uid !== prevLeader.uid) lastChange = { game:g, newLeader:leader };
+    prevLeader = leader;
+  }
+  return lastChange;
+}
+// "Mais dias na liderança": agrupa os jogos por dia, calcula o ranking cumulativo ao
+// fim de cada dia e conta quantos dias cada um terminou em 1º. → [{u, dias}] desc.
+function _cerDiasLideranca(d){
+  const played = (ALL_GAMES||[]).filter(g=>_hasFullResult(d.res[g.id]));
+  if(!played.length) return [];
+  const byDay = new Map();
+  played.forEach(g=>{ const k=_parseGameDate(g.date).getTime(); if(!byDay.has(k)) byDay.set(k,[]); byDay.get(k).push(g.id); });
+  const days = [...byDay.keys()].sort((a,b)=>a-b);
+  const ids = []; const dias = {}; const uById = {};
+  days.forEach(k=>{
+    byDay.get(k).forEach(id=>ids.push(id));
+    const leader = _computeRankingForGameIds(d.users, d.res, d.allPals, ids, d.champPicks)[0];
+    if(!leader) return;
+    dias[leader.uid] = (dias[leader.uid]||0)+1; uById[leader.uid] = leader;
+  });
+  return Object.keys(dias).map(uid=>({ u:uById[uid], dias:dias[uid] })).sort((a,b)=>b.dias-a.dias);
+}
+
 // Monta os cards de curiosidades da cerimônia, reusando as calculadoras _rz* do
 // Resumão + alguns cálculos inline. Cada gerador é envolto em try/catch e pulado
 // se não houver dados. Cards podem ter `name`/`detail` (opcionais) e `extra` (HTML
@@ -18361,6 +18438,46 @@ function _cerimoniaFacts(d){
     const max=arr[0][1]; const total=arr.reduce((s,x)=>s+x[1],0);
     const bars=arr.slice(0,3).map(([t,n])=>`<div class="cer-bar-row"><span class="cer-bar-nm">${flag(t)}${esc(t)}</span><span class="cer-bar-track"><span class="cer-bar-fill" style="width:${Math.round(n/max*100)}%"></span></span><span class="cer-bar-n">${n}</span></div>`).join('');
     return { emoji:'🏆', label:'Seleção mais escolhida p/ campeã', name:`${flag(arr[0][0])}${esc(arr[0][0])}`, detail:`${arr[0][1]} de ${total} palpites de campeão`, extra:`<div class="cer-bars">${bars}</div>` };
+  });
+  // 🤷 Rei dos empates (quem mais acertou jogos que terminaram empatados)
+  add(()=>{ const x=_rzVencedor(d.users, d.allPals, d.res, d.jogosComResultado).filter(v=>v.emp>0).sort((a,b)=>b.emp-a.emp||b.pct-a.pct)[0]; return x && {emoji:'🤷', label:'Rei dos empates', name:_rzName(x.u), detail:`${x.emp} empate${x.emp>1?'s':''} cravado${x.emp>1?'s':''}`}; });
+  // ⚽ Placar mais palpitado da Copa (contando todos os palpites de todos os jogos)
+  add(()=>{
+    const cnt={};
+    Object.keys(d.allPals||{}).forEach(uid=>{ const pals=d.allPals[uid]||{}; Object.keys(pals).forEach(gid=>{ const p=pals[gid]; if(!p||p.h==null||p.a==null) return; const k=`${parseInt(p.h)||0}×${parseInt(p.a)||0}`; cnt[k]=(cnt[k]||0)+1; }); });
+    const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]; if(!top) return null;
+    return { emoji:'⚽', label:'Placar mais palpitado da Copa', name:top[0], detail:`${top[1]} palpite${top[1]>1?'s':''} nesse placar` };
+  });
+  // 🎯 O jogo que mudou tudo (última virada de liderança)
+  add(()=>{ const c=_cerLeaderChangeGame(d); if(!c) return null; const tm=_gxGameTeams(c.game.id, d.res); return {emoji:'🎯', label:'O jogo que mudou tudo', name:`${esc(tm.h)} × ${esc(tm.a)}`, detail:`${_rzName(c.newLeader)} assumiu a liderança${c.game.date?' · '+esc(c.game.date):''}`}; });
+  // 🏮 Lanterna / Azarão (último colocado, em tom bem-humorado)
+  add(()=>{ const r=d.ranking; if(!r || r.length<2) return null; const last=r[r.length-1]; return {emoji:'🏮', label:'Lanterna / Azarão', name:_rzName(last), detail:`fechou a tabela com ${last.pontos} pt${last.pontos!==1?'s':''} — alguém tem que segurar a lanterna! 😅`}; });
+  // 🎯 Ranking de placar exato (Top 5)
+  add(()=>{
+    const arr=_rzExatos(d.ranking, d.userAccStats).slice(0,5); if(!arr.length) return null;
+    const md=['🥇','🥈','🥉','4º','5º'];
+    const rows=_cerRankRows(arr.map((x,i)=>({medal:md[i], nm:_rzName(x.u), v:`${x.exatos}`})));
+    return { emoji:'🎯', label:'Ranking de placar exato', extra:`<div class="cer-rank">${rows}</div>` };
+  });
+  // 🗓️ Ranking de liderança — mais dias no topo (Top 5)
+  add(()=>{
+    const arr=_cerDiasLideranca(d).slice(0,5); if(!arr.length) return null;
+    const md=['🥇','🥈','🥉','4º','5º'];
+    const rows=_cerRankRows(arr.map((x,i)=>({medal:md[i], nm:_rzName(x.u), v:`${x.dias}d`})));
+    return { emoji:'🗓️', label:'Mais dias na liderança', extra:`<div class="cer-rank">${rows}</div>` };
+  });
+  // 💰 Ranking por saldo nas trocas de palpite (Top 3 que lucraram + os que se arrependeram)
+  add(()=>{
+    const arr=Object.keys(d.editStats||{}).map(uid=>({ uid, ...d.editStats[uid] })).filter(v=>v.changedGames>0 && v.deltaPts!==0);
+    if(!arr.length) return null;
+    const nm=uid=>{ const u=(d.users||[]).find(x=>x.uid===uid); return u?_rzName(u):'—'; };
+    const pos=arr.filter(v=>v.deltaPts>0).sort((a,b)=>b.deltaPts-a.deltaPts).slice(0,3);
+    const neg=arr.filter(v=>v.deltaPts<0).sort((a,b)=>a.deltaPts-b.deltaPts).slice(0,3);
+    if(!pos.length && !neg.length) return null;
+    const blocks=[];
+    if(pos.length) blocks.push(`<div class="cer-rank-h pos">💚 Trocaram e lucraram</div>`+_cerRankRows(pos.map((x,i)=>({medal:['🥇','🥈','🥉'][i], nm:nm(x.uid), v:`+${x.deltaPts}`, cls:'pos'}))));
+    if(neg.length) blocks.push(`<div class="cer-rank-h neg">💔 Se arrependeram</div>`+_cerRankRows(neg.map(x=>({medal:'🔻', nm:nm(x.uid), v:`${x.deltaPts}`, cls:'neg'}))));
+    return { emoji:'💰', label:'Saldo nas trocas de palpite', extra:`<div class="cer-rank">${blocks.join('')}</div>` };
   });
   return facts;
 }
@@ -18782,66 +18899,52 @@ function _cerCountUp(el, target, ms){
   requestAnimationFrame(step);
 }
 
-// Estágio de abertura (0–42s): trailer cinematográfico — frases de efeito e números
-// grandes animados, sincronizados com a música, terminando em suspense p/ os cards.
+// Estágio de abertura (0–42s): trailer cinematográfico estilo premiação esportiva —
+// frases de efeito com fonte elegante (Cinzel), transições suaves e tempos EXATOS
+// ancorados no áudio (_cerAt → st.t0). No clímax (37s) surge "Glória Eterna!" com o
+// GIF configurado. Depois o último quadro segura até os cards (42s, _cerAt(introMs)).
 function _cerStageTrailer(d){
   const st = _cerimoniaState; if(!st || st.closed) return;
   const stageEl = document.getElementById('cerimonia-stage'); if(!stageEl){ _cerStageCards(d); return; }
-  _cerSetStageLabel('Cerimônia de encerramento');
-  const flag = t => { try { return (typeof teamFlag==='function') ? teamFlag(t)+' ' : ''; } catch(_){ return ''; } };
+  _cerSetStageLabel('');
 
-  // Monta os "beats" a partir dos dados (cada um em try/catch, pulado se sem dado).
-  const beats = []; const add = fn => { try { const b = fn(); if(b) beats.push(b); } catch(_){} };
-  const totalJogos = (d.jogosComResultado||[]).length;
-  const totalExatos = Object.values(d.analiseJogos||{}).reduce((a,b)=>a+(b.exatos||0),0);
-  const totalPalpites = Object.values(d.analiseJogos||{}).reduce((a,b)=>a+((b.palpites||[]).length),0);
-
-  add(()=>({ type:'title' }));
-  if(totalJogos) add(()=>({ type:'phrase', html:`Foram <b>${totalJogos}</b> jogos.` }));
-  if(totalPalpites) add(()=>({ type:'count', value:totalPalpites, label:'palpites no total' }));
-  if((d.users||[]).length) add(()=>({ type:'phrase', html:`<b>${d.users.length}</b> palpiteiros disputaram.<br>Um só campeão.` }));
-  if(totalExatos) add(()=>({ type:'count', value:totalExatos, label:'placares cravados' }));
-  if(totalJogos) add(()=>({ type:'phrase', html:`Teve zebra, virada e cravada<br>até a última rodada.` }));
-  add(()=>{
-    const cnt = {}; Object.values(d.champPicks||{}).forEach(t=>{ if(t) cnt[t]=(cnt[t]||0)+1; });
-    const top = Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
-    return top && { type:'phrase', html:`O favorito do bolão para a taça:<br><b>${flag(top[0])}${esc(top[0])}</b>` };
-  });
-  add(()=>({ type:'phrase', html:`E agora…<br><b>quem foi o grande campeão?</b>` }));
-
-  if(!beats.length){ _cerStageCards(d); return; }
-  // Ritmo: distribui os beats ao longo da janela real (deixando ~1,5s de respiro no fim).
-  const avail = Math.max(8000, _CER_INTRO_MS - 1500);
-  const per = Math.min(6000, Math.max(2800, avail / beats.length));
+  // Roteiro fixo (tempos em ms desde o início do áudio). `big` = frase de destaque.
+  const script = [
+    { t:0,     html:'Senhoras e Senhores,' },
+    { t:8000,  html:'Chegou a hora!', big:true },
+    { t:12000, html:'Depois de semanas de palpites,<br>disputas e reviravoltas...' },
+    { t:15000, html:'Restaram apenas os melhores!', big:true },
+    { t:18000, html:'Cada ponto conquistado,' },
+    { t:22000, html:'Cada resultado inesperado,' },
+    { t:24000, html:'Cada emoção vivida,' },
+    { t:26000, html:'Nos trouxe até este momento.' },
+    { t:28000, html:'Agora não há mais nada o que fazer...' },
+    { t:30000, html:'Apenas um nome<br>será eternizado!', big:true },
+    { t:34000, html:'Seja Bem-vindo à' },
+    { t:37000, climax:true },
+  ];
 
   stageEl.innerHTML = `<div class="cer-trailer" id="cer-trailer"></div>`;
-  let i = 0;
-  const showBeat = ()=>{
+
+  const renderBeat = (b)=>{
     const s = _cerimoniaState; if(!s || s.closed || s.revealed) return;
-    const host = document.getElementById('cer-trailer'); if(!host) return; // cards assumiram
-    if(i >= beats.length) return; // último beat segura até o _cerAt(introMs) ancorado
-    const b = beats[i];
-    if(b.type === 'title'){
-      host.innerHTML = `<div class="cer-trailer-beat">
-        <div class="cer-trailer-trophy">🏆</div>
-        <div class="cer-trailer-title">${esc(CFG.nome_bolao||'Bolão')}</div>
-        <div class="cer-trailer-sub">Copa 2026 · Cerimônia de encerramento</div>
-        <div class="cer-vol-tip" style="margin-top:16px">🔊 Aumente o volume</div>
+    const host = document.getElementById('cer-trailer'); if(!host) return; // cards já assumiram
+    if(b.climax){
+      const url = (CFG.cerimonia_gif_url||'').trim();
+      const gif = url ? `<div class="cer-open-gif-wrap"><img class="cer-open-gif" src="${esc(url)}" alt=""></div>` : '';
+      host.innerHTML = `<div class="cer-trailer-beat cer-open-climax-beat">
+        <div class="cer-open-pre">Seja Bem-vindo à</div>
+        <div class="cer-open-climax">Glória Eterna!</div>
+        ${gif}
       </div>`;
-    } else if(b.type === 'count'){
-      host.innerHTML = `<div class="cer-trailer-beat">
-        <div class="cer-trailer-num" id="cer-trailer-num">0</div>
-        <div class="cer-trailer-num-label">${esc(b.label)}</div>
-      </div>`;
-      _cerCountUp(document.getElementById('cer-trailer-num'), b.value, Math.min(1600, per*0.7));
+      _cerFwBurst(6);
     } else {
-      host.innerHTML = `<div class="cer-trailer-beat"><div class="cer-trailer-phrase">${b.html}</div></div>`;
+      host.innerHTML = `<div class="cer-trailer-beat"><div class="cer-open-phrase${b.big?' big':''}">${b.html}</div></div>`;
+      if(b.big) _cerFwBurst(2);
     }
-    if(i % 2 === 1) _cerFwBurst(2); // fogos leves em alguns beats
-    i++;
-    _cerTimer(showBeat, per);
   };
-  showBeat();
+
+  script.forEach(b=>{ _cerAt(b.t, ()=>renderBeat(b)); });
 }
 
 // Orquestra os cards (curiosidades + destaques por fase) na janela entre o fim do
