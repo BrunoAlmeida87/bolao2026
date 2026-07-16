@@ -1529,7 +1529,14 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 /* ══ Celebração do campeão do bolão (fogos + confete + pódio) ══ */
 .celebra-overlay{position:fixed;inset:0;z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 50% 40%,rgba(10,22,40,.82),rgba(0,0,0,.92))}
 .celebra-overlay.hidden{display:none}
-#celebra-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#celebra-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+/* Camada WebGL (three.js) opcional — fica ATRÁS do confete 2D e do card */
+.cer-fx3d{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+/* Com o pódio 3D ativo: card sobe p/ o topo e o pódio HTML (redundante) some,
+   deixando o pódio 3D visível no restante da tela. */
+.celebra-overlay.cer3d-on{align-items:flex-start}
+.celebra-overlay.cer3d-on .celebra-card{margin-top:2.2vh}
+.celebra-overlay.cer3d-on .celebra-podium{display:none}
 .celebra-card{position:relative;z-index:2;width:100%;max-width:420px;max-height:92vh;overflow-y:auto;background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1.5px solid var(--gold);border-radius:22px;padding:26px 22px 24px;text-align:center;box-shadow:0 0 60px rgba(255,215,0,.35),0 20px 50px rgba(0,0,0,.5);animation:celebraCardIn .6s cubic-bezier(.2,1.3,.4,1) both}
 .celebra-close{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;line-height:1;padding:4px}
 .celebra-close:hover{color:var(--white)}
@@ -1596,27 +1603,8 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cer-bar-fill{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--orange));border-radius:6px}
 .cer-bar-n{flex:0 0 auto;font-size:.8rem;font-weight:700;color:var(--gold);min-width:18px;text-align:left}
 /* Destaques por fase (rodadas 1/2/3 + mata-mata): cards que encolhem e formam uma grade */
-.cer-phases{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:500px}
-.cer-phase-active{width:100%;min-height:1px;display:flex;justify-content:center}
-.cer-phase-card{width:100%;background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1.5px solid var(--gold);border-radius:18px;padding:16px 14px;box-shadow:0 0 40px rgba(255,215,0,.22);animation:cerFactIn .55s cubic-bezier(.2,1.2,.4,1) both}
-.cer-phase-card.cer-phase-out{animation:cerPhaseOut .5s ease forwards}
-.cer-phase-head{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:12px}
-.cer-phase-emoji{font-size:2rem;line-height:1;filter:drop-shadow(0 3px 10px rgba(255,215,0,.4))}
-.cer-phase-title{color:var(--gold);font-weight:800;font-size:1.15rem;line-height:1.1;text-align:left}
-.cer-phase-sub{color:var(--text-muted);font-size:.72rem;text-align:left;margin-top:1px}
-.cer-phase-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.cer-phase-col{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:9px 8px}
-.cer-phase-col.best{border-color:rgba(255,215,0,.4)}
-.cer-phase-col.worst{border-color:rgba(100,181,246,.35)}
-.cer-phase-col-h{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;margin-bottom:7px;text-align:center}
-.cer-phase-col.best .cer-phase-col-h{color:var(--gold)}
-.cer-phase-col.worst .cer-phase-col-h{color:#64B5F6}
-.cer-phase-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.82rem}
-.cer-phase-row .rk{flex:0 0 18px;text-align:center;font-size:.92rem}
-.cer-phase-row .nm{flex:1;color:var(--white);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
-.cer-phase-row .pt{flex:0 0 auto;font-weight:800;font-size:.8rem}
-.cer-phase-col.best .pt{color:var(--gold)}
-.cer-phase-col.worst .pt{color:#64B5F6}
+.cer-phases{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:500px}
+.cer-phases-cap{color:var(--gold);font-weight:800;font-size:1rem;text-align:center}
 .cer-phase-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%}
 .cer-phase-thumb{background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1px solid var(--border);border-radius:12px;padding:8px 8px 9px;opacity:0;transform:scale(.72);transition:opacity .4s ease,transform .45s cubic-bezier(.2,1.3,.4,1)}
 .cer-phase-thumb.show{opacity:1;transform:scale(1)}
@@ -1628,7 +1616,6 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cpt-row .n{flex:1;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .cpt-row .p{flex:0 0 auto;font-weight:700;color:var(--text-muted)}
 @keyframes cerFactIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes cerPhaseOut{to{opacity:0;transform:scale(.82) translateY(-10px)}}
 /* Aviso p/ aumentar o volume (card inicial + roster) */
 .cer-vol-tip{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,140,0,.14);border:1px solid var(--orange);border-radius:14px;padding:10px 14px;margin:0 0 18px;color:var(--orange);font-weight:800;font-size:.9rem}
 /* Abertura: trailer cinematográfico (frases de efeito + números animados) */
@@ -1645,7 +1632,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 /* Transição entre estágios (ex.: abertura → cards): dissolve + sobe + desfoca */
 .cer-stage-leave{animation:cerStageLeave .5s cubic-bezier(.4,0,.55,1) forwards;pointer-events:none}
 @keyframes cerStageLeave{from{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}to{opacity:0;transform:translateY(-26px) scale(.9);filter:blur(5px)}}
-@media(prefers-reduced-motion:reduce){.cer-fact,.cer-phase-card,.cer-trailer-beat{animation:none}.cer-phase-thumb{transition:none}.cer-stage-leave{animation-duration:.15s}}
+@media(prefers-reduced-motion:reduce){.cer-fact,.cer-trailer-beat{animation:none}.cer-phase-thumb{transition:none}.cer-stage-leave{animation-duration:.15s}}
 /* Abertura cinematográfica: roteiro em fonte elegante (Cinzel) + GIF do clímax */
 .cer-open-phrase{font-family:'Cinzel',Georgia,'Times New Roman',serif;color:var(--white);font-weight:700;font-size:1.7rem;line-height:1.4;letter-spacing:.01em;overflow-wrap:anywhere;text-shadow:0 2px 18px rgba(0,0,0,.55)}
 .cer-open-phrase.big{color:var(--gold);font-weight:800;font-size:2.3rem;text-shadow:0 2px 26px rgba(255,215,0,.5)}
@@ -17908,8 +17895,280 @@ function _celebraStop(){
     if(st.ctx) st.ctx.clearRect(0,0,st.w,st.h);
   }
   _celebraState = null;
+  _cerFx3DStop(); // encerra a camada WebGL (three.js), se estiver ativa
   // Se a festa foi aberta como estágio final da cerimônia, fechá-la encerra tudo.
   const cb = _celebraOnClose; _celebraOnClose = null; if(cb) { try{ cb(); }catch(_){} }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CAMADA 3D DA CERIMÔNIA (three.js) — melhoria opcional e progressiva.
+// Carrega o three.js SOB DEMANDA (só quando a cerimônia roda) e SEMPRE tem
+// fallback: se o aparelho for fraco, o usuário pediu menos animação
+// (prefers-reduced-motion), não houver WebGL ou o CDN falhar, tudo isto vira
+// no-op e a festa 2D (canvas) continua valendo. Não mexe no troféu (GIF/emoji).
+// Efeitos: fundo de estrelas com parallax, pilares 3D do pódio subindo, confete
+// com profundidade e raios/energia nos momentos de destaque.
+// ════════════════════════════════════════════════════════════════════════════
+const _CER3D_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+let _cer3DLoad = null; // Promise<THREE|null> em cache
+function _cerLoad3D(){
+  if(_cer3DLoad) return _cer3DLoad;
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const lowMem = (navigator.deviceMemory && navigator.deviceMemory < 3);
+  const lowCPU = (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4);
+  let webgl = false; try { const c=document.createElement('canvas'); webgl = !!(c.getContext('webgl2')||c.getContext('webgl')); } catch(_){}
+  if(reduce || lowMem || lowCPU || !webgl || window.__cerNo3D){ _cer3DLoad = Promise.resolve(null); return _cer3DLoad; }
+  if(window.THREE){ _cer3DLoad = Promise.resolve(window.THREE); return _cer3DLoad; }
+  _cer3DLoad = new Promise(resolve=>{
+    let done = false; const finish = v => { if(!done){ done = true; resolve(v); } };
+    const s = document.createElement('script');
+    s.src = _CER3D_CDN; s.async = true;
+    s.onload = ()=> finish(window.THREE || null);
+    s.onerror = ()=> finish(null);
+    document.head.appendChild(s);
+    setTimeout(()=> finish(window.THREE || null), 6000); // timeout → fallback 2D
+  });
+  return _cer3DLoad;
+}
+
+let _fx3 = null; // instância da cena 3D ativa
+const _CER3D_PALETTE = [0xFFD700,0x1E90FF,0x00C851,0xFF8C00,0xFF4444,0xFFFFFF];
+// Textura circular macia (sprite) para confete/estrelas/faíscas, gerada em canvas.
+function _cer3DSprite(THREE){
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32,32,0,32,32,32);
+  grd.addColorStop(0,'rgba(255,255,255,1)'); grd.addColorStop(.35,'rgba(255,255,255,.9)');
+  grd.addColorStop(.7,'rgba(255,255,255,.25)'); grd.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.beginPath(); g.arc(32,32,32,0,Math.PI*2); g.fill();
+  const t = new THREE.CanvasTexture(c); return t;
+}
+// Monta o renderer/câmera/cena numa <canvas> nova dentro de `overlay` (atrás do
+// conteúdo). Retorna a instância ou null se algo falhar.
+function _cer3DMount(THREE, overlay, beforeEl){
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'cer-fx3d';
+    if(beforeEl && beforeEl.parentNode === overlay) overlay.insertBefore(canvas, beforeEl);
+    else overlay.appendChild(canvas);
+    const w = window.innerWidth, h = window.innerHeight;
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true, powerPreference:'low-power' });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+    renderer.setSize(w, h);
+    const scene = new THREE.Scene();
+    const cam = new THREE.PerspectiveCamera(55, w/h, 0.1, 200);
+    cam.position.set(0,0,20);
+    const halfH = Math.tan((55*Math.PI/180)/2) * 20;
+    const fx = { THREE, canvas, renderer, scene, cam, sprite:_cer3DSprite(THREE),
+      halfH, halfW: halfH*(w/h), raf:null, last:performance.now(),
+      confetti:null, confVel:null, stars:null, pillars:[], transient:[], onResize:null };
+    fx.onResize = ()=>{
+      const W = window.innerWidth, H = window.innerHeight;
+      fx.renderer.setSize(W,H); fx.cam.aspect = W/H; fx.cam.updateProjectionMatrix();
+      fx.halfW = fx.halfH*(W/H);
+    };
+    window.addEventListener('resize', fx.onResize);
+    return fx;
+  } catch(_){ return null; }
+}
+// Converte coordenada de tela (0..1) para o plano z=0 do mundo.
+function _cer3DToWorld(fx, nx, ny){ return { x:(nx-0.5)*2*fx.halfW, y:(0.5-ny)*2*fx.halfH }; }
+// Nuvem de confete com profundidade (cai com gravidade e recicla no topo).
+function _cer3DBuildConfetti(fx, n){
+  const THREE = fx.THREE; const pos = new Float32Array(n*3), col = new Float32Array(n*3);
+  const vel = new Float32Array(n*3); const C = new THREE.Color();
+  for(let i=0;i<n;i++){
+    pos[i*3]   = (Math.random()*2-1)*fx.halfW*1.1;
+    pos[i*3+1] = fx.halfH + Math.random()*fx.halfH*1.4;
+    pos[i*3+2] = -8 + Math.random()*16;
+    vel[i*3]   = (Math.random()*2-1)*1.2;
+    vel[i*3+1] = -(3.5 + Math.random()*3.5);
+    vel[i*3+2] = (Math.random()*2-1)*0.6;
+    C.setHex(_CER3D_PALETTE[(Math.random()*_CER3D_PALETTE.length)|0]);
+    col[i*3]=C.r; col[i*3+1]=C.g; col[i*3+2]=C.b;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col,3));
+  const mat = new THREE.PointsMaterial({ size:0.85, map:fx.sprite, vertexColors:true, transparent:true, opacity:.95, depthWrite:false, sizeAttenuation:true });
+  const pts = new THREE.Points(geo, mat); fx.scene.add(pts);
+  fx.confetti = pts; fx.confVel = vel;
+}
+// Campo de estrelas/brilho ao fundo (parallax leve pela câmera).
+function _cer3DBuildStars(fx, n){
+  const THREE = fx.THREE; const pos = new Float32Array(n*3);
+  for(let i=0;i<n;i++){ pos[i*3]=(Math.random()*2-1)*fx.halfW*2.2; pos[i*3+1]=(Math.random()*2-1)*fx.halfH*2.2; pos[i*3+2]=-30+Math.random()*20; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat = new THREE.PointsMaterial({ size:0.5, map:fx.sprite, color:0x9fc6ff, transparent:true, opacity:.6, depthWrite:false, blending:THREE.AdditiveBlending, sizeAttenuation:true });
+  const pts = new THREE.Points(geo, mat); fx.scene.add(pts); fx.stars = pts;
+}
+// Textura (canvas) com um emoji/símbolo grande e centralizado — medalha, coroa, etc.
+function _cer3DEmojiTexture(THREE, ch){
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '92px serif';
+  g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 8; g.fillText(ch, 64, 70);
+  const t = new THREE.CanvasTexture(c); return t;
+}
+// Textura (canvas) de um rótulo flutuante: nome + pontos, com fundo translúcido e borda.
+function _cer3DLabelTexture(THREE, name, sub, hexColor){
+  const W = 512, H = 176; const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const col = '#' + hexColor.toString(16).padStart(6,'0');
+  g.fillStyle = 'rgba(8,16,30,.72)';
+  const r = 26, x=6, y=6, w=W-12, h=H-12;
+  g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fill();
+  g.lineWidth = 4; g.strokeStyle = col; g.stroke();
+  g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = '800 62px system-ui,Arial';
+  g.fillText(name.length>16?name.slice(0,15)+'…':name, W/2, 78);
+  if(sub){ g.fillStyle = col; g.font = '700 44px system-ui,Arial'; g.fillText(sub, W/2, 134); }
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
+// Pódio 3D de verdade: três blocos sólidos e iluminados (prata/ouro/bronze) que sobem,
+// com medalha na frente, nome+pontos flutuando acima (billboard) e coroa no campeão.
+function _cer3DBuildPodium(fx, top3){
+  const THREE = fx.THREE; top3 = top3 || [];
+  // Iluminação p/ os blocos ganharem volume (sombreamento real).
+  const amb = new THREE.AmbientLight(0xffffff, 0.6);
+  const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(-7, 14, 12);
+  const glow = new THREE.PointLight(0xffe08a, 0.9, 80); glow.position.set(0, 3, 8);
+  fx.scene.add(amb, dir, glow); fx.lights = [amb, dir, glow];
+  const base = -5.6;
+  // ordem visual: 2º (esq) · 1º (centro) · 3º (dir). i = índice em top3.
+  const defs = [
+    { i:1, x:-4.2, h:3.6, c:0xC0C0C0, medal:'🥈' },
+    { i:0, x:0,    h:5.4, c:0xFFD700, medal:'🥇' },
+    { i:2, x:4.2,  h:2.8, c:0xCD7F32, medal:'🥉' },
+  ];
+  fx.pillars = [];
+  defs.forEach((d,order)=>{
+    if(!top3[d.i]) return;
+    const bgeo = new THREE.BoxGeometry(3.4, d.h, 3.0); bgeo.translate(0, d.h/2, 0); // pivô na base
+    const bmat = new THREE.MeshStandardMaterial({ color:d.c, metalness:0.65, roughness:0.3, emissive:d.c, emissiveIntensity:0.14 });
+    const box = new THREE.Mesh(bgeo, bmat); box.position.set(d.x, base, -3); box.scale.y = 0.001;
+    fx.scene.add(box);
+    // medalha na face frontal
+    const medTex = _cer3DEmojiTexture(THREE, d.medal);
+    const med = new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.7), new THREE.MeshBasicMaterial({ map:medTex, transparent:true, depthWrite:false }));
+    med.position.set(d.x, base + d.h*0.5, -3 + 1.55); med.material.opacity = 0;
+    fx.scene.add(med);
+    // rótulo nome+pontos acima do bloco (billboard)
+    const u = top3[d.i] || {}; const nm = (u.apelido||u.nome||'—'); const pts = (u.pontos!=null? u.pontos+' pts':'');
+    const labTex = _cer3DLabelTexture(THREE, nm, pts, d.c);
+    const lab = new THREE.Mesh(new THREE.PlaneGeometry(4.6,1.58), new THREE.MeshBasicMaterial({ map:labTex, transparent:true, depthWrite:false }));
+    lab.position.set(d.x, base + d.h + 1.5, -3); lab.material.opacity = 0;
+    fx.scene.add(lab);
+    // coroa no campeão
+    let crown = null;
+    if(d.i===0){ crown = new THREE.Mesh(new THREE.PlaneGeometry(2.4,2.4), new THREE.MeshBasicMaterial({ map:_cer3DEmojiTexture(THREE,'👑'), transparent:true, depthWrite:false }));
+      crown.position.set(d.x, base + d.h + 3.2, -3); crown.material.opacity = 0; fx.scene.add(crown); }
+    fx.pillars.push({ box, med, lab, crown, delay: order*0.2, t:0 });
+  });
+}
+// Explosão de energia + raios (usada nos destaques e ao cravar o campeão).
+function _cer3DEnergyBurst(fx, nx, ny, scale){
+  const THREE = fx.THREE; const w = _cer3DToWorld(fx, nx, ny); const z = 2; scale = scale||1;
+  // faíscas radiais (pontos aditivos)
+  const M = Math.round(70*scale); const pos = new Float32Array(M*3), vel = new Float32Array(M*3);
+  for(let i=0;i<M;i++){ const a=Math.random()*Math.PI*2, b=(Math.random()*2-1)*0.7, sp=(6+Math.random()*10)*scale;
+    pos[i*3]=w.x; pos[i*3+1]=w.y; pos[i*3+2]=z;
+    vel[i*3]=Math.cos(a)*sp; vel[i*3+1]=Math.sin(a)*sp; vel[i*3+2]=b*sp; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat = new THREE.PointsMaterial({ size:0.7*scale, map:fx.sprite, color:0xFFE9A8, transparent:true, opacity:1, depthWrite:false, blending:THREE.AdditiveBlending, sizeAttenuation:true });
+  const pts = new THREE.Points(geo, mat); fx.scene.add(pts);
+  fx.transient.push({ obj:pts, vel, life:1, decay:1.6, kind:'spark' });
+  // raios: algumas linhas quebradas saindo do centro
+  const bolts = 5; const lp = [];
+  for(let k=0;k<bolts;k++){ const ang = Math.random()*Math.PI*2, len = (6+Math.random()*5)*scale, seg = 7;
+    let px=w.x, py=w.y; for(let s=0;s<seg;s++){ const nxp=w.x+Math.cos(ang)*len*((s+1)/seg)+(Math.random()*2-1)*0.9;
+      const nyp=w.y+Math.sin(ang)*len*((s+1)/seg)+(Math.random()*2-1)*0.9; lp.push(px,py,z, nxp,nyp,z); px=nxp; py=nyp; } }
+  const bgeo = new THREE.BufferGeometry(); bgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lp),3));
+  const bmat = new THREE.LineBasicMaterial({ color:0xBFE3FF, transparent:true, opacity:1, blending:THREE.AdditiveBlending });
+  const seglines = new THREE.LineSegments(bgeo, bmat); fx.scene.add(seglines);
+  fx.transient.push({ obj:seglines, life:1, decay:4.5, kind:'bolt' });
+}
+function _cer3DLoop(now){
+  const fx = _fx3; if(!fx){ return; }
+  const dt = Math.min(0.05, (now - fx.last)/1000); fx.last = now;
+  const T = fx.THREE;
+  // Câmera: no pódio fica um pouco acima e inclinada p/ baixo (dá volume 3D);
+  // na abertura, centralizada com parallax suave.
+  if(fx.mode === 'podium'){
+    fx.cam.position.x = Math.sin(now*0.00012)*0.7; fx.cam.position.y = 3.4 + Math.cos(now*0.00010)*0.3; fx.cam.position.z = 18;
+    fx.cam.lookAt(0, -1.4, -3);
+  } else {
+    fx.cam.position.x = Math.sin(now*0.00016)*0.9; fx.cam.position.y = Math.cos(now*0.00013)*0.6; fx.cam.position.z = 20; fx.cam.lookAt(0,0,0);
+  }
+  // confete
+  if(fx.confetti){ const p = fx.confetti.geometry.attributes.position.array, v = fx.confVel;
+    for(let i=0;i<v.length;i+=3){ p[i]+=v[i]*dt; p[i+1]+=v[i+1]*dt; p[i+2]+=v[i+2]*dt;
+      if(p[i+1] < -fx.halfH*1.2){ p[i+1] = fx.halfH*(1+Math.random()*0.5); p[i]=(Math.random()*2-1)*fx.halfW*1.1; } }
+    fx.confetti.geometry.attributes.position.needsUpdate = true; }
+  // estrelas: leve giro
+  if(fx.stars) fx.stars.rotation.z += dt*0.02;
+  // pódio: blocos sobem (easeOut); depois medalha/rótulo/coroa surgem (fade) e
+  // os rótulos/coroa ficam de frente p/ a câmera (billboard).
+  fx.pillars.forEach(pl=>{ pl.t += dt; const tt = Math.max(0,(pl.t - pl.delay))/0.85; const e = tt<=0?0:(tt>=1?1:1-Math.pow(1-tt,3));
+    pl.box.scale.y = Math.max(0.001, e);
+    const fade = Math.max(0, Math.min(1, (pl.t - pl.delay - 0.7)/0.5));
+    if(pl.med) pl.med.material.opacity = fade * e;
+    if(pl.lab){ pl.lab.material.opacity = fade; pl.lab.lookAt(fx.cam.position); }
+    if(pl.crown){ pl.crown.material.opacity = fade; pl.crown.lookAt(fx.cam.position); } });
+  // transitórios (faíscas/raios)
+  fx.transient = fx.transient.filter(tr=>{
+    tr.life -= dt*tr.decay; if(tr.life<=0){ fx.scene.remove(tr.obj); tr.obj.geometry.dispose(); tr.obj.material.dispose(); return false; }
+    if(tr.kind==='spark' && tr.vel){ const p = tr.obj.geometry.attributes.position.array;
+      for(let i=0;i<tr.vel.length;i+=3){ p[i]+=tr.vel[i]*dt; p[i+1]+=tr.vel[i+1]*dt - 3*dt; p[i+2]+=tr.vel[i+2]*dt; }
+      tr.obj.geometry.attributes.position.needsUpdate = true; }
+    tr.obj.material.opacity = Math.max(0, tr.life); return true;
+  });
+  fx.renderer.render(fx.scene, fx.cam);
+  fx.raf = requestAnimationFrame(_cer3DLoop);
+}
+// Inicia a camada 3D do PÓDIO (chamado no reveal). top3 usado só p/ nº de pilares.
+function _cerFx3DPodium(top3){
+  _cerLoad3D().then(THREE=>{
+    if(!THREE) return; // fallback: fica só a festa 2D
+    const overlay = document.getElementById('celebra-overlay'); if(!overlay) return;
+    if(overlay.classList.contains('hidden')) return;
+    _cerFx3DStop();
+    // Com 3D ativo, o card sobe p/ o topo e o pódio HTML some — o pódio 3D é o centro.
+    overlay.classList.add('cer3d-on');
+    const fx = _cer3DMount(THREE, overlay, document.querySelector('#celebra-overlay .celebra-card'));
+    if(!fx){ overlay.classList.remove('cer3d-on'); return; } _fx3 = fx; fx.mode = 'podium';
+    _cer3DBuildStars(fx, 300); _cer3DBuildPodium(fx, top3); _cer3DBuildConfetti(fx, 420);
+    // rajadas de energia ao surgir o campeão
+    _cer3DEnergyBurst(fx, 0.5, 0.5, 1.4);
+    [500,1100,1800].forEach(ms=> setTimeout(()=>{ if(_fx3===fx) _cer3DEnergyBurst(fx, 0.3+Math.random()*0.4, 0.4+Math.random()*0.25, 1.1); }, ms));
+    fx.last = performance.now(); fx.raf = requestAnimationFrame(_cer3DLoop);
+  }).catch(()=>{});
+}
+// Rajada de energia/raios num destaque da abertura (frases `big`).
+function _cerFx3DEnergyPulse(){
+  _cerLoad3D().then(THREE=>{
+    if(!THREE) return;
+    const overlay = document.getElementById('cerimonia-overlay'); if(!overlay || overlay.classList.contains('hidden')) return;
+    if(!_fx3 || _fx3.mode!=='trailer'){
+      _cerFx3DStop();
+      const fx = _cer3DMount(THREE, overlay, document.getElementById('cerimonia-stage'));
+      if(!fx) return; _fx3 = fx; fx.mode = 'trailer';
+      fx.last = performance.now(); fx.raf = requestAnimationFrame(_cer3DLoop);
+    }
+    _cer3DEnergyBurst(_fx3, 0.5, 0.4, 1.15);
+  }).catch(()=>{});
+}
+function _cerFx3DStop(){
+  const ov = document.getElementById('celebra-overlay'); if(ov) ov.classList.remove('cer3d-on');
+  const fx = _fx3; _fx3 = null; if(!fx) return;
+  try { if(fx.raf) cancelAnimationFrame(fx.raf); } catch(_){}
+  try { if(fx.onResize) window.removeEventListener('resize', fx.onResize); } catch(_){}
+  const disp = m => { try{ if(m){ if(m.geometry) m.geometry.dispose(); if(m.material){ if(m.material.map) m.material.map.dispose(); m.material.dispose(); } } }catch(_){} };
+  try {
+    fx.transient.forEach(tr=>disp(tr.obj));
+    disp(fx.confetti); disp(fx.stars);
+    (fx.pillars||[]).forEach(pl=>{ disp(pl.box); disp(pl.med); disp(pl.lab); disp(pl.crown); });
+    if(fx.sprite) fx.sprite.dispose();
+    fx.renderer.dispose();
+  } catch(_){}
+  try { if(fx.canvas && fx.canvas.parentNode) fx.canvas.parentNode.removeChild(fx.canvas); } catch(_){}
 }
 
 // Toca a celebração no máximo 1× por anúncio (rev). Guarda o rev já visto em
@@ -18385,28 +18644,6 @@ function _cerPhaseStandings(d, gameIds){
   const worst = rows.slice().sort((a,b)=> a.pts-b.pts || byName(a,b)).slice(0,3);
   return { best, worst, total: rows.length, jogos: ids.length };
 }
-function _cerPhaseRankRows(list, kind){
-  const medals = ['🥇','🥈','🥉'];
-  return list.map((r,idx)=>`<div class="cer-phase-row">
-    <span class="rk">${kind==='best' ? (medals[idx]||(idx+1)) : '🧊'}</span>
-    <span class="nm">${_rzName(r.u)}</span>
-    <span class="pt">${r.pts}</span></div>`).join('');
-}
-function _cerPhaseCardHTML(def, st){
-  const showWorst = st.total > 3;
-  const best = `<div class="cer-phase-col best">
-      <div class="cer-phase-col-h">🏆 Top 3</div>${_cerPhaseRankRows(st.best,'best')}</div>`;
-  const worst = showWorst ? `<div class="cer-phase-col worst">
-      <div class="cer-phase-col-h">🧊 Piores 3</div>${_cerPhaseRankRows(st.worst,'worst')}</div>` : '';
-  return `<div class="cer-phase-card">
-    <div class="cer-phase-head">
-      <span class="cer-phase-emoji">${def.emoji}</span>
-      <div><div class="cer-phase-title">${esc(def.title)}</div>
-      <div class="cer-phase-sub">${esc(def.sub)} · ${st.jogos} jogo${st.jogos>1?'s':''}</div></div>
-    </div>
-    <div class="cer-phase-cols"${showWorst?'':' style="grid-template-columns:1fr"'}>${best}${worst}</div>
-  </div>`;
-}
 function _cerPhaseThumbHTML(def, st){
   const showWorst = st.total > 3;
   const col = (list, cls, head) => `<div class="cpt-col"><div class="cpt-h ${cls}">${head}</div>${
@@ -18576,6 +18813,9 @@ async function _cerShareViewer(){
 }
 // Estágio: mostra os cards de fase um a um (com fogos), encolhendo cada um para
 // uma grade que se acumula na tela; ao fim, a grade completa fica alguns segundos.
+// Estágio final antes do pódio: UM único card com o Top 3 e os piores de TODAS as
+// fases juntas (2×2). Como é só um quadro, ele fica na tela até o pódio (agendado no
+// tempo absoluto do áudio) — dá bastante tempo para as pessoas lerem com calma.
 function _cerStagePhases(d){
   if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
   const stageEl = document.getElementById('cerimonia-stage');
@@ -18585,46 +18825,14 @@ function _cerStagePhases(d){
     .filter(x=>x.st);
   if(!phases.length) return; // sem fases: o último card de curiosidade segura a tela
   _cerSetStageLabel('Destaques por fase');
-  stageEl.innerHTML = `<div class="cer-phases">
-    <div class="cer-phase-active" id="cer-phase-active"></div>
-    <div class="cer-phase-grid" id="cer-phase-grid"></div>
+  stageEl.innerHTML = `<div class="cer-phases cer-phases-final">
+    <div class="cer-phases-cap">🏅 Top 3 e piores de cada fase</div>
+    <div class="cer-phase-grid">${phases.map(({def,st})=>`<div class="cer-phase-thumb">${_cerPhaseThumbHTML(def,st)}</div>`).join('')}</div>
   </div>`;
-  const activeEl = document.getElementById('cer-phase-active');
-  const gridEl   = document.getElementById('cer-phase-grid');
-  const OUT = 520;
-  const HOLD = Math.max(2200, ((_cerimoniaState && _cerimoniaState.cardPer) || 4400) - OUT);
-  let i = 0;
-  const showNext = ()=>{
-    if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
-    if(i >= phases.length){
-      // Grade completa fica na tela até o pódio (agendado no tempo absoluto do áudio).
-      _cerSetStageLabel('Todos os destaques');
-      return;
-    }
-    const { def, st } = phases[i];
-    _cerSetStageLabel(`Destaques por fase · ${i+1}/${phases.length}`);
-    if(activeEl) activeEl.innerHTML = _cerPhaseCardHTML(def, st);
-    _cerFwBurst(2 + (Math.random()*2|0)); // poucos fogos a cada card
-    _cerTimer(()=>{
-      if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
-      const card = activeEl && activeEl.firstElementChild;
-      if(card) card.classList.add('cer-phase-out');
-      _cerTimer(()=>{
-        if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
-        if(activeEl) activeEl.innerHTML = '';
-        if(gridEl){
-          const thumb = document.createElement('div');
-          thumb.className = 'cer-phase-thumb';
-          thumb.innerHTML = _cerPhaseThumbHTML(def, st);
-          gridEl.appendChild(thumb);
-          requestAnimationFrame(()=>thumb.classList.add('show'));
-        }
-        i++;
-        showNext();
-      }, OUT);
-    }, HOLD);
-  };
-  showNext();
+  // Revela os quadros numa cascata rápida e segura tudo até o pódio.
+  const thumbs = stageEl.querySelectorAll('.cer-phase-thumb');
+  thumbs.forEach((t,i)=> _cerTimer(()=>{ if(_cerimoniaState && !_cerimoniaState.closed) t.classList.add('show'); }, 120 + i*150));
+  _cerFwBurst(4);
 }
 
 // Abre o overlay no estágio "Iniciar" (aguarda o toque do usuário p/ liberar o som).
@@ -18723,7 +18931,7 @@ function _cerStageTrailer(d){
       _cerFwBurst(6);
     } else {
       host.innerHTML = `<div class="cer-trailer-beat"><div class="cer-open-phrase${b.big?' big':''}">${b.html}</div></div>`;
-      if(b.big) _cerFwBurst(2);
+      if(b.big){ _cerFwBurst(2); _cerFx3DEnergyPulse(); } // raios/energia 3D (opcional) nos destaques
     }
   };
   const renderGif = (show)=>{
@@ -18754,7 +18962,7 @@ function _cerStageTrailer(d){
     const s = _cerimoniaState; if(!s || s.closed || s.revealed) return;
     const host = document.getElementById('cer-beat'); if(!host) return; // cards assumiram
     const cur = nowMs() - offsetMs;
-    if(cur >= introEndMs){ _cerStageCards(d); return; } // fim da abertura → cards (não reagenda)
+    if(cur >= introEndMs){ if(_fx3 && _fx3.mode==='trailer') _cerFx3DStop(); _cerStageCards(d); return; } // fim da abertura → cards (libera a GPU da camada 3D)
     let idx = -1;
     for(let i=0;i<script.length;i++){ if(script[i].t <= cur) idx = i; else break; }
     if(idx >= 0 && idx !== shownIdx){ shownIdx = idx; renderBeat(script[idx]); }
@@ -18825,6 +19033,7 @@ function _cerStageReveal(d){
   // continuous=true: os fogos seguem rolando enquanto o pódio fica na tela.
   // _celebraStart limpa o painel do jogador, então o pódio aparece sozinho primeiro.
   _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
+  _cerFx3DPodium(top3); // pódio 3D opcional (blocos + nomes + confete c/ profundidade + raios); no-op se indisponível
   // Só o pódio por ~5s; depois entram as estatísticas personalizadas de quem assiste.
   _cerTimer(()=>{
     if(!_cerimoniaState || _cerimoniaState.closed) return;
