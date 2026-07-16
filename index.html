@@ -1601,8 +1601,6 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cer-start-card h2{color:var(--gold);font-size:1.45rem;margin:8px 0 6px}
 .cer-start-card p{color:var(--text-muted);font-size:.88rem;line-height:1.55;margin:0 0 20px}
 .cer-btn-play{background:linear-gradient(135deg,var(--gold),var(--orange));color:#1a1200;border:none;font-weight:800;font-size:1.05rem;padding:14px 30px;border-radius:30px;cursor:pointer;box-shadow:0 6px 20px rgba(255,140,0,.4)}
-.cer-intro-title{font-size:2rem;font-weight:800;color:var(--gold);text-shadow:0 2px 20px rgba(255,215,0,.5);animation:celebraCardIn .8s ease both}
-.cer-intro-sub{color:var(--text-muted);font-size:1rem;margin-top:8px}
 .cer-fact{animation:cerFactIn .6s cubic-bezier(.2,1.2,.4,1) both;width:100%;max-width:460px}
 .cer-fact-emoji{font-size:3.4rem;line-height:1;filter:drop-shadow(0 4px 14px rgba(255,215,0,.4))}
 .cer-fact-label{color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:.82rem;margin-top:12px}
@@ -1655,7 +1653,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 /* Aviso p/ aumentar o volume (card inicial + roster) */
 .cer-vol-tip{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,140,0,.14);border:1px solid var(--orange);border-radius:14px;padding:10px 14px;margin:0 0 18px;color:var(--orange);font-weight:800;font-size:.9rem}
 /* Abertura: trailer cinematográfico (frases de efeito + números animados) */
-.cer-trailer{width:100%;max-width:560px;min-height:40vh;display:flex;align-items:center;justify-content:center}
+.cer-trailer{width:100%;max-width:560px;min-height:40vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
 .cer-trailer-beat{animation:cerTrailerIn .6s cubic-bezier(.2,1.1,.35,1) both;width:100%;text-align:center}
 .cer-trailer-trophy{font-size:4rem;line-height:1;filter:drop-shadow(0 6px 18px rgba(255,215,0,.5))}
 .cer-trailer-title{color:var(--gold);font-weight:800;font-size:1.9rem;line-height:1.1;margin-top:10px;text-shadow:0 2px 20px rgba(255,215,0,.4)}
@@ -1668,13 +1666,15 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 /* Transição entre estágios (ex.: abertura → cards): dissolve + sobe + desfoca */
 .cer-stage-leave{animation:cerStageLeave .5s cubic-bezier(.4,0,.55,1) forwards;pointer-events:none}
 @keyframes cerStageLeave{from{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}to{opacity:0;transform:translateY(-26px) scale(.9);filter:blur(5px)}}
-@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card,.cer-trailer-beat{animation:none}.cer-phase-thumb{transition:none}.cer-stage-leave{animation-duration:.15s}}
+@media(prefers-reduced-motion:reduce){.cer-fact,.cer-phase-card,.cer-trailer-beat{animation:none}.cer-phase-thumb{transition:none}.cer-stage-leave{animation-duration:.15s}}
 /* Abertura cinematográfica: roteiro em fonte elegante (Cinzel) + GIF do clímax */
 .cer-open-phrase{font-family:'Cinzel',Georgia,'Times New Roman',serif;color:var(--white);font-weight:700;font-size:1.7rem;line-height:1.4;letter-spacing:.01em;overflow-wrap:anywhere;text-shadow:0 2px 18px rgba(0,0,0,.55)}
 .cer-open-phrase.big{color:var(--gold);font-weight:800;font-size:2.3rem;text-shadow:0 2px 26px rgba(255,215,0,.5)}
 .cer-open-climax-beat{display:flex;flex-direction:column;align-items:center;gap:10px}
 .cer-open-pre{font-family:'Cinzel',Georgia,serif;color:var(--text-muted);font-weight:600;font-size:1.15rem;letter-spacing:.06em}
 .cer-open-climax{font-family:'Cinzel',Georgia,'Times New Roman',serif;color:var(--gold);font-weight:800;font-size:3.1rem;line-height:1.05;letter-spacing:.02em;text-transform:uppercase;text-shadow:0 0 30px rgba(255,215,0,.7),0 3px 24px rgba(255,140,0,.5);animation:cerGloryIn 1s cubic-bezier(.2,1.2,.35,1) both}
+.cer-open-gif-slot{display:flex;justify-content:center;width:100%}
+.cer-open-gif-slot:empty{display:none}
 .cer-open-gif-wrap{margin-top:6px;max-width:80%;width:auto}
 .cer-open-gif{display:block;max-width:100%;max-height:34vh;border-radius:16px;border:1.5px solid var(--gold);box-shadow:0 0 34px rgba(255,215,0,.35);animation:cerGifIn .9s ease .2s both}
 @keyframes cerGloryIn{from{opacity:0;transform:scale(.7);filter:blur(6px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
@@ -2487,7 +2487,10 @@ let CFG = {
   valor_participacao:50,
   qrcode_whatsapp:'',
   cerimonia_audio_url:'',
-  cerimonia_gif_url:'',
+  cerimonia_gif_url:'',            // legado (string) — migrado p/ cerimonia_gif
+  cerimonia_gif:null,             // { url, at(seg), dur(seg), on } — GIF da abertura
+  cerimonia_textos:null,         // [{ text, at(seg), on }] — roteiro da abertura (null = padrão)
+  cerimonia_cards:null,          // [{ key, on, dur(seg) }] — ordem/tempo/on dos cards
   cerimonia_sync_offset:0
 };
 
@@ -13666,9 +13669,34 @@ async function renderAdminConfig() {
       <div class="form-group"><label>URL da música (MP3) — Firebase Storage</label><input id="cfg-cerimonia-audio" value="${esc(CFG.cerimonia_audio_url||'')}" placeholder="https://firebasestorage.googleapis.com/.../tema.mp3?alt=media&token=..."></div>
       <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">Suba o MP3 no Firebase Storage, gere a URL de download (com <code>?alt=media&token=…</code>) e cole aqui. A música é responsabilidade sua quanto a direitos autorais.</p>
       <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaAudio()">💾 Salvar música</button></div>
-      <div class="form-group"><label>URL do GIF da Cerimônia (aparece no clímax da abertura)</label><input id="cfg-cerimonia-gif" value="${esc(CFG.cerimonia_gif_url||'')}" placeholder="https://.../copa.gif  (ou .webp / .png / .mp4)"></div>
-      <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">Cole a URL de um GIF da Copa (Firebase Storage, Giphy, etc.). Ele surge junto de <b>"Glória Eterna!"</b> no fim da abertura. Deixe em branco para não exibir GIF.</p>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <div class="card-title" style="font-size:1rem;margin-bottom:6px">📝 Textos da abertura</div>
+      <p class="text-muted" style="font-size:0.78rem;margin:0 0 10px">Cada frase aparece no <b>segundo</b> indicado da música e some quando a próxima entra. A ordem segue o segundo. Use <code>&lt;br&gt;</code> para quebrar linha. Deixe desmarcado para desativar uma frase. O clímax <b>"Glória Eterna!"</b> (+ GIF) é fixo e fecha a abertura.</p>
+      <div id="cfg-cer-textos">${_cerTextosEditorHTML()}</div>
+      <div class="btn-group" style="margin:6px 0 12px">
+        <button class="btn btn-secondary" onclick="cerTextoAddRow()">➕ Adicionar frase</button>
+        <button class="btn btn-secondary" onclick="cerTextosRestaurarPadrao()">↩️ Restaurar padrão</button>
+        <button class="btn btn-primary" onclick="saveCerimoniaTextos()">💾 Salvar textos</button>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <div class="card-title" style="font-size:1rem;margin-bottom:6px">🎞️ GIF da abertura</div>
+      <p class="text-muted" style="font-size:0.78rem;margin:0 0 10px">Um GIF/imagem da Copa que surge durante a abertura. Configure <b>quando aparece</b> e <b>quanto tempo fica</b>. Deixe a URL em branco (ou desmarque) para não exibir.</p>
+      <div class="form-group"><label>URL do GIF</label><input id="cfg-cerimonia-gif" value="${esc(_cerGif().url)}" placeholder="https://.../copa.gif  (ou .webp / .png / .mp4)"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
+        <div class="form-group" style="margin:0;flex:1;min-width:120px"><label>Aparecer aos (s)</label><input id="cfg-cerimonia-gif-at" type="number" min="0" step="1" value="${esc(String(_cerGif().at))}" placeholder="37"></div>
+        <div class="form-group" style="margin:0;flex:1;min-width:120px"><label>Permanecer (s) — 0 = até o fim</label><input id="cfg-cerimonia-gif-dur" type="number" min="0" step="1" value="${esc(String(_cerGif().dur))}" placeholder="0"></div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;padding-bottom:8px"><input id="cfg-cerimonia-gif-on" type="checkbox" ${_cerGif().on?'checked':''}> Ativo</label>
+      </div>
       <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaGif()">💾 Salvar GIF</button></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <div class="card-title" style="font-size:1rem;margin-bottom:6px">🃏 Cards da cerimônia</div>
+      <p class="text-muted" style="font-size:0.78rem;margin:0 0 10px">Ligue/desligue cada card, reordene com ↑/↓ e defina o <b>tempo de exibição</b> (segundos). Cards com tempo <b>0</b> usam o ritmo automático. Um card só aparece se houver dados para ele naquela edição. O card final (pódio) tem momento fixo no fim da música — a soma dos tempos não pode ultrapassá-lo.</p>
+      <div id="cfg-cer-cards-meter" class="text-muted" style="font-size:.82rem;margin-bottom:8px"></div>
+      <div id="cfg-cer-cards">${_cerCardsEditorHTML()}</div>
+      <div class="btn-group" style="margin:6px 0 12px">
+        <button class="btn btn-secondary" onclick="cerCardsResetOrder()">↩️ Restaurar padrão</button>
+        <button class="btn btn-primary" onclick="saveCerimoniaCards()">💾 Salvar cards</button>
+      </div>
       <div class="form-group"><label>Ajuste fino da sincronia (segundos) — + atrasa o texto · − adianta</label><input id="cfg-cerimonia-offset" type="number" step="0.5" value="${esc(String(CFG.cerimonia_sync_offset||0))}" placeholder="0"></div>
       <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">O texto da abertura acompanha a posição real da música automaticamente. Se ainda ficar um tiquinho adiantado ou atrasado em relação à sua faixa, ajuste aqui: ex. <b>1.5</b> mostra tudo 1,5s mais tarde; <b>-2</b> mostra 2s mais cedo. Teste com "👁️ Testar (só eu)".</p>
       <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaOffset()">💾 Salvar ajuste</button></div>
@@ -14545,10 +14573,143 @@ async function saveCerimoniaAudio() {
 async function saveCerimoniaGif() {
   if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
   const url = (document.getElementById('cfg-cerimonia-gif')?.value || '').trim();
+  const at  = Math.max(0, parseInt(document.getElementById('cfg-cerimonia-gif-at')?.value)  || 0);
+  const dur = Math.max(0, parseInt(document.getElementById('cfg-cerimonia-gif-dur')?.value) || 0);
+  const on  = !!document.getElementById('cfg-cerimonia-gif-on')?.checked && !!url;
+  const gif = { url, at, dur, on };
   try {
-    await db_.collection('config').doc('geral').set({ cerimonia_gif_url: url }, { merge: true });
-    CFG.cerimonia_gif_url = url;
-    showToast(url ? '🎞️ GIF da cerimônia salvo!' : 'GIF removido.', 'success');
+    // Grava o objeto novo e zera o campo legado (migração) para não haver ambiguidade.
+    await db_.collection('config').doc('geral').set({ cerimonia_gif: gif, cerimonia_gif_url: '' }, { merge: true });
+    CFG.cerimonia_gif = gif; CFG.cerimonia_gif_url = '';
+    showToast(url ? `🎞️ GIF salvo (aparece aos ${at}s${dur?`, por ${dur}s`:''}).` : 'GIF removido.', 'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// ── Editor dos TEXTOS da abertura (Admin) ────────────────────────────────────
+// Fonte bruta (inclui frases desativadas), ordenada por segundo, p/ o editor.
+function _cerTextosRaw(){
+  const arr = Array.isArray(CFG.cerimonia_textos) && CFG.cerimonia_textos.length ? CFG.cerimonia_textos : _CER_TEXTOS_DEFAULT;
+  return arr.map(t=>({ text:String(t.text||''), at:Math.max(0,parseFloat(t.at)||0), big:!!t.big, on:t.on!==false })).sort((a,b)=>a.at-b.at);
+}
+function _cerTextoRowHTML(t){
+  return `<div class="cer-cfg-row cer-txt-row" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+    <input class="cer-txt-text" value="${esc(t.text||'')}" placeholder="Frase (use &lt;br&gt; p/ quebrar)" style="flex:1;min-width:160px">
+    <input class="cer-txt-at" type="number" min="0" step="1" value="${esc(String(t.at||0))}" title="segundo em que aparece" style="width:66px">
+    <label style="font-size:.72rem;display:flex;gap:3px;align-items:center" title="frase de destaque (maior/dourada)"><input class="cer-txt-big" type="checkbox" ${t.big?'checked':''}> ⭐</label>
+    <label style="font-size:.72rem;display:flex;gap:3px;align-items:center"><input class="cer-txt-on" type="checkbox" ${t.on!==false?'checked':''}> on</label>
+    <button class="btn btn-secondary" style="padding:2px 8px" onclick="cerTextoDelRow(this)">✕</button>
+  </div>`;
+}
+function _cerTextosEditorHTML(){ return _cerTextosRaw().map(_cerTextoRowHTML).join(''); }
+function cerTextoAddRow(){
+  const host = document.getElementById('cfg-cer-textos'); if(!host) return;
+  host.insertAdjacentHTML('beforeend', _cerTextoRowHTML({ text:'', at:0, big:false, on:true }));
+}
+function cerTextoDelRow(btn){ const row = btn && btn.closest('.cer-txt-row'); if(row) row.remove(); }
+function cerTextosRestaurarPadrao(){
+  const host = document.getElementById('cfg-cer-textos'); if(!host) return;
+  host.innerHTML = _CER_TEXTOS_DEFAULT.map(_cerTextoRowHTML).join('');
+  showToast('Roteiro padrão restaurado (lembre de salvar).', 'info');
+}
+async function saveCerimoniaTextos(){
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  const rows = [...document.querySelectorAll('#cfg-cer-textos .cer-txt-row')];
+  const arr = rows.map(r=>({
+    text: (r.querySelector('.cer-txt-text')?.value || '').trim(),
+    at:   Math.max(0, parseFloat(r.querySelector('.cer-txt-at')?.value) || 0),
+    big:  !!r.querySelector('.cer-txt-big')?.checked,
+    on:   !!r.querySelector('.cer-txt-on')?.checked,
+  })).filter(t=>t.text !== '').sort((a,b)=>a.at-b.at);
+  if(!arr.length){ showToast('Adicione ao menos uma frase (ou restaure o padrão).','error'); return; }
+  try {
+    await db_.collection('config').doc('geral').set({ cerimonia_textos: arr }, { merge: true });
+    CFG.cerimonia_textos = arr;
+    showToast(`📝 Textos salvos (${arr.length} frase${arr.length>1?'s':''}).`, 'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// ── Editor dos CARDS da cerimônia (Admin) ────────────────────────────────────
+let _cerAdminDurMs = 0; // duração real da música (carregada sob demanda p/ a validação)
+function _cerLoadAudioDur(){
+  const url = (CFG.cerimonia_audio_url||'').trim(); if(!url) return;
+  try {
+    const a = new Audio(); a.preload = 'metadata'; a.src = url;
+    a.addEventListener('loadedmetadata', ()=>{ if(isFinite(a.duration) && a.duration > 30){ _cerAdminDurMs = Math.round(a.duration*1000); _cerCardsUpdateMeter(); } });
+  } catch(_){}
+}
+// Segundos disponíveis p/ os cards: entre o fim da abertura e o pódio (fim da música − 4s),
+// descontando o respiro final da grade. (As "Destaques por fase" também usam esta janela.)
+function _cerCardsAvailSec(){
+  const totalMs = _cerAdminDurMs || 159000;
+  const introEnd = _cerIntroEndMs();
+  const podiumAt = Math.max(introEnd + 15000, totalMs - 4000);
+  const gridHold = Math.min(6000, (podiumAt - introEnd) * 0.06);
+  return Math.max(0, Math.round((podiumAt - introEnd - gridHold) / 1000));
+}
+// Ordem de exibição atual do editor, mesclando a config salva com o catálogo completo.
+function _cerCardsRows(){
+  const cfg = Array.isArray(CFG.cerimonia_cards) ? CFG.cerimonia_cards : [];
+  const byKey = {}; cfg.forEach(c=>{ if(c && c.key) byKey[c.key] = c; });
+  const ordered = [];
+  cfg.forEach(c=>{ const cat = _CER_CARD_CATALOG.find(x=>x.key===c.key); if(cat) ordered.push({ ...cat, on:c.on!==false, dur:parseFloat(c.dur)||0 }); });
+  _CER_CARD_CATALOG.forEach(cat=>{ if(!byKey[cat.key]) ordered.push({ ...cat, on:true, dur:0 }); });
+  return ordered;
+}
+function _cerCardRowHTML(c){
+  return `<div class="cer-cfg-row cer-card-row" data-key="${esc(c.key)}" style="display:flex;gap:6px;align-items:center;margin-bottom:5px;flex-wrap:wrap">
+    <span style="flex:1;min-width:150px;font-size:.85rem">${c.emoji} ${esc(c.label)}</span>
+    <input class="cer-card-dur" type="number" min="0" step="1" value="${esc(String(c.dur||0))}" title="tempo de exibição (s); 0 = automático" oninput="_cerCardsUpdateMeter()" style="width:66px">
+    <label style="font-size:.72rem;display:flex;gap:3px;align-items:center"><input class="cer-card-on" type="checkbox" ${c.on!==false?'checked':''} onchange="_cerCardsUpdateMeter()"> on</label>
+    <button class="btn btn-secondary" style="padding:2px 7px" onclick="cerCardMove(this,-1)" title="subir">↑</button>
+    <button class="btn btn-secondary" style="padding:2px 7px" onclick="cerCardMove(this,1)" title="descer">↓</button>
+  </div>`;
+}
+function _cerCardsEditorHTML(){
+  requestAnimationFrame(()=>{ _cerLoadAudioDur(); _cerCardsUpdateMeter(); }); // paint → carrega duração + medidor
+  return _cerCardsRows().map(_cerCardRowHTML).join('');
+}
+function cerCardMove(btn, dir){
+  const row = btn && btn.closest('.cer-card-row'); if(!row) return;
+  if(dir < 0){ const p = row.previousElementSibling; if(p) row.parentNode.insertBefore(row, p); }
+  else { const n = row.nextElementSibling; if(n) row.parentNode.insertBefore(n, row); }
+}
+function cerCardsResetOrder(){
+  const host = document.getElementById('cfg-cer-cards'); if(!host) return;
+  host.innerHTML = _CER_CARD_CATALOG.map(c=>_cerCardRowHTML({ ...c, on:true, dur:0 })).join('');
+  _cerCardsUpdateMeter();
+  showToast('Ordem/tempos padrão restaurados (lembre de salvar).', 'info');
+}
+function _cerCardsReadRows(){
+  return [...document.querySelectorAll('#cfg-cer-cards .cer-card-row')].map(r=>({
+    key: r.dataset.key,
+    on:  !!r.querySelector('.cer-card-on')?.checked,
+    dur: Math.max(0, parseFloat(r.querySelector('.cer-card-dur')?.value) || 0),
+  }));
+}
+function _cerCardsUpdateMeter(){
+  const meter = document.getElementById('cfg-cer-cards-meter'); if(!meter) return;
+  const rows = _cerCardsReadRows();
+  const used = rows.filter(r=>r.on).reduce((s,r)=>s+r.dur, 0);
+  const avail = _cerCardsAvailSec();
+  const over = used > avail;
+  meter.innerHTML = `Tempo manual usado: <b style="color:${over?'var(--danger,#e74c3c)':'var(--text)'}">${used}s</b> / disponível: <b>~${avail}s</b>${over?` <span style="color:var(--danger,#e74c3c)">⚠️ excede em ${Math.ceil(used-avail)}s</span>`:''}<br><span style="font-size:.72rem">Cards com tempo 0 e as fases dividem o tempo restante automaticamente.</span>`;
+}
+async function saveCerimoniaCards(){
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  const rows = _cerCardsReadRows();
+  const used = rows.filter(r=>r.on).reduce((s,r)=>s+r.dur, 0);
+  const avail = _cerCardsAvailSec();
+  if(used > avail){
+    const over = Math.ceil(used - avail);
+    showToast(`A configuração excede em ${over} segundo${over>1?'s':''} o tempo disponível antes do card final. Reduza os tempos de exibição para continuar.`, 'error');
+    _cerCardsUpdateMeter();
+    return;
+  }
+  const arr = rows.map(r=>({ key:r.key, on:r.on, dur:r.dur }));
+  try {
+    await db_.collection('config').doc('geral').set({ cerimonia_cards: arr }, { merge: true });
+    CFG.cerimonia_cards = arr;
+    showToast('🃏 Cards da cerimônia salvos!', 'success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
@@ -18273,6 +18434,54 @@ function _cerTotalMs(){
   const d = a && a.duration;
   return (d && isFinite(d) && d > 30) ? Math.round(d * 1000) : 159000;
 }
+
+// ── Configuração da abertura (textos + GIF), editável no Admin ────────────────
+// Roteiro padrão da abertura (usado quando o admin não configurou textos próprios).
+// `at` em segundos; `big` = frase de destaque. O clímax "Glória Eterna!" é um beat
+// especial fixo (não faz parte desta lista editável) para preservar o momento-marca.
+const _CER_TEXTOS_DEFAULT = [
+  { text:'Senhoras e Senhores,',                                   at:0,  big:false },
+  { text:'Chegou a hora!',                                         at:8,  big:true  },
+  { text:'Depois de semanas de palpites,<br>disputas e reviravoltas...', at:12, big:false },
+  { text:'Restaram apenas os melhores!',                           at:15, big:true  },
+  { text:'Cada ponto conquistado,',                                at:18, big:false },
+  { text:'Cada resultado inesperado,',                             at:22, big:false },
+  { text:'Cada emoção vivida,',                                    at:24, big:false },
+  { text:'Nos trouxe até este momento.',                           at:26, big:false },
+  { text:'Agora não há mais nada o que fazer...',                  at:28, big:false },
+  { text:'Apenas um nome<br>será eternizado!',                     at:30, big:true  },
+  { text:'Seja Bem-vindo à',                                       at:34, big:false },
+];
+// Devolve o roteiro efetivo da abertura (config do admin ou o padrão), já filtrado
+// pelas frases ativas e ordenado por segundo.
+function _cerTextos(){
+  let arr = Array.isArray(CFG.cerimonia_textos) && CFG.cerimonia_textos.length ? CFG.cerimonia_textos : _CER_TEXTOS_DEFAULT;
+  return arr.filter(t => t && t.on !== false && String(t.text||'').trim() !== '')
+    .map(t => ({ text:String(t.text), at:Math.max(0, parseFloat(t.at)||0), big:!!t.big }))
+    .sort((a,b)=> a.at - b.at);
+}
+// Devolve a config efetiva do GIF da abertura, com retrocompatibilidade para o
+// campo legado `cerimonia_gif_url` (string). { url, at, dur, on }.
+function _cerGif(){
+  const g = CFG.cerimonia_gif;
+  if(g && typeof g === 'object'){
+    return { url:String(g.url||'').trim(), at:Math.max(0,parseFloat(g.at)||0), dur:Math.max(0,parseFloat(g.dur)||0), on:g.on!==false && !!String(g.url||'').trim() };
+  }
+  const legacy = String(CFG.cerimonia_gif_url||'').trim();
+  return { url:legacy, at:37, dur:0, on:!!legacy }; // dur 0 = fica até o fim da abertura
+}
+// Instante (ms) do clímax "Glória Eterna!" (+ GIF): 3s após a última frase da abertura.
+function _cerClimaxMs(){
+  const t = _cerTextos();
+  const lastAt = t.length ? t[t.length-1].at : 34;
+  return Math.round((lastAt + 3) * 1000); // default: 34+3 = 37s
+}
+// Instante (ms) em que a abertura termina e os cards começam: clímax + folga, nunca
+// menos que o piso histórico (_CER_INTRO_MS = 42s).
+function _cerIntroEndMs(){
+  return Math.max(_CER_INTRO_MS, _cerClimaxMs() + 5000); // default: 37+5 = 42s
+}
+
 function _cerSetStageLabel(txt){ const el = document.getElementById('cerimonia-stage-label'); if(el) el.textContent = txt || ''; }
 // Troca de estágio com transição: o conteúdo atual dissolve/sobe/desfoca e só
 // então `cb()` renderiza o próximo (que entra com a própria animação).
@@ -18497,6 +18706,60 @@ function _cerimoniaFacts(d){
     return { emoji:'💰', label:'Saldo nas trocas de palpite', extra:`<div class="cer-rank">${blocks.join('')}</div>` };
   });
   return facts;
+}
+
+// Catálogo estável de TODOS os cards de curiosidade possíveis (chave + rótulo). O rótulo
+// bate exatamente com o `label` que cada gerador de _cerimoniaFacts devolve — é assim que
+// a config do admin (cerimonia_cards, por `key`) casa com o card gerado em tempo real.
+const _CER_CARD_CATALOG = [
+  { key:'numeros',          emoji:'📋', label:'O bolão em números' },
+  { key:'lideranca',        emoji:'👑', label:'Mais tempo na liderança' },
+  { key:'rei_exatos',       emoji:'🎯', label:'Rei dos placares exatos' },
+  { key:'sniper',           emoji:'🎯', label:'Sniper — mira de precisão' },
+  { key:'oraculo',          emoji:'🧙', label:'Oráculo da Copa' },
+  { key:'consistente',      emoji:'🧱', label:'O mais consistente' },
+  { key:'sequencia',        emoji:'🔥', label:'Maior sequência de acertos' },
+  { key:'ousado',           emoji:'🎲', label:'O palpiteiro mais ousado' },
+  { key:'media',            emoji:'🐑', label:'O mais "na média"' },
+  { key:'arrancada',        emoji:'🚀', label:'Maior arrancada no mata-mata' },
+  { key:'tombo',            emoji:'🧊', label:'Maior tombo no mata-mata' },
+  { key:'mudou_mais',       emoji:'🔁', label:'Mudou mais de ideia' },
+  { key:'mudou_certo',      emoji:'📈', label:'Mudou de ideia na hora certa' },
+  { key:'mudou_errado',     emoji:'📉', label:'Se arrependeu de mudar' },
+  { key:'saldo_esp',        emoji:'📐', label:'Especialista em saldo' },
+  { key:'oposta',           emoji:'⚔️', label:'A dupla mais oposta' },
+  { key:'gemeos',           emoji:'🤝', label:'Gêmeos de palpite' },
+  { key:'sel_rendeu',       emoji:'💰', label:'Seleção que mais rendeu' },
+  { key:'sel_enganou',      emoji:'🃏', label:'Seleção que mais enganou' },
+  { key:'zebra',            emoji:'🦓', label:'Maior zebra do bolão' },
+  { key:'quase_todos',      emoji:'🥅', label:'Jogo que quase todos cravaram' },
+  { key:'sel_campea',       emoji:'🏆', label:'Seleção mais escolhida p/ campeã' },
+  { key:'rei_empates',      emoji:'🤷', label:'Rei dos empates' },
+  { key:'placar_palpitado', emoji:'⚽', label:'Placar mais palpitado da Copa' },
+  { key:'jogo_mudou',       emoji:'🎯', label:'O jogo que mudou tudo' },
+  { key:'lanterna',         emoji:'🏮', label:'Lanterna / Azarão' },
+  { key:'rank_exato',       emoji:'🎯', label:'Ranking de placar exato' },
+  { key:'rank_dias',        emoji:'🗓️', label:'Mais dias na liderança' },
+  { key:'rank_trocas',      emoji:'💰', label:'Saldo nas trocas de palpite' },
+];
+const _CER_CARD_KEY_BY_LABEL = (()=>{ const m={}; _CER_CARD_CATALOG.forEach(c=>{ m[c.label]=c.key; }); return m; })();
+
+// Aplica a config do admin (CFG.cerimonia_cards) aos cards gerados: marca a `key` de cada
+// um, remove os desligados, reordena conforme a config e injeta `durMs` (tempo manual por
+// card). Sem config → devolve os cards como estão (todos ligados, ritmo automático).
+function _cerApplyCardCfg(facts){
+  facts.forEach(f=>{ f.key = _CER_CARD_KEY_BY_LABEL[f.label] || null; });
+  const cfg = Array.isArray(CFG.cerimonia_cards) ? CFG.cerimonia_cards : null;
+  if(!cfg || !cfg.length) return facts;
+  const byKey = {}; cfg.forEach((c,i)=>{ if(c && c.key) byKey[c.key] = { on:c.on, dur:parseFloat(c.dur)||0, ord:i }; });
+  let out = facts.filter(f => !f.key || !byKey[f.key] || byKey[f.key].on !== false);
+  out = out.map((f,i)=>({ f, i })).sort((a,b)=>{
+    const ca = a.f.key && byKey[a.f.key], cb = b.f.key && byKey[b.f.key];
+    const oa = ca ? ca.ord : 9999, ob = cb ? cb.ord : 9999;
+    return (oa - ob) || (a.i - b.i); // empate: mantém ordem natural (arco narrativo)
+  }).map(x=>x.f);
+  out.forEach(f=>{ const c = f.key && byKey[f.key]; if(c && c.dur > 0) f.durMs = Math.round(c.dur * 1000); });
+  return out;
 }
 
 // ── Fogos leves na canvas da cerimônia (estágios de curiosidades e cards) ──────
@@ -18861,7 +19124,11 @@ function _cerimoniaStart(data){
   </div>`;
 }
 
-// Toque do usuário: libera o áudio, busca os dados e inicia a sequência.
+// Toque do usuário: CARREGA TODOS OS DADOS primeiro (só a tela de loading), e só depois
+// inicia música + linha do tempo + textos + cards juntos. Assim, em internet lenta, a
+// apresentação nunca começa "no meio": nada roda enquanto os dados carregam. O gesto do
+// usuário é preservado para o autoplay via uma "isca" muda de áudio (play→pause) que
+// destrava a reprodução para quando os dados terminarem de carregar.
 async function _cerimoniaBegin(){
   const st = _cerimoniaState; if(!st) return;
   _cerAcquireWakeLock(); // gesto do usuário: momento válido p/ manter a tela acesa
@@ -18873,91 +19140,77 @@ async function _cerimoniaBegin(){
       // crossOrigin precisa ficar nulo — senão o navegador bloqueia o carregamento.
       audio.crossOrigin = null;
       audio.src = url; audio.currentTime = 0; audio.volume = 1;
-      audio.play().catch(err => console.warn('[cerimonia] áudio não tocou:', err && err.message));
+      // Isca silenciosa dentro do gesto: destrava o autoplay sem tocar nada ainda.
+      audio.muted = true;
+      audio.play().then(()=>{ try{ audio.pause(); audio.currentTime = 0; }catch(_){} })
+                  .catch(err => console.warn('[cerimonia] áudio não destravou:', err && err.message));
     } catch(_){}
   }
   const stageEl = document.getElementById('cerimonia-stage');
-  if(stageEl) stageEl.innerHTML = '<div class="spinner"></div>';
+  if(stageEl) stageEl.innerHTML = '<div class="spinner"></div>'; // durante a carga: SÓ loading
   let d; try { d = await _cerimoniaBuildData(); } catch(e){ if(stageEl) stageEl.innerHTML = `<div class="alert alert-error">Erro ao carregar os dados do bolão.</div>`; return; }
   if(st.closed) return;
   st.data = d;
-  // Linha do tempo ancorada no ÁUDIO (2:39), não no fim da carga de dados: 0–42s =
-  // trailer de abertura; 42s → (fim-4s) = curiosidades/fases; fim-4s = pódio. Como a carga do
-  // Firestore pode levar alguns segundos (o áudio já tocou nesse meio-tempo), usamos
-  // audio.currentTime p/ recuar t0 até o instante 0 real da faixa — assim o pódio cai
-  // no tempo certo mesmo com carregamento lento.
-  const playedMs = (audio && isFinite(audio.currentTime)) ? audio.currentTime * 1000 : 0;
-  st.t0 = performance.now() - playedMs;
+  // Dados prontos: agora sim começa tudo JUNTO, ancorado no instante 0 real da faixa.
+  if(audio && url){
+    try {
+      audio.muted = false; audio.currentTime = 0; audio.volume = 1;
+      audio.play().catch(err => console.warn('[cerimonia] áudio não tocou:', err && err.message));
+    } catch(_){}
+  }
+  st.t0 = performance.now(); // âncora limpa: t=0 = agora (música e timeline partem juntas)
   st.revealed = false;
   const total = _cerTotalMs();
-  const introMs = _CER_INTRO_MS;
+  const introMs = _cerIntroEndMs();
   const podiumAt = Math.max(introMs + 15000, total - 4000);
   st.podiumAt = podiumAt;
-  _cerStageTrailer(d); // a abertura acompanha a posição real do áudio e passa p/ os cards aos 42s
+  _cerStageTrailer(d); // abertura acompanha a posição real do áudio e passa p/ os cards no fim
   _cerAt(podiumAt, ()=>_cerStageReveal(d));
 }
 
-// Anima um contador de 0 até `target` em ~`ms` (respeita prefers-reduced-motion).
-function _cerCountUp(el, target, ms){
-  if(!el) return;
-  target = Math.round(target || 0);
-  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(reduce || target <= 0 || ms <= 0){ el.textContent = target.toLocaleString('pt-BR'); return; }
-  const t0 = performance.now();
-  const step = (now)=>{
-    const s = _cerimoniaState; if(!s || s.closed) return;
-    if(!el.isConnected) return; // beat já trocou
-    const p = Math.min(1, (now - t0) / ms);
-    const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
-    el.textContent = Math.round(target * eased).toLocaleString('pt-BR');
-    if(p < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
-
-// Estágio de abertura (0–42s): trailer cinematográfico estilo premiação esportiva —
-// frases de efeito com fonte elegante (Cinzel) e transições suaves, cada uma exibida
-// conforme a POSIÇÃO REAL do áudio (audio.currentTime), para não dessincronizar com a
-// música em qualquer internet. No clímax (37s) surge "Glória Eterna!" com o GIF
-// configurado; aos 42s a própria abertura passa para os cards.
+// Estágio de abertura: trailer cinematográfico estilo premiação esportiva — frases de
+// efeito (roteiro configurável no Admin: _cerTextos) com fonte elegante (Cinzel) e
+// transições suaves, cada uma exibida conforme a POSIÇÃO REAL do áudio (audio.currentTime),
+// para não dessincronizar com a música em qualquer internet. No clímax surge "Glória
+// Eterna!" e o GIF configurado (at/dur próprios); ao fim da abertura passa para os cards.
 function _cerStageTrailer(d){
   const st = _cerimoniaState; if(!st || st.closed) return;
   const stageEl = document.getElementById('cerimonia-stage'); if(!stageEl){ _cerStageCards(d); return; }
   _cerSetStageLabel('');
 
-  // Roteiro fixo (tempos em ms desde o início do áudio). `big` = frase de destaque.
-  const script = [
-    { t:0,     html:'Senhoras e Senhores,' },
-    { t:8000,  html:'Chegou a hora!', big:true },
-    { t:12000, html:'Depois de semanas de palpites,<br>disputas e reviravoltas...' },
-    { t:15000, html:'Restaram apenas os melhores!', big:true },
-    { t:18000, html:'Cada ponto conquistado,' },
-    { t:22000, html:'Cada resultado inesperado,' },
-    { t:24000, html:'Cada emoção vivida,' },
-    { t:26000, html:'Nos trouxe até este momento.' },
-    { t:28000, html:'Agora não há mais nada o que fazer...' },
-    { t:30000, html:'Apenas um nome<br>será eternizado!', big:true },
-    { t:34000, html:'Seja Bem-vindo à' },
-    { t:37000, climax:true },
-  ];
+  // Roteiro (tempos em ms) a partir da config do admin (ou padrão) + beat de clímax fixo.
+  const climaxMs = _cerClimaxMs();
+  const introEndMs = _cerIntroEndMs();
+  const script = _cerTextos().map(t => ({ t:Math.round(t.at*1000), html:t.text, big:t.big }));
+  script.push({ t:climaxMs, climax:true });
 
-  stageEl.innerHTML = `<div class="cer-trailer" id="cer-trailer"></div>`;
+  const gif = _cerGif();
+  const gifAtMs = Math.round(gif.at * 1000);
+  const gifEndMs = gif.dur > 0 ? gifAtMs + Math.round(gif.dur * 1000) : introEndMs; // dur 0 = até o fim da abertura
+
+  stageEl.innerHTML = `<div class="cer-trailer" id="cer-trailer"><div id="cer-beat"></div><div id="cer-gif" class="cer-open-gif-slot"></div></div>`;
 
   const renderBeat = (b)=>{
     const s = _cerimoniaState; if(!s || s.closed || s.revealed) return;
-    const host = document.getElementById('cer-trailer'); if(!host) return; // cards já assumiram
+    const host = document.getElementById('cer-beat'); if(!host) return; // cards já assumiram
     if(b.climax){
-      const url = (CFG.cerimonia_gif_url||'').trim();
-      const gif = url ? `<div class="cer-open-gif-wrap"><img class="cer-open-gif" src="${esc(url)}" alt=""></div>` : '';
       host.innerHTML = `<div class="cer-trailer-beat cer-open-climax-beat">
         <div class="cer-open-pre">Seja Bem-vindo à</div>
         <div class="cer-open-climax">Glória Eterna!</div>
-        ${gif}
       </div>`;
       _cerFwBurst(6);
     } else {
       host.innerHTML = `<div class="cer-trailer-beat"><div class="cer-open-phrase${b.big?' big':''}">${b.html}</div></div>`;
       if(b.big) _cerFwBurst(2);
+    }
+  };
+  const renderGif = (show)=>{
+    const slot = document.getElementById('cer-gif'); if(!slot) return;
+    if(show && !slot.dataset.on){
+      slot.dataset.on = '1';
+      slot.innerHTML = `<div class="cer-open-gif-wrap"><img class="cer-open-gif" src="${esc(gif.url)}" alt=""></div>`;
+    } else if(!show && slot.dataset.on){
+      slot.dataset.on = ''; slot.innerHTML = '';
     }
   };
 
@@ -18977,12 +19230,13 @@ function _cerStageTrailer(d){
   let shownIdx = -1;
   const tick = ()=>{
     const s = _cerimoniaState; if(!s || s.closed || s.revealed) return;
-    const host = document.getElementById('cer-trailer'); if(!host) return; // cards assumiram
+    const host = document.getElementById('cer-beat'); if(!host) return; // cards assumiram
     const cur = nowMs() - offsetMs;
-    if(cur >= _CER_INTRO_MS){ _cerStageCards(d); return; } // fim da abertura → cards (não reagenda)
+    if(cur >= introEndMs){ _cerStageCards(d); return; } // fim da abertura → cards (não reagenda)
     let idx = -1;
     for(let i=0;i<script.length;i++){ if(script[i].t <= cur) idx = i; else break; }
     if(idx >= 0 && idx !== shownIdx){ shownIdx = idx; renderBeat(script[idx]); }
+    if(gif.on && gif.url) renderGif(cur >= gifAtMs && cur < gifEndMs);
     s.raf = requestAnimationFrame(tick);
   };
   st.raf = requestAnimationFrame(tick);
@@ -18992,37 +19246,31 @@ function _cerStageTrailer(d){
 // trailer de abertura (42s) e o pódio (fim-4s), dimensionando o tempo por card p/ caber.
 function _cerStageCards(d){
   const st = _cerimoniaState; if(!st || st.closed || st.revealed) return;
-  const facts = _cerimoniaFacts(d);
+  const facts = _cerApplyCardCfg(_cerimoniaFacts(d)); // aplica ordem/on-off/tempo do admin
   const phases = _CER_PHASE_DEFS
     .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
     .filter(x=>x.st);
-  const nItems = facts.length + phases.length;
-  const winStart = _CER_INTRO_MS;
+  // Ritmo automático dos cards SEM tempo manual: divide o tempo restante da janela
+  // (descontando os cards com tempo fixo) pelos demais, p/ o pódio cair no tempo certo.
+  const winStart = _cerIntroEndMs();
   const podiumAt = st.podiumAt || (_cerTotalMs() - 4000);
   const win = Math.max(20000, podiumAt - winStart);
   const gridHold = Math.min(6000, win * 0.06); // respiro final com a grade completa
-  const per = nItems > 0
-    ? Math.min(9000, Math.max(2600, (win - gridHold) / nItems))
+  const fixedMs = facts.reduce((s,f)=> s + (f.durMs>0 ? f.durMs : 0), 0);
+  const autoItems = facts.filter(f=>!(f.durMs>0)).length + phases.length;
+  const per = autoItems > 0
+    ? Math.min(9000, Math.max(2600, (win - gridHold - fixedMs) / autoItems))
     : 4800;
   st.cardPer = per;
   // Transição bonita saindo da fase de nomes para o primeiro card.
   _cerTransitionStage(()=>_cerStageFacts(d, facts));
 }
 
-function _cerStageIntro(d){
-  _cerSetStageLabel('Cerimônia de encerramento');
-  const stageEl = document.getElementById('cerimonia-stage'); if(!stageEl) return;
-  stageEl.innerHTML = `<div class="cer-intro"><div style="font-size:3.5rem">🏆</div>
-    <div class="cer-intro-title">Cerimônia de Encerramento</div>
-    <div class="cer-intro-sub">${esc(CFG.nome_bolao||'Bolão')} · Copa 2026</div></div>`;
-  _cerTimer(()=>_cerStageFacts(d), 5000);
-}
-
 function _cerStageFacts(d, facts){
-  facts = facts || _cerimoniaFacts(d);
+  facts = facts || _cerApplyCardCfg(_cerimoniaFacts(d));
   const stageEl = document.getElementById('cerimonia-stage');
   if(!facts.length || !stageEl){ _cerStagePhases(d); return; }
-  const per = (_cerimoniaState && _cerimoniaState.cardPer) || 4800; let i = 0;
+  const autoPer = (_cerimoniaState && _cerimoniaState.cardPer) || 4800; let i = 0;
   const showOne = ()=>{
     if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
     if(i >= facts.length){ _cerStagePhases(d); return; }
@@ -19036,7 +19284,7 @@ function _cerStageFacts(d, facts){
       ${f.extra || ''}</div>`;
     _cerFwBurst(1 + (Math.random()*2|0)); // poucos fogos a cada curiosidade
     i++;
-    _cerTimer(showOne, per);
+    _cerTimer(showOne, (f.durMs > 0 ? f.durMs : autoPer)); // tempo manual do card, ou o ritmo automático
   };
   showOne();
 }
