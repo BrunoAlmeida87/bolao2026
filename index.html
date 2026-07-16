@@ -1670,14 +1670,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 /* Transição entre estágios (ex.: nomes → cards): dissolve + sobe + desfoca */
 .cer-stage-leave{animation:cerStageLeave .5s cubic-bezier(.4,0,.55,1) forwards;pointer-events:none}
 @keyframes cerStageLeave{from{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}to{opacity:0;transform:translateY(-26px) scale(.9);filter:blur(5px)}}
-/* Selo de cada participante (montagem antes do pódio) */
-.cer-selo{animation:cerSeloIn .5s cubic-bezier(.2,1.3,.4,1) both;width:100%;max-width:460px;text-align:center}
-.cer-selo-emoji{font-size:3rem;line-height:1;filter:drop-shadow(0 4px 14px rgba(255,215,0,.4))}
-.cer-selo-name{color:var(--white);font-weight:800;font-size:1.7rem;line-height:1.15;margin:8px 0 1px}
-.cer-selo-sub{color:var(--text-muted);font-size:.82rem;margin-bottom:8px}
-.cer-selo-badge{display:inline-block;background:rgba(255,215,0,.12);border:1px solid var(--gold);border-radius:16px;padding:8px 16px;color:var(--gold);font-weight:700;font-size:1rem;line-height:1.35;margin-top:4px}
-@keyframes cerSeloIn{from{opacity:0;transform:translateY(16px) scale(.92)}to{opacity:1;transform:translateY(0) scale(1)}}
-@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card,.cer-roster-name,.cer-roster-fullname,.cer-selo{animation:none}.cer-phase-thumb,.cer-roster-chip{transition:none}.cer-stage-leave{animation-duration:.15s}}
+@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card,.cer-roster-name,.cer-roster-fullname{animation:none}.cer-phase-thumb,.cer-roster-chip{transition:none}.cer-stage-leave{animation-duration:.15s}}
 </style>
 </head>
 <body>
@@ -18210,6 +18203,8 @@ function _cerimoniaSizeCanvas(cv){
 }
 
 function _cerTimer(fn, ms){ const id = setTimeout(fn, ms); if(_cerimoniaState) _cerimoniaState.timers.push(id); return id; }
+// Duração da abertura com os nomes dos participantes (o áudio ganhou +12s de intro).
+const _CER_ROSTER_MS = 42000;
 // Agenda `fn` para um instante absoluto (ms desde o início do áudio, st.t0), para
 // que o cronograma não acumule desvio: o pódio cai sempre no tempo certo.
 function _cerAt(ms, fn){
@@ -18218,12 +18213,12 @@ function _cerAt(ms, fn){
   const delay = Math.max(0, base + ms - performance.now());
   return _cerTimer(fn, delay);
 }
-// Duração total do áudio da cerimônia (default 2:27 = 147s). Usa a duração real
-// do <audio> quando já disponível e plausível; senão, o valor combinado.
+// Duração total do áudio da cerimônia (default 2:39 = 159s, com os +12s de intro).
+// Usa a duração real do <audio> quando já disponível e plausível; senão, o combinado.
 function _cerTotalMs(){
   const a = document.getElementById('cerimonia-audio');
   const d = a && a.duration;
-  return (d && isFinite(d) && d > 30) ? Math.round(d * 1000) : 147000;
+  return (d && isFinite(d) && d > 30) ? Math.round(d * 1000) : 159000;
 }
 function _cerSetStageLabel(txt){ const el = document.getElementById('cerimonia-stage-label'); if(el) el.textContent = txt || ''; }
 // Troca de estágio com transição: o conteúdo atual dissolve/sobe/desfoca e só
@@ -18237,7 +18232,6 @@ function _cerTransitionStage(cb, ms){
   _cerFwBurst(3); // florzinha de fogos cobre o corte
   _cerTimer(()=>{ if(!_cerimoniaState || _cerimoniaState.closed) return; cb(); }, ms || 500);
 }
-function _cerTsMs(ts){ try { return ts && ts.toMillis ? ts.toMillis() : (ts && ts.seconds ? ts.seconds*1000 : 0); } catch(_){ return 0; } }
 
 // Reúne os mesmos dados que a aba Estatísticas/Resumão usa (mesmo custo de leituras).
 async function _cerimoniaBuildData(){
@@ -18259,44 +18253,7 @@ async function _cerimoniaBuildData(){
       else if(t==='vencedor') analiseJogos[jid].apenas_venc++; else analiseJogos[jid].erros++;
     });
   });
-  // Estatísticas de "mudança de ideia" (histórico de alterações de palpite) — best-effort:
-  // se falhar ou não houver histórico, os selos caem no melhor número pessoal de cada um.
-  let editStats = {}; try { editStats = await _cerFetchEditStats(users, res); } catch(_){ editStats = {}; }
-  return { users, res, allPals, champPicks, ranking, userAccStats, analiseJogos, jogosComResultado, editStats };
-}
-
-// Lê o histórico de palpites de cada participante (palpites/{uid}/historico) e resume,
-// por jogador: quantas vezes alterou um palpite e quantos pontos ganhou/perdeu ao mudar
-// de ideia (1º placar salvo vs. placar final, só em jogos já com resultado).
-async function _cerFetchEditStats(users, res){
-  const stats = {};
-  await Promise.all((users||[]).map(async u=>{
-    stats[u.uid] = { edits:0, changedGames:0, deltaPts:0 };
-    try {
-      const snap = await db_.collection('palpites').doc(u.uid).collection('historico').get();
-      const byGame = {}; let edits = 0;
-      snap.docs.forEach(doc=>{
-        const e = doc.data(); if(!e || !e.gameId) return;
-        if(e.action === 'set' && e.edit) edits++;
-        (byGame[e.gameId] = byGame[e.gameId] || []).push(e);
-      });
-      let deltaPts = 0, changed = 0;
-      Object.keys(byGame).forEach(gid=>{
-        if(!res[gid] || !_hasFullResult(res[gid])) return;
-        const sets = byGame[gid].filter(e=>e.action==='set' && e.h!=null && e.a!=null)
-          .sort((a,b)=> _cerTsMs(a.at) - _cerTsMs(b.at));
-        if(sets.length < 2) return;
-        const f = sets[0], l = sets[sets.length-1];
-        if(String(f.h)===String(l.h) && String(f.a)===String(l.a)) return; // não mudou o placar
-        changed++;
-        const pf = calcPontos({h:f.h,a:f.a}, res[gid], gid) || 0;
-        const pl = calcPontos({h:l.h,a:l.a}, res[gid], gid) || 0;
-        deltaPts += (pl - pf);
-      });
-      stats[u.uid] = { edits, changedGames:changed, deltaPts };
-    } catch(_){ /* best-effort por usuário */ }
-  }));
-  return stats;
+  return { users, res, allPals, champPicks, ranking, userAccStats, analiseJogos, jogosComResultado };
 }
 
 // Monta os cards de curiosidades da cerimônia, reusando as calculadoras _rz* do
@@ -18662,7 +18619,7 @@ function _cerStagePhases(d){
   const phases = _CER_PHASE_DEFS
     .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
     .filter(x=>x.st);
-  if(!phases.length){ _cerStageSelos(d); return; } // sem fases: vai direto aos selos
+  if(!phases.length) return; // sem fases: o último card de curiosidade segura a tela
   _cerSetStageLabel('Destaques por fase');
   stageEl.innerHTML = `<div class="cer-phases">
     <div class="cer-phase-active" id="cer-phase-active"></div>
@@ -18676,9 +18633,8 @@ function _cerStagePhases(d){
   const showNext = ()=>{
     if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
     if(i >= phases.length){
-      // Grade completa aparece por um instante e então entram os selos pessoais.
+      // Grade completa fica na tela até o pódio (agendado no tempo absoluto do áudio).
       _cerSetStageLabel('Todos os destaques');
-      _cerTimer(()=>{ if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return; _cerTransitionStage(()=>_cerStageSelos(d)); }, 1600);
       return;
     }
     const { def, st } = phases[i];
@@ -18746,12 +18702,12 @@ async function _cerimoniaBegin(){
   let d; try { d = await _cerimoniaBuildData(); } catch(e){ if(stageEl) stageEl.innerHTML = `<div class="alert alert-error">Erro ao carregar os dados do bolão.</div>`; return; }
   if(st.closed) return;
   st.data = d;
-  // Linha do tempo ancorada no áudio (2:27): 0–30s = nomes dos participantes;
-  // 30s → (fim-4s) = curiosidades + destaques por fase; fim-4s = pódio do campeão.
+  // Linha do tempo ancorada no áudio (2:39): 0–42s = nomes dos participantes;
+  // 42s → (fim-4s) = curiosidades + destaques por fase; fim-4s = pódio do campeão.
   st.t0 = performance.now();
   st.revealed = false;
   const total = _cerTotalMs();
-  const rosterMs = 30000;
+  const rosterMs = _CER_ROSTER_MS;
   const podiumAt = Math.max(rosterMs + 15000, total - 4000);
   st.podiumAt = podiumAt;
   _cerStageRoster(d);
@@ -18759,7 +18715,7 @@ async function _cerimoniaBegin(){
   _cerAt(podiumAt, ()=>_cerStageReveal(d));
 }
 
-// Estágio de abertura (0–30s): mostra o nome/apelido de cada participante — primeiro
+// Estágio de abertura (0–42s): mostra o nome/apelido de cada participante — primeiro
 // em destaque, depois encolhido numa lista que se acumula na tela.
 function _cerStageRoster(d){
   const st = _cerimoniaState; if(!st || st.closed) return;
@@ -18774,9 +18730,10 @@ function _cerStageRoster(d){
     <div class="cer-roster-list" id="cer-roster-list"></div>
   </div>`;
   if(!parts.length) return;
-  // Ritmo: distribui os nomes ao longo de ~28,5s, deixando a lista completa
-  // parada por ~1,5s antes de os cards começarem (limites p/ não ficar rápido demais).
-  const per = Math.min(2200, Math.max(450, 28500 / parts.length));
+  // Ritmo: distribui os nomes ao longo de ~40s (deixando ~2s com a lista completa
+  // antes dos cards). Um pouco mais lento que antes: cada nome surge com calma e vai
+  // se organizando na grade que preenche a tela (limites p/ caber com muita gente).
+  const per = Math.min(3200, Math.max(700, 40000 / parts.length));
   let i = 0;
   const showName = ()=>{
     const s = _cerimoniaState; if(!s || s.closed) return;
@@ -18803,29 +18760,22 @@ function _cerStageRoster(d){
 }
 
 // Orquestra os cards (curiosidades + destaques por fase) na janela entre o fim do
-// roster (30s) e o pódio (fim-4s), dimensionando o tempo por card p/ caber na trilha.
+// roster (42s) e o pódio (fim-4s), dimensionando o tempo por card p/ caber na trilha.
 function _cerStageCards(d){
   const st = _cerimoniaState; if(!st || st.closed || st.revealed) return;
   const facts = _cerimoniaFacts(d);
   const phases = _CER_PHASE_DEFS
     .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
     .filter(x=>x.st);
-  const selos = _cerParticipantSelos(d); // um destaque pessoal p/ CADA participante
-  const nCards = facts.length + phases.length;
-  const winStart = 30000;
+  const nItems = facts.length + phases.length;
+  const winStart = _CER_ROSTER_MS;
   const podiumAt = st.podiumAt || (_cerTotalMs() - 4000);
   const win = Math.max(20000, podiumAt - winStart);
-  const gridHold = Math.min(5000, win * 0.05); // respiro antes do pódio
-  // Os selos são uma montagem rápida; limitam-se a ~50% da janela (mín. 1,1s cada).
-  let seloPer = 2000;
-  if(selos.length){
-    const maxSelosMs = win * 0.5;
-    if(selos.length * seloPer > maxSelosMs) seloPer = Math.max(1100, maxSelosMs / selos.length);
-  }
-  const selosMs = selos.length * seloPer;
-  const winCards = Math.max(12000, win - gridHold - selosMs);
-  const per = nCards > 0 ? Math.min(9000, Math.max(2600, winCards / nCards)) : 4800;
-  st.cardPer = per; st.selos = selos; st.seloPer = seloPer;
+  const gridHold = Math.min(6000, win * 0.06); // respiro final com a grade completa
+  const per = nItems > 0
+    ? Math.min(9000, Math.max(2600, (win - gridHold) / nItems))
+    : 4800;
+  st.cardPer = per;
   // Transição bonita saindo da fase de nomes para o primeiro card.
   _cerTransitionStage(()=>_cerStageFacts(d, facts));
 }
@@ -18856,114 +18806,6 @@ function _cerStageFacts(d, facts){
       ${f.detail ? `<div class="cer-fact-detail">${f.detail}</div>` : ''}
       ${f.extra || ''}</div>`;
     _cerFwBurst(1 + (Math.random()*2|0)); // poucos fogos a cada curiosidade
-    i++;
-    _cerTimer(showOne, per);
-  };
-  showOne();
-}
-
-// ── Selos: um destaque pessoal p/ CADA participante (todos entram na cerimônia) ──
-// Escolhe, por jogador, sua curiosidade mais interessante: um superlativo que ele
-// lidera (rei dos exatos, sniper, mudou mais de ideia…) ou, na falta, o melhor
-// número pessoal dele. Assim ninguém fica sem aparecer.
-function _cerParticipantSelos(d){
-  try {
-    if(!Array.isArray(d.ranking) || !d.ranking.length || !Array.isArray(d.users)) return [];
-    const rkByUid = {}; d.ranking.forEach(u=>{ rkByUid[u.uid] = u; });
-    const priority = new Map(); // uid -> {emoji, badge} (superlativos, 1 dono cada)
-    const claim = (u, emoji, badge)=>{ if(u && u.uid && !priority.has(u.uid)) priority.set(u.uid, { emoji, badge }); };
-    const first = arr => (arr && arr.length) ? arr[0] : null;
-    const T = fn => { try { return fn(); } catch(_){ return undefined; } };
-
-    // Superlativos de categoria (reusa as calculadoras do Resumão)
-    T(()=>{ const x=first(_rzExatos(d.ranking, d.userAccStats)); if(x && x.exatos>0) claim(x.u,'🎯',`Rei dos placares exatos · ${x.exatos} cravado${x.exatos>1?'s':''}`); });
-    T(()=>{ const c=d.ranking.filter(u=>u.jogos>=10).map(u=>({u,pct:u.exatos/u.jogos})).sort((a,b)=>b.pct-a.pct)[0]; if(c && c.pct>0) claim(c.u,'🔫',`Sniper · ${(c.pct*100).toFixed(0)}% de placares exatos`); });
-    T(()=>{ const c=d.ranking.filter(u=>u.jogos>=10).map(u=>({u,pct:(u.exatos+u.venc_saldo+u.apenas_venc)/u.jogos})).sort((a,b)=>b.pct-a.pct)[0]; if(c) claim(c.u,'🧙',`Oráculo · ${(c.pct*100).toFixed(0)}% de acerto`); });
-    T(()=>{ const x=first(_rzSaldo(d.ranking, d.allPals, d.res)); if(x) claim(x.u,'📐',`Mestre do saldo · ${x.saldo} acerto${x.saldo>1?'s':''}`); });
-    T(()=>{ const x=first(_rzConsistency(d.users, d.allPals, d.res)); if(x) claim(x.u,'🧱','O mais consistente do bolão'); });
-    T(()=>{ const x=first(_rzBoldness(d.users, d.allPals, d.res)); if(x) claim(x.u,'🎲','O palpiteiro mais ousado'); });
-    T(()=>{ const l=_rzLeadership(d.users, d.allPals, d.res, d.champPicks); const x=l && first(l.rows); if(x) claim(x.u,'👑',`Mais tempo na liderança · ${x.steps} jogos no topo`); });
-    T(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); if(t && t.up && t.up.delta>0) claim(t.up.u,'🚀',`Maior arrancada · subiu ${t.up.delta} posiç${t.up.delta>1?'ões':'ão'} no mata-mata`); });
-    T(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); if(t && t.down && t.down.delta<0) claim(t.down.u,'🧊',`Maior tombo · caiu ${Math.abs(t.down.delta)} posiç${Math.abs(t.down.delta)>1?'ões':'ão'} no mata-mata`); });
-
-    // Superlativos de "mudança de ideia" (histórico de alterações de palpite)
-    const es = d.editStats || {};
-    T(()=>{ const arr=Object.keys(es).map(uid=>({uid,...es[uid]}));
-      const mais=arr.filter(x=>x.edits>0).sort((a,b)=>b.edits-a.edits)[0];
-      if(mais) claim(rkByUid[mais.uid],'🔁',`Mudou mais de ideia · ${mais.edits} alteraç${mais.edits>1?'ões':'ão'} de palpite`);
-      const perdeu=arr.filter(x=>x.deltaPts<0).sort((a,b)=>a.deltaPts-b.deltaPts)[0];
-      if(perdeu) claim(rkByUid[perdeu.uid],'📉',`Mais se arrependeu · perdeu ${Math.abs(perdeu.deltaPts)} pts mudando de ideia`);
-      const ganhou=arr.filter(x=>x.deltaPts>0).sort((a,b)=>b.deltaPts-a.deltaPts)[0];
-      if(ganhou) claim(rkByUid[ganhou.uid],'📈',`Melhor palpiteiro arrependido · ganhou ${ganhou.deltaPts} pts ao mudar de ideia`);
-    });
-
-    // Ordena alfabético (neutro, não entrega o ranking) e resolve o selo de cada um.
-    const parts = d.users.slice().sort((a,b)=>
-      String(a.apelido||a.nome||'').localeCompare(String(b.apelido||b.nome||''),'pt',{sensitivity:'base'}));
-    return parts.map(u=>{
-      const sel = priority.get(u.uid) || _cerPersonalSelo(u, d, rkByUid[u.uid]);
-      return { u, emoji: sel.emoji, badge: sel.badge };
-    });
-  } catch(_){ return []; }
-}
-// Melhor número pessoal de um jogador que não lidera nenhum superlativo.
-function _cerPersonalSelo(u, d, me){
-  me = me || {};
-  const uid = u.uid;
-  const acc = (d.userAccStats && d.userAccStats[uid]) || null;
-  const es  = (d.editStats && d.editStats[uid]) || null;
-  const flag = t => { try { return teamFlag(t)+' '; } catch(_){ return ''; } };
-  let best = null;
-  try {
-    _CER_PHASE_DEFS.forEach(def=>{
-      const ids = _cerPhaseGameIds(def).filter(id => d.res[id] && _hasFullResult(d.res[id]));
-      if(!ids.length) return;
-      let pts=0, any=false;
-      ids.forEach(id=>{ const p=d.allPals[uid] && d.allPals[uid][id]; if(!p) return; any=true; const s=calcPontos(p,d.res[id],id); if(s!=null) pts+=s; });
-      if(any && (!best || pts>best.pts)) best = { title:def.title, pts };
-    });
-  } catch(_){}
-  const cand = [];
-  if((me.exatos||0) >= 1) cand.push({ emoji:'🎯', badge:`${me.exatos} placar${me.exatos>1?'es':''} exato${me.exatos>1?'s':''} cravado${me.exatos>1?'s':''}`, score:60+Math.min(20,me.exatos) });
-  if(acc && acc.maxStreak >= 3) cand.push({ emoji:'🔥', badge:`Emendou ${acc.maxStreak} jogos seguidos pontuando`, score:52+acc.maxStreak });
-  if(me.acertou_campeao && me.campeao) cand.push({ emoji:'🏆', badge:`Cravou ${flag(me.campeao)}${esc(me.campeao)} como campeã — e acertou! ✅`, score:85 });
-  else if(me.campeao) cand.push({ emoji:'🏳️', badge:`Apostou em ${flag(me.campeao)}${esc(me.campeao)} para ser campeã`, score:34 });
-  if(best && best.pts > 0) cand.push({ emoji:'🧱', badge:`Brilhou na ${best.title}: ${best.pts} pts`, score:40 });
-  if(es && es.edits === 0 && (me.jogos||0) > 0) cand.push({ emoji:'🗿', badge:'Cravou os palpites e nunca mudou de ideia', score:46 });
-  if(es && es.deltaPts > 0) cand.push({ emoji:'📈', badge:`Ganhou ${es.deltaPts} pts mudando de ideia na hora certa`, score:50 });
-  if(es && es.edits > 0) cand.push({ emoji:'🔁', badge:`Repensou ${es.edits} palpite${es.edits>1?'s':''} antes de fechar`, score:22 });
-  try { const media=d.ranking.reduce((a,x)=>a+(x.pontos||0),0)/d.ranking.length; const vs=Math.round((me.pontos||0)-media); if(vs>0) cand.push({ emoji:'📊', badge:`${vs} pts acima da média do bolão`, score:20+Math.min(15,vs/5) }); } catch(_){}
-  cand.push({ emoji:'⭐', badge:`${me.pontos||0} pts somados no bolão`, score:5 });
-  cand.sort((a,b)=>b.score-a.score);
-  return cand[0];
-}
-// Estágio: montagem rápida com o selo de cada participante (antes do pódio).
-function _cerStageSelos(d){
-  const st = _cerimoniaState; if(!st || st.closed || st.revealed) return;
-  const stageEl = document.getElementById('cerimonia-stage'); if(!stageEl) return;
-  const selos = st.selos || _cerParticipantSelos(d);
-  if(!selos.length) return; // nada a mostrar: a grade/último card segura até o pódio
-  const per = st.seloPer || 2000;
-  _cerSetStageLabel('Cada participante');
-  stageEl.innerHTML = `<div class="cer-selo-stage" id="cer-selo-stage"></div>`;
-  let i = 0;
-  const showOne = ()=>{
-    if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
-    const host = document.getElementById('cer-selo-stage'); if(!host) return;
-    if(i >= selos.length){ _cerSetStageLabel('Todo mundo no bolão'); return; }
-    const s = selos[i], u = s.u;
-    _cerSetStageLabel(`Cada participante · ${i+1}/${selos.length}`);
-    const apelido = (u.apelido && String(u.apelido).trim()) || '';
-    const nome = (u.nome && String(u.nome).trim()) || '';
-    const primary = esc(apelido || nome || '—');
-    const secondary = (apelido && nome && nome.toLowerCase() !== apelido.toLowerCase()) ? esc(nome) : '';
-    host.innerHTML = `<div class="cer-selo">
-      <div class="cer-selo-emoji">${s.emoji}</div>
-      <div class="cer-selo-name">${primary}</div>
-      ${secondary ? `<div class="cer-selo-sub">${secondary}</div>` : ''}
-      <div class="cer-selo-badge">${s.badge}</div>
-    </div>`;
-    _cerFwBurst(1);
     i++;
     _cerTimer(showOne, per);
   };
