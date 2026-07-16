@@ -1654,24 +1654,21 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 @keyframes cerPhaseOut{to{opacity:0;transform:scale(.82) translateY(-10px)}}
 /* Aviso p/ aumentar o volume (card inicial + roster) */
 .cer-vol-tip{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,140,0,.14);border:1px solid var(--orange);border-radius:14px;padding:10px 14px;margin:0 0 18px;color:var(--orange);font-weight:800;font-size:.9rem}
-/* Abertura: nomes de todos os participantes (primeiros 42s) */
-.cer-roster{width:100%;max-width:640px;max-height:76vh;display:flex;flex-direction:column;align-items:center;gap:10px}
-.cer-roster-label{color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:.8rem;flex:0 0 auto}
-.cer-roster-tip{color:var(--orange);font-weight:700;font-size:.88rem;margin-top:-4px;flex:0 0 auto}
-.cer-roster-big{min-height:2.3em;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:2px 0 4px;max-width:100%;flex:0 0 auto}
-.cer-roster-name{font-size:2rem;font-weight:800;color:var(--white);text-shadow:0 2px 22px rgba(255,215,0,.45);text-align:center;line-height:1.12;max-width:100%;overflow-wrap:anywhere;animation:cerRosterPop .5s cubic-bezier(.2,1.3,.4,1) both}
-.cer-roster-fullname{display:block;margin-top:3px;color:var(--text-muted);font-size:.95rem;font-weight:600;animation:cerRosterPop .5s .06s cubic-bezier(.2,1.3,.4,1) both}
-/* A lista preenche a largura toda (as laterais) e rola dentro da própria caixa se
-   houver muita gente, em vez de estourar a tela para cima/baixo. */
-.cer-roster-list{display:flex;flex-wrap:wrap;gap:6px 7px;justify-content:center;align-content:flex-start;width:100%;flex:1 1 auto;min-height:0;overflow-y:auto;padding:2px 2px 4px;scrollbar-width:thin}
-.cer-roster-chip{display:inline-flex;align-items:baseline;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:18px;padding:4px 11px;font-size:.82rem;font-weight:600;color:var(--white);white-space:nowrap;opacity:0;transform:scale(.55);transition:opacity .35s ease,transform .42s cubic-bezier(.2,1.3,.4,1)}
-.cer-roster-chip.show{opacity:1;transform:scale(1)}
-.cer-roster-chip-sub{color:var(--text-muted);font-weight:500;font-size:.72rem;margin-left:5px}
-@keyframes cerRosterPop{from{opacity:0;transform:scale(.6) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
-/* Transição entre estágios (ex.: nomes → cards): dissolve + sobe + desfoca */
+/* Abertura: trailer cinematográfico (frases de efeito + números animados) */
+.cer-trailer{width:100%;max-width:560px;min-height:40vh;display:flex;align-items:center;justify-content:center}
+.cer-trailer-beat{animation:cerTrailerIn .6s cubic-bezier(.2,1.1,.35,1) both;width:100%;text-align:center}
+.cer-trailer-trophy{font-size:4rem;line-height:1;filter:drop-shadow(0 6px 18px rgba(255,215,0,.5))}
+.cer-trailer-title{color:var(--gold);font-weight:800;font-size:1.9rem;line-height:1.1;margin-top:10px;text-shadow:0 2px 20px rgba(255,215,0,.4)}
+.cer-trailer-sub{color:var(--text-muted);font-size:.92rem;margin-top:6px}
+.cer-trailer-phrase{color:var(--white);font-weight:800;font-size:1.9rem;line-height:1.32;overflow-wrap:anywhere}
+.cer-trailer-phrase b{color:var(--gold)}
+.cer-trailer-num{color:var(--gold);font-weight:800;font-size:4.2rem;line-height:1;text-shadow:0 3px 26px rgba(255,215,0,.45);font-variant-numeric:tabular-nums}
+.cer-trailer-num-label{color:var(--text-muted);font-weight:600;font-size:1.05rem;letter-spacing:.04em;text-transform:uppercase;margin-top:8px}
+@keyframes cerTrailerIn{from{opacity:0;transform:translateY(20px) scale(.94);filter:blur(3px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+/* Transição entre estágios (ex.: abertura → cards): dissolve + sobe + desfoca */
 .cer-stage-leave{animation:cerStageLeave .5s cubic-bezier(.4,0,.55,1) forwards;pointer-events:none}
 @keyframes cerStageLeave{from{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}to{opacity:0;transform:translateY(-26px) scale(.9);filter:blur(5px)}}
-@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card,.cer-roster-name,.cer-roster-fullname{animation:none}.cer-phase-thumb,.cer-roster-chip{transition:none}.cer-stage-leave{animation-duration:.15s}}
+@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card,.cer-trailer-beat{animation:none}.cer-phase-thumb{transition:none}.cer-stage-leave{animation-duration:.15s}}
 </style>
 </head>
 <body>
@@ -18204,8 +18201,8 @@ function _cerimoniaSizeCanvas(cv){
 }
 
 function _cerTimer(fn, ms){ const id = setTimeout(fn, ms); if(_cerimoniaState) _cerimoniaState.timers.push(id); return id; }
-// Duração da abertura com os nomes dos participantes (o áudio ganhou +12s de intro).
-const _CER_ROSTER_MS = 42000;
+// Duração da abertura (trailer cinematográfico) antes dos cards (áudio tem +12s de intro).
+const _CER_INTRO_MS = 42000;
 // Agenda `fn` para um instante absoluto (ms desde o início do áudio, st.t0), para
 // que o cronograma não acumule desvio: o pódio cai sempre no tempo certo.
 function _cerAt(ms, fn){
@@ -18751,7 +18748,7 @@ async function _cerimoniaBegin(){
   if(st.closed) return;
   st.data = d;
   // Linha do tempo ancorada no ÁUDIO (2:39), não no fim da carga de dados: 0–42s =
-  // nomes; 42s → (fim-4s) = curiosidades/fases; fim-4s = pódio. Como a carga do
+  // trailer de abertura; 42s → (fim-4s) = curiosidades/fases; fim-4s = pódio. Como a carga do
   // Firestore pode levar alguns segundos (o áudio já tocou nesse meio-tempo), usamos
   // audio.currentTime p/ recuar t0 até o instante 0 real da faixa — assim o pódio cai
   // no tempo certo mesmo com carregamento lento.
@@ -18759,62 +18756,96 @@ async function _cerimoniaBegin(){
   st.t0 = performance.now() - playedMs;
   st.revealed = false;
   const total = _cerTotalMs();
-  const rosterMs = _CER_ROSTER_MS;
-  const podiumAt = Math.max(rosterMs + 15000, total - 4000);
+  const introMs = _CER_INTRO_MS;
+  const podiumAt = Math.max(introMs + 15000, total - 4000);
   st.podiumAt = podiumAt;
-  _cerStageRoster(d);
-  _cerAt(rosterMs, ()=>_cerStageCards(d));
+  _cerStageTrailer(d);
+  _cerAt(introMs, ()=>_cerStageCards(d));
   _cerAt(podiumAt, ()=>_cerStageReveal(d));
 }
 
-// Estágio de abertura (0–42s): mostra o nome/apelido de cada participante — primeiro
-// em destaque, depois encolhido numa lista que se acumula na tela.
-function _cerStageRoster(d){
+// Anima um contador de 0 até `target` em ~`ms` (respeita prefers-reduced-motion).
+function _cerCountUp(el, target, ms){
+  if(!el) return;
+  target = Math.round(target || 0);
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce || target <= 0 || ms <= 0){ el.textContent = target.toLocaleString('pt-BR'); return; }
+  const t0 = performance.now();
+  const step = (now)=>{
+    const s = _cerimoniaState; if(!s || s.closed) return;
+    if(!el.isConnected) return; // beat já trocou
+    const p = Math.min(1, (now - t0) / ms);
+    const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+    el.textContent = Math.round(target * eased).toLocaleString('pt-BR');
+    if(p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Estágio de abertura (0–42s): trailer cinematográfico — frases de efeito e números
+// grandes animados, sincronizados com a música, terminando em suspense p/ os cards.
+function _cerStageTrailer(d){
   const st = _cerimoniaState; if(!st || st.closed) return;
   const stageEl = document.getElementById('cerimonia-stage'); if(!stageEl){ _cerStageCards(d); return; }
-  _cerSetStageLabel('Participantes do bolão');
-  const parts = (d.users || []).slice().sort((a,b)=>
-    String(a.apelido||a.nome||'').localeCompare(String(b.apelido||b.nome||''), 'pt', {sensitivity:'base'}));
-  stageEl.innerHTML = `<div class="cer-roster">
-    <div class="cer-roster-label">🎉 Participantes do bolão</div>
-    <div class="cer-roster-tip">🔊 Aumente o volume</div>
-    <div class="cer-roster-big" id="cer-roster-big"></div>
-    <div class="cer-roster-list" id="cer-roster-list"></div>
-  </div>`;
-  if(!parts.length) return;
-  // Ritmo: deriva da duração real da abertura, garantindo que TODOS os nomes apareçam
-  // antes de os cards assumirem (mesmo com muita gente). Deixa ~2s com a lista completa;
-  // com poucos participantes, cada nome ganha até 3,2s (não fica rápido demais).
-  const avail = Math.max(8000, _CER_ROSTER_MS - 2000);
-  const per = Math.min(3200, Math.max(220, avail / parts.length));
+  _cerSetStageLabel('Cerimônia de encerramento');
+  const flag = t => { try { return (typeof teamFlag==='function') ? teamFlag(t)+' ' : ''; } catch(_){ return ''; } };
+
+  // Monta os "beats" a partir dos dados (cada um em try/catch, pulado se sem dado).
+  const beats = []; const add = fn => { try { const b = fn(); if(b) beats.push(b); } catch(_){} };
+  const totalJogos = (d.jogosComResultado||[]).length;
+  const totalExatos = Object.values(d.analiseJogos||{}).reduce((a,b)=>a+(b.exatos||0),0);
+  const totalPalpites = Object.values(d.analiseJogos||{}).reduce((a,b)=>a+((b.palpites||[]).length),0);
+
+  add(()=>({ type:'title' }));
+  if(totalJogos) add(()=>({ type:'phrase', html:`Foram <b>${totalJogos}</b> jogos.` }));
+  if(totalPalpites) add(()=>({ type:'count', value:totalPalpites, label:'palpites no total' }));
+  if((d.users||[]).length) add(()=>({ type:'phrase', html:`<b>${d.users.length}</b> palpiteiros disputaram.<br>Um só campeão.` }));
+  if(totalExatos) add(()=>({ type:'count', value:totalExatos, label:'placares cravados' }));
+  if(totalJogos) add(()=>({ type:'phrase', html:`Teve zebra, virada e cravada<br>até a última rodada.` }));
+  add(()=>{
+    const cnt = {}; Object.values(d.champPicks||{}).forEach(t=>{ if(t) cnt[t]=(cnt[t]||0)+1; });
+    const top = Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+    return top && { type:'phrase', html:`O favorito do bolão para a taça:<br><b>${flag(top[0])}${esc(top[0])}</b>` };
+  });
+  add(()=>({ type:'phrase', html:`E agora…<br><b>quem foi o grande campeão?</b>` }));
+
+  if(!beats.length){ _cerStageCards(d); return; }
+  // Ritmo: distribui os beats ao longo da janela real (deixando ~1,5s de respiro no fim).
+  const avail = Math.max(8000, _CER_INTRO_MS - 1500);
+  const per = Math.min(6000, Math.max(2800, avail / beats.length));
+
+  stageEl.innerHTML = `<div class="cer-trailer" id="cer-trailer"></div>`;
   let i = 0;
-  const showName = ()=>{
-    const s = _cerimoniaState; if(!s || s.closed) return;
-    const bigEl = document.getElementById('cer-roster-big');
-    const listEl = document.getElementById('cer-roster-list');
-    if(!bigEl || !listEl) return; // estágio já trocou (cards assumiram)
-    if(i >= parts.length){ bigEl.innerHTML = ''; return; }
-    const u = parts[i];
-    const apelido = (u.apelido && String(u.apelido).trim()) || '';
-    const nome = (u.nome && String(u.nome).trim()) || '';
-    const primary = esc(apelido || nome || '—');
-    // Mostra o nome real junto do apelido quando forem diferentes.
-    const secondary = (apelido && nome && nome.toLowerCase() !== apelido.toLowerCase()) ? esc(nome) : '';
-    bigEl.innerHTML = `<span class="cer-roster-name">${primary}</span>${secondary?`<span class="cer-roster-fullname">${secondary}</span>`:''}`;
-    const chip = document.createElement('span');
-    chip.className = 'cer-roster-chip';
-    chip.innerHTML = `${primary}${secondary?`<span class="cer-roster-chip-sub">${secondary}</span>`:''}`;
-    listEl.appendChild(chip);
-    // Se a lista já encheu a caixa, acompanha o novo nome (evita "sair da tela").
-    requestAnimationFrame(()=>{ chip.classList.add('show'); listEl.scrollTop = listEl.scrollHeight; });
+  const showBeat = ()=>{
+    const s = _cerimoniaState; if(!s || s.closed || s.revealed) return;
+    const host = document.getElementById('cer-trailer'); if(!host) return; // cards assumiram
+    if(i >= beats.length) return; // último beat segura até o _cerAt(introMs) ancorado
+    const b = beats[i];
+    if(b.type === 'title'){
+      host.innerHTML = `<div class="cer-trailer-beat">
+        <div class="cer-trailer-trophy">🏆</div>
+        <div class="cer-trailer-title">${esc(CFG.nome_bolao||'Bolão')}</div>
+        <div class="cer-trailer-sub">Copa 2026 · Cerimônia de encerramento</div>
+        <div class="cer-vol-tip" style="margin-top:16px">🔊 Aumente o volume</div>
+      </div>`;
+    } else if(b.type === 'count'){
+      host.innerHTML = `<div class="cer-trailer-beat">
+        <div class="cer-trailer-num" id="cer-trailer-num">0</div>
+        <div class="cer-trailer-num-label">${esc(b.label)}</div>
+      </div>`;
+      _cerCountUp(document.getElementById('cer-trailer-num'), b.value, Math.min(1600, per*0.7));
+    } else {
+      host.innerHTML = `<div class="cer-trailer-beat"><div class="cer-trailer-phrase">${b.html}</div></div>`;
+    }
+    if(i % 2 === 1) _cerFwBurst(2); // fogos leves em alguns beats
     i++;
-    _cerTimer(showName, per);
+    _cerTimer(showBeat, per);
   };
-  showName();
+  showBeat();
 }
 
 // Orquestra os cards (curiosidades + destaques por fase) na janela entre o fim do
-// roster (42s) e o pódio (fim-4s), dimensionando o tempo por card p/ caber na trilha.
+// trailer de abertura (42s) e o pódio (fim-4s), dimensionando o tempo por card p/ caber.
 function _cerStageCards(d){
   const st = _cerimoniaState; if(!st || st.closed || st.revealed) return;
   const facts = _cerimoniaFacts(d);
@@ -18822,7 +18853,7 @@ function _cerStageCards(d){
     .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
     .filter(x=>x.st);
   const nItems = facts.length + phases.length;
-  const winStart = _CER_ROSTER_MS;
+  const winStart = _CER_INTRO_MS;
   const podiumAt = st.podiumAt || (_cerTotalMs() - 4000);
   const win = Math.max(20000, podiumAt - winStart);
   const gridHold = Math.min(6000, win * 0.06); // respiro final com a grade completa
