@@ -1654,18 +1654,19 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 @keyframes cerPhaseOut{to{opacity:0;transform:scale(.82) translateY(-10px)}}
 /* Aviso p/ aumentar o volume (card inicial + roster) */
 .cer-vol-tip{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,140,0,.14);border:1px solid var(--orange);border-radius:14px;padding:10px 14px;margin:0 0 18px;color:var(--orange);font-weight:800;font-size:.9rem}
-/* Abertura: nomes de todos os participantes (primeiros 30s) */
-.cer-roster{width:100%;max-width:540px;display:flex;flex-direction:column;align-items:center;gap:12px}
-.cer-roster-label{color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:.8rem}
-.cer-roster-tip{color:var(--orange);font-weight:700;font-size:.88rem;margin-top:-4px}
-.cer-roster-big{min-height:2.5em;display:flex;align-items:center;justify-content:center;margin:2px 0 6px}
-.cer-roster-big{flex-direction:column}
-.cer-roster-name{font-size:2.2rem;font-weight:800;color:var(--white);text-shadow:0 2px 22px rgba(255,215,0,.45);text-align:center;line-height:1.12;animation:cerRosterPop .5s cubic-bezier(.2,1.3,.4,1) both}
-.cer-roster-fullname{display:block;margin-top:4px;color:var(--text-muted);font-size:1rem;font-weight:600;animation:cerRosterPop .5s .06s cubic-bezier(.2,1.3,.4,1) both}
-.cer-roster-list{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;width:100%}
-.cer-roster-chip{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:.85rem;font-weight:600;color:var(--white);opacity:0;transform:scale(.55);transition:opacity .35s ease,transform .42s cubic-bezier(.2,1.3,.4,1)}
+/* Abertura: nomes de todos os participantes (primeiros 42s) */
+.cer-roster{width:100%;max-width:640px;max-height:76vh;display:flex;flex-direction:column;align-items:center;gap:10px}
+.cer-roster-label{color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:.8rem;flex:0 0 auto}
+.cer-roster-tip{color:var(--orange);font-weight:700;font-size:.88rem;margin-top:-4px;flex:0 0 auto}
+.cer-roster-big{min-height:2.3em;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:2px 0 4px;max-width:100%;flex:0 0 auto}
+.cer-roster-name{font-size:2rem;font-weight:800;color:var(--white);text-shadow:0 2px 22px rgba(255,215,0,.45);text-align:center;line-height:1.12;max-width:100%;overflow-wrap:anywhere;animation:cerRosterPop .5s cubic-bezier(.2,1.3,.4,1) both}
+.cer-roster-fullname{display:block;margin-top:3px;color:var(--text-muted);font-size:.95rem;font-weight:600;animation:cerRosterPop .5s .06s cubic-bezier(.2,1.3,.4,1) both}
+/* A lista preenche a largura toda (as laterais) e rola dentro da própria caixa se
+   houver muita gente, em vez de estourar a tela para cima/baixo. */
+.cer-roster-list{display:flex;flex-wrap:wrap;gap:6px 7px;justify-content:center;align-content:flex-start;width:100%;flex:1 1 auto;min-height:0;overflow-y:auto;padding:2px 2px 4px;scrollbar-width:thin}
+.cer-roster-chip{display:inline-flex;align-items:baseline;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:18px;padding:4px 11px;font-size:.82rem;font-weight:600;color:var(--white);white-space:nowrap;opacity:0;transform:scale(.55);transition:opacity .35s ease,transform .42s cubic-bezier(.2,1.3,.4,1)}
 .cer-roster-chip.show{opacity:1;transform:scale(1)}
-.cer-roster-chip-sub{color:var(--text-muted);font-weight:500;font-size:.74rem;margin-left:5px}
+.cer-roster-chip-sub{color:var(--text-muted);font-weight:500;font-size:.72rem;margin-left:5px}
 @keyframes cerRosterPop{from{opacity:0;transform:scale(.6) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
 /* Transição entre estágios (ex.: nomes → cards): dissolve + sobe + desfoca */
 .cer-stage-leave{animation:cerStageLeave .5s cubic-bezier(.4,0,.55,1) forwards;pointer-events:none}
@@ -18253,7 +18254,45 @@ async function _cerimoniaBuildData(){
       else if(t==='vencedor') analiseJogos[jid].apenas_venc++; else analiseJogos[jid].erros++;
     });
   });
-  return { users, res, allPals, champPicks, ranking, userAccStats, analiseJogos, jogosComResultado };
+  // Estatísticas de "mudança de ideia" (histórico de alterações de palpite) — best-effort:
+  // alimentam os cards de curiosidade sobre quem mais alterou / ganhou / perdeu ao mudar.
+  let editStats = {}; try { editStats = await _cerFetchEditStats(users, res); } catch(_){ editStats = {}; }
+  return { users, res, allPals, champPicks, ranking, userAccStats, analiseJogos, jogosComResultado, editStats };
+}
+
+function _cerTsMs(ts){ try { return ts && ts.toMillis ? ts.toMillis() : (ts && ts.seconds ? ts.seconds*1000 : 0); } catch(_){ return 0; } }
+// Lê o histórico de palpites de cada participante (palpites/{uid}/historico) e resume,
+// por jogador: quantas vezes alterou um palpite e quantos pontos ganhou/perdeu ao mudar
+// de ideia (1º placar salvo vs. placar final, só em jogos já com resultado).
+async function _cerFetchEditStats(users, res){
+  const stats = {};
+  await Promise.all((users||[]).map(async u=>{
+    stats[u.uid] = { edits:0, changedGames:0, deltaPts:0 };
+    try {
+      const snap = await db_.collection('palpites').doc(u.uid).collection('historico').get();
+      const byGame = {}; let edits = 0;
+      snap.docs.forEach(doc=>{
+        const e = doc.data(); if(!e || !e.gameId) return;
+        if(e.action === 'set' && e.edit) edits++;
+        (byGame[e.gameId] = byGame[e.gameId] || []).push(e);
+      });
+      let deltaPts = 0, changed = 0;
+      Object.keys(byGame).forEach(gid=>{
+        if(!res[gid] || !_hasFullResult(res[gid])) return;
+        const sets = byGame[gid].filter(e=>e.action==='set' && e.h!=null && e.a!=null)
+          .sort((a,b)=> _cerTsMs(a.at) - _cerTsMs(b.at));
+        if(sets.length < 2) return;
+        const f = sets[0], l = sets[sets.length-1];
+        if(String(f.h)===String(l.h) && String(f.a)===String(l.a)) return; // não mudou o placar
+        changed++;
+        const pf = calcPontos({h:f.h,a:f.a}, res[gid], gid) || 0;
+        const pl = calcPontos({h:l.h,a:l.a}, res[gid], gid) || 0;
+        deltaPts += (pl - pf);
+      });
+      stats[u.uid] = { edits, changedGames:changed, deltaPts };
+    } catch(_){ /* best-effort por usuário */ }
+  }));
+  return stats;
 }
 
 // Monta os cards de curiosidades da cerimônia, reusando as calculadoras _rz* do
@@ -18295,6 +18334,15 @@ function _cerimoniaFacts(d){
   add(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); return t && t.up && t.up.delta>0 && {emoji:'🚀', label:'Maior arrancada no mata-mata', name:_rzName(t.up.u), detail:`subiu ${t.up.delta} posiç${t.up.delta>1?'ões':'ão'}`}; });
   // 🧊 Maior tombo no mata-mata
   add(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); return t && t.down && t.down.delta<0 && {emoji:'🧊', label:'Maior tombo no mata-mata', name:_rzName(t.down.u), detail:`caiu ${Math.abs(t.down.delta)} posiç${Math.abs(t.down.delta)>1?'ões':'ão'}`}; });
+  // ── Mudança de ideia (histórico de alterações de palpite) ──
+  const _esName = uid => { const u=(d.users||[]).find(x=>x.uid===uid); return u ? _rzName(u) : null; };
+  const _esArr = () => Object.keys(d.editStats||{}).map(uid=>({ uid, ...d.editStats[uid] }));
+  // 🔁 Quem mais alterou palpites
+  add(()=>{ const x=_esArr().filter(v=>v.edits>0).sort((a,b)=>b.edits-a.edits)[0]; const nm=x&&_esName(x.uid); return nm && {emoji:'🔁', label:'Mudou mais de ideia', name:nm, detail:`${x.edits} alteraç${x.edits>1?'ões':'ão'} de palpite`}; });
+  // 📈 Quem mais ganhou pontos ao mudar de ideia
+  add(()=>{ const x=_esArr().filter(v=>v.deltaPts>0).sort((a,b)=>b.deltaPts-a.deltaPts)[0]; const nm=x&&_esName(x.uid); return nm && {emoji:'📈', label:'Mudou de ideia na hora certa', name:nm, detail:`ganhou ${x.deltaPts} pts trocando o palpite`}; });
+  // 📉 Quem mais perdeu pontos ao mudar de ideia
+  add(()=>{ const x=_esArr().filter(v=>v.deltaPts<0).sort((a,b)=>a.deltaPts-b.deltaPts)[0]; const nm=x&&_esName(x.uid); return nm && {emoji:'📉', label:'Se arrependeu de mudar', name:nm, detail:`perdeu ${Math.abs(x.deltaPts)} pts trocando o palpite`}; });
   // 📐 Especialista em saldo
   add(()=>{ const x=_rzSaldo(d.ranking, d.allPals, d.res)[0]; return x && {emoji:'📐', label:'Especialista em saldo', name:_rzName(x.u), detail:`${x.saldo} acerto${x.saldo>1?'s':''} de vencedor + saldo de gols`}; });
   // ⚔️ Dupla mais oposta
@@ -18702,9 +18750,13 @@ async function _cerimoniaBegin(){
   let d; try { d = await _cerimoniaBuildData(); } catch(e){ if(stageEl) stageEl.innerHTML = `<div class="alert alert-error">Erro ao carregar os dados do bolão.</div>`; return; }
   if(st.closed) return;
   st.data = d;
-  // Linha do tempo ancorada no áudio (2:39): 0–42s = nomes dos participantes;
-  // 42s → (fim-4s) = curiosidades + destaques por fase; fim-4s = pódio do campeão.
-  st.t0 = performance.now();
+  // Linha do tempo ancorada no ÁUDIO (2:39), não no fim da carga de dados: 0–42s =
+  // nomes; 42s → (fim-4s) = curiosidades/fases; fim-4s = pódio. Como a carga do
+  // Firestore pode levar alguns segundos (o áudio já tocou nesse meio-tempo), usamos
+  // audio.currentTime p/ recuar t0 até o instante 0 real da faixa — assim o pódio cai
+  // no tempo certo mesmo com carregamento lento.
+  const playedMs = (audio && isFinite(audio.currentTime)) ? audio.currentTime * 1000 : 0;
+  st.t0 = performance.now() - playedMs;
   st.revealed = false;
   const total = _cerTotalMs();
   const rosterMs = _CER_ROSTER_MS;
@@ -18730,10 +18782,11 @@ function _cerStageRoster(d){
     <div class="cer-roster-list" id="cer-roster-list"></div>
   </div>`;
   if(!parts.length) return;
-  // Ritmo: distribui os nomes ao longo de ~40s (deixando ~2s com a lista completa
-  // antes dos cards). Um pouco mais lento que antes: cada nome surge com calma e vai
-  // se organizando na grade que preenche a tela (limites p/ caber com muita gente).
-  const per = Math.min(3200, Math.max(700, 40000 / parts.length));
+  // Ritmo: deriva da duração real da abertura, garantindo que TODOS os nomes apareçam
+  // antes de os cards assumirem (mesmo com muita gente). Deixa ~2s com a lista completa;
+  // com poucos participantes, cada nome ganha até 3,2s (não fica rápido demais).
+  const avail = Math.max(8000, _CER_ROSTER_MS - 2000);
+  const per = Math.min(3200, Math.max(220, avail / parts.length));
   let i = 0;
   const showName = ()=>{
     const s = _cerimoniaState; if(!s || s.closed) return;
@@ -18752,7 +18805,8 @@ function _cerStageRoster(d){
     chip.className = 'cer-roster-chip';
     chip.innerHTML = `${primary}${secondary?`<span class="cer-roster-chip-sub">${secondary}</span>`:''}`;
     listEl.appendChild(chip);
-    requestAnimationFrame(()=>chip.classList.add('show'));
+    // Se a lista já encheu a caixa, acompanha o novo nome (evita "sair da tela").
+    requestAnimationFrame(()=>{ chip.classList.add('show'); listEl.scrollTop = listEl.scrollHeight; });
     i++;
     _cerTimer(showName, per);
   };
