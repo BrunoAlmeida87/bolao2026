@@ -2487,7 +2487,8 @@ let CFG = {
   valor_participacao:50,
   qrcode_whatsapp:'',
   cerimonia_audio_url:'',
-  cerimonia_gif_url:''
+  cerimonia_gif_url:'',
+  cerimonia_sync_offset:0
 };
 
 // Horários dos jogos (Brasília - fuso -3)
@@ -13668,6 +13669,9 @@ async function renderAdminConfig() {
       <div class="form-group"><label>URL do GIF da Cerimônia (aparece no clímax da abertura)</label><input id="cfg-cerimonia-gif" value="${esc(CFG.cerimonia_gif_url||'')}" placeholder="https://.../copa.gif  (ou .webp / .png / .mp4)"></div>
       <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">Cole a URL de um GIF da Copa (Firebase Storage, Giphy, etc.). Ele surge junto de <b>"Glória Eterna!"</b> no fim da abertura. Deixe em branco para não exibir GIF.</p>
       <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaGif()">💾 Salvar GIF</button></div>
+      <div class="form-group"><label>Ajuste fino da sincronia (segundos) — + atrasa o texto · − adianta</label><input id="cfg-cerimonia-offset" type="number" step="0.5" value="${esc(String(CFG.cerimonia_sync_offset||0))}" placeholder="0"></div>
+      <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">O texto da abertura acompanha a posição real da música automaticamente. Se ainda ficar um tiquinho adiantado ou atrasado em relação à sua faixa, ajuste aqui: ex. <b>1.5</b> mostra tudo 1,5s mais tarde; <b>-2</b> mostra 2s mais cedo. Teste com "👁️ Testar (só eu)".</p>
+      <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaOffset()">💾 Salvar ajuste</button></div>
       <div class="btn-group">
         <button class="btn btn-primary" onclick="iniciarCerimoniaBolao()">🎬 Iniciar cerimônia para todos</button>
         <button class="btn btn-secondary" onclick="testarCerimonia()">👁️ Testar (só eu)</button>
@@ -14545,6 +14549,19 @@ async function saveCerimoniaGif() {
     await db_.collection('config').doc('geral').set({ cerimonia_gif_url: url }, { merge: true });
     CFG.cerimonia_gif_url = url;
     showToast(url ? '🎞️ GIF da cerimônia salvo!' : 'GIF removido.', 'success');
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// Salva o ajuste fino de sincronia da abertura (segundos, + atrasa o texto) em config/geral.
+async function saveCerimoniaOffset() {
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  const raw = (document.getElementById('cfg-cerimonia-offset')?.value || '0').trim().replace(',', '.');
+  let off = parseFloat(raw); if (!isFinite(off)) off = 0;
+  off = Math.max(-30, Math.min(30, off)); // trava em ±30s por segurança
+  try {
+    await db_.collection('config').doc('geral').set({ cerimonia_sync_offset: off }, { merge: true });
+    CFG.cerimonia_sync_offset = off;
+    showToast(`⏱️ Sincronia ajustada (${off > 0 ? '+' : ''}${off}s).`, 'success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 
@@ -18876,8 +18893,7 @@ async function _cerimoniaBegin(){
   const introMs = _CER_INTRO_MS;
   const podiumAt = Math.max(introMs + 15000, total - 4000);
   st.podiumAt = podiumAt;
-  _cerStageTrailer(d);
-  _cerAt(introMs, ()=>_cerStageCards(d));
+  _cerStageTrailer(d); // a abertura acompanha a posição real do áudio e passa p/ os cards aos 42s
   _cerAt(podiumAt, ()=>_cerStageReveal(d));
 }
 
@@ -18900,9 +18916,10 @@ function _cerCountUp(el, target, ms){
 }
 
 // Estágio de abertura (0–42s): trailer cinematográfico estilo premiação esportiva —
-// frases de efeito com fonte elegante (Cinzel), transições suaves e tempos EXATOS
-// ancorados no áudio (_cerAt → st.t0). No clímax (37s) surge "Glória Eterna!" com o
-// GIF configurado. Depois o último quadro segura até os cards (42s, _cerAt(introMs)).
+// frases de efeito com fonte elegante (Cinzel) e transições suaves, cada uma exibida
+// conforme a POSIÇÃO REAL do áudio (audio.currentTime), para não dessincronizar com a
+// música em qualquer internet. No clímax (37s) surge "Glória Eterna!" com o GIF
+// configurado; aos 42s a própria abertura passa para os cards.
 function _cerStageTrailer(d){
   const st = _cerimoniaState; if(!st || st.closed) return;
   const stageEl = document.getElementById('cerimonia-stage'); if(!stageEl){ _cerStageCards(d); return; }
@@ -18944,7 +18961,31 @@ function _cerStageTrailer(d){
     }
   };
 
-  script.forEach(b=>{ _cerAt(b.t, ()=>renderBeat(b)); });
+  // Sincronia: em vez de agendar por relógio (que dessincroniza quando o áudio demora
+  // ou engasga), cada frase segue a POSIÇÃO REAL do áudio (audio.currentTime). Se o
+  // áudio ainda não começou / não existe, cai no relógio (fallback). `cerimonia_sync_offset`
+  // (segundos, +atrasa / −adianta) permite ao admin acertar fino a narração da faixa.
+  const audio = document.getElementById('cerimonia-audio');
+  const offsetMs = (parseFloat(CFG.cerimonia_sync_offset) || 0) * 1000;
+  const wallStart = performance.now();
+  const nowMs = ()=>{
+    // currentTime>0.05 = o áudio realmente tocou; durante um buffer ele CONGELA (não
+    // avança), então o texto espera junto e volta em sincronia quando a música retoma.
+    if(audio && isFinite(audio.currentTime) && audio.currentTime > 0.05) return audio.currentTime * 1000;
+    return performance.now() - wallStart; // fallback: sem áudio ou antes do 1º frame de som
+  };
+  let shownIdx = -1;
+  const tick = ()=>{
+    const s = _cerimoniaState; if(!s || s.closed || s.revealed) return;
+    const host = document.getElementById('cer-trailer'); if(!host) return; // cards assumiram
+    const cur = nowMs() - offsetMs;
+    if(cur >= _CER_INTRO_MS){ _cerStageCards(d); return; } // fim da abertura → cards (não reagenda)
+    let idx = -1;
+    for(let i=0;i<script.length;i++){ if(script[i].t <= cur) idx = i; else break; }
+    if(idx >= 0 && idx !== shownIdx){ shownIdx = idx; renderBeat(script[idx]); }
+    s.raf = requestAnimationFrame(tick);
+  };
+  st.raf = requestAnimationFrame(tick);
 }
 
 // Orquestra os cards (curiosidades + destaques por fase) na janela entre o fim do
