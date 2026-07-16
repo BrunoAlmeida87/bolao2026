@@ -1652,7 +1652,19 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cpt-row .p{flex:0 0 auto;font-weight:700;color:var(--text-muted)}
 @keyframes cerFactIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes cerPhaseOut{to{opacity:0;transform:scale(.82) translateY(-10px)}}
-@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card{animation:none}.cer-phase-thumb{transition:none}}
+/* Aviso p/ aumentar o volume (card inicial + roster) */
+.cer-vol-tip{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,140,0,.14);border:1px solid var(--orange);border-radius:14px;padding:10px 14px;margin:0 0 18px;color:var(--orange);font-weight:800;font-size:.9rem}
+/* Abertura: nomes de todos os participantes (primeiros 30s) */
+.cer-roster{width:100%;max-width:540px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.cer-roster-label{color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:.8rem}
+.cer-roster-tip{color:var(--orange);font-weight:700;font-size:.88rem;margin-top:-4px}
+.cer-roster-big{min-height:2.5em;display:flex;align-items:center;justify-content:center;margin:2px 0 6px}
+.cer-roster-name{font-size:2.2rem;font-weight:800;color:var(--white);text-shadow:0 2px 22px rgba(255,215,0,.45);text-align:center;line-height:1.12;animation:cerRosterPop .5s cubic-bezier(.2,1.3,.4,1) both}
+.cer-roster-list{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;width:100%}
+.cer-roster-chip{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:.85rem;font-weight:600;color:var(--white);opacity:0;transform:scale(.55);transition:opacity .35s ease,transform .42s cubic-bezier(.2,1.3,.4,1)}
+.cer-roster-chip.show{opacity:1;transform:scale(1)}
+@keyframes cerRosterPop{from{opacity:0;transform:scale(.6) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@media(prefers-reduced-motion:reduce){.cer-fact,.cer-intro-title,.cer-phase-card,.cer-roster-name{animation:none}.cer-phase-thumb,.cer-roster-chip{transition:none}}
 </style>
 </head>
 <body>
@@ -18185,6 +18197,21 @@ function _cerimoniaSizeCanvas(cv){
 }
 
 function _cerTimer(fn, ms){ const id = setTimeout(fn, ms); if(_cerimoniaState) _cerimoniaState.timers.push(id); return id; }
+// Agenda `fn` para um instante absoluto (ms desde o início do áudio, st.t0), para
+// que o cronograma não acumule desvio: o pódio cai sempre no tempo certo.
+function _cerAt(ms, fn){
+  const st = _cerimoniaState; if(!st) return null;
+  const base = (st.t0 != null) ? st.t0 : performance.now();
+  const delay = Math.max(0, base + ms - performance.now());
+  return _cerTimer(fn, delay);
+}
+// Duração total do áudio da cerimônia (default 2:27 = 147s). Usa a duração real
+// do <audio> quando já disponível e plausível; senão, o valor combinado.
+function _cerTotalMs(){
+  const a = document.getElementById('cerimonia-audio');
+  const d = a && a.duration;
+  return (d && isFinite(d) && d > 30) ? Math.round(d * 1000) : 147000;
+}
 function _cerSetStageLabel(txt){ const el = document.getElementById('cerimonia-stage-label'); if(el) el.textContent = txt || ''; }
 
 // Reúne os mesmos dados que a aba Estatísticas/Resumão usa (mesmo custo de leituras).
@@ -18567,13 +18594,13 @@ async function _cerShareViewer(){
 // Estágio: mostra os cards de fase um a um (com fogos), encolhendo cada um para
 // uma grade que se acumula na tela; ao fim, a grade completa fica alguns segundos.
 function _cerStagePhases(d){
-  if(!_cerimoniaState || _cerimoniaState.closed) return;
+  if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
   const stageEl = document.getElementById('cerimonia-stage');
-  if(!stageEl){ _cerStageReveal(d); return; }
+  if(!stageEl) return;
   const phases = _CER_PHASE_DEFS
     .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
     .filter(x=>x.st);
-  if(!phases.length){ _cerStageReveal(d); return; }
+  if(!phases.length) return; // sem fases: o último card de curiosidade segura a tela
   _cerSetStageLabel('Destaques por fase');
   stageEl.innerHTML = `<div class="cer-phases">
     <div class="cer-phase-active" id="cer-phase-active"></div>
@@ -18581,13 +18608,14 @@ function _cerStagePhases(d){
   </div>`;
   const activeEl = document.getElementById('cer-phase-active');
   const gridEl   = document.getElementById('cer-phase-grid');
-  const HOLD = 4400, OUT = 520;
+  const OUT = 520;
+  const HOLD = Math.max(2200, ((_cerimoniaState && _cerimoniaState.cardPer) || 4400) - OUT);
   let i = 0;
   const showNext = ()=>{
-    if(!_cerimoniaState || _cerimoniaState.closed) return;
+    if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
     if(i >= phases.length){
+      // Grade completa fica na tela até o pódio (agendado no tempo absoluto do áudio).
       _cerSetStageLabel('Todos os destaques');
-      _cerTimer(()=>_cerStageReveal(d), 3800); // grade completa fica na tela alguns segundos
       return;
     }
     const { def, st } = phases[i];
@@ -18595,11 +18623,11 @@ function _cerStagePhases(d){
     if(activeEl) activeEl.innerHTML = _cerPhaseCardHTML(def, st);
     _cerFwBurst(2 + (Math.random()*2|0)); // poucos fogos a cada card
     _cerTimer(()=>{
-      if(!_cerimoniaState || _cerimoniaState.closed) return;
+      if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
       const card = activeEl && activeEl.firstElementChild;
       if(card) card.classList.add('cer-phase-out');
       _cerTimer(()=>{
-        if(!_cerimoniaState || _cerimoniaState.closed) return;
+        if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
         if(activeEl) activeEl.innerHTML = '';
         if(gridEl){
           const thumb = document.createElement('div');
@@ -18629,8 +18657,9 @@ function _cerimoniaStart(data){
     <div style="font-size:3rem">🎬</div>
     <h2>Cerimônia de Encerramento</h2>
     <p>${esc(CFG.nome_bolao||'Bolão')} · Copa 2026<br>${hasUrl?'Com música, ':''}as maiores curiosidades, os destaques de cada fase e o anúncio do grande campeão.</p>
+    <div class="cer-vol-tip">🔊 Aumente o volume do seu aparelho</div>
     <button class="cer-btn-play" onclick="_cerimoniaBegin()">▶️ Iniciar cerimônia</button>
-    ${hasUrl?'<div style="font-size:.72rem;color:var(--text-muted);margin-top:14px">🔊 Toque para liberar o som</div>':''}
+    ${hasUrl?'<div style="font-size:.72rem;color:var(--text-muted);margin-top:14px">Toque para liberar o som</div>':''}
   </div>`;
 }
 
@@ -18654,7 +18683,75 @@ async function _cerimoniaBegin(){
   let d; try { d = await _cerimoniaBuildData(); } catch(e){ if(stageEl) stageEl.innerHTML = `<div class="alert alert-error">Erro ao carregar os dados do bolão.</div>`; return; }
   if(st.closed) return;
   st.data = d;
-  _cerStageIntro(d);
+  // Linha do tempo ancorada no áudio (2:27): 0–30s = nomes dos participantes;
+  // 30s → (fim-4s) = curiosidades + destaques por fase; fim-4s = pódio do campeão.
+  st.t0 = performance.now();
+  st.revealed = false;
+  const total = _cerTotalMs();
+  const rosterMs = 30000;
+  const podiumAt = Math.max(rosterMs + 15000, total - 4000);
+  st.podiumAt = podiumAt;
+  _cerStageRoster(d);
+  _cerAt(rosterMs, ()=>_cerStageCards(d));
+  _cerAt(podiumAt, ()=>_cerStageReveal(d));
+}
+
+// Estágio de abertura (0–30s): mostra o nome/apelido de cada participante — primeiro
+// em destaque, depois encolhido numa lista que se acumula na tela.
+function _cerStageRoster(d){
+  const st = _cerimoniaState; if(!st || st.closed) return;
+  const stageEl = document.getElementById('cerimonia-stage'); if(!stageEl){ _cerStageCards(d); return; }
+  _cerSetStageLabel('Participantes do bolão');
+  const parts = (d.users || []).slice().sort((a,b)=>
+    String(a.apelido||a.nome||'').localeCompare(String(b.apelido||b.nome||''), 'pt', {sensitivity:'base'}));
+  stageEl.innerHTML = `<div class="cer-roster">
+    <div class="cer-roster-label">🎉 Participantes do bolão</div>
+    <div class="cer-roster-tip">🔊 Aumente o volume</div>
+    <div class="cer-roster-big" id="cer-roster-big"></div>
+    <div class="cer-roster-list" id="cer-roster-list"></div>
+  </div>`;
+  if(!parts.length) return;
+  // Ritmo: distribui os nomes ao longo de ~28,5s, deixando a lista completa
+  // parada por ~1,5s antes de os cards começarem (limites p/ não ficar rápido demais).
+  const per = Math.min(2200, Math.max(450, 28500 / parts.length));
+  let i = 0;
+  const showName = ()=>{
+    const s = _cerimoniaState; if(!s || s.closed) return;
+    const bigEl = document.getElementById('cer-roster-big');
+    const listEl = document.getElementById('cer-roster-list');
+    if(!bigEl || !listEl) return; // estágio já trocou (cards assumiram)
+    if(i >= parts.length){ bigEl.innerHTML = ''; return; }
+    const nm = _rzName(parts[i]);
+    bigEl.innerHTML = `<span class="cer-roster-name">${nm}</span>`;
+    const chip = document.createElement('span');
+    chip.className = 'cer-roster-chip';
+    chip.innerHTML = nm;
+    listEl.appendChild(chip);
+    requestAnimationFrame(()=>chip.classList.add('show'));
+    i++;
+    _cerTimer(showName, per);
+  };
+  showName();
+}
+
+// Orquestra os cards (curiosidades + destaques por fase) na janela entre o fim do
+// roster (30s) e o pódio (fim-4s), dimensionando o tempo por card p/ caber na trilha.
+function _cerStageCards(d){
+  const st = _cerimoniaState; if(!st || st.closed || st.revealed) return;
+  const facts = _cerimoniaFacts(d);
+  const phases = _CER_PHASE_DEFS
+    .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
+    .filter(x=>x.st);
+  const nItems = facts.length + phases.length;
+  const winStart = 30000;
+  const podiumAt = st.podiumAt || (_cerTotalMs() - 4000);
+  const win = Math.max(20000, podiumAt - winStart);
+  const gridHold = Math.min(6000, win * 0.06); // respiro final com a grade completa
+  const per = nItems > 0
+    ? Math.min(9000, Math.max(2600, (win - gridHold) / nItems))
+    : 4800;
+  st.cardPer = per;
+  _cerStageFacts(d, facts);
 }
 
 function _cerStageIntro(d){
@@ -18666,13 +18763,13 @@ function _cerStageIntro(d){
   _cerTimer(()=>_cerStageFacts(d), 5000);
 }
 
-function _cerStageFacts(d){
-  const facts = _cerimoniaFacts(d);
+function _cerStageFacts(d, facts){
+  facts = facts || _cerimoniaFacts(d);
   const stageEl = document.getElementById('cerimonia-stage');
   if(!facts.length || !stageEl){ _cerStagePhases(d); return; }
-  const per = 4800; let i = 0;
+  const per = (_cerimoniaState && _cerimoniaState.cardPer) || 4800; let i = 0;
   const showOne = ()=>{
-    if(!_cerimoniaState || _cerimoniaState.closed) return;
+    if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
     if(i >= facts.length){ _cerStagePhases(d); return; }
     const f = facts[i];
     _cerSetStageLabel(`Curiosidades · ${i+1}/${facts.length}`);
@@ -18691,7 +18788,8 @@ function _cerStageFacts(d){
 
 // Estágio final: o reveal do campeão (reusa a festa de fogos + pódio).
 function _cerStageReveal(d){
-  if(!_cerimoniaState || _cerimoniaState.closed) return;
+  const st = _cerimoniaState; if(!st || st.closed) return;
+  if(st.revealed) return; st.revealed = true; // trava cards pendentes e evita reentrada
   _cerSetStageLabel('O grande campeão do bolão');
   _cerFwStop(); // a festa do pódio assume a partir daqui (canvas própria, por cima)
   const cv = document.getElementById('cerimonia-canvas'); if(cv){ const c = cv.getContext('2d'); if(c) c.clearRect(0,0,cv.width,cv.height); }
@@ -18700,12 +18798,16 @@ function _cerStageReveal(d){
   // Fechar o reveal encerra a cerimônia inteira (música + overlay).
   _celebraOnClose = ()=>{ _celebraOnClose = null; _cerimoniaStop(); };
   // continuous=true: os fogos seguem rolando enquanto o pódio fica na tela.
+  // _celebraStart limpa o painel do jogador, então o pódio aparece sozinho primeiro.
   _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
-  // Estatísticas personalizadas de quem está assistindo (abaixo do pódio).
-  try {
-    const vp = document.getElementById('celebra-viewer');
-    if(vp){ const v = _cerViewerStats(d); vp.innerHTML = v ? _cerViewerPanelHTML(v) : ''; }
-  } catch(_){}
+  // Só o pódio por ~5s; depois entram as estatísticas personalizadas de quem assiste.
+  _cerTimer(()=>{
+    if(!_cerimoniaState || _cerimoniaState.closed) return;
+    try {
+      const vp = document.getElementById('celebra-viewer');
+      if(vp){ const v = _cerViewerStats(d); vp.innerHTML = v ? _cerViewerPanelHTML(v) : ''; }
+    } catch(_){}
+  }, 5000);
 }
 
 function _cerimoniaStop(){
