@@ -1551,7 +1551,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .celebra-overlay{position:fixed;inset:0;z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 50% 40%,rgba(10,22,40,.82),rgba(0,0,0,.92))}
 .celebra-overlay.hidden{display:none}
 #celebra-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.celebra-card{position:relative;z-index:2;width:100%;max-width:420px;background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1.5px solid var(--gold);border-radius:22px;padding:26px 22px 24px;text-align:center;box-shadow:0 0 60px rgba(255,215,0,.35),0 20px 50px rgba(0,0,0,.5);animation:celebraCardIn .6s cubic-bezier(.2,1.3,.4,1) both}
+.celebra-card{position:relative;z-index:2;width:100%;max-width:420px;max-height:92vh;overflow-y:auto;background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1.5px solid var(--gold);border-radius:22px;padding:26px 22px 24px;text-align:center;box-shadow:0 0 60px rgba(255,215,0,.35),0 20px 50px rgba(0,0,0,.5);animation:celebraCardIn .6s cubic-bezier(.2,1.3,.4,1) both}
 .celebra-close{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;line-height:1;padding:4px}
 .celebra-close:hover{color:var(--white)}
 .celebra-trophy{font-size:3.4rem;line-height:1;filter:drop-shadow(0 4px 14px rgba(255,215,0,.6));animation:celebraTrophy 2.4s ease-in-out infinite}
@@ -1574,9 +1574,14 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .celebra-viewer:not(:empty){margin-top:14px;padding-top:12px;border-top:1px solid var(--border);text-align:left;animation:cerFactIn .5s ease both}
 .cv-title{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--gold);margin-bottom:8px;text-align:center}
 .cv-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 2px;font-size:.86rem}
-.cv-k{color:var(--text-muted)}
-.cv-v{color:var(--white);font-weight:800;text-align:right}
+.cv-k{color:var(--text-muted);flex:1 1 auto}
+.cv-v{color:var(--white);font-weight:800;text-align:right;flex:0 0 auto}
 .cv-sub{color:var(--text-muted);font-weight:600;font-size:.76rem}
+.cv-sec{font-size:.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);opacity:.8;margin:11px 0 2px}
+.cv-titles{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.cv-badge{font-size:.72rem;font-weight:700;background:rgba(255,215,0,.14);border:1px solid rgba(255,215,0,.4);color:var(--gold);border-radius:12px;padding:3px 9px}
+.cv-share{margin-top:15px;width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--white);font-weight:700;font-size:.82rem;padding:9px;border-radius:12px;cursor:pointer}
+.cv-share:hover{border-color:var(--gold);color:var(--gold)}
 /* Botão flutuante de parar a gravação de vídeo da cerimônia */
 .cer-rec-stop{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:700;background:linear-gradient(135deg,#FF4444,#c0392b);color:#fff;border:none;font-weight:800;font-size:.82rem;padding:9px 16px;border-radius:22px;cursor:pointer;box-shadow:0 6px 20px rgba(255,68,68,.45);display:flex;align-items:center;gap:7px}
 .cer-rec-stop.hidden{display:none}
@@ -18404,19 +18409,22 @@ function _cerPhaseThumbHTML(def, st){
 }
 
 // ── Estatísticas personalizadas do jogador logado (abaixo do pódio) ───────────
-// Monta o desempenho de quem está assistindo: posição, pontos, exatos, distância
-// do campeão, melhor fase e acerto do campeão. Retorna null se não der p/ localizar.
+// Monta um retrato completo do desempenho de quem está assistindo: posição,
+// pontos, aproveitamento, média do bolão, melhor fase, cravada mais rara, maior
+// sequência, vizinho no ranking, nêmesis/seleção da sorte, palpite de campeão e
+// títulos de curiosidade conquistados. Retorna null se não der p/ localizar.
 function _cerViewerStats(d){
   const uid = currentUserDoc && currentUserDoc.uid;
-  if(!uid || !Array.isArray(d.ranking)) return null;
+  if(!uid || !Array.isArray(d.ranking) || !d.ranking.length) return null;
   const idx = d.ranking.findIndex(u => u.uid === uid);
   if(idx < 0) return null;
   const me = d.ranking[idx];
   const champ = d.ranking[0];
   const atras = champ ? Math.max(0, (champ.pontos||0) - (me.pontos||0)) : 0;
-  // Posição OFICIAL com empates (1,2,2,4…), igual à tabela do ranking e aos prêmios —
-  // não o índice bruto do array, que erraria a posição de quem está empatado.
-  const pos = (_rankPositionsTieAware(d.ranking)[idx]) || (idx+1);
+  // Posição OFICIAL com empates (1,2,2,4…), igual à tabela do ranking e aos prêmios.
+  const posArr = _rankPositionsTieAware(d.ranking);
+  const pos = posArr[idx] || (idx+1);
+
   // Melhor fase do jogador (mais pontos somados numa fase com resultado).
   let bestPhase = null;
   _CER_PHASE_DEFS.forEach(def=>{
@@ -18426,19 +18434,135 @@ function _cerViewerStats(d){
     ids.forEach(id=>{ const p=d.allPals[uid] && d.allPals[uid][id]; if(!p) return; any=true; const s=calcPontos(p,d.res[id],id); if(s!=null) pts+=s; });
     if(any && (!bestPhase || pts>bestPhase.pts)) bestPhase = { title:def.title, pts };
   });
-  return { me, pos, total: d.ranking.length, atras, bestPhase, acertouCampeao: !!me.acertou_campeao };
+
+  // Vizinho logo à frente no ranking (ou empatado).
+  let vizinho = null;
+  if(idx > 0){
+    const up = d.ranking[idx-1];
+    vizinho = { nome:_rzName(up), gap:Math.max(0,(up.pontos||0)-(me.pontos||0)), tied: posArr[idx-1]===pos };
+  }
+
+  // Média do bolão e diferença do jogador para ela.
+  const media = d.ranking.reduce((a,u)=>a+(u.pontos||0),0) / d.ranking.length;
+  const vsMedia = Math.round((me.pontos||0) - media);
+
+  // Aproveitamento e maior sequência (via userAccStats, se disponível).
+  const acc = (d.userAccStats && d.userAccStats[uid]) || null;
+  const aproveitamento = (acc && acc.acertoPct!=null && acc.acertoPct!=='-') ? acc.acertoPct : null;
+  const maxStreak = acc ? (acc.maxStreak||0) : 0;
+  const jogos = me.jogos || 0;
+  const mediaPorJogo = jogos ? ((me.pontos||0)-(me.bonus_campeao||0))/jogos : 0;
+
+  // Cravada mais rara + nêmesis (seleção que mais te derrubou) + seleção da sorte.
+  let rare = null; const nemesis = {}, fregues = {};
+  const pals = d.allPals[uid] || {};
+  Object.keys(pals).forEach(jid=>{
+    if(!_hasFullResult(d.res[jid])) return;
+    const t = _hitType(pals[jid], d.res[jid]);
+    if(t===null) return;
+    const teams = _gxGameTeams(jid, d.res);
+    if(t==='exato'){
+      const totalEx = (d.analiseJogos[jid] && d.analiseJogos[jid].exatos) || 1;
+      if(!rare || totalEx < rare.count) rare = { count: totalEx, jogo: `${teams.h} × ${teams.a}` };
+    }
+    const bucket = (t==='erro') ? nemesis : fregues;
+    [teams.h, teams.a].forEach(tm=>{ if(tm && tm.length<=24) bucket[tm]=(bucket[tm]||0)+1; });
+  });
+  const topTeam = obj => { const a=Object.entries(obj).sort((x,y)=>y[1]-x[1])[0]; return (a && a[1]>=2) ? { nome:a[0], n:a[1] } : null; };
+
+  // Títulos de curiosidade em que o jogador é o nº 1 (reusa os cálculos do Resumão).
+  const titulos = []; const isMe = u => u && u.uid === uid;
+  const tryTitle = (fn, label) => { try { if(fn()) titulos.push(label); } catch(_){} };
+  tryTitle(()=>{ const x=_rzExatos(d.ranking, d.userAccStats)[0]; return isMe(x&&x.u); }, '🎯 Rei dos exatos');
+  tryTitle(()=>{ const c=d.ranking.filter(u=>u.jogos>=10).map(u=>({u,pct:u.exatos/u.jogos})).sort((a,b)=>b.pct-a.pct)[0]; return c&&c.pct>0&&isMe(c.u); }, '🔫 Sniper');
+  tryTitle(()=>{ const c=d.ranking.filter(u=>u.jogos>=10).map(u=>({u,pct:(u.exatos+u.venc_saldo+u.apenas_venc)/u.jogos})).sort((a,b)=>b.pct-a.pct)[0]; return isMe(c&&c.u); }, '🧙 Oráculo');
+  tryTitle(()=>{ const x=_rzSaldo(d.ranking, d.allPals, d.res)[0]; return isMe(x&&x.u); }, '📐 Mestre do saldo');
+  tryTitle(()=>{ const x=_rzConsistency(d.users, d.allPals, d.res)[0]; return isMe(x&&x.u); }, '🧱 Mais consistente');
+  tryTitle(()=>{ const x=_rzBoldness(d.users, d.allPals, d.res)[0]; return isMe(x&&x.u); }, '🎲 Mais ousado');
+  tryTitle(()=>{ const l=_rzLeadership(d.users, d.allPals, d.res, d.champPicks); return l && isMe(l.rows[0]&&l.rows[0].u); }, '👑 Mais tempo na liderança');
+  tryTitle(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); return t && t.up && t.up.delta>0 && isMe(t.up.u); }, '🚀 Maior arrancada');
+
+  return {
+    me, pos, total: d.ranking.length, atras, bestPhase,
+    acertouCampeao: !!me.acertou_campeao, meuCampeao: me.campeao || null,
+    vizinho, media: Math.round(media), vsMedia,
+    aproveitamento, maxStreak, jogos, mediaPorJogo,
+    rare, nemesis: topTeam(nemesis), fregues: topTeam(fregues), titulos,
+    quaseTitulo: pos>1 && atras>0 && atras <= (CFG.pts_exato_mata ?? 15)
+  };
 }
+let _cerViewerLast = null; // guarda o último retrato p/ o botão de compartilhar
 function _cerViewerPanelHTML(v){
+  _cerViewerLast = v;
   const posEmoji = v.pos===1 ? '👑' : (v.pos<=3 ? '🏅' : '🎯');
-  const rows = [];
-  rows.push(`<div class="cv-row"><span class="cv-k">${posEmoji} Sua posição</span><span class="cv-v">${v.pos}º <span class="cv-sub">de ${v.total}</span></span></div>`);
-  rows.push(`<div class="cv-row"><span class="cv-k">⭐ Seus pontos</span><span class="cv-v">${v.me.pontos||0}</span></div>`);
-  if((v.me.exatos||0)>0) rows.push(`<div class="cv-row"><span class="cv-k">🎯 Placares exatos</span><span class="cv-v">${v.me.exatos}</span></div>`);
-  if(v.pos>1 && v.atras>0) rows.push(`<div class="cv-row"><span class="cv-k">📊 Atrás do campeão</span><span class="cv-v">${v.atras} pt${v.atras>1?'s':''}</span></div>`);
-  if(v.bestPhase) rows.push(`<div class="cv-row"><span class="cv-k">🔥 Sua melhor fase</span><span class="cv-v">${esc(v.bestPhase.title)} <span class="cv-sub">${v.bestPhase.pts} pts</span></span></div>`);
-  if(v.acertouCampeao) rows.push(`<div class="cv-row"><span class="cv-k">🏆 Palpite de campeão</span><span class="cv-v">Você acertou! 🎉</span></div>`);
+  const flag = t => { try { return teamFlag(t)+' '; } catch(_){ return ''; } };
+  const row = (k,val)=>`<div class="cv-row"><span class="cv-k">${k}</span><span class="cv-v">${val}</span></div>`;
+  const sec = t=>`<div class="cv-sec">${t}</div>`;
+  const out = [];
+
+  // Núcleo
+  out.push(row(`${posEmoji} Sua posição`, `${v.pos}º <span class="cv-sub">de ${v.total}</span>`));
+  out.push(row('⭐ Seus pontos', `${v.me.pontos||0}`));
+  if(v.aproveitamento!=null) out.push(row('✅ Aproveitamento', `${v.aproveitamento}% <span class="cv-sub">de acerto</span>`));
+  if(v.jogos>0) out.push(row('📈 Média por jogo', `${v.mediaPorJogo.toFixed(1)} <span class="cv-sub">pts</span>`));
+  out.push(row('⚖️ Você vs. média', v.vsMedia>=0
+    ? `<span style="color:var(--green)">+${v.vsMedia}</span> <span class="cv-sub">(média ${v.media})</span>`
+    : `<span style="color:#FF6B6B">${v.vsMedia}</span> <span class="cv-sub">(média ${v.media})</span>`));
+
+  // Destaques
+  const dest = [];
+  if((v.me.exatos||0)>0) dest.push(row('🎯 Placares exatos', `${v.me.exatos}`));
+  if(v.rare) dest.push(row('💎 Cravada mais rara', `${esc(v.rare.jogo)} <span class="cv-sub">${v.rare.count===1?'só você!':v.rare.count+' cravaram'}</span>`));
+  if(v.maxStreak>=2) dest.push(row('🔥 Maior sequência', `${v.maxStreak} jogos <span class="cv-sub">pontuando</span>`));
+  if(v.bestPhase) dest.push(row('🌟 Sua melhor fase', `${esc(v.bestPhase.title)} <span class="cv-sub">${v.bestPhase.pts} pts</span>`));
+  if(dest.length){ out.push(sec('Seus destaques')); dest.forEach(r=>out.push(r)); }
+
+  // Rivais & escolhas
+  const rel = [];
+  if(v.vizinho) rel.push(v.vizinho.tied
+    ? row('🤝 Empatado com', `${esc(v.vizinho.nome)}`)
+    : row('⬆️ Logo à frente', `${esc(v.vizinho.nome)} <span class="cv-sub">+${v.vizinho.gap} pt${v.vizinho.gap>1?'s':''}</span>`));
+  if(v.nemesis) rel.push(row('😤 Seu nêmesis', `${flag(v.nemesis.nome)}${esc(v.nemesis.nome)} <span class="cv-sub">${v.nemesis.n} erros</span>`));
+  if(v.fregues) rel.push(row('🍀 Seleção da sorte', `${flag(v.fregues.nome)}${esc(v.fregues.nome)} <span class="cv-sub">${v.fregues.n} acertos</span>`));
+  if(v.meuCampeao) rel.push(row('🧿 Palpite de campeão', `${flag(v.meuCampeao)}${esc(v.meuCampeao)}${v.acertouCampeao?' <span class="cv-sub" style="color:var(--gold)">acertou! 🎉</span>':''}`));
+  if(rel.length){ out.push(sec('Rivais & escolhas')); rel.forEach(r=>out.push(r)); }
+
+  // Rumo ao topo
+  if(v.pos>1 && v.atras>0){
+    out.push(sec(v.quaseTitulo ? 'Quase lá!' : 'Rumo ao topo'));
+    out.push(row('📊 Atrás do campeão', `${v.atras} pt${v.atras>1?'s':''}`));
+    if(v.quaseTitulo) out.push(row('😮 Faltou pouco', `1 cravada te dava o título!`));
+  }
+
+  // Títulos de curiosidade
+  if(v.titulos && v.titulos.length){
+    out.push(sec('Seus títulos'));
+    const shown = v.titulos.slice(0,4);
+    out.push(`<div class="cv-titles">${shown.map(t=>`<span class="cv-badge">${t}</span>`).join('')}${v.titulos.length>4?`<span class="cv-badge">+${v.titulos.length-4}</span>`:''}</div>`);
+  }
+
   const quem = esc((currentUserDoc && (currentUserDoc.apelido||currentUserDoc.nome)) || 'você');
-  return `<div class="cv-title">📌 Seu desempenho, ${quem}</div>${rows.join('')}`;
+  return `<div class="cv-title">📌 Seu desempenho, ${quem}</div>${out.join('')}
+    <button class="cv-share" onclick="_cerShareViewer()">📤 Compartilhar meu desempenho</button>`;
+}
+// Compartilha (ou copia) um resumo em texto do desempenho do jogador.
+async function _cerShareViewer(){
+  const v = _cerViewerLast; if(!v) return;
+  const nome = (currentUserDoc && (currentUserDoc.apelido||currentUserDoc.nome)) || 'Eu';
+  const L = [];
+  L.push(`🏆 ${CFG.nome_bolao||'Bolão'} · Copa 2026`);
+  L.push(`📌 Meu desempenho — ${nome}`);
+  L.push(`🥇 Posição: ${v.pos}º de ${v.total}`);
+  L.push(`⭐ Pontos: ${v.me.pontos||0}`);
+  if(v.aproveitamento!=null) L.push(`✅ Aproveitamento: ${v.aproveitamento}%`);
+  if((v.me.exatos||0)>0) L.push(`🎯 Placares exatos: ${v.me.exatos}`);
+  if(v.maxStreak>=2) L.push(`🔥 Maior sequência: ${v.maxStreak} jogos`);
+  if(v.bestPhase) L.push(`🌟 Melhor fase: ${v.bestPhase.title} (${v.bestPhase.pts} pts)`);
+  if(v.titulos && v.titulos.length) L.push(`🏅 Títulos: ${v.titulos.slice(0,4).join(', ')}`);
+  const text = L.join('\n');
+  try { if(navigator.share){ await navigator.share({ text }); return; } } catch(_){ return; /* usuário cancelou */ }
+  try { await navigator.clipboard.writeText(text); showToast('📋 Desempenho copiado!','success'); }
+  catch(_){ showToast('Compartilhamento não suportado neste navegador.','error'); }
 }
 // Estágio: mostra os cards de fase um a um (com fogos), encolhendo cada um para
 // uma grade que se acumula na tela; ao fim, a grade completa fica alguns segundos.
