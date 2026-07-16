@@ -1603,27 +1603,8 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cer-bar-fill{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--orange));border-radius:6px}
 .cer-bar-n{flex:0 0 auto;font-size:.8rem;font-weight:700;color:var(--gold);min-width:18px;text-align:left}
 /* Destaques por fase (rodadas 1/2/3 + mata-mata): cards que encolhem e formam uma grade */
-.cer-phases{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:500px}
-.cer-phase-active{width:100%;min-height:1px;display:flex;justify-content:center}
-.cer-phase-card{width:100%;background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1.5px solid var(--gold);border-radius:18px;padding:16px 14px;box-shadow:0 0 40px rgba(255,215,0,.22);animation:cerFactIn .55s cubic-bezier(.2,1.2,.4,1) both}
-.cer-phase-card.cer-phase-out{animation:cerPhaseOut .5s ease forwards}
-.cer-phase-head{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:12px}
-.cer-phase-emoji{font-size:2rem;line-height:1;filter:drop-shadow(0 3px 10px rgba(255,215,0,.4))}
-.cer-phase-title{color:var(--gold);font-weight:800;font-size:1.15rem;line-height:1.1;text-align:left}
-.cer-phase-sub{color:var(--text-muted);font-size:.72rem;text-align:left;margin-top:1px}
-.cer-phase-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.cer-phase-col{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:9px 8px}
-.cer-phase-col.best{border-color:rgba(255,215,0,.4)}
-.cer-phase-col.worst{border-color:rgba(100,181,246,.35)}
-.cer-phase-col-h{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;margin-bottom:7px;text-align:center}
-.cer-phase-col.best .cer-phase-col-h{color:var(--gold)}
-.cer-phase-col.worst .cer-phase-col-h{color:#64B5F6}
-.cer-phase-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.82rem}
-.cer-phase-row .rk{flex:0 0 18px;text-align:center;font-size:.92rem}
-.cer-phase-row .nm{flex:1;color:var(--white);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
-.cer-phase-row .pt{flex:0 0 auto;font-weight:800;font-size:.8rem}
-.cer-phase-col.best .pt{color:var(--gold)}
-.cer-phase-col.worst .pt{color:#64B5F6}
+.cer-phases{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:500px}
+.cer-phases-cap{color:var(--gold);font-weight:800;font-size:1rem;text-align:center}
 .cer-phase-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%}
 .cer-phase-thumb{background:linear-gradient(160deg,var(--card),var(--dark-blue));border:1px solid var(--border);border-radius:12px;padding:8px 8px 9px;opacity:0;transform:scale(.72);transition:opacity .4s ease,transform .45s cubic-bezier(.2,1.3,.4,1)}
 .cer-phase-thumb.show{opacity:1;transform:scale(1)}
@@ -1635,7 +1616,6 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cpt-row .n{flex:1;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .cpt-row .p{flex:0 0 auto;font-weight:700;color:var(--text-muted)}
 @keyframes cerFactIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes cerPhaseOut{to{opacity:0;transform:scale(.82) translateY(-10px)}}
 /* Aviso p/ aumentar o volume (card inicial + roster) */
 .cer-vol-tip{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,140,0,.14);border:1px solid var(--orange);border-radius:14px;padding:10px 14px;margin:0 0 18px;color:var(--orange);font-weight:800;font-size:.9rem}
 /* Abertura: trailer cinematográfico (frases de efeito + números animados) */
@@ -1652,7 +1632,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 /* Transição entre estágios (ex.: abertura → cards): dissolve + sobe + desfoca */
 .cer-stage-leave{animation:cerStageLeave .5s cubic-bezier(.4,0,.55,1) forwards;pointer-events:none}
 @keyframes cerStageLeave{from{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}to{opacity:0;transform:translateY(-26px) scale(.9);filter:blur(5px)}}
-@media(prefers-reduced-motion:reduce){.cer-fact,.cer-phase-card,.cer-trailer-beat{animation:none}.cer-phase-thumb{transition:none}.cer-stage-leave{animation-duration:.15s}}
+@media(prefers-reduced-motion:reduce){.cer-fact,.cer-trailer-beat{animation:none}.cer-phase-thumb{transition:none}.cer-stage-leave{animation-duration:.15s}}
 /* Abertura cinematográfica: roteiro em fonte elegante (Cinzel) + GIF do clímax */
 .cer-open-phrase{font-family:'Cinzel',Georgia,'Times New Roman',serif;color:var(--white);font-weight:700;font-size:1.7rem;line-height:1.4;letter-spacing:.01em;overflow-wrap:anywhere;text-shadow:0 2px 18px rgba(0,0,0,.55)}
 .cer-open-phrase.big{color:var(--gold);font-weight:800;font-size:2.3rem;text-shadow:0 2px 26px rgba(255,215,0,.5)}
@@ -18664,28 +18644,6 @@ function _cerPhaseStandings(d, gameIds){
   const worst = rows.slice().sort((a,b)=> a.pts-b.pts || byName(a,b)).slice(0,3);
   return { best, worst, total: rows.length, jogos: ids.length };
 }
-function _cerPhaseRankRows(list, kind){
-  const medals = ['🥇','🥈','🥉'];
-  return list.map((r,idx)=>`<div class="cer-phase-row">
-    <span class="rk">${kind==='best' ? (medals[idx]||(idx+1)) : '🧊'}</span>
-    <span class="nm">${_rzName(r.u)}</span>
-    <span class="pt">${r.pts}</span></div>`).join('');
-}
-function _cerPhaseCardHTML(def, st){
-  const showWorst = st.total > 3;
-  const best = `<div class="cer-phase-col best">
-      <div class="cer-phase-col-h">🏆 Top 3</div>${_cerPhaseRankRows(st.best,'best')}</div>`;
-  const worst = showWorst ? `<div class="cer-phase-col worst">
-      <div class="cer-phase-col-h">🧊 Piores 3</div>${_cerPhaseRankRows(st.worst,'worst')}</div>` : '';
-  return `<div class="cer-phase-card">
-    <div class="cer-phase-head">
-      <span class="cer-phase-emoji">${def.emoji}</span>
-      <div><div class="cer-phase-title">${esc(def.title)}</div>
-      <div class="cer-phase-sub">${esc(def.sub)} · ${st.jogos} jogo${st.jogos>1?'s':''}</div></div>
-    </div>
-    <div class="cer-phase-cols"${showWorst?'':' style="grid-template-columns:1fr"'}>${best}${worst}</div>
-  </div>`;
-}
 function _cerPhaseThumbHTML(def, st){
   const showWorst = st.total > 3;
   const col = (list, cls, head) => `<div class="cpt-col"><div class="cpt-h ${cls}">${head}</div>${
@@ -18855,6 +18813,9 @@ async function _cerShareViewer(){
 }
 // Estágio: mostra os cards de fase um a um (com fogos), encolhendo cada um para
 // uma grade que se acumula na tela; ao fim, a grade completa fica alguns segundos.
+// Estágio final antes do pódio: UM único card com o Top 3 e os piores de TODAS as
+// fases juntas (2×2). Como é só um quadro, ele fica na tela até o pódio (agendado no
+// tempo absoluto do áudio) — dá bastante tempo para as pessoas lerem com calma.
 function _cerStagePhases(d){
   if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
   const stageEl = document.getElementById('cerimonia-stage');
@@ -18864,46 +18825,14 @@ function _cerStagePhases(d){
     .filter(x=>x.st);
   if(!phases.length) return; // sem fases: o último card de curiosidade segura a tela
   _cerSetStageLabel('Destaques por fase');
-  stageEl.innerHTML = `<div class="cer-phases">
-    <div class="cer-phase-active" id="cer-phase-active"></div>
-    <div class="cer-phase-grid" id="cer-phase-grid"></div>
+  stageEl.innerHTML = `<div class="cer-phases cer-phases-final">
+    <div class="cer-phases-cap">🏅 Top 3 e piores de cada fase</div>
+    <div class="cer-phase-grid">${phases.map(({def,st})=>`<div class="cer-phase-thumb">${_cerPhaseThumbHTML(def,st)}</div>`).join('')}</div>
   </div>`;
-  const activeEl = document.getElementById('cer-phase-active');
-  const gridEl   = document.getElementById('cer-phase-grid');
-  const OUT = 520;
-  const HOLD = Math.max(2200, ((_cerimoniaState && _cerimoniaState.cardPer) || 4400) - OUT);
-  let i = 0;
-  const showNext = ()=>{
-    if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
-    if(i >= phases.length){
-      // Grade completa fica na tela até o pódio (agendado no tempo absoluto do áudio).
-      _cerSetStageLabel('Todos os destaques');
-      return;
-    }
-    const { def, st } = phases[i];
-    _cerSetStageLabel(`Destaques por fase · ${i+1}/${phases.length}`);
-    if(activeEl) activeEl.innerHTML = _cerPhaseCardHTML(def, st);
-    _cerFwBurst(2 + (Math.random()*2|0)); // poucos fogos a cada card
-    _cerTimer(()=>{
-      if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
-      const card = activeEl && activeEl.firstElementChild;
-      if(card) card.classList.add('cer-phase-out');
-      _cerTimer(()=>{
-        if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
-        if(activeEl) activeEl.innerHTML = '';
-        if(gridEl){
-          const thumb = document.createElement('div');
-          thumb.className = 'cer-phase-thumb';
-          thumb.innerHTML = _cerPhaseThumbHTML(def, st);
-          gridEl.appendChild(thumb);
-          requestAnimationFrame(()=>thumb.classList.add('show'));
-        }
-        i++;
-        showNext();
-      }, OUT);
-    }, HOLD);
-  };
-  showNext();
+  // Revela os quadros numa cascata rápida e segura tudo até o pódio.
+  const thumbs = stageEl.querySelectorAll('.cer-phase-thumb');
+  thumbs.forEach((t,i)=> _cerTimer(()=>{ if(_cerimoniaState && !_cerimoniaState.closed) t.classList.add('show'); }, 120 + i*150));
+  _cerFwBurst(4);
 }
 
 // Abre o overlay no estágio "Iniciar" (aguarda o toque do usuário p/ liberar o som).
