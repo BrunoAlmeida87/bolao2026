@@ -18122,12 +18122,17 @@ function _cer3DEnergyBurst(fx, nx, ny, scale){
 function _cer3DFireworkBurst(fx, wx, wy, wz, scale){
   const THREE = fx.THREE; scale = scale||1;
   const M = Math.round(58*scale); const pos = new Float32Array(M*3), vel = new Float32Array(M*3);
+  // A face frontal dos blocos fica em ~z=-1.8; as faíscas precisam ficar ATRÁS dela p/ o
+  // efeito valer. Cada faísca vive ~1s (decay 1.05), então limitamos só a componente de
+  // velocidade que aponta para a câmera (+z) ao avanço que ainda a deixa atrás do plano
+  // do pódio — x/y e o recuo (−z) expandem livremente, preservando o formato do estouro.
+  const maxVz = Math.max(0, (-2.5) - wz); // orçamento de avanço p/ ~1s de vida
   for(let i=0;i<M;i++){
     const a = Math.random()*Math.PI*2, e = Math.acos(2*Math.random()-1), sp = (5+Math.random()*7)*scale;
     pos[i*3]=wx; pos[i*3+1]=wy; pos[i*3+2]=wz;
     vel[i*3]   = Math.sin(e)*Math.cos(a)*sp;
     vel[i*3+1] = Math.cos(e)*sp;
-    vel[i*3+2] = Math.sin(e)*Math.sin(a)*sp;
+    vel[i*3+2] = Math.min(Math.sin(e)*Math.sin(a)*sp, maxVz);
   }
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
   const col = _CER3D_PALETTE[(Math.random()*_CER3D_PALETTE.length)|0];
