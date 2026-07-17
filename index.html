@@ -1604,6 +1604,12 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cer-fact-label{color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:.82rem;margin-top:12px}
 .cer-fact-name{color:var(--white);font-weight:800;font-size:1.85rem;line-height:1.2;margin:6px 0 4px}
 .cer-fact-detail{color:var(--text-muted);font-size:1rem;line-height:1.45}
+/* Emojis coloridos garantidos (rede de segurança p/ desktop) — não muda o mobile, que já usa
+   estes mesmos fonts nativos por padrão. Vem antes da substituição por SVG (só no desktop). */
+.cer-fact-emoji,.cer-fact-label,.cer-fact-name,.cer-fact-detail,.cer-rank,.cer-rank-h,.cer-phases-cap,.cpt-title,.cpt-h{font-family:'Segoe UI',system-ui,sans-serif,"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji"}
+/* Ícone SVG que substitui emojis frágeis no desktop (herda a cor do texto ao redor). */
+.cer-ico{width:1em;height:1em;display:inline-block;vertical-align:-.14em}
+.cer-fact-emoji .cer-ico{color:var(--gold);vertical-align:-.06em}
 .cer-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
 .cer-cell{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:14px;padding:16px 10px}
 .cer-cell-v{color:var(--gold);font-weight:800;font-size:2rem;line-height:1}
@@ -14233,7 +14239,7 @@ function _cerReadNum(id, dflt){ const el=document.getElementById(id); if(!el) re
 function _cerFmtMMSS(ms){ const s=Math.max(0,Math.round(ms/1000)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
 // Cards "ricos" (têm `extra`: grade/ranking/barras) ganham mais tempo no ritmo automático
 // (mesma heurística por key usada no runtime, _cerCardWeight). Os demais são curtos.
-const _CER_RICH_CARD_KEYS = new Set(['numeros','sel_campea','lanterna','rank_exato','rank_dias','rank_trocas']);
+const _CER_RICH_CARD_KEYS = new Set(['numeros','sel_campea','lanterna','rank_exato','rank_dias','rank_trocas','jejum','zebras','maiores_apostadores','rank_original']);
 function _cerAdminCardWeight(key){ return _CER_RICH_CARD_KEYS.has(key) ? 1.25 : 0.72; }
 
 // Monta a linha do tempo ESTIMADA a partir do estado atual do editor (valores ainda não
@@ -18597,18 +18603,24 @@ async function _cerimoniaBuildData(){
   });
   // Estatísticas de "mudança de ideia" (histórico de alterações de palpite) — best-effort:
   // alimentam os cards de curiosidade sobre quem mais alterou / ganhou / perdeu ao mudar.
-  let editStats = {}; try { editStats = await _cerFetchEditStats(users, res); } catch(_){ editStats = {}; }
-  return { users, res, allPals, champPicks, ranking, userAccStats, analiseJogos, jogosComResultado, editStats };
+  let editStats = {}, originalPals = {};
+  try { const _es = await _cerFetchEditStats(users, res, allPals); editStats = _es.stats || {}; originalPals = _es.originalPals || {}; } catch(_){ editStats = {}; originalPals = {}; }
+  // Ranking hipotético "sem trocas": só a 1ª aposta registrada de cada um (fallback p/ o palpite atual).
+  let rankingOriginal = null;
+  try { if(originalPals && Object.keys(originalPals).length) rankingOriginal = computeRanking(users, res, originalPals, champPicks); } catch(_){ rankingOriginal = null; }
+  return { users, res, allPals, champPicks, ranking, userAccStats, analiseJogos, jogosComResultado, editStats, originalPals, rankingOriginal };
 }
 
 function _cerTsMs(ts){ try { return ts && ts.toMillis ? ts.toMillis() : (ts && ts.seconds ? ts.seconds*1000 : 0); } catch(_){ return 0; } }
 // Lê o histórico de palpites de cada participante (palpites/{uid}/historico) e resume,
 // por jogador: quantas vezes alterou um palpite e quantos pontos ganhou/perdeu ao mudar
 // de ideia (1º placar salvo vs. placar final, só em jogos já com resultado).
-async function _cerFetchEditStats(users, res){
+async function _cerFetchEditStats(users, res, allPals){
   const stats = {};
+  const originalPals = {}; // uid -> { gid: {h,a} } com o 1º palpite registrado (fallback: palpite atual)
   await Promise.all((users||[]).map(async u=>{
     stats[u.uid] = { edits:0, changedGames:0, deltaPts:0 };
+    const orig = {}; // gid -> 1º palpite salvo no histórico
     try {
       const snap = await db_.collection('palpites').doc(u.uid).collection('historico').get();
       const byGame = {}; let edits = 0;
@@ -18619,9 +18631,10 @@ async function _cerFetchEditStats(users, res){
       });
       let deltaPts = 0, changed = 0;
       Object.keys(byGame).forEach(gid=>{
-        if(!res[gid] || !_hasFullResult(res[gid])) return;
         const sets = byGame[gid].filter(e=>e.action==='set' && e.h!=null && e.a!=null)
           .sort((a,b)=> _cerTsMs(a.at) - _cerTsMs(b.at));
+        if(sets.length){ orig[gid] = { h:sets[0].h, a:sets[0].a }; } // 1ª aposta registrada deste jogo
+        if(!res[gid] || !_hasFullResult(res[gid])) return;
         if(sets.length < 2) return;
         const f = sets[0], l = sets[sets.length-1];
         if(String(f.h)===String(l.h) && String(f.a)===String(l.a)) return; // não mudou o placar
@@ -18632,8 +18645,15 @@ async function _cerFetchEditStats(users, res){
       });
       stats[u.uid] = { edits, changedGames:changed, deltaPts };
     } catch(_){ /* best-effort por usuário */ }
+    // Palpites "originais": começa do palpite atual e sobrepõe com a 1ª aposta do histórico
+    // (jogos sem histórico ficam com o palpite atual = quem nunca trocou).
+    const cur = (allPals && allPals[u.uid]) || {};
+    const merged = {};
+    Object.keys(cur).forEach(gid=>{ merged[gid] = cur[gid]; });
+    Object.keys(orig).forEach(gid=>{ merged[gid] = orig[gid]; });
+    originalPals[u.uid] = merged;
   }));
-  return stats;
+  return { stats, originalPals };
 }
 
 // Constrói as linhas de uma lista ranqueada (extra dos cards de ranking).
@@ -18706,10 +18726,21 @@ function _cerimoniaFacts(d){
   add(()=>{ const x=_rzConsistency(d.users, d.allPals, d.res)[0]; return x && {emoji:'🧱', label:'O mais consistente', name:_rzName(x.u), detail:`desvio padrão σ ${x.std.toFixed(1)} · média ${x.mean.toFixed(0)} pts/fase`}; });
   // 🔥 Maior sequência de acertos
   add(()=>{ let best=null; d.users.forEach(u=>{ const s=d.userAccStats[u.uid]; if(s && s.maxStreak>(best?best.n:0)) best={u,n:s.maxStreak}; }); return best && best.n>=3 && {emoji:'🔥', label:'Maior sequência de acertos', name:_rzName(best.u), detail:`${best.n} jogos seguidos pontuando`}; });
-  // 🎲 Mais ousado
-  add(()=>{ const x=_rzBoldness(d.users, d.allPals, d.res)[0]; return x && {emoji:'🎲', label:'O palpiteiro mais ousado', name:_rzName(x.u), detail:`fugiu ${x.ousadia.toFixed(1)} gols da média do grupo`}; });
-  // 🐑 Mais na média (conservador)
-  add(()=>{ const arr=_rzBoldness(d.users, d.allPals, d.res); const x=arr[arr.length-1]; return arr.length>2 && x && {emoji:'🐑', label:'O mais "na média"', name:_rzName(x.u), detail:`só ${x.ousadia.toFixed(1)} gols de distância da manada`}; });
+  // 🥶 Maiores sequências sem pontuar (jejum) — destaque com Top 5 e ênfase no Top 3
+  add(()=>{
+    const rows = computeStreaks(d).filter(r=>r.u.ativo!==false && r.maxMiss>0).sort((a,b)=>b.maxMiss-a.maxMiss).slice(0,5);
+    if(!rows.length) return null;
+    const md=['🥇','🥈','🥉','4º','5º'];
+    const list=_cerRankRows(rows.map((r,i)=>({ medal:md[i], nm:_rzName(r.u), v:`${r.maxMiss} jogo${r.maxMiss>1?'s':''}`, cls: i<3?'neg':'' })));
+    const top=rows[0];
+    return { emoji:'🥶', label:'Maior jejum sem pontuar', name:_rzName(top.u),
+      detail:`${top.maxMiss} jogos seguidos sem pontuar — o maior jejum do bolão! 🥶`,
+      extra:`<div class="cer-rank"><div class="cer-rank-h neg">🥶 Recordes de jejum · jogos seguidos sem pontuar</div>${list}</div>` };
+  });
+  // 🎲 Mais ousado (maior risco / mais longe da média do grupo)
+  add(()=>{ const x=_rzBoldness(d.users, d.allPals, d.res)[0]; return x && {emoji:'🎲', label:'O apostador mais ousado', name:_rzName(x.u), detail:`arriscou fugindo ${x.ousadia.toFixed(1)} gols da média do grupo`}; });
+  // 🛡️ Mais conservador (menor risco / palpites coladinhos na média) — logo após o ousado
+  add(()=>{ const arr=_rzBoldness(d.users, d.allPals, d.res); const x=arr[arr.length-1]; return arr.length>2 && x && {emoji:'🛡️', label:'O apostador mais conservador', name:_rzName(x.u), detail:`jogou seguro: só ${x.ousadia.toFixed(1)} gols de distância da média do grupo`}; });
   // 🚀 Maior arrancada no mata-mata
   add(()=>{ const t=_rzTurnaround(d.users, d.allPals, d.res, d.champPicks); return t && t.up && t.up.delta>0 && {emoji:'🚀', label:'Maior arrancada no mata-mata', name:_rzName(t.up.u), detail:`subiu ${t.up.delta} posiç${t.up.delta>1?'ões':'ão'}`}; });
   // 🧊 Maior tombo no mata-mata
@@ -18735,6 +18766,25 @@ function _cerimoniaFacts(d){
   add(()=>{ const s=_rzSelecoes(d.analiseJogos, d.res).filter(x=>x.jogos>=2).sort((a,b)=>a.acertoPct-b.acertoPct)[0]; return s && {emoji:'🃏', label:'Seleção que mais enganou', name:`${flag(s.name)}${esc(s.name)}`, detail:`só ${s.acertoPct.toFixed(0)}% de acerto nos jogos dela`}; });
   // 🦓 Maior zebra do bolão
   add(()=>{ const dif=Object.entries(d.analiseJogos).filter(([,x])=>x.palpites.length>0).map(([,x])=>({game:x.game, pct:(x.exatos+x.venc_saldo+x.apenas_venc)/x.palpites.length*100})).sort((a,b)=>a.pct-b.pct)[0]; return dif && dif.game && {emoji:'🦓', label:'Maior zebra do bolão', name:`${esc(dif.game.h)} × ${esc(dif.game.a)}`, detail:`só ${dif.pct.toFixed(0)}% acertaram o vencedor`}; });
+  // 🎰 Top 5 Zebras: quem mais acertou em jogos "zebra" (acerto de <20% do bolão = prob. estatística < 20%)
+  add(()=>{
+    const zc = {}; // uid -> acertos em zebras
+    Object.values(d.analiseJogos||{}).forEach(g=>{
+      const n = g.palpites.length; if(!n) return;
+      const rate = (g.exatos + g.venc_saldo + g.apenas_venc) / n; // prob. estatística de acerto do jogo
+      if(rate >= 0.20) return; // não é zebra: mais de 20% acertaram
+      g.palpites.forEach(pp=>{ if((pp.pts||0) > 0){ const uid = pp.user && pp.user.uid; if(uid) zc[uid] = (zc[uid]||0) + 1; } });
+    });
+    const arr = Object.keys(zc).map(uid=>({ uid, n:zc[uid] })).sort((a,b)=>b.n-a.n).slice(0,5);
+    if(!arr.length) return null;
+    const uName = uid=>{ const u=(d.users||[]).find(x=>x.uid===uid); return u?_rzName(u):'—'; };
+    const md=['🥇','🥈','🥉','4º','5º'];
+    const rows=_cerRankRows(arr.map((x,i)=>({ medal:md[i], nm:uName(x.uid), v:`${x.n}` })));
+    const top=arr[0];
+    return { emoji:'🎰', label:'Top 5 Zebras', name:uName(top.uid),
+      detail:`${top.n} acerto${top.n>1?'s':''} em jogos que menos de 20% do bolão cravaram`,
+      extra:`<div class="cer-rank"><div class="cer-rank-h">🎰 Mais acertos em zebras (prob. < 20%)</div>${rows}</div>` };
+  });
   // 🥅 Jogo que quase todos cravaram
   add(()=>{ const best=Object.values(d.analiseJogos).filter(x=>x.game && x.exatos>0).sort((a,b)=>b.exatos-a.exatos)[0]; return best && {emoji:'🥅', label:'Jogo que quase todos cravaram', name:`${esc(best.game.h)} × ${esc(best.game.a)}`, detail:`${best.exatos} pessoa${best.exatos>1?'s':''} acertaram o placar exato`}; });
   // 🏆 Seleção mais escolhida como campeã (com mini-barras)
@@ -18753,6 +18803,24 @@ function _cerimoniaFacts(d){
     Object.keys(d.allPals||{}).forEach(uid=>{ const pals=d.allPals[uid]||{}; Object.keys(pals).forEach(gid=>{ const p=pals[gid]; if(!p||p.h==null||p.a==null) return; const k=`${parseInt(p.h)||0}×${parseInt(p.a)||0}`; cnt[k]=(cnt[k]||0)+1; }); });
     const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]; if(!top) return null;
     return { emoji:'⚽', label:'Placar mais palpitado da Copa', name:top[0], detail:`${top[1]} palpite${top[1]>1?'s':''} nesse placar` };
+  });
+  // 📮 Maiores apostadores — quem apostou em mais jogos, com o percentual (participação + aproveitamento)
+  add(()=>{
+    const totJogos = d.jogosComResultado.length; if(!totJogos) return null;
+    const arr = d.users.map(u=>{
+      const acc = d.userAccStats[u.uid] || {};
+      const jogos = acc.count || 0; // jogos (com resultado) em que apostou
+      const pct = (acc.acertoPct!=null && acc.acertoPct!=='-') ? parseFloat(acc.acertoPct) : null;
+      return { u, jogos, pct };
+    }).filter(x=>x.jogos>0).sort((a,b)=> b.jogos-a.jogos || ((b.pct||0)-(a.pct||0))).slice(0,5);
+    if(!arr.length) return null;
+    const md=['🥇','🥈','🥉','4º','5º'];
+    const rows=_cerRankRows(arr.map((x,i)=>({ medal:md[i], nm:_rzName(x.u), v:`${x.jogos}/${totJogos} · ${x.pct!=null?Math.round(x.pct)+'%':'—'}` })));
+    const top=arr[0];
+    const partic = Math.round(top.jogos / totJogos * 100);
+    return { emoji:'📮', label:'Maiores apostadores', name:_rzName(top.u),
+      detail:`apostou em ${top.jogos} de ${totJogos} jogos (${partic}% de participação)${top.pct!=null?` · ${Math.round(top.pct)}% de acerto`:''}`,
+      extra:`<div class="cer-rank"><div class="cer-rank-h">📮 Volume de palpites · aproveitamento</div>${rows}</div>` };
   });
   // 🎯 O jogo que mudou tudo (última virada de liderança)
   add(()=>{ const c=_cerLeaderChangeGame(d); if(!c) return null; const tm=_gxGameTeams(c.game.id, d.res); return {emoji:'🎯', label:'O jogo que mudou tudo', name:`${esc(tm.h)} × ${esc(tm.a)}`, detail:`${_rzName(c.newLeader)} assumiu a liderança${c.game.date?' · '+esc(c.game.date):''}`}; });
@@ -18801,6 +18869,19 @@ function _cerimoniaFacts(d){
     if(neg.length) blocks.push(`<div class="cer-rank-h neg">💔 Se arrependeram</div>`+_cerRankRows(neg.map(x=>({medal:'🔻', nm:nm(x.uid), v:`${x.deltaPts}`, cls:'neg'}))));
     return { emoji:'💰', label:'Saldo nas trocas de palpite', extra:`<div class="cer-rank">${blocks.join('')}</div>` };
   });
+  // 🕰️ Ranking sem as trocas — como estaria o topo se ninguém tivesse mudado os palpites iniciais
+  add(()=>{
+    const ro = d.rankingOriginal; if(!ro || ro.length < 2) return null;
+    const md=['🥇','🥈','🥉','4º','5º'];
+    const rows=_cerRankRows(ro.slice(0,5).map((u,i)=>({ medal:md[i], nm:_rzName(u), v:`${u.pontos} pt${u.pontos!==1?'s':''}` })));
+    const realChamp = d.ranking && d.ranking[0];
+    const origChamp = ro[0];
+    const detail = (realChamp && origChamp && realChamp.uid !== origChamp.uid)
+      ? `Sem as trocas, o campeão seria ${_rzName(origChamp)} — as mudanças de palpite viraram o jogo!`
+      : `O topo se manteve: as trocas de palpite não mudaram quem lidera.`;
+    return { emoji:'🕰️', label:'Ranking sem as trocas', detail,
+      extra:`<div class="cer-rank"><div class="cer-rank-h">🕰️ Só a 1ª aposta registrada de cada um</div>${rows}</div>` };
+  });
   return facts;
 }
 
@@ -18815,8 +18896,9 @@ const _CER_CARD_CATALOG = [
   { key:'oraculo',          emoji:'🧙', label:'Oráculo da Copa' },
   { key:'consistente',      emoji:'🧱', label:'O mais consistente' },
   { key:'sequencia',        emoji:'🔥', label:'Maior sequência de acertos' },
-  { key:'ousado',           emoji:'🎲', label:'O palpiteiro mais ousado' },
-  { key:'media',            emoji:'🐑', label:'O mais "na média"' },
+  { key:'jejum',            emoji:'🥶', label:'Maior jejum sem pontuar' },
+  { key:'ousado',           emoji:'🎲', label:'O apostador mais ousado' },
+  { key:'media',            emoji:'🛡️', label:'O apostador mais conservador' },
   { key:'arrancada',        emoji:'🚀', label:'Maior arrancada no mata-mata' },
   { key:'tombo',            emoji:'🧊', label:'Maior tombo no mata-mata' },
   { key:'mudou_mais',       emoji:'🔁', label:'Mudou mais de ideia' },
@@ -18828,15 +18910,18 @@ const _CER_CARD_CATALOG = [
   { key:'sel_rendeu',       emoji:'💰', label:'Seleção que mais rendeu' },
   { key:'sel_enganou',      emoji:'🃏', label:'Seleção que mais enganou' },
   { key:'zebra',            emoji:'🦓', label:'Maior zebra do bolão' },
+  { key:'zebras',           emoji:'🎰', label:'Top 5 Zebras' },
   { key:'quase_todos',      emoji:'🥅', label:'Jogo que quase todos cravaram' },
   { key:'sel_campea',       emoji:'🏆', label:'Seleção mais escolhida p/ campeã' },
   { key:'rei_empates',      emoji:'🤷', label:'Rei dos empates' },
   { key:'placar_palpitado', emoji:'⚽', label:'Placar mais palpitado da Copa' },
+  { key:'maiores_apostadores', emoji:'📮', label:'Maiores apostadores' },
   { key:'jogo_mudou',       emoji:'🎯', label:'O jogo que mudou tudo' },
   { key:'lanterna',         emoji:'🏮', label:'Lanterna / Azarão' },
   { key:'rank_exato',       emoji:'🎯', label:'Ranking de placar exato' },
   { key:'rank_dias',        emoji:'🗓️', label:'Mais dias na liderança' },
   { key:'rank_trocas',      emoji:'💰', label:'Saldo nas trocas de palpite' },
+  { key:'rank_original',    emoji:'🕰️', label:'Ranking sem as trocas' },
 ];
 const _CER_CARD_KEY_BY_LABEL = (()=>{ const m={}; _CER_CARD_CATALOG.forEach(c=>{ m[c.label]=c.key; }); return m; })();
 
@@ -19150,10 +19235,10 @@ function _cerStagePhases(d){
     const el = document.getElementById('cerimonia-stage'); if(!el) return;
     _cerSetStageLabel(kind==='worst' ? 'Os piores de cada fase' : 'Os melhores de cada fase');
     const cap = kind==='worst' ? '🧊 Os piores de cada fase' : '🏆 Top 3 de cada fase';
-    el.innerHTML = `<div class="cer-phases cer-phases-final">
+    el.innerHTML = _cerDeskEmoji(`<div class="cer-phases cer-phases-final">
       <div class="cer-phases-cap">${cap}</div>
       <div class="cer-phase-grid">${phases.map(({def,st})=>`<div class="cer-phase-thumb">${_cerPhaseThumbHTML(def,st,kind)}</div>`).join('')}</div>
-    </div>`;
+    </div>`);
     // Revela os quadros numa cascata rápida.
     el.querySelectorAll('.cer-phase-thumb').forEach((t,i)=> _cerTimer(()=>{ if(_cerimoniaState && !_cerimoniaState.closed) t.classList.add('show'); }, 120 + i*150));
     _cerFwBurst(4);
@@ -19341,6 +19426,46 @@ function _cerStageCards(d){
   _cerTransitionStage(()=>_cerStageFacts(d, facts));
 }
 
+// ── Emojis no desktop ─────────────────────────────────────────────────────────
+// Alguns emojis (sequências com seletor de variação, keycaps, pictogramas novos) não
+// renderizam bem em certos desktops (viram "tofu"). No DESKTOP substituímos esses por
+// ícones SVG limpos que herdam a cor do texto. No MOBILE nada muda: `_cerDeskEmoji`
+// devolve o HTML intacto e os emojis originais continuam exatamente como estão.
+const _CER_DESK_ICON = (()=>{
+  const S = i => `<svg class="cer-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${i}</svg>`;
+  const F = i => `<svg class="cer-ico" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">${i}</svg>`;
+  const NUM = n => `<svg class="cer-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor"/><text x="12" y="17" text-anchor="middle" font-size="13" font-weight="800" font-family="system-ui,'Segoe UI',sans-serif" fill="#0b1220">${n}</text></svg>`;
+  const swords = S('<line x1="5" y1="19" x2="19" y2="5"/><line x1="5" y1="5" x2="19" y2="19"/><circle cx="5" cy="19" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="19" r="1.4" fill="currentColor" stroke="none"/>');
+  const calendar = S('<rect x="3.5" y="5" width="17" height="15" rx="2"/><line x1="3.5" y1="9.5" x2="20.5" y2="9.5"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/>');
+  const clock = S('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>');
+  const flag = S('<line x1="6" y1="3" x2="6" y2="21"/><path d="M6 4.5h11l-2.5 4 2.5 4H6z" fill="currentColor" stroke="none"/>');
+  const net = S('<rect x="3" y="7" width="18" height="11"/><line x1="9" y1="7" x2="9" y2="18"/><line x1="15" y1="7" x2="15" y2="18"/><line x1="3" y1="11" x2="21" y2="11"/><line x1="3" y1="14.5" x2="21" y2="14.5"/>');
+  const star = F('<path d="M12 2.6l2.7 5.9 6.4.7-4.8 4.4 1.3 6.3L12 17.9 6.2 20.6l1.3-6.3L2.7 9.9l6.4-.7z"/>');
+  const shield = S('<path d="M12 3l7 3v5c0 4.6-3.1 7.8-7 9-3.9-1.2-7-4.4-7-9V6z"/>');
+  const snow = S('<line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="5.2" y1="5.2" x2="18.8" y2="18.8"/><line x1="18.8" y1="5.2" x2="5.2" y2="18.8"/>');
+  const down = S('<line x1="12" y1="4" x2="12" y2="18"/><path d="M6.5 12.5L12 18l5.5-5.5"/>');
+  const up = S('<line x1="12" y1="20" x2="12" y2="6"/><path d="M6.5 11.5L12 6l5.5 5.5"/>');
+  const swap = S('<path d="M4 9h13M14 6l3 3-3 3"/><path d="M20 15H7M10 12l-3 3 3 3"/>');
+  const ruler = S('<path d="M14.5 3.5l6 6L9.5 20.5l-6-6z"/><line x1="8" y1="8" x2="9.5" y2="9.5"/><line x1="11" y1="11" x2="12.5" y2="12.5"/><line x1="14" y1="14" x2="15.5" y2="15.5"/>');
+  const box = S('<rect x="3.5" y="8" width="17" height="12" rx="1.5"/><path d="M3.5 8l8.5-4.5L20.5 8"/><line x1="12" y1="12.5" x2="12" y2="15.5"/>');
+  return {
+    '⚔️': swords, '🗓️': calendar, '🕰️': clock, '🏮': flag, '🥅': net,
+    '🃏': star, '🦓': star, '🤷': star, '🧙': star,
+    '🧱': shield, '🐑': shield, '🛡️': shield,
+    '🧊': snow, '🥶': snow,
+    '🔻': down, '📉': down, '📈': up, '🚀': up,
+    '🔁': swap, '📐': ruler, '📮': box,
+    '1️⃣': NUM(1), '2️⃣': NUM(2), '3️⃣': NUM(3),
+  };
+})();
+// Só no desktop: troca os emojis frágeis pelos SVGs. No mobile devolve o HTML sem tocar.
+function _cerDeskEmoji(html){
+  if(isMobileClient()) return html;
+  let out = String(html);
+  for(const k in _CER_DESK_ICON){ if(out.indexOf(k) !== -1) out = out.split(k).join(_CER_DESK_ICON[k]); }
+  return out;
+}
+
 function _cerStageFacts(d, facts){
   facts = facts || _cerApplyCardCfg(_cerimoniaFacts(d));
   const stageEl = document.getElementById('cerimonia-stage');
@@ -19351,12 +19476,12 @@ function _cerStageFacts(d, facts){
     if(i >= facts.length){ _cerStagePhases(d); return; }
     const f = facts[i];
     _cerSetStageLabel(`Curiosidades · ${i+1}/${facts.length}`);
-    stageEl.innerHTML = `<div class="cer-fact">
+    stageEl.innerHTML = _cerDeskEmoji(`<div class="cer-fact">
       <div class="cer-fact-emoji">${f.emoji}</div>
       <div class="cer-fact-label">${f.label}</div>
       ${f.name ? `<div class="cer-fact-name">${f.name}</div>` : ''}
       ${f.detail ? `<div class="cer-fact-detail">${f.detail}</div>` : ''}
-      ${f.extra || ''}</div>`;
+      ${f.extra || ''}</div>`);
     _cerFwBurst(1 + (Math.random()*2|0)); // poucos fogos a cada curiosidade
     i++;
     // Ritmo ponderado: card curto (sem `extra`) sai mais rápido; card denso segura mais.
