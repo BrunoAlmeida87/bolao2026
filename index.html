@@ -1576,6 +1576,15 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 /* Antes do pódio: tela preta + raios (tempestade) e depois clareia p/ revelar o pódio */
 .celebra-lightning{position:fixed;inset:0;z-index:690;background:#000;pointer-events:none}
 .celebra-lightning canvas{position:absolute;inset:0;width:100%;height:100%}
+/* Painel "Linha do tempo & efeitos" (Admin) — resumo unificado dos tempos da cerimônia */
+.cer-tl-box{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.03)}
+.cer-tl-head{font-weight:800;font-size:.86rem;margin-bottom:8px}
+.cer-tl-line{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:3px 0;border-bottom:1px dashed var(--border);font-size:.82rem}
+.cer-tl-line>span:first-child{color:var(--text-muted)}
+.cer-tl-chips{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+.cer-tl-chip{font-size:.72rem;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:20px;padding:3px 9px;white-space:nowrap}
+.cer-tl-chip i{font-style:normal;color:var(--text-muted);margin-left:4px;font-size:.66rem}
+.cer-tl-sum{margin-top:9px;display:flex;flex-direction:column;gap:5px;font-size:.82rem;font-weight:600}
 @media(prefers-reduced-motion:reduce){.celebra-card{animation:none}.celebra-trophy{animation:none}.celebra-step{transition:none}.celebra-viewer:not(:empty){animation:none}.cer-rec-dot{animation:none}}
 
 /* ══ Cerimônia de encerramento (intro → cards → corrida → reveal, com música) ══ */
@@ -2456,7 +2465,10 @@ let CFG = {
   cerimonia_gif:null,             // { url, at(seg), dur(seg), on } — GIF da abertura
   cerimonia_textos:null,         // [{ text, at(seg), on }] — roteiro da abertura (null = padrão)
   cerimonia_cards:null,          // [{ key, on, dur(seg) }] — ordem/tempo/on dos cards
-  cerimonia_sync_offset:0
+  cerimonia_sync_offset:0,
+  cerimonia_storm_dur:2.2,       // s — duração da tempestade de raios antes do pódio
+  cerimonia_podium_gap:6,        // s — reveal do pódio ancorado em fim da música − este valor
+  cerimonia_podium_hold:10       // s — só o pódio na tela antes das estatísticas do jogador
 };
 
 // Horários dos jogos (Brasília - fuso -3)
@@ -13937,14 +13949,24 @@ async function renderAdminConfig() {
       </div>
       <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaGif()">💾 Salvar GIF</button></div>
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
-      <div class="card-title" style="font-size:1rem;margin-bottom:6px">🃏 Cards da cerimônia</div>
-      <p class="text-muted" style="font-size:0.78rem;margin:0 0 10px">Ligue/desligue cada card, reordene com ↑/↓ e defina o <b>tempo de exibição</b> (segundos). Cards com tempo <b>0</b> usam o ritmo automático. Um card só aparece se houver dados para ele naquela edição. O card final (pódio) tem momento fixo no fim da música — a soma dos tempos não pode ultrapassá-lo.</p>
-      <div id="cfg-cer-cards-meter" class="text-muted" style="font-size:.82rem;margin-bottom:8px"></div>
-      <div id="cfg-cer-cards">${_cerCardsEditorHTML()}</div>
-      <div class="btn-group" style="margin:6px 0 12px">
-        <button class="btn btn-secondary" onclick="cerCardsResetOrder()">↩️ Restaurar padrão</button>
-        <button class="btn btn-primary" onclick="saveCerimoniaCards()">💾 Salvar cards</button>
+      <div class="card-title" style="font-size:1rem;margin-bottom:6px">⏱️ Linha do tempo &amp; efeitos</div>
+      <p class="text-muted" style="font-size:0.78rem;margin:0 0 10px">Aqui você mexe no <b>tempo de tudo que aparece</b> na cerimônia — cada card e cada efeito, com o <b>tempo padrão</b> ao lado. Deixe um card em <b>0</b> para usar o ritmo automático (o sistema divide o tempo que sobra). O resumo embaixo mostra a <b>soma total</b> e avisa se você passou do <b>tempo da música</b> ou se o <b>pódio (a parte emocionante)</b> caiu fora da hora.</p>
+
+      <div class="card-title" style="font-size:.9rem;margin:6px 0 6px">✨ Efeitos <span class="text-muted" style="font-weight:400;font-size:.76rem">(padrão entre parênteses)</span></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+        <div class="form-group" style="margin:0;flex:1;min-width:140px"><label>⚡ Tempestade de raios (s) <span class="text-muted">(2.2)</span></label><input id="cfg-cer-storm" type="number" min="0" step="0.1" value="${esc(String(_cerStormSec()))}" oninput="_cerCardsUpdateMeter()"></div>
+        <div class="form-group" style="margin:0;flex:1;min-width:140px"><label>🏅 Pódio antes do fim (s) <span class="text-muted">(6)</span></label><input id="cfg-cer-gap" type="number" min="1" step="0.5" value="${esc(String(_cerPodiumGapSec()))}" oninput="_cerCardsUpdateMeter()"></div>
+        <div class="form-group" style="margin:0;flex:1;min-width:140px"><label>👤 Pódio na tela (s) <span class="text-muted">(10)</span></label><input id="cfg-cer-hold" type="number" min="1" step="1" value="${esc(String(_cerPodiumHoldSec()))}" oninput="_cerCardsUpdateMeter()"></div>
       </div>
+      <p class="text-muted" style="font-size:0.72rem;margin:-2px 0 12px">⚡ quanto dura a tela preta com raios antes do pódio · 🏅 quanto antes do fim da música o pódio é revelado (é o <b>ajuste da parte emocionante</b>) · 👤 quanto tempo só o pódio fica antes de entrarem as estatísticas do jogador.</p>
+
+      <div class="card-title" style="font-size:.9rem;margin:6px 0 6px">🃏 Cards <span class="text-muted" style="font-weight:400;font-size:.76rem">(ligue/desligue, reordene com ↑/↓, tempo em s · 0 = automático)</span></div>
+      <div id="cfg-cer-cards">${_cerCardsEditorHTML()}</div>
+      <div class="btn-group" style="margin:6px 0 10px">
+        <button class="btn btn-secondary" onclick="cerCardsResetOrder()">↩️ Restaurar padrão</button>
+        <button class="btn btn-primary" onclick="saveCerimoniaTempos()">💾 Salvar tempos &amp; efeitos</button>
+      </div>
+      <div id="cfg-cer-cards-meter" class="cer-timeline-meter" style="font-size:.82rem;margin:2px 0 12px"></div>
       <div class="form-group"><label>Ajuste fino da sincronia (segundos) — + atrasa o texto · − adianta</label><input id="cfg-cerimonia-offset" type="number" step="0.5" value="${esc(String(CFG.cerimonia_sync_offset||0))}" placeholder="0"></div>
       <p class="text-muted" style="font-size:0.78rem;margin:-4px 0 12px">O texto da abertura acompanha a posição real da música automaticamente. Se ainda ficar um tiquinho adiantado ou atrasado em relação à sua faixa, ajuste aqui: ex. <b>1.5</b> mostra tudo 1,5s mais tarde; <b>-2</b> mostra 2s mais cedo. Teste com "👁️ Testar (só eu)".</p>
       <div class="btn-group" style="margin-bottom:12px"><button class="btn btn-secondary" onclick="saveCerimoniaOffset()">💾 Salvar ajuste</button></div>
@@ -14154,12 +14176,14 @@ function _cerLoadAudioDur(){
     a.addEventListener('loadedmetadata', ()=>{ if(isFinite(a.duration) && a.duration > 30){ _cerAdminDurMs = Math.round(a.duration*1000); _cerCardsUpdateMeter(); } });
   } catch(_){}
 }
-// Segundos disponíveis p/ os cards: entre o fim da abertura e o pódio (fim da música − 6s),
+// Segundos disponíveis p/ os cards: entre o fim da abertura e o pódio (fim da música − gap),
 // descontando o respiro final da grade. (As "Destaques por fase" também usam esta janela.)
-function _cerCardsAvailSec(){
-  const totalMs = _cerAdminDurMs || 159000;
+// gapSec/totalMs opcionais permitem preview ao vivo com valores ainda não salvos.
+function _cerCardsAvailSec(gapSec, totalMs){
+  totalMs = totalMs || _cerAdminDurMs || 159000;
+  const gapMs = Math.round((gapSec != null ? gapSec : _cerPodiumGapSec()) * 1000);
   const introEnd = _cerIntroEndMs();
-  const podiumAt = Math.max(introEnd + 15000, totalMs - 6000);
+  const podiumAt = Math.max(introEnd + 15000, totalMs - gapMs);
   const gridHold = Math.min(6000, (podiumAt - introEnd) * 0.06);
   return Math.max(0, Math.round((podiumAt - introEnd - gridHold) / 1000));
 }
@@ -14193,8 +14217,10 @@ function cerCardMove(btn, dir){
 function cerCardsResetOrder(){
   const host = document.getElementById('cfg-cer-cards'); if(!host) return;
   host.innerHTML = _CER_CARD_CATALOG.map(c=>_cerCardRowHTML({ ...c, on:true, dur:0 })).join('');
+  const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.value = v; };
+  set('cfg-cer-storm', 2.2); set('cfg-cer-gap', 6); set('cfg-cer-hold', 10); // efeitos → padrão
   _cerCardsUpdateMeter();
-  showToast('Ordem/tempos padrão restaurados (lembre de salvar).', 'info');
+  showToast('Ordem, tempos e efeitos padrão restaurados (lembre de salvar).', 'info');
 }
 function _cerCardsReadRows(){
   return [...document.querySelectorAll('#cfg-cer-cards .cer-card-row')].map(r=>({
@@ -14203,13 +14229,103 @@ function _cerCardsReadRows(){
     dur: Math.max(0, parseFloat(r.querySelector('.cer-card-dur')?.value) || 0),
   }));
 }
+function _cerReadNum(id, dflt){ const el=document.getElementById(id); if(!el) return dflt; const v=parseFloat(String(el.value).replace(',','.')); return isFinite(v)?v:dflt; }
+function _cerFmtMMSS(ms){ const s=Math.max(0,Math.round(ms/1000)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+// Cards "ricos" (têm `extra`: grade/ranking/barras) ganham mais tempo no ritmo automático
+// (mesma heurística por key usada no runtime, _cerCardWeight). Os demais são curtos.
+const _CER_RICH_CARD_KEYS = new Set(['numeros','sel_campea','lanterna','rank_exato','rank_dias','rank_trocas']);
+function _cerAdminCardWeight(key){ return _CER_RICH_CARD_KEYS.has(key) ? 1.25 : 0.72; }
+
+// Monta a linha do tempo ESTIMADA a partir do estado atual do editor (valores ainda não
+// salvos) — base do resumo/medidor. Espelha a matemática do runtime. Tempos em ms.
+function _cerTimelinePlan(){
+  const totalMs = _cerAdminDurMs || 159000;
+  const knownDur = _cerAdminDurMs > 0;
+  const stormSec = Math.max(0, _cerReadNum('cfg-cer-storm', _cerStormSec()));
+  const gapSec   = Math.max(1, _cerReadNum('cfg-cer-gap',   _cerPodiumGapSec()));
+  const holdSec  = Math.max(1, _cerReadNum('cfg-cer-hold',  _cerPodiumHoldSec()));
+  const introEnd = _cerIntroEndMs();
+  const podiumAt = Math.max(introEnd + 15000, totalMs - Math.round(gapSec*1000));
+  const win = Math.max(0, podiumAt - introEnd);
+  const gridHold = Math.min(6000, win * 0.06);
+  const onRows = _cerCardsReadRows().filter(r=>r.on);
+  const fixedMs = onRows.filter(r=>r.dur>0).reduce((s,r)=>s+r.dur*1000, 0);
+  const autoRows = onRows.filter(r=>!(r.dur>0));
+  const phaseCount = 4; // estimativa: as 4 fases aparecem se houver resultado
+  const factW = autoRows.reduce((s,r)=>s+_cerAdminCardWeight(r.key), 0);
+  const Wsum = factW + phaseCount*1.0;
+  const budget = Math.max(0, win - gridHold - fixedMs);
+  const unit = Wsum>0 ? budget/Wsum : 0;
+  const autoMsOf = key => Math.min(9000, Math.max(2200, unit*_cerAdminCardWeight(key)));
+  const cards = onRows.map(r=>{
+    const cat = _CER_CARD_CATALOG.find(c=>c.key===r.key) || { emoji:'🃏', label:r.key };
+    const auto = !(r.dur>0);
+    return { emoji:cat.emoji, label:cat.label, auto, ms: auto ? autoMsOf(r.key) : r.dur*1000 };
+  });
+  const podiumVisibleMs = podiumAt + Math.round(stormSec*1000); // pódio aparece depois da tempestade
+  const cardsSumMs = cards.reduce((s,c)=>s+c.ms, 0);
+  const phaseMs = Math.min(9000, Math.max(2200, unit*1.0)); // tempo estimado de cada quadro de fase
+  return { totalMs, knownDur, stormSec, gapSec, holdSec, introEnd, podiumAt, win, gridHold,
+           fixedMs, cardsSumMs, cards, phaseCount, phaseMs, podiumVisibleMs };
+}
+
+// Resumo unificado: lista o que aparece com o tempo de cada um, a soma total e os dois
+// avisos que o admin pediu (passou do tempo da música? o pódio caiu na hora certa?).
 function _cerCardsUpdateMeter(){
   const meter = document.getElementById('cfg-cer-cards-meter'); if(!meter) return;
-  const rows = _cerCardsReadRows();
-  const used = rows.filter(r=>r.on).reduce((s,r)=>s+r.dur, 0);
-  const avail = _cerCardsAvailSec();
-  const over = used > avail;
-  meter.innerHTML = `Tempo manual usado: <b style="color:${over?'var(--danger,#e74c3c)':'var(--text)'}">${used}s</b> / disponível: <b>~${avail}s</b>${over?` <span style="color:var(--danger,#e74c3c)">⚠️ excede em ${Math.ceil(used-avail)}s</span>`:''}<br><span style="font-size:.72rem">Cards com tempo 0 e as fases dividem o tempo restante automaticamente.</span>`;
+  const p = _cerTimelinePlan();
+  const C = { ok:'var(--green,#2ecc71)', warn:'var(--danger,#e74c3c)', mut:'var(--text-muted)' };
+  const overWin = p.fixedMs > (p.win - p.gridHold);           // tempos manuais estouram a janela
+  const overWinSec = Math.ceil((p.fixedMs - (p.win - p.gridHold))/1000);
+  const podiumPastEnd = p.podiumVisibleMs > p.totalMs;         // pódio depois do fim da música
+  const fromEndMs = p.totalMs - p.podiumVisibleMs;
+
+  const chips = p.cards.map(c=>`<span class="cer-tl-chip">${c.emoji} ${esc(c.label)} <b>${Math.round(c.ms/1000)}s</b>${c.auto?'<i>auto</i>':''}</span>`).join('');
+
+  const line = (emoji, label, val, note) =>
+    `<div class="cer-tl-line"><span>${emoji} ${label}</span><span><b>${val}</b>${note?` <span style="color:${C.mut}">${note}</span>`:''}</span></div>`;
+
+  meter.innerHTML = `
+    <div class="cer-tl-box">
+      <div class="cer-tl-head">🎬 Linha do tempo${p.knownDur?'':' <span style="color:'+C.mut+';font-weight:400">(música estimada em '+_cerFmtMMSS(p.totalMs)+' — salve a URL da música p/ números reais)</span>'}</div>
+      ${line('🎵','Música (total)', _cerFmtMMSS(p.totalMs))}
+      ${line('📝','Abertura (frases + clímax)', '0 → '+_cerFmtMMSS(p.introEnd), 'sincronizada à música — edite nas frases acima')}
+      ${line('🃏','Cards + fases', _cerFmtMMSS(p.introEnd)+' → '+_cerFmtMMSS(p.podiumAt), '≈'+Math.round(p.win/1000)+'s de janela')}
+      <div class="cer-tl-chips">${chips || '<span style="color:'+C.mut+'">nenhum card ligado</span>'}<span class="cer-tl-chip">🏆 ${p.phaseCount} quadros de fase <b>~${Math.round(p.phaseMs/1000)}s</b> cada <i>auto</i></span></div>
+      ${line('⚡','Tempestade de raios', p.stormSec+'s', 'antes do pódio')}
+      ${line('🏅','Pódio (parte emocionante)', 'aos '+_cerFmtMMSS(p.podiumVisibleMs), podiumPastEnd?'':'a '+(fromEndMs/1000).toFixed(1)+'s do fim')}
+      ${line('👤','Painel do jogador', '+'+p.holdSec+'s', 'depois do pódio')}
+      <div class="cer-tl-sum">
+        <div style="color:${overWin?C.warn:C.ok}">${overWin?'⚠️':'✅'} Soma dos cards com tempo manual: <b>${Math.round(p.fixedMs/1000)}s</b> ${overWin?`— passa <b>${overWinSec}s</b> da janela (alguns cards serão encurtados)`:'— cabe na janela'}</div>
+        <div style="color:${podiumPastEnd?C.warn:C.ok}">${podiumPastEnd?'⚠️':'✅'} ${podiumPastEnd
+            ? `O pódio cairia <b>${Math.ceil(-fromEndMs/1000)}s depois</b> do fim da música — aumente o "Pódio antes do fim" ou reduza a tempestade.`
+            : `O pódio aparece <b>${(fromEndMs/1000).toFixed(1)}s antes</b> do fim — ajuste o "Pódio antes do fim" p/ cair na parte emocionante.`}</div>
+      </div>
+    </div>`;
+}
+// Salva tudo do painel de tempos de uma vez: cards (ordem/on/dur) + os 3 efeitos. Não
+// bloqueia se passar da janela — apenas avisa (o pódio é ancorado no tempo; cards estouram
+// são só encurtados). O medidor já mostra os ⚠️ ao vivo.
+async function saveCerimoniaTempos(){
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  const arr   = _cerCardsReadRows().map(r=>({ key:r.key, on:r.on, dur:r.dur }));
+  const storm = Math.max(0, Math.min(8,  _cerReadNum('cfg-cer-storm', 2.2)));
+  const gap   = Math.max(1, Math.min(40, _cerReadNum('cfg-cer-gap',   6)));
+  const hold  = Math.max(1, Math.min(60, _cerReadNum('cfg-cer-hold',  10)));
+  try {
+    await db_.collection('config').doc('geral').set({
+      cerimonia_cards: arr, cerimonia_storm_dur: storm, cerimonia_podium_gap: gap, cerimonia_podium_hold: hold
+    }, { merge: true });
+    CFG.cerimonia_cards = arr; CFG.cerimonia_storm_dur = storm; CFG.cerimonia_podium_gap = gap; CFG.cerimonia_podium_hold = hold;
+    const p = _cerTimelinePlan();
+    const overWin = p.fixedMs > (p.win - p.gridHold);
+    const podiumPastEnd = p.podiumVisibleMs > p.totalMs;
+    let msg = '💾 Tempos & efeitos salvos!', type = 'success';
+    if(podiumPastEnd){ msg = '💾 Salvo — ⚠️ o pódio cai depois do fim da música. Aumente o "Pódio antes do fim".'; type = 'info'; }
+    else if(overWin){ msg = '💾 Salvo — ⚠️ os tempos manuais passam da janela; alguns cards serão encurtados.'; type = 'info'; }
+    showToast(msg, type);
+    _cerCardsUpdateMeter();
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
 }
 async function saveCerimoniaCards(){
   if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
@@ -17934,8 +18050,11 @@ function _celebraLightning(cb){
     ctx.shadowBlur = 0;
   };
 
-  const strikes = [ { t:140 }, { t:520 }, { t:860 }, { t:1220 }, { t:1600 } ];
-  const DUR = 2150, FLASH_FROM = 1920;
+  const DUR = Math.max(500, Math.round(_cerStormSec() * 1000)); // duração configurável da tempestade
+  const FLASH_FROM = Math.max(200, DUR - 230);                  // último trecho: flash branco que clareia
+  const strikes = [];                                           // um raio a cada ~360ms até pouco antes do flash
+  for(let t = 140; t < FLASH_FROM - 120; t += 360) strikes.push({ t });
+  if(!strikes.length) strikes.push({ t: Math.round(DUR * 0.2) });
   const start = performance.now();
   const frame = (now)=>{
     const el = now - start;
@@ -18388,6 +18507,13 @@ function _cerTotalMs(){
   const d = a && a.duration;
   return (d && isFinite(d) && d > 30) ? Math.round(d * 1000) : 159000;
 }
+
+// ── Tempos configuráveis dos EFEITOS (segundos), com padrão ───────────────────
+// Editáveis no painel "Linha do tempo & efeitos" do Admin. Ficam aqui (perto de
+// _cerTotalMs) porque são usados tanto pelo runtime quanto pelo editor.
+function _cerStormSec(){    const v = parseFloat(CFG.cerimonia_storm_dur);   return (isFinite(v) && v >= 0)  ? Math.min(8,  v) : 2.2; } // tempestade de raios antes do pódio
+function _cerPodiumGapSec(){ const v = parseFloat(CFG.cerimonia_podium_gap); return (isFinite(v) && v >= 1)  ? Math.min(40, v) : 6;   } // reveal ancorado em fim da música − este valor
+function _cerPodiumHoldSec(){ const v = parseFloat(CFG.cerimonia_podium_hold); return (isFinite(v) && v > 0) ? Math.min(60, v) : 10;  } // só o pódio na tela antes das estatísticas
 
 // ── Configuração da abertura (textos + GIF), editável no Admin ────────────────
 // Roteiro padrão da abertura (usado quando o admin não configurou textos próprios).
@@ -19097,10 +19223,10 @@ async function _cerimoniaBegin(){
   st.revealed = false;
   const total = _cerTotalMs();
   const introMs = _cerIntroEndMs();
-  // Reveal ancorado em fim da música − 6s: 1s a menos no tempo geral dos cards + 0,5s de
-  // outros lugares p/ bancar a tempestade 0,5s mais longa. Com os raios (2,15s), o pódio
-  // aparece ~fim−3,85s, caindo exatamente na emoção da parte final da música.
-  const podiumAt = Math.max(introMs + 15000, total - 6000);
+  // Reveal ancorado em fim da música − (gap configurável). Com a tempestade por cima, o
+  // pódio surge em fim − (gap − storm), caindo na emoção da parte final da música. Ajustável
+  // no painel "Linha do tempo & efeitos".
+  const podiumAt = Math.max(introMs + 15000, total - Math.round(_cerPodiumGapSec() * 1000));
   st.podiumAt = podiumAt;
   _cerStageTrailer(d); // abertura acompanha a posição real do áudio e passa p/ os cards no fim
   _cerAt(podiumAt, ()=>_cerStageReveal(d));
@@ -19199,7 +19325,7 @@ function _cerStageCards(d){
   // (descontando os cards com tempo fixo) PONDERADO pelo tamanho de cada card, p/ o pódio
   // cair no tempo certo tirando o tempo dos cards curtos, não dos densos.
   const winStart = _cerIntroEndMs();
-  const podiumAt = st.podiumAt || (_cerTotalMs() - 6000);
+  const podiumAt = st.podiumAt || (_cerTotalMs() - Math.round(_cerPodiumGapSec() * 1000));
   const win = Math.max(20000, podiumAt - winStart);
   const gridHold = Math.min(6000, win * 0.06); // respiro final com a grade completa
   const fixedMs = facts.reduce((s,f)=> s + (f.durMs>0 ? f.durMs : 0), 0);
@@ -19255,15 +19381,15 @@ function _cerStageReveal(d){
   // _celebraStart limpa o painel do jogador, então o pódio aparece sozinho primeiro.
   _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos,
     onReveal: ()=>_cerFx3DPodium(top3) }); // pódio 3D opcional (blocos + nomes + confete c/ profundidade + raios) entra junto com a luz; no-op se indisponível
-  // Só o pódio por ~10s (tempo p/ apreciar o campeão); depois entram as estatísticas
-  // personalizadas de quem assiste.
+  // Só o pódio por um tempo (configurável) p/ apreciar o campeão; depois entram as
+  // estatísticas personalizadas de quem assiste.
   _cerTimer(()=>{
     if(!_cerimoniaState || _cerimoniaState.closed) return;
     try {
       const vp = document.getElementById('celebra-viewer');
       if(vp){ const v = _cerViewerStats(d); vp.innerHTML = v ? _cerViewerPanelHTML(v) : ''; }
     } catch(_){}
-  }, 10000);
+  }, Math.round(_cerPodiumHoldSec() * 1000));
 }
 
 function _cerimoniaStop(){
