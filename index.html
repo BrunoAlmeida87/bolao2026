@@ -14154,12 +14154,12 @@ function _cerLoadAudioDur(){
     a.addEventListener('loadedmetadata', ()=>{ if(isFinite(a.duration) && a.duration > 30){ _cerAdminDurMs = Math.round(a.duration*1000); _cerCardsUpdateMeter(); } });
   } catch(_){}
 }
-// Segundos disponíveis p/ os cards: entre o fim da abertura e o pódio (fim da música − 4,5s),
+// Segundos disponíveis p/ os cards: entre o fim da abertura e o pódio (fim da música − 6s),
 // descontando o respiro final da grade. (As "Destaques por fase" também usam esta janela.)
 function _cerCardsAvailSec(){
   const totalMs = _cerAdminDurMs || 159000;
   const introEnd = _cerIntroEndMs();
-  const podiumAt = Math.max(introEnd + 15000, totalMs - 4500);
+  const podiumAt = Math.max(introEnd + 15000, totalMs - 6000);
   const gridHold = Math.min(6000, (podiumAt - introEnd) * 0.06);
   return Math.max(0, Math.round((podiumAt - introEnd - gridHold) / 1000));
 }
@@ -17934,8 +17934,8 @@ function _celebraLightning(cb){
     ctx.shadowBlur = 0;
   };
 
-  const strikes = [ { t:140 }, { t:520 }, { t:860 }, { t:1220 } ];
-  const DUR = 1650, FLASH_FROM = 1420;
+  const strikes = [ { t:140 }, { t:520 }, { t:860 }, { t:1220 }, { t:1600 } ];
+  const DUR = 2150, FLASH_FROM = 1920;
   const start = performance.now();
   const frame = (now)=>{
     const el = now - start;
@@ -19097,9 +19097,10 @@ async function _cerimoniaBegin(){
   st.revealed = false;
   const total = _cerTotalMs();
   const introMs = _cerIntroEndMs();
-  // Pódio 0,5s mais cedo (fim da música − 4,5s): tira meio segundo do último card p/ o
-  // pódio surgir junto com a emoção da parte final da música.
-  const podiumAt = Math.max(introMs + 15000, total - 4500);
+  // Reveal ancorado em fim da música − 6s: 1s a menos no tempo geral dos cards + 0,5s de
+  // outros lugares p/ bancar a tempestade 0,5s mais longa. Com os raios (2,15s), o pódio
+  // aparece ~fim−3,85s, caindo exatamente na emoção da parte final da música.
+  const podiumAt = Math.max(introMs + 15000, total - 6000);
   st.podiumAt = podiumAt;
   _cerStageTrailer(d); // abertura acompanha a posição real do áudio e passa p/ os cards no fim
   _cerAt(podiumAt, ()=>_cerStageReveal(d));
@@ -19179,8 +19180,15 @@ function _cerStageTrailer(d){
   st.raf = requestAnimationFrame(tick);
 }
 
+// Peso de exibição por "tamanho" do card: os curtos e fáceis de ler (só emoji + nome +
+// detalhe, sem grade/ranking) ficam MENOS tempo; os ricos (com `extra`: grids, mini-barras,
+// rankings) ficam mais. É daqui que sai o "diminua dos menores" sem atrapalhar a leitura
+// dos cards densos.
+const _CER_PHASE_WEIGHT = 1.0;
+function _cerCardWeight(f){ return (f && f.extra && String(f.extra).trim()) ? 1.25 : 0.72; }
+
 // Orquestra os cards (curiosidades + destaques por fase) na janela entre o fim do
-// trailer de abertura (42s) e o pódio (fim-4s), dimensionando o tempo por card p/ caber.
+// trailer de abertura (42s) e o pódio (fim-6s), dimensionando o tempo por card p/ caber.
 function _cerStageCards(d){
   const st = _cerimoniaState; if(!st || st.closed || st.revealed) return;
   const facts = _cerApplyCardCfg(_cerimoniaFacts(d)); // aplica ordem/on-off/tempo do admin
@@ -19188,17 +19196,21 @@ function _cerStageCards(d){
     .map(def=>({ def, st:_cerPhaseStandings(d, _cerPhaseGameIds(def)) }))
     .filter(x=>x.st);
   // Ritmo automático dos cards SEM tempo manual: divide o tempo restante da janela
-  // (descontando os cards com tempo fixo) pelos demais, p/ o pódio cair no tempo certo.
+  // (descontando os cards com tempo fixo) PONDERADO pelo tamanho de cada card, p/ o pódio
+  // cair no tempo certo tirando o tempo dos cards curtos, não dos densos.
   const winStart = _cerIntroEndMs();
-  const podiumAt = st.podiumAt || (_cerTotalMs() - 4500);
+  const podiumAt = st.podiumAt || (_cerTotalMs() - 6000);
   const win = Math.max(20000, podiumAt - winStart);
   const gridHold = Math.min(6000, win * 0.06); // respiro final com a grade completa
   const fixedMs = facts.reduce((s,f)=> s + (f.durMs>0 ? f.durMs : 0), 0);
-  const autoItems = facts.filter(f=>!(f.durMs>0)).length + phases.length;
-  const per = autoItems > 0
-    ? Math.min(9000, Math.max(2600, (win - gridHold - fixedMs) / autoItems))
-    : 4800;
-  st.cardPer = per;
+  const autoFacts = facts.filter(f=>!(f.durMs>0));
+  const factW = autoFacts.reduce((s,f)=> s + _cerCardWeight(f), 0);
+  const phaseW = phases.length * _CER_PHASE_WEIGHT;
+  const Wsum = (factW + phaseW) || 1;
+  const budget = Math.max(0, win - gridHold - fixedMs);
+  const unit = budget / Wsum;               // tempo por "unidade de peso"
+  st.cardUnit = unit;
+  st.cardPer = Math.min(9000, Math.max(2600, unit)); // média (fases + fallback/compat)
   // Transição bonita saindo da fase de nomes para o primeiro card.
   _cerTransitionStage(()=>_cerStageFacts(d, facts));
 }
@@ -19207,7 +19219,7 @@ function _cerStageFacts(d, facts){
   facts = facts || _cerApplyCardCfg(_cerimoniaFacts(d));
   const stageEl = document.getElementById('cerimonia-stage');
   if(!facts.length || !stageEl){ _cerStagePhases(d); return; }
-  const autoPer = (_cerimoniaState && _cerimoniaState.cardPer) || 4800; let i = 0;
+  const unit = (_cerimoniaState && _cerimoniaState.cardUnit) || (_cerimoniaState && _cerimoniaState.cardPer) || 4800; let i = 0;
   const showOne = ()=>{
     if(!_cerimoniaState || _cerimoniaState.closed || _cerimoniaState.revealed) return;
     if(i >= facts.length){ _cerStagePhases(d); return; }
@@ -19221,7 +19233,9 @@ function _cerStageFacts(d, facts){
       ${f.extra || ''}</div>`;
     _cerFwBurst(1 + (Math.random()*2|0)); // poucos fogos a cada curiosidade
     i++;
-    _cerTimer(showOne, (f.durMs > 0 ? f.durMs : autoPer)); // tempo manual do card, ou o ritmo automático
+    // Ritmo ponderado: card curto (sem `extra`) sai mais rápido; card denso segura mais.
+    const auto = Math.min(9000, Math.max(2200, unit * _cerCardWeight(f)));
+    _cerTimer(showOne, (f.durMs > 0 ? f.durMs : auto)); // tempo manual do card, ou o ritmo ponderado
   };
   showOne();
 }
