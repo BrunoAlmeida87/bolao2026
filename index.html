@@ -14272,7 +14272,7 @@ function _cerReadNum(id, dflt){ const el=document.getElementById(id); if(!el) re
 function _cerFmtMMSS(ms){ const s=Math.max(0,Math.round(ms/1000)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
 // Cards "ricos" (têm `extra`: grade/ranking/barras) ganham mais tempo no ritmo automático
 // (mesma heurística por key usada no runtime, _cerCardWeight). Os demais são curtos.
-const _CER_RICH_CARD_KEYS = new Set(['numeros','sel_campea','lanterna','rank_exato','rank_dias','rank_trocas','jejum','zebras','maiores_apostadores','rank_original']);
+const _CER_RICH_CARD_KEYS = new Set(['numeros','sel_campea','lanterna','rank_exato','rank_dias','rank_trocas','jejum','zebras','rank_original']);
 function _cerAdminCardWeight(key){ return _CER_RICH_CARD_KEYS.has(key) ? 1.25 : 0.72; }
 
 // Monta a linha do tempo ESTIMADA a partir do estado atual do editor (valores ainda não
@@ -14490,6 +14490,16 @@ function assistirCerimonia(){
 }
 
 // Convite (pop-up) mostrado ao entrar, no máx. 1× por publicação (rev via localStorage).
+// Trava de sessão: o convite (pop-up) só aparece AUTOMATICAMENTE uma vez por
+// carregamento — vale tanto para a produção (cerimônia publicada) quanto para a
+// prévia do admin. Sem isso, os dois gatilhos disparavam e surgiam dois pop-ups.
+// O botão "Rever o convite" chama `_showCerimoniaConvite()` direto e ignora a trava.
+let _cerConviteAutoDone = false;
+function _cerConviteAuto(){
+  if (_cerConviteAutoDone) return;
+  _cerConviteAutoDone = true;
+  _showCerimoniaConvite();
+}
 function _maybeShowCerimoniaPublicada(){
   try {
     if (!CFG || !CFG.cerimonia_publicada) return;
@@ -14498,7 +14508,7 @@ function _maybeShowCerimoniaPublicada(){
     if (localStorage.getItem('bolao_cerimonia_pub_visto') === rev) return;
     localStorage.setItem('bolao_cerimonia_pub_visto', rev);
   } catch(_){ return; }
-  _showCerimoniaConvite();
+  _cerConviteAuto();
 }
 function _showCerimoniaConvite(){
   if (document.getElementById('cer-convite-ov')) return;
@@ -14577,7 +14587,8 @@ async function renderAdminPreviaCerimonia(){
       </div>
     </div>`;
     // "Como se eu tivesse acabado de ativar": abre o convite automaticamente ao entrar na prévia.
-    setTimeout(()=>{ const el = document.getElementById('admin-previa-cerimonia'); if (el && el.classList.contains('active')) _showCerimoniaConvite(); }, 250);
+    // Usa a trava de sessão para nunca duplicar com o gatilho de produção (só 1 pop-up automático).
+    setTimeout(()=>{ const el = document.getElementById('admin-previa-cerimonia'); if (el && el.classList.contains('active')) _cerConviteAuto(); }, 250);
   } catch(e) {
     cont.innerHTML = `<div class="alert alert-error">Erro ao montar a prévia: ${esc(errMsg(e))}</div>`;
   }
@@ -18981,24 +18992,6 @@ function _cerimoniaFacts(d){
     const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]; if(!top) return null;
     return { emoji:'⚽', label:'Placar mais palpitado da Copa', name:top[0], detail:`${top[1]} palpite${top[1]>1?'s':''} nesse placar` };
   });
-  // 📮 Maiores apostadores — quem apostou em mais jogos, com o percentual (participação + aproveitamento)
-  add(()=>{
-    const totJogos = d.jogosComResultado.length; if(!totJogos) return null;
-    const arr = d.users.map(u=>{
-      const acc = d.userAccStats[u.uid] || {};
-      const jogos = acc.count || 0; // jogos (com resultado) em que apostou
-      const pct = (acc.acertoPct!=null && acc.acertoPct!=='-') ? parseFloat(acc.acertoPct) : null;
-      return { u, jogos, pct };
-    }).filter(x=>x.jogos>0).sort((a,b)=> b.jogos-a.jogos || ((b.pct||0)-(a.pct||0))).slice(0,5);
-    if(!arr.length) return null;
-    const md=['🥇','🥈','🥉','4º','5º'];
-    const rows=_cerRankRows(arr.map((x,i)=>({ medal:md[i], nm:_rzName(x.u), v:`${x.jogos}/${totJogos} · ${x.pct!=null?Math.round(x.pct)+'%':'—'}` })));
-    const top=arr[0];
-    const partic = Math.round(top.jogos / totJogos * 100);
-    return { emoji:'📮', label:'Maiores apostadores', name:_rzName(top.u),
-      detail:`apostou em ${top.jogos} de ${totJogos} jogos (${partic}% de participação)${top.pct!=null?` · ${Math.round(top.pct)}% de acerto`:''}`,
-      extra:`<div class="cer-rank"><div class="cer-rank-h">📮 Volume de palpites · aproveitamento</div>${rows}</div>` };
-  });
   // 🎯 O jogo que mudou tudo (última virada de liderança)
   add(()=>{ const c=_cerLeaderChangeGame(d); if(!c) return null; const tm=_gxGameTeams(c.game.id, d.res); return {emoji:'🎯', label:'O jogo que mudou tudo', name:`${esc(tm.h)} × ${esc(tm.a)}`, detail:`${_rzName(c.newLeader)} assumiu a liderança${c.game.date?' · '+esc(c.game.date):''}`}; });
   // 🏮 Lanterna / Azarão (último colocado, em tom bem-humorado)
@@ -19093,7 +19086,6 @@ const _CER_CARD_CATALOG = [
   { key:'sel_campea',       emoji:'🏆', label:'Seleção mais escolhida p/ campeã' },
   { key:'rei_empates',      emoji:'🤷', label:'Rei dos empates' },
   { key:'placar_palpitado', emoji:'⚽', label:'Placar mais palpitado da Copa' },
-  { key:'maiores_apostadores', emoji:'📮', label:'Maiores apostadores' },
   { key:'jogo_mudou',       emoji:'🎯', label:'O jogo que mudou tudo' },
   { key:'lanterna',         emoji:'🏮', label:'Lanterna / Azarão' },
   { key:'rank_exato',       emoji:'🎯', label:'Ranking de placar exato' },
