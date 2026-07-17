@@ -1573,6 +1573,9 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 .cer-rec-stop.hidden{display:none}
 .cer-rec-dot{width:10px;height:10px;border-radius:50%;background:#fff;animation:cerRecBlink 1s steps(2) infinite}
 @keyframes cerRecBlink{0%{opacity:1}50%{opacity:.25}100%{opacity:1}}
+/* Antes do pódio: tela preta + raios (tempestade) e depois clareia p/ revelar o pódio */
+.celebra-lightning{position:fixed;inset:0;z-index:690;background:#000;pointer-events:none}
+.celebra-lightning canvas{position:absolute;inset:0;width:100%;height:100%}
 @media(prefers-reduced-motion:reduce){.celebra-card{animation:none}.celebra-trophy{animation:none}.celebra-step{transition:none}.celebra-viewer:not(:empty){animation:none}.cer-rec-dot{animation:none}}
 
 /* ══ Cerimônia de encerramento (intro → cards → corrida → reveal, com música) ══ */
@@ -14282,8 +14285,8 @@ async function testarPodio(use3d) {
     const { allPals, champPicks } = await _fetchPals(users);
     const ranking = computeRanking(users, res, allPals, champPicks);
     const top3 = ranking.slice(0,3).map(u => ({ apelido: u.apelido || null, nome: u.nome || null, pontos: u.pontos }));
-    _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
-    _cerFx3DPodium(top3); // pódio 3D opcional (no-op sem three.js)
+    _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos,
+      onReveal: ()=>_cerFx3DPodium(top3) }); // pódio 3D opcional entra junto com a luz (no-op sem three.js)
   } catch(e) {
     showToast('Erro ao testar o pódio: '+e.message,'error');
   }
@@ -17862,6 +17865,106 @@ function _celebraLoop(now){
 }
 
 // Revela o pódio 3º→2º→1º com atraso e estoura fogos ao cravar o 1º.
+// ── Tempestade antes do pódio ────────────────────────────────────────────────
+// Cobre a tela de preto e solta alguns raios (canvas full-screen), depois clareia
+// num flash branco e chama `cb` — é nesse instante que o pódio é revelado (2D e 3D).
+// Camada DOM própria (não a canvas da festa), então funciona igual com e sem 3D e
+// é capturada na gravação (getDisplayMedia grava a tela toda). Respeita reduced-motion.
+let _celebraLightningEl = null;
+let _celebraLightningRaf = null;
+function _celebraLightningCancel(){
+  if(_celebraLightningRaf){ cancelAnimationFrame(_celebraLightningRaf); _celebraLightningRaf = null; }
+  if(_celebraLightningEl){ try{ _celebraLightningEl.remove(); }catch(_){} _celebraLightningEl = null; }
+}
+function _celebraLightning(cb){
+  _celebraLightningCancel();
+  let done = false;
+  const finish = ()=>{ if(done) return; done = true; window.removeEventListener('resize', resize); _celebraLightningCancel(); };
+  let fired = false;
+  const reveal = ()=>{ if(fired) return; fired = true; try{ cb && cb(); }catch(_){} };
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce){ reveal(); return; } // sem animação: revela o pódio direto
+
+  const layer = document.createElement('div');
+  layer.className = 'celebra-lightning';
+  const cv = document.createElement('canvas');
+  layer.appendChild(cv);
+  document.body.appendChild(layer);
+  _celebraLightningEl = layer;
+  const ctx = cv.getContext('2d');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let W = 0, H = 0;
+  const resize = ()=>{ W = innerWidth; H = innerHeight; cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); };
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Um raio: linha quebrada do topo até ~meio da tela, com galhos, deslocada aleatoriamente.
+  const makeBolt = ()=>{
+    const x0 = W*(0.2 + Math.random()*0.6);
+    const segs = [{ x:x0, y:-10 }];
+    let x = x0, y = 0; const target = H*(0.45 + Math.random()*0.35);
+    while(y < target){
+      y += target*(0.06 + Math.random()*0.10);
+      x += (Math.random()-0.5) * W*0.16;
+      x = Math.max(W*0.05, Math.min(W*0.95, x));
+      segs.push({ x, y });
+    }
+    // alguns galhos saindo de pontos intermediários
+    const branches = [];
+    for(let i=2;i<segs.length-1;i++){
+      if(Math.random() < 0.35){
+        const b = [segs[i]]; let bx = segs[i].x, by = segs[i].y; const n = 2 + (Math.random()*3|0);
+        for(let k=0;k<n;k++){ by += H*(0.03+Math.random()*0.05); bx += (Math.random()-0.5)*W*0.12; b.push({ x:bx, y:by }); }
+        branches.push(b);
+      }
+    }
+    return { segs, branches };
+  };
+  const strokePath = (pts, w, alpha)=>{
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = alpha; ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  const drawBolt = (bolt, a)=>{
+    ctx.shadowColor = 'rgba(150,190,255,0.95)'; ctx.shadowBlur = 26;
+    ctx.strokeStyle = 'rgba(170,205,255,'+(0.55*a)+')'; strokePath(bolt.segs, 6.5, 0.55*a);
+    bolt.branches.forEach(b=> strokePath(b, 3, 0.4*a));
+    ctx.strokeStyle = 'rgba(255,255,255,'+(0.95*a)+')'; strokePath(bolt.segs, 2.4, 0.95*a);
+    ctx.shadowBlur = 0;
+  };
+
+  const strikes = [ { t:140 }, { t:520 }, { t:860 }, { t:1220 } ];
+  const DUR = 1650, FLASH_FROM = 1420;
+  const start = performance.now();
+  const frame = (now)=>{
+    const el = now - start;
+    ctx.clearRect(0,0,W,H);
+    for(const s of strikes){
+      const age = el - s.t;
+      if(age >= 0 && age < 230){
+        if(!s.bolt) s.bolt = makeBolt();
+        const a = 1 - age/230;
+        ctx.fillStyle = 'rgba(150,180,255,'+(0.30*a)+')'; ctx.fillRect(0,0,W,H); // clarão do raio
+        drawBolt(s.bolt, a);
+      }
+    }
+    if(el >= FLASH_FROM){ // clareia num flash branco e revela o pódio por baixo
+      const fa = Math.min(1, (el-FLASH_FROM)/200);
+      ctx.fillStyle = 'rgba(255,255,255,'+fa+')'; ctx.fillRect(0,0,W,H);
+    }
+    if(el >= DUR){
+      reveal();                       // pódio (2D + 3D) surge enquanto a luz volta
+      layer.style.transition = 'opacity .6s ease-out';
+      layer.style.opacity = '0';
+      setTimeout(finish, 620);
+      return;
+    }
+    _celebraLightningRaf = requestAnimationFrame(frame);
+  };
+  _celebraLightningRaf = requestAnimationFrame(frame);
+}
+
 function _celebraRevealPodium(top3){
   const box = document.getElementById('celebra-podium'); if(!box) return;
   const medals = ['🥇','🥈','🥉'];
@@ -17901,20 +18004,26 @@ function _celebraStart(data){
   overlay.classList.remove('hidden');
 
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(reduce){ _celebraState = null; _celebraRevealPodium(top3); return; } // card estático, sem partículas
+  if(reduce){ _celebraState = null; _celebraRevealPodium(top3); if(data.onReveal){ try{ data.onReveal(); }catch(_){} } return; } // card estático, sem partículas
   const { ctx, w, h } = _celebraSizeCanvas(cv);
   if(_celebraState && _celebraState.raf) cancelAnimationFrame(_celebraState.raf);
   _celebraState = { ctx, w, h, parts:[], t:0, last: performance.now(), fwTimer:0.2, confTimer:0, raf:null, continuous: !!data.continuous,
     _onResize: ()=>{ if(!_celebraState) return; const d=_celebraSizeCanvas(cv); _celebraState.ctx=d.ctx; _celebraState.w=d.w; _celebraState.h=d.h; } };
   window.addEventListener('resize', _celebraState._onResize);
-  _celebraRevealPodium(top3);
-  _celebraSpawnConfetti(_celebraState, 60);
-  _celebraState.raf = requestAnimationFrame(_celebraLoop);
+  // Antes do pódio: tela preta + raios; ao clarear, revela o pódio (2D e 3D juntos).
+  _celebraLightning(()=>{
+    if(!_celebraState) return; // celebração fechada durante a tempestade
+    _celebraRevealPodium(top3);
+    _celebraSpawnConfetti(_celebraState, 60);
+    _celebraState.raf = requestAnimationFrame(_celebraLoop);
+    if(data.onReveal){ try{ data.onReveal(); }catch(_){} } // pódio 3D entra junto com a luz
+  });
 }
 
 function _celebraStop(){
   const overlay = document.getElementById('celebra-overlay');
   if(overlay) overlay.classList.add('hidden');
+  _celebraLightningCancel(); // remove a camada de raios se ainda estiver rodando
   const st = _celebraState;
   if(st){
     if(st.raf) cancelAnimationFrame(st.raf);
@@ -18522,7 +18631,23 @@ function _cerimoniaFacts(d){
   // 🎯 O jogo que mudou tudo (última virada de liderança)
   add(()=>{ const c=_cerLeaderChangeGame(d); if(!c) return null; const tm=_gxGameTeams(c.game.id, d.res); return {emoji:'🎯', label:'O jogo que mudou tudo', name:`${esc(tm.h)} × ${esc(tm.a)}`, detail:`${_rzName(c.newLeader)} assumiu a liderança${c.game.date?' · '+esc(c.game.date):''}`}; });
   // 🏮 Lanterna / Azarão (último colocado, em tom bem-humorado)
-  add(()=>{ const r=d.ranking; if(!r || r.length<2) return null; const last=r[r.length-1]; return {emoji:'🏮', label:'Lanterna / Azarão', name:_rzName(last), detail:`fechou a tabela com ${last.pontos} pt${last.pontos!==1?'s':''} — alguém tem que segurar a lanterna! 😅`}; });
+  add(()=>{
+    const r=d.ranking; if(!r || r.length<2) return null;
+    const last=r[r.length-1];
+    // Zona de rebaixamento: 4 últimos (>=8 participantes); com menos gente, mostra os 3 últimos.
+    const relegN = r.length >= 8 ? 4 : Math.min(3, r.length);
+    const startIdx = r.length - relegN;
+    const rows = _cerRankRows(r.slice(startIdx).map((u,k)=>{
+      const isLast = (startIdx + k) === r.length - 1;
+      return { medal: isLast ? '🏮' : '🔻', nm:_rzName(u), v:`${u.pontos} pt${u.pontos!==1?'s':''}`, cls: isLast ? 'neg' : '' };
+    }));
+    const zoneTitle = r.length >= 8 ? '🔻 Zona de rebaixamento' : '🔻 Os últimos colocados';
+    return {
+      emoji:'🏮', label:'Lanterna / Azarão', name:_rzName(last),
+      detail:`fechou a tabela com ${last.pontos} pt${last.pontos!==1?'s':''} — alguém tem que segurar a lanterna! 😅`,
+      extra:`<div class="cer-rank"><div class="cer-rank-h neg">${zoneTitle}</div>${rows}</div>`
+    };
+  });
   // 🎯 Ranking de placar exato (Top 5)
   add(()=>{
     const arr=_rzExatos(d.ranking, d.userAccStats).slice(0,5); if(!arr.length) return null;
@@ -19112,8 +19237,8 @@ function _cerStageReveal(d){
   _celebraOnClose = ()=>{ _celebraOnClose = null; _cerimoniaStop(); };
   // continuous=true: os fogos seguem rolando enquanto o pódio fica na tela.
   // _celebraStart limpa o painel do jogador, então o pódio aparece sozinho primeiro.
-  _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos });
-  _cerFx3DPodium(top3); // pódio 3D opcional (blocos + nomes + confete c/ profundidade + raios); no-op se indisponível
+  _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos,
+    onReveal: ()=>_cerFx3DPodium(top3) }); // pódio 3D opcional (blocos + nomes + confete c/ profundidade + raios) entra junto com a luz; no-op se indisponível
   // Só o pódio por ~10s (tempo p/ apreciar o campeão); depois entram as estatísticas
   // personalizadas de quem assiste.
   _cerTimer(()=>{
