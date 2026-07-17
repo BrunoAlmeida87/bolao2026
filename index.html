@@ -14154,12 +14154,12 @@ function _cerLoadAudioDur(){
     a.addEventListener('loadedmetadata', ()=>{ if(isFinite(a.duration) && a.duration > 30){ _cerAdminDurMs = Math.round(a.duration*1000); _cerCardsUpdateMeter(); } });
   } catch(_){}
 }
-// Segundos disponíveis p/ os cards: entre o fim da abertura e o pódio (fim da música − 4s),
+// Segundos disponíveis p/ os cards: entre o fim da abertura e o pódio (fim da música − 4,5s),
 // descontando o respiro final da grade. (As "Destaques por fase" também usam esta janela.)
 function _cerCardsAvailSec(){
   const totalMs = _cerAdminDurMs || 159000;
   const introEnd = _cerIntroEndMs();
-  const podiumAt = Math.max(introEnd + 15000, totalMs - 4000);
+  const podiumAt = Math.max(introEnd + 15000, totalMs - 4500);
   const gridHold = Math.min(6000, (podiumAt - introEnd) * 0.06);
   return Math.max(0, Math.round((podiumAt - introEnd - gridHold) / 1000));
 }
@@ -19097,7 +19097,9 @@ async function _cerimoniaBegin(){
   st.revealed = false;
   const total = _cerTotalMs();
   const introMs = _cerIntroEndMs();
-  const podiumAt = Math.max(introMs + 15000, total - 4000);
+  // Pódio 0,5s mais cedo (fim da música − 4,5s): tira meio segundo do último card p/ o
+  // pódio surgir junto com a emoção da parte final da música.
+  const podiumAt = Math.max(introMs + 15000, total - 4500);
   st.podiumAt = podiumAt;
   _cerStageTrailer(d); // abertura acompanha a posição real do áudio e passa p/ os cards no fim
   _cerAt(podiumAt, ()=>_cerStageReveal(d));
@@ -19188,7 +19190,7 @@ function _cerStageCards(d){
   // Ritmo automático dos cards SEM tempo manual: divide o tempo restante da janela
   // (descontando os cards com tempo fixo) pelos demais, p/ o pódio cair no tempo certo.
   const winStart = _cerIntroEndMs();
-  const podiumAt = st.podiumAt || (_cerTotalMs() - 4000);
+  const podiumAt = st.podiumAt || (_cerTotalMs() - 4500);
   const win = Math.max(20000, podiumAt - winStart);
   const gridHold = Math.min(6000, win * 0.06); // respiro final com a grade completa
   const fixedMs = facts.reduce((s,f)=> s + (f.durMs>0 ? f.durMs : 0), 0);
