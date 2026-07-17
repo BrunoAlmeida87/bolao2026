@@ -11904,6 +11904,7 @@ function renderAdmin() {
       <button class="admin-tab" data-tab="financeiro" onclick="switchAdminTab('financeiro')">💰 Financeiro</button>
       <button class="admin-tab" data-tab="palpites-admin" onclick="switchAdminTab('palpites-admin')">✏️ Editar Palpites</button>
       <button class="admin-tab" data-tab="config" onclick="switchAdminTab('config')">⚙️ Config</button>
+      <button class="admin-tab" data-tab="previa-cerimonia" onclick="switchAdminTab('previa-cerimonia')">👁️ Prévia cerimônia</button>
       <button class="admin-tab" data-tab="historico" onclick="switchAdminTab('historico')">📜 Histórico</button>
       <button class="admin-tab" data-tab="relatorio" onclick="switchAdminTab('relatorio')">📈 Relatório</button>
       <button class="admin-tab" data-tab="export" onclick="switchAdminTab('export')">⬇️ Exportar</button>
@@ -11915,6 +11916,7 @@ function renderAdmin() {
     <div id="admin-financeiro" class="admin-content"></div>
     <div id="admin-palpites-admin" class="admin-content"></div>
     <div id="admin-config" class="admin-content"></div>
+    <div id="admin-previa-cerimonia" class="admin-content"></div>
     <div id="admin-historico" class="admin-content"></div>
     <div id="admin-export" class="admin-content"></div>
     <div id="admin-ia" class="admin-content"></div>
@@ -12730,6 +12732,7 @@ function switchAdminTab(tab) {
     case 'financeiro': renderAdminFinanceiro(); break;
     case 'palpites-admin': renderAdminEditPalpites(); break;
     case 'config': renderAdminConfig(); break;
+    case 'previa-cerimonia': renderAdminPreviaCerimonia(); break;
     case 'historico': renderAdminHistorico(); break;
     case 'export': renderAdminExport(); break;
     case 'ia': renderAdminIA(); break;
@@ -14517,8 +14520,8 @@ function _cerConviteAssistir(){ _cerConviteFechar(); assistirCerimonia(); }
 
 // Banner no topo da 1ª página (dashboard): mini-pódio (top 3) + botão "Assistir".
 // Só aparece quando a cerimônia está publicada. `ranking` = array já ordenado do dashboard.
-function _cerPublishedHomeBanner(ranking){
-  if (!CFG || !CFG.cerimonia_publicada) return '';
+function _cerPublishedHomeBanner(ranking, force){
+  if (!force && (!CFG || !CFG.cerimonia_publicada)) return '';
   const top3 = (ranking || []).slice(0, 3);
   if (!top3.length) return '';
   const medals = ['🥇','🥈','🥉'];
@@ -14537,6 +14540,47 @@ function _cerPublishedHomeBanner(ranking){
     <button class="cer-home-btn" onclick="assistirCerimonia()">▶️ Assistir à cerimônia de encerramento</button>
     <div class="cer-home-hint">🔊 Aumente o som para a experiência completa</div>
   </div>`;
+}
+
+// ── Aba admin: Prévia da cerimônia publicada (só o admin) ─────────────────────
+// Simula, APENAS no aparelho do admin, como a 1ª página fica com a cerimônia publicada
+// (convite + pódio no topo + botão). Não escreve nada no Firestore, não muda o status real
+// de publicação, não afeta os outros participantes e não dispara a cerimônia original.
+async function renderAdminPreviaCerimonia(){
+  const cont = document.getElementById('admin-previa-cerimonia');
+  if (!cont) return;
+  if (currentUserDoc?.role !== 'admin') { cont.innerHTML = '<div class="alert alert-error">Apenas admin.</div>'; return; }
+  cont.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const [allUsers, res] = await Promise.all([_fetchUsr(), _fetchRes()]);
+    const users = allUsers.filter(u => u.ativo !== false);
+    const { allPals, champPicks } = await _fetchPalsCached(users);
+    const ranking = computeRanking(users, res, allPals, champPicks);
+    const banner = _cerPublishedHomeBanner(ranking, true); // força a prévia mesmo sem publicar
+    cont.innerHTML = `<div style="margin-top:16px">
+      <div class="card">
+        <div class="card-title">👁️ Prévia da cerimônia publicada — só você</div>
+        <p class="text-muted" style="font-size:.85rem;line-height:1.55;margin:8px 0 14px">
+          Veja exatamente como a 1ª página fica quando a cerimônia está publicada: o convite (pop-up),
+          o pódio no topo e o botão de assistir. <b>É apenas uma simulação no seu aparelho</b> — não publica
+          nada, não altera o status real, não afeta os outros participantes e não dispara a cerimônia original.
+        </p>
+        <div class="btn-group" style="margin-bottom:10px">
+          <button class="btn btn-primary" onclick="_showCerimoniaConvite()">🔔 Rever o convite (pop-up)</button>
+          <button class="btn btn-secondary" onclick="assistirCerimonia()">▶️ Assistir à cerimônia (2D)</button>
+        </div>
+        <p class="text-muted" style="font-size:.78rem;margin:0">Status real de publicação: <b style="color:${CFG.cerimonia_publicada?'var(--green)':'var(--text-muted)'}">${CFG.cerimonia_publicada?'PUBLICADA ✅':'não publicada'}</b> — esta aba não muda isso. Para publicar de verdade, use ⚙️ Config › 🎬 Cerimônia.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📱 Como aparece no topo da 1ª página</div>
+        ${banner || '<p class="text-muted" style="font-size:.85rem">Ainda não há pódio para exibir (sem ranking com resultados).</p>'}
+      </div>
+    </div>`;
+    // "Como se eu tivesse acabado de ativar": abre o convite automaticamente ao entrar na prévia.
+    setTimeout(()=>{ const el = document.getElementById('admin-previa-cerimonia'); if (el && el.classList.contains('active')) _showCerimoniaConvite(); }, 250);
+  } catch(e) {
+    cont.innerHTML = `<div class="alert alert-error">Erro ao montar a prévia: ${esc(errMsg(e))}</div>`;
+  }
 }
 
 // ── Exportar a cerimônia em vídeo (captura de tela/aba + áudio) ────────────────
