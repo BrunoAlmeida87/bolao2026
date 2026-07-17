@@ -1610,6 +1610,26 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 /* Ícone SVG que substitui emojis frágeis no desktop (herda a cor do texto ao redor). */
 .cer-ico{width:1em;height:1em;display:inline-block;vertical-align:-.14em}
 .cer-fact-emoji .cer-ico{color:var(--gold);vertical-align:-.06em}
+/* Convite (pop-up) da cerimônia publicada */
+.cer-convite-ov{position:fixed;inset:0;z-index:700;background:rgba(3,7,18,.82);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;animation:cerConviteIn .3s ease}
+.cer-convite-card{background:linear-gradient(160deg,#12234d,#0a1430);border:1px solid var(--gold);border-radius:20px;padding:26px 22px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.cer-convite-emoji{font-size:3.2rem;line-height:1;filter:drop-shadow(0 4px 14px rgba(255,215,0,.5))}
+.cer-convite-ttl{color:var(--gold);font-weight:800;font-size:1.28rem;line-height:1.25;margin:12px 0 8px}
+.cer-convite-sub{color:var(--text-muted);font-size:.92rem;line-height:1.5;margin-bottom:18px}
+.cer-convite-btn{display:block;width:100%;background:linear-gradient(135deg,var(--gold),var(--orange));color:#1a1200;border:none;font-weight:800;font-size:1.05rem;padding:14px;border-radius:30px;cursor:pointer;box-shadow:0 6px 20px rgba(255,140,0,.4)}
+.cer-convite-close{display:block;width:100%;background:none;border:none;color:var(--text-muted);font-size:.86rem;padding:12px 0 0;cursor:pointer}
+@keyframes cerConviteIn{from{opacity:0}to{opacity:1}}
+/* Banner no topo da 1ª página: mini-pódio + botão "Assistir" */
+.cer-home-banner{background:linear-gradient(160deg,rgba(255,215,0,.10),rgba(10,20,48,.6));border:1px solid var(--gold);border-radius:18px;padding:16px 14px 18px;margin:0 0 14px;text-align:center}
+.cer-home-cap{color:var(--gold);font-weight:800;font-size:.92rem;margin-bottom:12px}
+.cer-home-podium{display:flex;align-items:flex-end;justify-content:center;gap:10px;margin-bottom:14px}
+.cer-home-pod{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:12px;padding:10px 8px;min-width:88px}
+.cer-home-pod-1{transform:translateY(-8px);border-color:var(--gold);background:rgba(255,215,0,.10)}
+.cer-home-medal{font-size:1.6rem;line-height:1}
+.cer-home-nm{color:var(--white);font-weight:800;font-size:.86rem;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px}
+.cer-home-pts{color:var(--gold);font-weight:700;font-size:.78rem;margin-top:2px}
+.cer-home-btn{background:linear-gradient(135deg,var(--gold),var(--orange));color:#1a1200;border:none;font-weight:800;font-size:1rem;padding:13px 22px;border-radius:28px;cursor:pointer;box-shadow:0 6px 18px rgba(255,140,0,.4);width:100%;max-width:420px}
+.cer-home-hint{color:var(--text-muted);font-size:.8rem;margin-top:8px}
 .cer-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
 .cer-cell{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:14px;padding:16px 10px}
 .cer-cell-v{color:var(--gold);font-weight:800;font-size:2rem;line-height:1}
@@ -2474,7 +2494,9 @@ let CFG = {
   cerimonia_sync_offset:0,
   cerimonia_storm_dur:2.2,       // s — duração da tempestade de raios antes do pódio
   cerimonia_podium_gap:6,        // s — reveal do pódio ancorado em fim da música − este valor
-  cerimonia_podium_hold:10       // s — só o pódio na tela antes das estatísticas do jogador
+  cerimonia_podium_hold:10,      // s — só o pódio na tela antes das estatísticas do jogador
+  cerimonia_publicada:false,     // publica a cerimônia 2D p/ todos: convite (pop-up) + pódio no topo da home + botão
+  cerimonia_pub_rev:0            // incrementa a cada publicação → reexibe o convite p/ quem já viu
 };
 
 // Horários dos jogos (Brasília - fuso -3)
@@ -2969,6 +2991,7 @@ async function handleAuthState(user) {
       _startCelebracaoListener();
       _startCerimoniaListener();
       _restorePageFromHash();
+      setTimeout(_maybeShowCerimoniaPublicada, 900); // convite da cerimônia publicada (1× por publicação)
     } catch(e) {
       showToast('Erro ao carregar dados: '+e.message,'error');
       showLoading(false); showAuth();
@@ -4789,6 +4812,7 @@ async function renderDashboard() {
 
     let html = `
       <div class="section-title">🏆 ${esc(CFG.nome_bolao)}${_refreshBtn()}</div>
+      ${_cerPublishedHomeBanner(ranking)}
       ${_premioCard}
 
       ${_roundReminderBanner()}
@@ -13980,6 +14004,12 @@ async function renderAdminConfig() {
         <button class="btn btn-primary" onclick="iniciarCerimoniaBolao()">🎬 Iniciar cerimônia para todos</button>
         <button class="btn btn-secondary" onclick="encerrarCerimonia()">⏹️ Encerrar</button>
       </div>
+      <p class="text-muted" style="font-size:0.78rem;margin:14px 0 6px">📣 <b>Publicar a cerimônia (2D) para todos:</b> ao publicar, cada pessoa vê um convite (pop-up) ao entrar no app, o <b>pódio aparece no topo da 1ª página</b> e fica um botão "Assistir à cerimônia" pedindo para aumentar o som. Diferente de "Iniciar para todos" (que abre a cerimônia na tela de todo mundo agora) — aqui cada um assiste quando quiser.</p>
+      <div class="btn-group">
+        <button class="btn ${CFG.cerimonia_publicada?'btn-secondary':'btn-primary'}" onclick="publicarCerimonia(true)">📣 ${CFG.cerimonia_publicada?'Republicar (reexibe o convite)':'Publicar cerimônia 2D'}</button>
+        <button class="btn btn-secondary" onclick="publicarCerimonia(false)">🚫 Despublicar</button>
+      </div>
+      <p class="text-muted" style="font-size:0.76rem;margin:6px 0 0">Status: <b style="color:${CFG.cerimonia_publicada?'var(--green)':'var(--text-muted)'}">${CFG.cerimonia_publicada?'PUBLICADA ✅':'não publicada'}</b>${CFG.cerimonia_publicada?` · rev ${esc(String(CFG.cerimonia_pub_rev||1))}`:''}</p>
       <p class="text-muted" style="font-size:0.78rem;margin:12px 0 6px">👁️ <b>Testes (só no seu aparelho):</b> compare a cerimônia com e sem os efeitos 3D (three.js), ou veja apenas o pódio.</p>
       <div class="btn-group">
         <button class="btn btn-secondary" onclick="testarCerimonia(true)">✨ Testar cerimônia com 3D</button>
@@ -14422,6 +14452,91 @@ async function encerrarCerimonia() {
     await db_.collection('config').doc('cerimonia').set({ active: false }, { merge: true });
     showToast('⏹️ Cerimônia encerrada.','success');
   } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// ── Publicar a cerimônia 2D para todos ────────────────────────────────────────
+// Ao publicar: grava CFG.cerimonia_publicada + incrementa a revisão (reexibe o convite
+// p/ quem já viu). Diferente de "iniciar para todos": não abre a cerimônia na tela de
+// ninguém; apenas faz aparecer o convite (pop-up) ao entrar, o pódio no topo da 1ª página
+// e o botão "Assistir à cerimônia". CFG (config/geral) é lido no carregamento do app, então
+// quem entrar depois já vê tudo.
+async function publicarCerimonia(on){
+  if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
+  if (on) {
+    if (!confirm('Publicar a cerimônia 2D para TODOS?\n\nCada pessoa verá um convite (pop-up) ao entrar no app, o pódio aparece no topo da 1ª página e fica um botão para assistir (pedindo para aumentar o som).\n\nRepublicar reexibe o convite até para quem já viu.')) return;
+  } else {
+    if (!confirm('Despublicar a cerimônia? O convite, o pódio no topo e o botão deixam de aparecer para novos acessos.')) return;
+  }
+  try {
+    const upd = { cerimonia_publicada: !!on };
+    if (on) upd.cerimonia_pub_rev = (parseInt(CFG.cerimonia_pub_rev) || 0) + 1;
+    await db_.collection('config').doc('geral').set(upd, { merge: true });
+    CFG.cerimonia_publicada = !!on;
+    if (on) CFG.cerimonia_pub_rev = upd.cerimonia_pub_rev;
+    showToast(on ? '📣 Cerimônia publicada para todos!' : '🚫 Cerimônia despublicada.','success');
+    try { renderAdminConfig(); } catch(_){}
+    try { if (typeof renderDashboard === 'function') renderDashboard(); } catch(_){}
+  } catch(e) { showToast('Erro: '+(e && e.message || e),'error'); }
+}
+
+// Assiste à cerimônia (2D, sem 3D) neste aparelho — usado pelo convite, pelo botão da home
+// e pelo pódio no topo. Abre a cerimônia no estágio "Iniciar" (um toque libera o som).
+function assistirCerimonia(){
+  try { window.__cerNo3D = true; _cer3DLoad = null; } catch(_){}
+  _cerimoniaStart({});
+}
+
+// Convite (pop-up) mostrado ao entrar, no máx. 1× por publicação (rev via localStorage).
+function _maybeShowCerimoniaPublicada(){
+  try {
+    if (!CFG || !CFG.cerimonia_publicada) return;
+    if (!currentUser) return; // só para quem está logado
+    const rev = String(CFG.cerimonia_pub_rev || 1);
+    if (localStorage.getItem('bolao_cerimonia_pub_visto') === rev) return;
+    localStorage.setItem('bolao_cerimonia_pub_visto', rev);
+  } catch(_){ return; }
+  _showCerimoniaConvite();
+}
+function _showCerimoniaConvite(){
+  if (document.getElementById('cer-convite-ov')) return;
+  const ov = document.createElement('div');
+  ov.id = 'cer-convite-ov';
+  ov.className = 'cer-convite-ov';
+  ov.innerHTML = `<div class="cer-convite-card" role="dialog" aria-modal="true">
+    <div class="cer-convite-emoji">🏆</div>
+    <div class="cer-convite-ttl">Assista aqui à cerimônia de encerramento</div>
+    <div class="cer-convite-sub">Clique em assistir e <b>aumente o som</b> 🔊 para a experiência completa.</div>
+    <button class="cer-convite-btn" onclick="_cerConviteAssistir()">▶️ Assistir agora</button>
+    <button class="cer-convite-close" onclick="_cerConviteFechar()">Agora não</button>
+  </div>`;
+  ov.addEventListener('click', e=>{ if(e.target===ov) _cerConviteFechar(); });
+  document.body.appendChild(ov);
+}
+function _cerConviteFechar(){ const o=document.getElementById('cer-convite-ov'); if(o) o.remove(); }
+function _cerConviteAssistir(){ _cerConviteFechar(); assistirCerimonia(); }
+
+// Banner no topo da 1ª página (dashboard): mini-pódio (top 3) + botão "Assistir".
+// Só aparece quando a cerimônia está publicada. `ranking` = array já ordenado do dashboard.
+function _cerPublishedHomeBanner(ranking){
+  if (!CFG || !CFG.cerimonia_publicada) return '';
+  const top3 = (ranking || []).slice(0, 3);
+  if (!top3.length) return '';
+  const medals = ['🥇','🥈','🥉'];
+  const order = [1,0,2]; // 2º · 1º · 3º (pódio)
+  const cells = order.filter(i=>top3[i]).map(i=>{
+    const u = top3[i];
+    return `<div class="cer-home-pod cer-home-pod-${i+1}">
+      <div class="cer-home-medal">${medals[i]}</div>
+      <div class="cer-home-nm">${esc(u.apelido || u.nome || '—')}</div>
+      <div class="cer-home-pts">${u.pontos} pts</div>
+    </div>`;
+  }).join('');
+  return `<div class="cer-home-banner">
+    <div class="cer-home-cap">🏆 Cerimônia de Encerramento — o pódio do bolão</div>
+    <div class="cer-home-podium">${cells}</div>
+    <button class="cer-home-btn" onclick="assistirCerimonia()">▶️ Assistir à cerimônia de encerramento</button>
+    <div class="cer-home-hint">🔊 Aumente o som para a experiência completa</div>
+  </div>`;
 }
 
 // ── Exportar a cerimônia em vídeo (captura de tela/aba + áudio) ────────────────
@@ -18633,7 +18748,25 @@ async function _cerFetchEditStats(users, res, allPals){
       Object.keys(byGame).forEach(gid=>{
         const sets = byGame[gid].filter(e=>e.action==='set' && e.h!=null && e.a!=null)
           .sort((a,b)=> _cerTsMs(a.at) - _cerTsMs(b.at));
-        if(sets.length){ orig[gid] = { h:sets[0].h, a:sets[0].a }; } // 1ª aposta registrada deste jogo
+        if(sets.length){
+          // Palpite que ficou MAIS TEMPO no sistema: soma a duração de cada valor (do momento
+          // em que foi salvo até a próxima troca — e do último até a trava das apostas) e
+          // escolhe o de maior tempo total ativo.
+          const game = (typeof ALL_GAMES!=='undefined') ? ALL_GAMES.find(g=>g.id===gid) : null;
+          let endMs = 0;
+          try { const li = _gameLockInstant(game, res[gid]); endMs = li ? li.getTime() : 0; } catch(_){ endMs = 0; }
+          if(!endMs) endMs = _cerTsMs(sets[sets.length-1].at) || Date.now();
+          const dur = {}, val = {};
+          sets.forEach((s,i)=>{
+            const t0 = _cerTsMs(s.at);
+            const t1 = (i < sets.length-1) ? _cerTsMs(sets[i+1].at) : endMs;
+            const k = `${s.h}×${s.a}`;
+            dur[k] = (dur[k]||0) + Math.max(0, t1 - t0);
+            val[k] = { h:s.h, a:s.a };
+          });
+          let bestK = null; Object.keys(dur).forEach(k=>{ if(bestK===null || dur[k] > dur[bestK]) bestK = k; });
+          orig[gid] = bestK ? val[bestK] : { h:sets[0].h, a:sets[0].a };
+        }
         if(!res[gid] || !_hasFullResult(res[gid])) return;
         if(sets.length < 2) return;
         const f = sets[0], l = sets[sets.length-1];
@@ -18645,8 +18778,8 @@ async function _cerFetchEditStats(users, res, allPals){
       });
       stats[u.uid] = { edits, changedGames:changed, deltaPts };
     } catch(_){ /* best-effort por usuário */ }
-    // Palpites "originais": começa do palpite atual e sobrepõe com a 1ª aposta do histórico
-    // (jogos sem histórico ficam com o palpite atual = quem nunca trocou).
+    // Palpites "originais": começa do palpite atual e sobrepõe com o palpite que ficou mais
+    // tempo ativo no histórico (jogos sem histórico ficam com o palpite atual = quem nunca trocou).
     const cur = (allPals && allPals[u.uid]) || {};
     const merged = {};
     Object.keys(cur).forEach(gid=>{ merged[gid] = cur[gid]; });
@@ -18759,7 +18892,7 @@ function _cerimoniaFacts(d){
   // ⚔️ Dupla mais oposta
   add(()=>{ const o=_rzOpposition(d.users, d.allPals, d.res); return o.globalPair && {emoji:'⚔️', label:'A dupla mais oposta', name:`${_rzName(o.globalPair.a)} × ${_rzName(o.globalPair.b)}`, detail:`${o.globalPair.pct.toFixed(0)}% de palpites diferentes`}; });
   // 🤝 Gêmeos de palpite
-  add(()=>{ const o=_rzOpposition(d.users, d.allPals, d.res); return o.globalTwin && {emoji:'🤝', label:'Gêmeos de palpite', name:`${_rzName(o.globalTwin.a)} & ${_rzName(o.globalTwin.b)}`, detail:`quase sempre no mesmo palpite`}; });
+  add(()=>{ const o=_rzOpposition(d.users, d.allPals, d.res); return o.globalTwin && {emoji:'🤝', label:'Gêmeos de palpite', name:`${_rzName(o.globalTwin.a)} & ${_rzName(o.globalTwin.b)}`, detail:`${(100-o.globalTwin.pct).toFixed(0)}% de palpites iguais${o.globalTwin.common?` em ${o.globalTwin.common} jogos`:''}`}; });
   // 💰 Seleção que mais rendeu pontos
   add(()=>{ const s=_rzSelecoes(d.analiseJogos, d.res).sort((a,b)=>b.pts-a.pts)[0]; return s && {emoji:'💰', label:'Seleção que mais rendeu', name:`${flag(s.name)}${esc(s.name)}`, detail:`${s.pts} pts distribuídos ao bolão`}; });
   // 🃏 Seleção que mais enganou
@@ -18869,7 +19002,8 @@ function _cerimoniaFacts(d){
     if(neg.length) blocks.push(`<div class="cer-rank-h neg">💔 Se arrependeram</div>`+_cerRankRows(neg.map(x=>({medal:'🔻', nm:nm(x.uid), v:`${x.deltaPts}`, cls:'neg'}))));
     return { emoji:'💰', label:'Saldo nas trocas de palpite', extra:`<div class="cer-rank">${blocks.join('')}</div>` };
   });
-  // 🕰️ Ranking sem as trocas — como estaria o topo se ninguém tivesse mudado os palpites iniciais
+  // 🕰️ Ranking sem as trocas — como estaria o topo se cada um tivesse mantido o palpite que
+  // ficou mais tempo no sistema (em vez das trocas de última hora)
   add(()=>{
     const ro = d.rankingOriginal; if(!ro || ro.length < 2) return null;
     const md=['🥇','🥈','🥉','4º','5º'];
@@ -18880,7 +19014,7 @@ function _cerimoniaFacts(d){
       ? `Sem as trocas, o campeão seria ${_rzName(origChamp)} — as mudanças de palpite viraram o jogo!`
       : `O topo se manteve: as trocas de palpite não mudaram quem lidera.`;
     return { emoji:'🕰️', label:'Ranking sem as trocas', detail,
-      extra:`<div class="cer-rank"><div class="cer-rank-h">🕰️ Só a 1ª aposta registrada de cada um</div>${rows}</div>` };
+      extra:`<div class="cer-rank"><div class="cer-rank-h">🕰️ O palpite que cada um manteve por mais tempo</div>${rows}</div>` };
   });
   return facts;
 }
