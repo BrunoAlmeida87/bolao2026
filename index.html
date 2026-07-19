@@ -4839,12 +4839,19 @@ async function renderDashboard() {
         </div>
       </div>`;
 
-    // Painel "Reta Final" — expectativa de quem pode ser campeão do bolão
-    // (aparece só a partir do 1º resultado de mata-mata; vazio antes disso).
-    html += _buildRetaFinalPanel(ranking, res, allPals, champPicks, users);
+    // Quando a cerimônia de encerramento está PUBLICADA, a 1ª página entra em "modo
+    // encerramento": escondemos a "Reta Final — corrida pelo pódio" e a "Análise da IA",
+    // que falam do bolão ainda em disputa. O campeão já é revelado pela cerimônia.
+    const _cerimoniaOn = !!(CFG && CFG.cerimonia_publicada);
 
-    // Manchetes da Análise da IA (carrossel animado) — preenchido após o render.
-    html += `<div id="dash-ai-news"></div>`;
+    if (!_cerimoniaOn) {
+      // Painel "Reta Final" — expectativa de quem pode ser campeão do bolão
+      // (aparece só a partir do 1º resultado de mata-mata; vazio antes disso).
+      html += _buildRetaFinalPanel(ranking, res, allPals, champPicks, users);
+
+      // Manchetes da Análise da IA (carrossel animado) — preenchido após o render.
+      html += `<div id="dash-ai-news"></div>`;
+    }
 
     // Aviso + link para o "🏆 Resumão do Bolão" (retrospectiva) — só quando já há jogos.
     if (totalJogos > 0) {
@@ -5017,7 +5024,7 @@ async function renderDashboard() {
     cont.innerHTML = html;
     _runAnimNumbers(); // contagem animada dos KPIs e da premiação (a partir do valor anterior)
     _startCountdownTimer();
-    _dashStartAINews(); // manchetes da Análise da IA (carrossel) abaixo dos KPIs
+    if (!(CFG && CFG.cerimonia_publicada)) _dashStartAINews(); // manchetes da Análise da IA (carrossel) — escondida no modo encerramento
     _showNewResultsModal(res, _dashMyPals);
     setTimeout(_maybeShowLock1hIntro, 400);          // pop-up: nova regra de bloqueio 1h antes (1x por navegador)
     setTimeout(_maybeShowPendingPalpitesAlert, 850); // lembrete de palpites pendentes (a cada entrada)
