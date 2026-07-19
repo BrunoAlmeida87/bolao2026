@@ -10149,12 +10149,14 @@ function _rzSelecoesCard(d){
   const maisEnganou=arr.filter(t=>t.palpites>=Math.max(3,d.users.length)).sort((a,b)=>a.acertoPct-b.acertoPct)[0] || arr.slice().sort((a,b)=>a.acertoPct-b.acertoPct)[0];
   const zebra=dif[0], consenso=dif[dif.length-1];
   const tName=n=>`${teamFlag(n)} ${esc(n)}`;
-  const gName=g=>g?`${esc(g.h)} × ${esc(g.a)}`:'—';
+  // Resolve as seleções reais do jogo (no mata-mata, game.h/.a são placeholders tipo
+  // "1º A" / "Melhor 3º" — _gxGameTeams troca pelos times que de fato se classificaram).
+  const gName=o=>{ if(!o||!o.game) return '—'; const tm=_gxGameTeams(o.gid, d.res); return `${esc(tm.h)} × ${esc(tm.a)}`; };
   const cells=[];
   if (maisPontos) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">💰 Seleção que mais rendeu pontos</div><div class="rz-mini-val">${tName(maisPontos.name)}</div><div class="rz-mini-sub">${maisPontos.pts} pts somados no bolão</div></div>`);
   if (maisEnganou) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">🃏 Seleção que mais enganou</div><div class="rz-mini-val">${tName(maisEnganou.name)}</div><div class="rz-mini-sub">só ${maisEnganou.acertoPct.toFixed(0)}% de acerto nos seus jogos</div></div>`);
-  if (zebra) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">🦓 Maior zebra do bolão</div><div class="rz-mini-val">${gName(zebra.game)}</div><div class="rz-mini-sub">só ${zebra.pct.toFixed(0)}% acertaram o vencedor</div></div>`);
-  if (consenso && consenso!==zebra) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">✅ Quase todo mundo acertou</div><div class="rz-mini-val">${gName(consenso.game)}</div><div class="rz-mini-sub">${consenso.pct.toFixed(0)}% acertaram o vencedor</div></div>`);
+  if (zebra) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">🦓 Maior zebra do bolão</div><div class="rz-mini-val">${gName(zebra)}</div><div class="rz-mini-sub">só ${zebra.pct.toFixed(0)}% acertaram o vencedor</div></div>`);
+  if (consenso && consenso!==zebra) cells.push(`<div class="rz-mini"><div class="rz-mini-lbl">✅ Quase todo mundo acertou</div><div class="rz-mini-val">${gName(consenso)}</div><div class="rz-mini-sub">${consenso.pct.toFixed(0)}% acertaram o vencedor</div></div>`);
   return _gxCard('🌍 Seleções & Jogos que Marcaram', `<div class="rz-mini-grid">${cells.join('')}</div>`,
     'As seleções e partidas que mais mexeram com o bolão.');
 }
@@ -10224,8 +10226,8 @@ function _rzNarrativeCard(d){
   if (opp.globalPair) linhas.push(['⚔️', `A dupla mais oposta foi <b>${_rzName(opp.globalPair.a)}</b> e <b>${_rzName(opp.globalPair.b)}</b> — ${opp.globalPair.pct.toFixed(0)}% de palpites diferentes.`]);
   if (opp.globalTwin) linhas.push(['🤝', `Já os "gêmeos de palpite" foram <b>${_rzName(opp.globalTwin.a)}</b> e <b>${_rzName(opp.globalTwin.b)}</b>, quase sempre no mesmo palpite.`]);
   const dif=Object.entries(d.analiseJogos).filter(([,x])=>x.palpites.length>0)
-    .map(([gid,x])=>({ game:x.game, pct:(x.exatos+x.venc_saldo+x.apenas_venc)/x.palpites.length*100 })).sort((a,b)=>a.pct-b.pct)[0];
-  if (dif&&dif.game) linhas.push(['🦓', `O jogo que mais derrubou palpites foi <b>${esc(dif.game.h)} × ${esc(dif.game.a)}</b>: só ${dif.pct.toFixed(0)}% acertaram o vencedor.`]);
+    .map(([gid,x])=>({ gid, game:x.game, pct:(x.exatos+x.venc_saldo+x.apenas_venc)/x.palpites.length*100 })).sort((a,b)=>a.pct-b.pct)[0];
+  if (dif&&dif.game){ const tm=_gxGameTeams(dif.gid, d.res); linhas.push(['🦓', `O jogo que mais derrubou palpites foi <b>${esc(tm.h)} × ${esc(tm.a)}</b>: só ${dif.pct.toFixed(0)}% acertaram o vencedor.`]); }
   const champ=_getFinalChampion(d.res);
   if (champ) linhas.push(['🏆', `E a taça ficou com <b>${teamFlag(champ)} ${esc(champ)}</b> — parabéns a quem cravou!`]);
   if (!linhas.length) return '';
