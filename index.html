@@ -19534,7 +19534,11 @@ async function _cerimoniaBegin(){
   _cerStageTrailer(d); // abertura acompanha a posição real do áudio e passa p/ os cards no fim
   // A tempestade de raios começa _CER_RAIO_BOOST_MS antes do pódio (tira esse tempo só do
   // último card) e dura o mesmo tanto a mais, então o pódio surge no MESMO instante da música.
-  _cerAt(podiumAt - _CER_RAIO_BOOST_MS, ()=>_cerStageReveal(d));
+  // Com prefers-reduced-motion NÃO há tempestade (o reveal é imediato), então mantemos o
+  // pódio ancorado em podiumAt — senão ele apareceria 0,6s antes, quebrando a sincronia.
+  const _reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const _raioLeadMs = _reduceMotion ? 0 : _CER_RAIO_BOOST_MS;
+  _cerAt(podiumAt - _raioLeadMs, ()=>_cerStageReveal(d));
 }
 
 // Estágio de abertura: trailer cinematográfico estilo premiação esportiva — frases de
