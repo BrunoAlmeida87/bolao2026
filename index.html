@@ -14466,9 +14466,9 @@ async function encerrarCerimonia() {
 async function publicarCerimonia(on){
   if (currentUserDoc?.role !== 'admin') { showToast('Apenas admin.','error'); return; }
   if (on) {
-    if (!confirm('Publicar a cerimônia 2D para TODOS?\n\nCada pessoa verá um convite (pop-up) ao entrar no app, o pódio aparece no topo da 1ª página e fica um botão para assistir (pedindo para aumentar o som).\n\nRepublicar reexibe o convite até para quem já viu.')) return;
+    if (!confirm('Publicar a cerimônia 2D para TODOS?\n\nCada pessoa verá um convite (pop-up) ao entrar no app, o pódio aparece no topo da 1ª página e fica um botão para assistir (pedindo para aumentar o som).\n\n⚠️ O app de TODOS que estão logados será ATUALIZADO automaticamente agora (recarrega em alguns segundos) para já mostrar a cerimônia — sem precisar reabrir na mão.\n\nRepublicar reexibe o convite até para quem já viu.')) return;
   } else {
-    if (!confirm('Despublicar a cerimônia? O convite, o pódio no topo e o botão deixam de aparecer para novos acessos.')) return;
+    if (!confirm('Despublicar a cerimônia? O convite, o pódio no topo e o botão deixam de aparecer.\n\nO app de todos os usuários logados também será atualizado automaticamente.')) return;
   }
   try {
     const upd = { cerimonia_publicada: !!on };
@@ -14476,7 +14476,21 @@ async function publicarCerimonia(on){
     await db_.collection('config').doc('geral').set(upd, { merge: true });
     CFG.cerimonia_publicada = !!on;
     if (on) CFG.cerimonia_pub_rev = upd.cerimonia_pub_rev;
-    showToast(on ? '📣 Cerimônia publicada para todos!' : '🚫 Cerimônia despublicada.','success');
+    // Força TODOS os apps logados a recarregar agora, para pegarem o config/geral
+    // recém-(des)publicado — lembrando que o CFG é lido só na abertura (loadCFG).
+    // Reusa o mesmo mecanismo do botão "Forçar atualização": incrementa
+    // config/app_reload.rev, e o listener de cada cliente recarrega a página 1×.
+    try {
+      const FV = firebase.firestore.FieldValue;
+      await db_.collection('config').doc('app_reload').set({
+        rev: FV.increment(1),
+        requestedAt: FV.serverTimestamp(),
+        requestedBy: currentUserDoc?.nome || currentUser?.uid || null,
+        requestedByEmail: currentUser?.email || null,
+        reason: on ? 'cerimonia_publicada' : 'cerimonia_despublicada'
+      }, { merge: true });
+    } catch(_){ /* best-effort: a (des)publicação já está salva; quem reabrir pega */ }
+    showToast(on ? '📣 Cerimônia publicada! Atualizando todos os apps…' : '🚫 Cerimônia despublicada. Atualizando todos os apps…','success');
     try { renderAdminConfig(); } catch(_){}
     try { if (typeof renderDashboard === 'function') renderDashboard(); } catch(_){}
   } catch(e) { showToast('Erro: '+(e && e.message || e),'error'); }
