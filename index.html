@@ -3464,163 +3464,14 @@ function computeTitleRace(ranking, res, allPals, champPicks) {
   return { ceilingByUid, contenders, clinched, finalDecidida, ptsEmJogo, jogosRestantes: jogosRestantes.length };
 }
 
-// ── Probabilidade de pódio (reta final / endgame) ────────────────────────────
-// Enumeração EXATA dos cenários dos jogos restantes (subconjunto de {T1, FIN1}).
-// Placares ~ Poisson independente por lado (grade 0..6, renormalizada). O campeão
-// do mundo (vencedor de FIN1) é sorteado por pA = chance do finalista A (mandante
-// de FIN1); o placar da final é enumerado restrito ao meio-grid do lado vencedor
-// (empate = pênaltis p/ o campeão), mantendo placar e campeão coerentes. Reusa a
-// base já apurada em `ranking` (jogos decididos) e só soma o delta dos jogos
-// restantes + bônus de campeão. Retorna probabilidades por posição de cada jogador.
-const _RETA_LAMBDA = 1.25; // média de gols/lado assumida nos jogos de mata-mata
-function _poissonGrid(lambda, G) {
-  const pmf = [Math.exp(-lambda)];
-  for (let k = 1; k <= G; k++) pmf[k] = pmf[k-1] * lambda / k;
-  const s = pmf.reduce((a,b)=>a+b,0) || 1;
-  const grid = [];
-  for (let h = 0; h <= G; h++) for (let a = 0; a <= G; a++)
-    grid.push({ h, a, w: (pmf[h]/s) * (pmf[a]/s) });
-  return grid;
-}
-function computePodiumProbabilities(ranking, res, allPals, champPicks, finalists, pA, lambda) {
-  const G = 6;
-  const L = (typeof lambda === 'number') ? lambda : _RETA_LAMBDA;
-  const PE = _ptsForType('exato', true), PS = _ptsForType('saldo', true), PV = _ptsForType('vencedor', true);
-  const champBonus = CFG.pts_campeao ?? 0;
-  const teamA = finalists.A, teamB = finalists.B;
-  const finalPending = !_hasFullResult(res['FIN1']);
-  const t1Pending = !_hasFullResult(res['T1']);
-  const actualChamp = finalPending ? null : _getFinalChampion(res);
-
-  const players = ranking.map(u => ({
-    uid: u.uid,
-    basePts: u.pontos, baseExa: u.exatos, baseVS: u.venc_saldo, baseAV: u.apenas_venc,
-    baseAC: !!u.acertou_campeao,
-    palT1: (allPals[u.uid] || {})['T1'],
-    palFIN: (allPals[u.uid] || {})['FIN1'],
-    pick: champPicks[u.uid] || u.campeao || null,
-  }));
-  const N = players.length;
-
-  const _delta = (pal, h, a) => {
-    if (!pal || pal.h === undefined || pal.a === undefined) return [0,0,0,0];
-    const t = _hitType(pal, { h_real: h, a_real: a });
-    if (t === 'exato')    return [PE,1,0,0];
-    if (t === 'saldo')    return [PS,0,1,0];
-    if (t === 'vencedor') return [PV,0,0,1];
-    return [0,0,0,0];
-  };
-  const _attachDeltas = (scorelines, palKey) => scorelines.map(s => ({
-    w: s.w, h: s.h, a: s.a,
-    d: players.map(p => _delta(p[palKey], s.h, s.a)),
-  }));
-  const _trivial = () => [{ w: 1, d: players.map(() => [0,0,0,0]) }];
-
-  const fullGrid = _poissonGrid(L, G);
-  const t1List = t1Pending ? _attachDeltas(fullGrid, 'palT1') : _trivial();
-
-  // Ramos do campeão do mundo (dimensão da final).
-  let branches;
-  if (finalPending) {
-    const halfA = fullGrid.filter(s => s.h >= s.a); // finalista A (mandante) vence
-    const halfB = fullGrid.filter(s => s.a >= s.h); // finalista B (visitante) vence
-    const wA = halfA.reduce((x,s)=>x+s.w,0) || 1;
-    const wB = halfB.reduce((x,s)=>x+s.w,0) || 1;
-    branches = [
-      { key:'A', team:teamA, prob:pA,   list:_attachDeltas(halfA,'palFIN'), wsum:wA,
-        bonus: players.map(p => p.pick===teamA ? champBonus : 0),
-        ac:    players.map(p => p.pick===teamA) },
-      { key:'B', team:teamB, prob:1-pA, list:_attachDeltas(halfB,'palFIN'), wsum:wB,
-        bonus: players.map(p => p.pick===teamB ? champBonus : 0),
-        ac:    players.map(p => p.pick===teamB) },
-    ];
-  } else {
-    branches = [
-      { key:'A', team:actualChamp, prob:1, list:_trivial(), wsum:1,
-        bonus: players.map(() => 0),
-        ac:    players.map(p => p.baseAC) },
-    ];
-  }
-
-  const cmp = (a,b) => b.pontos-a.pontos || b.exatos-a.exatos || b.venc_saldo-a.venc_saldo
-    || b.apenas_venc-a.apenas_venc || ((b.acertou_campeao?1:0)-(a.acertou_campeao?1:0));
-
-  const acc = players.map(() => ({ p1:0,p2:0,p3:0,pod:0,epts:0,epos:0 }));
-  const cond = { A: players.map(()=>0), B: players.map(()=>0) };
-  const buf = new Array(N);
-
-  branches.forEach(br => {
-    if (br.prob <= 0 || br.wsum <= 0) return;
-    br.list.forEach(fs => {
-      const wFin = br.prob * (fs.w / br.wsum);
-      if (wFin <= 0) return;
-      t1List.forEach(ts => {
-        const w = wFin * ts.w;
-        if (w <= 0) return;
-        for (let i=0;i<N;i++) {
-          const fd = fs.d[i], td = ts.d[i], p = players[i];
-          buf[i] = {
-            idx: i,
-            pontos:      p.basePts + fd[0] + td[0] + br.bonus[i],
-            exatos:      p.baseExa + fd[1] + td[1],
-            venc_saldo:  p.baseVS  + fd[2] + td[2],
-            apenas_venc: p.baseAV  + fd[3] + td[3],
-            acertou_campeao: br.ac[i],
-          };
-        }
-        const sorted = buf.slice().sort(cmp);
-        const pos = _rankPositionsTieAware(sorted);
-        for (let r=0;r<N;r++) {
-          const P = pos[r], a = acc[sorted[r].idx];
-          if (P===1) { a.p1 += w; cond[br.key][sorted[r].idx] += w; }
-          else if (P===2) a.p2 += w;
-          else if (P===3) a.p3 += w;
-          if (P<=3) a.pod += w;
-          a.epts += w * sorted[r].pontos;
-          a.epos += w * P;
-        }
-      });
-    });
-  });
-
-  const perUser = {};
-  players.forEach((p,i) => {
-    const a = acc[i];
-    perUser[p.uid] = { p1:a.p1, p2:a.p2, p3:a.p3, podium:a.pod, expPts:a.epts, expPos:a.epos };
-  });
-
-  // Líder mais provável condicionado a cada campeão do mundo.
-  const _condLeader = (key, prob) => {
-    if (prob <= 0) return null;
-    let bi=-1, bw=-1;
-    cond[key].forEach((wv,i) => { if (wv>bw) { bw=wv; bi=i; } });
-    if (bi<0) return null;
-    return { uid: players[bi].uid, prob: bw/prob };
-  };
-
-  const contenders = players
-    .map(p => p.uid)
-    .filter(uid => perUser[uid].podium > 0.005)
-    .sort((x,y) => perUser[y].p1-perUser[x].p1 || perUser[y].podium-perUser[x].podium);
-
-  const ptsPlacar = ((finalPending?1:0) + (t1Pending?1:0)) * PE;
-
-  return {
-    perUser, contenders, finalists:{A:teamA,B:teamB}, finalPending, t1Pending, champBonus,
-    ptsPlacar, actualChamp,
-    scenarioA: finalPending ? _condLeader('A', pA)   : null,
-    scenarioB: finalPending ? _condLeader('B', 1-pA) : null,
-  };
-}
-
-// ── Mapa DETERMINÍSTICO de cenários da final ─────────────────────────────────
-// Diferente do painel de Poisson acima (que estima probabilidades), aqui a final
-// já está bloqueada e os palpites estão travados: então enumeramos EXATAMENTE
-// cada placar possível da Final (e do 3º lugar, se ainda pendente) e mostramos o
-// pódio resultante — "se a final terminar assim, o pódio fica assim". Responde
-// diretamente: quem pode ser campeão do bolão, quem pode ficar em 2º/3º e sob
-// quais resultados. Reusa a mesma base já apurada em `ranking` (jogos decididos)
-// e só soma o delta da Final + 3º lugar + bônus de campeão de cada cenário.
+// ── Reta Final: mapa DETERMINÍSTICO de cenários da final ─────────────────────
+// A final está bloqueada e os palpites travados. Nada de probabilidade estimada:
+// enumeramos EXATAMENTE cada placar possível da Final (e do 3º lugar, se ainda
+// pendente) e, com os palpites reais da galera, mostramos o pódio resultante —
+// "se a final terminar assim, o pódio fica assim". Responde direto: quem pode ser
+// campeão do bolão, quem pode ficar em 2º/3º e sob quais resultados. Reusa a base
+// já apurada em `ranking` (jogos decididos) e só soma o delta da Final + 3º lugar
+// + bônus de campeão de cada cenário.
 const _FINAL_GRID_MAX = 6; // placar máximo por lado enumerado (0..6)
 function computeFinalScenarios(ranking, res, allPals, champPicks, finalists) {
   if (!ranking || !ranking.length) return null;
@@ -3785,9 +3636,7 @@ function _buildFinalScenarioMapHtml(sc, ranking) {
     const flagName = `${teamFlag(cs.team)} ${esc(cs.team)}`;
     const principalHtml = `<div style="font-size:0.86rem;line-height:1.7;margin:4px 0 2px">${_podiumLine(cs.principal.podium)}</div>`;
     let varHtml = '';
-    if (sc.t1Pending) {
-      varHtml = `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">O 3º lugar ainda não saiu — o pódio acima considera o cenário mais comum; use o painel de probabilidades acima para o quadro completo.</div>`;
-    } else if (cs.variations.length) {
+    if (cs.variations.length) {
       const vrows = cs.variations.slice(0, 4).map(v => `<div style="font-size:0.78rem;line-height:1.55;padding:5px 0;border-top:1px dashed var(--border)">
         <div style="color:var(--text-muted);font-size:0.72rem;margin-bottom:2px">Se a final terminar ${_fmtScoreList(v.scorelines)}:</div>
         <div>${_podiumLine(v.podium)}</div>
@@ -3824,12 +3673,17 @@ function _buildFinalScenarioMapHtml(sc, ranking) {
   }).join('');
   const contMore = sc.contenders.length > 12 ? `<div style="font-size:0.73rem;color:var(--text-muted);text-align:center;margin-top:4px">+${sc.contenders.length-12} com chance de pódio</div>` : '';
 
+  // Aviso quando o 3º lugar ainda não saiu (aí o quadro por campeão fica de fora).
+  const t1Nota = sc.t1Pending
+    ? `<div class="alert alert-warning" style="margin:0 0 12px;font-size:0.78rem">⚠️ O jogo de <b>3º lugar</b> ainda não teve placar lançado — ele também soma pontos, então o quadro por campeão do mundo abaixo só aparece depois que esse resultado entrar. Por ora, veja o alcance de cada um na tabela.</div>`
+    : '';
+
   return `<div class="card" style="margin-bottom:14px">
-    <div class="card-title" style="margin-bottom:6px">🔮 Cenários da final — o mapa do pódio</div>
+    <div class="card-title" style="margin-bottom:6px">🎯 Reta Final — cenários da final</div>
     <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.5;margin-bottom:12px">
-      A final está bloqueada e os palpites travados. Aqui é a conta <b>exata</b> (não estimativa): para cada resultado possível, o pódio que sai — quem leva o bolão, quem fica em 2º e 3º. Bônus de campeão: <b style="color:var(--gold)">+${sc.champBonus}</b> pts p/ quem cravou ${teamFlag(A)} ${esc(A)} ou ${teamFlag(B)} ${esc(B)}.
+      A final está bloqueada e os palpites travados. Sem estimativa: para <b>cada resultado possível</b> de ${teamFlag(A)} ${esc(A)} × ${teamFlag(B)} ${esc(B)}, a conta <b>exata</b> do pódio a partir dos palpites da galera — quem leva o bolão, quem fica em 2º e 3º. Bônus de campeão: <b style="color:var(--gold)">+${sc.champBonus}</b> pts p/ quem cravou o campeão do mundo.
     </div>
-    ${champBlocks}
+    ${t1Nota}${champBlocks}
     <div style="margin-top:6px">
       <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">📊 Onde cada um pode terminar (melhor — pior caso)</div>
       ${contRows}${contMore}
@@ -3837,132 +3691,6 @@ function _buildFinalScenarioMapHtml(sc, ranking) {
   </div>`;
 }
 
-// Estado em memória do painel probabilístico (para o slider recomputar sem
-// releitura do Firestore). Setado por _buildRetaFinalProbPanel a cada render.
-let _retaFinalState = null;
-
-function _rfPct(x) {
-  if (x >= 0.9995) return '100%';
-  if (x < 0.005) return '<0,5%';
-  const v = x*100;
-  return (v>=10 ? Math.round(v).toString() : v.toFixed(1).replace('.',',')) + '%';
-}
-
-// Bloco dinâmico do painel (muda com o slider): resumo, tabela de candidatos ao
-// pódio e cenários do título por campeão do mundo. Reusado pelo handler do slider.
-function _retaFinalDynHtml(r, st) {
-  const nm = uid => { const u = st.ranking.find(x=>x.uid===uid); return esc((u&&(u.apelido||u.nome))||'—'); };
-  const ptsUser = uid => { const u = st.ranking.find(x=>x.uid===uid); return u ? u.pontos : 0; };
-  const cont = r.contenders;
-
-  const subtitle = `<div style="color:var(--text-muted);font-size:0.85rem;margin-bottom:10px;text-align:center">
-    <b style="color:var(--white)">${cont.length}</b> ${cont.length===1?'jogador tem':'jogadores têm'} chance real de pódio ·
-    <b style="color:var(--white)">${r.ptsPlacar}</b> pts de placar em jogo${r.finalPending?` + bônus de campeão (<b style="color:var(--gold)">${r.champBonus}</b> pts) p/ quem cravou ${esc(r.finalists.A)}/${esc(r.finalists.B)}`:''}
-  </div>`;
-
-  const rows = cont.slice(0,10).map((uid,i) => {
-    const pu = r.perUser[uid];
-    const isMe = uid === currentUser.uid;
-    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'º';
-    const barW = Math.max(2, Math.round(pu.podium*100));
-    const cells = [['🥇 campeão',pu.p1,'var(--gold)'],['🥈 2º',pu.p2,'var(--white)'],['🥉 3º',pu.p3,'#CD7F32'],['🏆 pódio',pu.podium,'var(--accent)']];
-    return `<div style="padding:8px 9px;border-radius:9px;margin-bottom:6px;background:${isMe?'rgba(255,215,0,.10)':'rgba(255,255,255,.03)'};border:1px solid ${isMe?'rgba(255,215,0,.30)':'var(--border)'}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="width:24px;text-align:center;font-weight:700;color:var(--text-muted)">${medal}</span>
-        <span style="flex:1;font-weight:${isMe?'800':'600'};color:${isMe?'var(--gold)':'var(--white)'}">${nm(uid)}${isMe?' (você)':''}</span>
-        <span style="font-size:0.78rem;color:var(--text-muted)">${ptsUser(uid)} pts</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:6px">
-        ${cells.map(([lbl,val,col])=>`<div style="text-align:center;background:rgba(0,0,0,.18);border-radius:7px;padding:5px 2px">
-            <div style="font-size:0.62rem;color:var(--text-muted);white-space:nowrap">${lbl}</div>
-            <div style="font-size:0.9rem;font-weight:800;color:${col}">${_rfPct(val)}</div>
-          </div>`).join('')}
-      </div>
-      <div style="height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden">
-        <div style="height:100%;width:${barW}%;background:linear-gradient(90deg,var(--accent),var(--gold))"></div>
-      </div>
-    </div>`;
-  }).join('');
-
-  const moreHtml = cont.length>10 ? `<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-top:2px">+${cont.length-10} com chance menor</div>` : '';
-  const emptyHtml = cont.length===0 ? `<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:6px">Pódio já definido — sem disputa em aberto pelas 3 primeiras posições.</div>` : '';
-
-  // Cenários por campeão do mundo (só enquanto a final não foi decidida).
-  let scen = '';
-  if (r.finalPending && (r.scenarioA || r.scenarioB)) {
-    const line = (team, sc) => sc ? `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:0.82rem">
-        <span style="flex:1;color:var(--text-muted)">Se <b style="color:var(--white)">${teamFlag(team)} ${esc(team)}</b> for campeã do mundo</span>
-        <span style="color:var(--text-muted)">→</span>
-        <span style="font-weight:700;color:var(--gold)">🏆 ${nm(sc.uid)}</span>
-        <span style="font-size:0.75rem;color:var(--text-muted)">${_rfPct(sc.prob)}</span>
-      </div>` : '';
-    scen = `<div style="margin-top:8px">
-      <div style="font-size:0.8rem;font-weight:700;color:var(--text-muted);margin:4px 0">🔮 Cenários do título do bolão</div>
-      ${line(r.finalists.A, r.scenarioA)}${line(r.finalists.B, r.scenarioB)}
-    </div>`;
-  }
-
-  return subtitle + rows + emptyHtml + moreHtml + scen;
-}
-
-// Handler do slider "chance na final": recomputa as probabilidades em memória
-// (sem tocar no Firestore) e reescreve só o bloco dinâmico + rótulos de %.
-function _onRetaFinalProbChange(v) {
-  const st = _retaFinalState;
-  if (!st) return;
-  const pA = Math.max(0, Math.min(1, (parseFloat(v)||0)/100));
-  st.pA = pA;
-  const r = computePodiumProbabilities(st.ranking, st.res, st.allPals, st.champPicks, st.finalists, pA, st.lambda);
-  const dyn = document.getElementById('reta-final-probs');
-  if (dyn) dyn.innerHTML = _retaFinalDynHtml(r, st);
-  const la = document.getElementById('rf-pctA'), lb = document.getElementById('rf-pctB');
-  if (la) la.textContent = Math.round(pA*100)+'%';
-  if (lb) lb.textContent = Math.round((1-pA)*100)+'%';
-}
-
-// Painel probabilístico da reta final (endgame: só restam T1/FIN1). Monta a casca
-// estática (título, slider, nota) + o bloco dinâmico via _retaFinalDynHtml.
-function _buildRetaFinalProbPanel(ranking, res, allPals, champPicks, users) {
-  const finGame = ELIM_DATA.final.games.find(g => g.id==='FIN1');
-  const fr = _getResolvedTeamsForGame(finGame, res);
-  const finalPending = !_hasFullResult(res['FIN1']);
-  const t1Pending = !_hasFullResult(res['T1']);
-  const A = fr.h, B = fr.a;
-  const pA = 0.5;
-  _retaFinalState = { ranking, res, allPals, champPicks, users, finalists:{A,B}, finalPending, t1Pending, lambda:_RETA_LAMBDA, pA };
-  const r = computePodiumProbabilities(ranking, res, allPals, champPicks, {A,B}, pA, _RETA_LAMBDA);
-
-  let sliderHtml = '';
-  if (finalPending) {
-    sliderHtml = `<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;margin-bottom:8px">
-        <span>${teamFlag(A)} ${esc(A)} <b id="rf-pctA" style="color:var(--gold)">50%</b></span>
-        <span style="color:var(--text-muted);font-size:0.7rem">chance na final</span>
-        <span><b id="rf-pctB" style="color:var(--gold)">50%</b> ${esc(B)} ${teamFlag(B)}</span>
-      </div>
-      <input type="range" min="0" max="100" value="50" step="5" oninput="_onRetaFinalProbChange(this.value)" style="width:100%;accent-color:var(--gold)" aria-label="Chance de ${esc(A)} ser campeã do mundo">
-      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:5px;text-align:center">Ajuste quem você acha favorito e veja as probabilidades mudarem</div>
-    </div>`;
-  }
-
-  // Mapa determinístico dos cenários da final (conta exata, complementa o Poisson).
-  let mapaHtml = '';
-  if (finalPending) {
-    try {
-      const sc = computeFinalScenarios(ranking, res, allPals, champPicks, {A,B});
-      mapaHtml = _buildFinalScenarioMapHtml(sc, ranking);
-    } catch (_) { mapaHtml = ''; }
-  }
-
-  return `<div class="card" style="margin-bottom:14px">
-    <div class="card-title" style="margin-bottom:10px">🎯 Reta Final — corrida pelo pódio</div>
-    ${sliderHtml}
-    <div id="reta-final-probs">${_retaFinalDynHtml(r, _retaFinalState)}</div>
-    <div style="font-size:0.68rem;color:var(--text-muted);margin-top:10px;line-height:1.5;border-top:1px solid var(--border);padding-top:8px">
-      Probabilidades estimadas: placares dos ${((finalPending?1:0)+(t1Pending?1:0))} jogo(s) restante(s) modelados por distribuição de Poisson${finalPending?'; título mundial ajustável no controle acima':''}. É uma estimativa estatística, não um palpite oficial.
-    </div>
-  </div>${mapaHtml}`;
-}
 
 // Monta o painel "Reta Final" do dashboard (ou '' se ainda for cedo). Mostra o
 // estado do título (encaminhado × em disputa), banner de suspense na final,
@@ -3974,9 +3702,9 @@ function _buildRetaFinalPanel(ranking, res, allPals, champPicks, users) {
   const mataIniciou = [..._MATA_IDS].some(id => _hasFullResult(res[id]));
   if (!mataIniciou) return '';
 
-  // Endgame (final / 3º lugar): se só restam T1/FIN1 e temos os palpites em
-  // memória, usa o painel PROBABILÍSTICO de pódio. Caso contrário, mantém o
-  // painel determinístico de teto/piso abaixo (fases anteriores / caminho de cache).
+  // Endgame (só falta a final): enumera o mapa DETERMINÍSTICO de cenários a
+  // partir dos palpites reais + resultados possíveis da final. Sem probabilidade
+  // estimada. Caso contrário, cai no painel de teto/piso abaixo (fases anteriores).
   const _restantes = ALL_GAMES.filter(g => !_hasFullResult(res[g.id]));
   const _soEndgame = _restantes.length >= 1 && _restantes.every(g => g.id==='T1' || g.id==='FIN1');
   const _temPalpites = allPals && Object.keys(allPals).length > 0;
@@ -3984,10 +3712,13 @@ function _buildRetaFinalPanel(ranking, res, allPals, champPicks, users) {
     const _fr = _getResolvedTeamsForGame(ELIM_DATA.final.games.find(g=>g.id==='FIN1'), res);
     const _teams = new Set(_getAllTeams());
     const _finalPend = !_hasFullResult(res['FIN1']);
-    // Só ativa se os finalistas já são seleções reais (semis decididas). Se a
-    // final ainda está pendente e os slots são placeholders, cai no painel antigo.
-    if (!_finalPend || (_teams.has(_fr.h) && _teams.has(_fr.a))) {
-      return _buildRetaFinalProbPanel(ranking, res, allPals, champPicks, users);
+    // Só ativa com a final ainda em aberto e finalistas reais (semis decididas).
+    if (_finalPend && _teams.has(_fr.h) && _teams.has(_fr.a)) {
+      try {
+        const sc = computeFinalScenarios(ranking, res, allPals, champPicks, {A:_fr.h, B:_fr.a});
+        const panel = _buildFinalScenarioMapHtml(sc, ranking);
+        if (panel) return panel;
+      } catch (_) { /* cai no painel de título abaixo */ }
     }
   }
 
