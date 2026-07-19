@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏆 Bolão ICN Copa 2026</title>
 <!-- App Version -->
-<meta name="app-version" content="v1.13.9">
+<meta name="app-version" content="v1.13.10">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A1628">
@@ -2052,7 +2052,7 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
   <!-- Footer com versão -->
   <footer class="app-footer">
     <div class="footer-row">
-      <span id="app-version">Bolão ICN Copa 2026 • v1.13.9</span>
+      <span id="app-version">Bolão ICN Copa 2026 • v1.13.10</span>
       <button id="btn-install-pwa-footer" class="btn-install-pwa" hidden onclick="showPwaInstallInfo()">
         📲 Instalar app
       </button>
@@ -2475,7 +2475,7 @@ let app_, auth_, db_;
 let currentUser  = null;
 let currentUserDoc = null;
 let CFG = {
-  app_version:'v1.13.9',
+  app_version:'v1.13.10',
   pts_exato:10,
   pts_resultado:5,
   pts_vencedor_saldo:7,
@@ -19309,19 +19309,76 @@ function _cerFwStop(){
 // ── Wake Lock: impede a tela do celular de apagar durante a cerimônia ──────────
 let _cerWakeLock = null;
 async function _cerAcquireWakeLock(){
+  // "Cinto e suspensório": tenta o Wake Lock nativo E roda o vídeo de keep-awake.
+  // Assim a tela fica ligada mesmo em aparelhos onde a Wake Lock API não existe
+  // (iOS < 16.4, alguns WebViews) ou onde ela é aceita mas não segura de fato.
   try {
-    if('wakeLock' in navigator && navigator.wakeLock && navigator.wakeLock.request){
+    if(!_cerWakeLock && 'wakeLock' in navigator && navigator.wakeLock && navigator.wakeLock.request){
       _cerWakeLock = await navigator.wakeLock.request('screen');
+      // O SO libera o Wake Lock sozinho quando a aba fica oculta / a tela dá sinal
+      // de apagar. Quando isso acontece, o evento 'release' dispara: ZERAMOS a
+      // referência para que o visibilitychange consiga readquirir ao voltar — sem
+      // isso, a variável ficava "presa" num sentinela já liberado e nunca re-travava.
+      if(_cerWakeLock && _cerWakeLock.addEventListener){
+        _cerWakeLock.addEventListener('release', ()=>{ _cerWakeLock = null; });
+      }
     }
-  } catch(_){ /* navegador pode recusar sem HTTPS/gesto — não é crítico */ }
+  } catch(_){ _cerWakeLock = null; /* pode recusar sem HTTPS/gesto */ }
+  _cerStartKeepAwakeVideo();
 }
 function _cerReleaseWakeLock(){
   try { if(_cerWakeLock && _cerWakeLock.release) _cerWakeLock.release(); } catch(_){}
   _cerWakeLock = null;
+  _cerStopKeepAwakeVideo();
 }
-// Reaquire ao voltar o foco (o Wake Lock é liberado quando a aba fica oculta).
+
+// Fallback "keep-awake" por mídia: um <video> mudo, minúsculo e invisível tocando
+// um MediaStream gerado por canvas. Enquanto um vídeo está de fato reproduzindo, o
+// aparelho não apaga a tela — cobre navegadores sem a Wake Lock API. Vídeo mudo
+// pode tocar sem gesto, então funciona mesmo quando iniciado após o await acima.
+let _cerKeepVid = null, _cerKeepTimer = null;
+function _cerStartKeepAwakeVideo(){
+  try {
+    if(_cerKeepVid) return; // já ativo
+    const cvs = document.createElement('canvas'); cvs.width = 2; cvs.height = 2;
+    const ctx = cvs.getContext('2d'); if(!ctx || !cvs.captureStream) return;
+    let f = 0;
+    const draw = ()=>{ ctx.fillStyle = (f++ & 1) ? '#000' : '#010101'; ctx.fillRect(0,0,2,2); };
+    draw();
+    const stream = cvs.captureStream(2); if(!stream) return; // 2 fps bastam
+    const vid = document.createElement('video');
+    vid.muted = true; vid.defaultMuted = true; vid.playsInline = true;
+    vid.setAttribute('playsinline',''); vid.setAttribute('aria-hidden','true');
+    vid.style.cssText = 'position:fixed;width:2px;height:2px;opacity:.01;pointer-events:none;bottom:0;right:0;z-index:-1';
+    vid.srcObject = stream;
+    document.body.appendChild(vid);
+    _cerKeepVid = vid;
+    _cerKeepTimer = setInterval(draw, 500); // mantém frames fluindo (evita "vídeo parado")
+    const p = vid.play(); if(p && p.catch) p.catch(()=>{});
+  } catch(_){}
+}
+function _cerStopKeepAwakeVideo(){
+  try { if(_cerKeepTimer){ clearInterval(_cerKeepTimer); _cerKeepTimer = null; } } catch(_){}
+  try {
+    if(_cerKeepVid){
+      _cerKeepVid.pause();
+      if(_cerKeepVid.srcObject){ _cerKeepVid.srcObject.getTracks().forEach(t=>{ try{t.stop();}catch(_){}}); }
+      _cerKeepVid.srcObject = null;
+      _cerKeepVid.remove();
+    }
+  } catch(_){}
+  _cerKeepVid = null;
+}
+// Ao voltar o foco/visibilidade: readquire o Wake Lock (liberado quando oculto) e
+// retoma o vídeo de fallback (que pausa quando a aba fica oculta).
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState==='visible' && _cerimoniaState && !_cerimoniaState.closed && !_cerWakeLock){ _cerAcquireWakeLock(); }
+  if(document.visibilityState==='visible' && _cerimoniaState && !_cerimoniaState.closed){
+    if(!_cerWakeLock) _cerAcquireWakeLock();
+    if(_cerKeepVid){ const p = _cerKeepVid.play(); if(p && p.catch) p.catch(()=>{}); }
+  }
+});
+window.addEventListener('focus', ()=>{
+  if(_cerimoniaState && !_cerimoniaState.closed && !_cerWakeLock && document.visibilityState==='visible'){ _cerAcquireWakeLock(); }
 });
 
 // ── Classificação por fase (rodadas 1/2/3 e mata-mata) ────────────────────────
