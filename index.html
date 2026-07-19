@@ -9947,14 +9947,20 @@ function renderResumao(){
     html += _rzOverviewCard(d);
     html += _rzPhaseRankingCard(d);
     html += _rzExatosCard(d);
+    html += _rzStreaksCard(d);      // 🔥 Embalos & Jejuns (sequências pontuando / sem pontuar)
     html += _rzSaldoCard(d);
     html += _rzVencedorCard(d);
+    html += _rzEmpatesCard(d);      // 🤷 Reis dos Empates
     html += _rzLeadershipCard(d);
+    html += _rzJogoMudouCard(d);    // 🎯 O Jogo que Mudou Tudo (última virada de líder)
     html += _rzConsistencyCard(d);
     html += _rzOppositionCard(d);
     html += _rzBoldnessCard(d);
     html += _rzTurnaroundCard(d);
     html += _rzSelecoesCard(d);
+    html += _rzZebrasCard(d);       // 🎰 Reis das Zebras
+    html += _rzPlacarCard(d);       // ⚽ Placar Mais Palpitado
+    html += _rzLanternaCard(d);     // 🏮 Lanterna / Azarão
     html += _rzHallCard(d);
     html += _rzChampCard(d);
     html += _rzNarrativeCard(d);
@@ -10226,6 +10232,122 @@ function _rzNarrativeCard(d){
   const body=linhas.map(([em,txt])=>`<div class="rz-narr-line"><span class="em">${em}</span><span>${txt}</span></div>`).join('');
   return _gxCard('📖 A história do bolão em números', `<div class="rz-narr">${body}</div>`,
     'Um resuminho narrado, montado automaticamente a partir dos dados.');
+}
+
+// ── Cards extras do Resumão que espelham curiosidades da cerimônia ────────────
+// Estes existiam só na cerimônia de encerramento; trazidos para o Resumão para que a
+// retrospectiva fique completa. Reusam os mesmos cálculos (computeStreaks, _rzVencedor,
+// _cerLeaderChangeGame, d.analiseJogos, d.ranking) — nada é buscado a mais.
+
+// 🔥 Embalos & Jejuns — maior sequência pontuando e maior sequência sem pontuar.
+function _rzStreaksCard(d){
+  const rows=computeStreaks(d).filter(r=>r.u.ativo!==false);
+  const hot=rows.filter(r=>r.maxStreak>0).sort((a,b)=>b.maxStreak-a.maxStreak).slice(0,5);
+  const cold=rows.filter(r=>r.maxMiss>0).sort((a,b)=>b.maxMiss-a.maxMiss).slice(0,5);
+  if(!hot.length && !cold.length) return _gxCard('🔥 Embalos & Jejuns',
+    _gxEmpty('As sequências aparecem conforme os jogos vão tendo resultado.'), 'Quem mais emendou pontos — e quem mais penou sem pontuar.');
+  const maxH=hot.length?hot[0].maxStreak:0, maxC=cold.length?cold[0].maxMiss:0;
+  const hotBody=hot.length?hot.map((r,i)=>_rzRankRow(r.u, r.maxStreak, maxH, 'jogos', 'var(--green)', i)).join(''):_gxEmpty('Ninguém emendou pontos ainda.');
+  const coldBody=cold.length?cold.map((r,i)=>_rzRankRow(r.u, r.maxMiss, maxC, 'jogos', 'rgba(150,168,196,.85)', i)).join(''):_gxEmpty('Ninguém ficou zerado em sequência.');
+  return _gxCard('🔥 Embalos & Jejuns', `
+    <div style="font-size:0.78rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.4px;margin:2px 0 8px">🔥 Maior sequência pontuando</div>
+    <div class="rz-rows">${hotBody}</div>
+    <div style="font-size:0.78rem;font-weight:700;color:rgba(150,168,196,.95);text-transform:uppercase;letter-spacing:.4px;margin:16px 0 8px">🥶 Maior jejum sem pontuar</div>
+    <div class="rz-rows">${coldBody}</div>
+    <div class="rz-note">Jogos consecutivos (em ordem cronológica) com resultado. "Pontuando" = fez ao menos 1 ponto; "jejum" = ficou zerado.</div>`,
+    'Quem mais emendou pontos seguidos — e quem mais penou sem pontuar.');
+}
+
+// 🤷 Reis dos Empates — quem mais acertou justamente os jogos que terminaram empatados.
+function _rzEmpatesCard(d){
+  const rows=_rzVencedor(d.users, d.allPals, d.res, d.jogosComResultado).filter(r=>r.emp>0).sort((a,b)=>b.emp-a.emp||b.pct-a.pct).slice(0,10);
+  if(!rows.length) return _gxCard('🤷 Reis dos Empates',
+    _gxEmpty('Ninguém cravou o resultado de um jogo que terminou empatado ainda.'), 'O empate é o resultado mais difícil de prever — estes anteciparam mais.');
+  const max=rows[0].emp;
+  const body=rows.map((r,i)=>_rzRankRow(r.u, r.emp, max, `de ${r.venc} acertos`, 'var(--accent)', i)).join('');
+  return _gxCard('🤷 Reis dos Empates', `<div class="rz-rows">${body}</div>
+    <div class="rz-note">Valor = jogos que terminaram empatados em que a pessoa acertou o resultado (empate). Sub = total de resultados que ela acertou.</div>`,
+    'O empate é o resultado mais difícil de prever — quem mais o cravou.');
+}
+
+// 🎰 Reis das Zebras — quem mais pontuou nos jogos que menos de 20% do bolão acertou.
+function _rzZebrasCard(d){
+  const zc={};
+  Object.values(d.analiseJogos||{}).forEach(g=>{
+    const n=g.palpites.length; if(!n) return;
+    const rate=(g.exatos+g.venc_saldo+g.apenas_venc)/n; // taxa de acerto do jogo
+    if(rate>=0.20) return;                               // não é zebra
+    g.palpites.forEach(pp=>{ if((pp.pts||0)>0){ const uid=pp.user&&pp.user.uid; if(uid) zc[uid]=(zc[uid]||0)+1; } });
+  });
+  const arr=Object.keys(zc).map(uid=>({ uid, n:zc[uid] })).sort((a,b)=>b.n-a.n).slice(0,10);
+  if(!arr.length) return _gxCard('🎰 Reis das Zebras',
+    _gxEmpty('Ainda não houve zebras (jogos que menos de 20% do bolão acertou) com acertos.'), 'Quem mais pontuou nos jogos que pegaram quase todo mundo de surpresa.');
+  const uById=uid=>(d.users||[]).find(x=>x.uid===uid);
+  const max=arr[0].n;
+  const body=arr.map((x,i)=>_rzRankRow(uById(x.uid), x.n, max, 'acertos', 'var(--orange)', i)).join('');
+  return _gxCard('🎰 Reis das Zebras', `<div class="rz-rows">${body}</div>
+    <div class="rz-note">"Zebra" = jogo em que menos de 20% do bolão acertou o resultado. Valor = quantas dessas o participante cravou (pontuou).</div>`,
+    'Quem mais acertou os jogos que pegaram quase todo mundo de surpresa.');
+}
+
+// ⚽ Placar Mais Palpitado — o placar que mais apareceu nos palpites da Copa inteira.
+function _rzPlacarCard(d){
+  const cnt={};
+  Object.keys(d.allPals||{}).forEach(uid=>{ const pals=d.allPals[uid]||{}; Object.keys(pals).forEach(gid=>{ const p=pals[gid]; if(!p||p.h==null||p.a==null) return; const k=`${parseInt(p.h)||0}×${parseInt(p.a)||0}`; cnt[k]=(cnt[k]||0)+1; }); });
+  const arr=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  if(!arr.length) return _gxCard('⚽ Placar Mais Palpitado', _gxEmpty('Ainda não há palpites suficientes.'), 'O placar que mais gente escreveu em toda a Copa.');
+  const total=Object.values(cnt).reduce((s,n)=>s+n,0);
+  const max=arr[0][1];
+  const body=arr.map(([k,n],i)=>`<div class="rz-row${i===0?' rz-row-top':''}">
+    <div class="rz-row-medal">${_rzMedal(i)}</div>
+    <div class="rz-row-main"><div class="rz-row-name">${esc(k)}</div>
+      <div class="rz-row-track"><div class="rz-row-fill" style="width:${Math.max(4,n/max*100).toFixed(1)}%;background:var(--gold)"></div></div></div>
+    <div class="rz-row-val" style="color:var(--gold)">${n}<span class="rz-row-sub">${(n/total*100).toFixed(0)}%</span></div>
+  </div>`).join('');
+  return _gxCard('⚽ Placar Mais Palpitado', `<div class="rz-rows">${body}</div>
+    <div class="rz-note">Contando todos os palpites de todos os jogos. Valor = quantas vezes o placar foi escrito · % sobre o total de palpites.</div>`,
+    'O placar que mais apareceu nos palpites da Copa inteira.');
+}
+
+// 🎯 O Jogo que Mudou Tudo — o resultado da última troca de líder do bolão.
+function _rzJogoMudouCard(d){
+  const c=_cerLeaderChangeGame(d);
+  if(!c) return ''; // sem virada de liderança registrada: não mostra o card
+  const tm=_gxGameTeams(c.game.id, d.res);
+  return _gxCard('🎯 O Jogo que Mudou Tudo', `<div class="rz-mini-grid"><div class="rz-mini">
+    <div class="rz-mini-lbl">🔄 Última virada na liderança</div>
+    <div class="rz-mini-val">${esc(tm.h)} × ${esc(tm.a)}</div>
+    <div class="rz-mini-sub"><b>${_rzName(c.newLeader)}</b> assumiu a ponta${c.game.date?' · '+esc(c.game.date):''}</div>
+  </div></div>`,
+    'O resultado que provocou a última troca de líder do bolão.');
+}
+
+// 🏮 Lanterna / Azarão — os últimos colocados (zona de rebaixamento), em tom leve.
+function _rzLanternaCard(d){
+  const r=d.ranking;
+  if(!r || r.length<2) return _gxCard('🏮 Lanterna / Azarão', _gxEmpty('O ranking ainda está tomando forma.'), 'Os últimos colocados — alguém tem que segurar a lanterna!');
+  const relegN=r.length>=8?4:Math.min(3, r.length);
+  const startIdx=r.length-relegN;
+  const zone=r.slice(startIdx);
+  const last=r[r.length-1];
+  const max=Math.max(1, ...zone.map(u=>u.pontos||0));
+  const body=zone.map((u,k)=>{
+    const posGlobal=startIdx+k;
+    const isLast=posGlobal===r.length-1;
+    const col=isLast?'var(--red)':'var(--orange)';
+    const me=u && currentUser && u.uid===currentUser.uid;
+    const pct=max>0?Math.max(4,(u.pontos||0)/max*100):0;
+    return `<div class="rz-row${me?' rz-row-me':''}">
+      <div class="rz-row-medal">${isLast?'🏮':'🔻'}</div>
+      <div class="rz-row-main"><div class="rz-row-name">${_rzName(u)}<span class="rz-row-badge">${posGlobal+1}º</span></div>
+        <div class="rz-row-track"><div class="rz-row-fill" style="width:${pct.toFixed(1)}%;background:${col}"></div></div></div>
+      <div class="rz-row-val" style="color:${col}">${u.pontos||0}<span class="rz-row-sub">pts</span></div>
+    </div>`;
+  }).join('');
+  const zoneTitle=r.length>=8?'Zona de rebaixamento (4 últimos)':'Os últimos colocados';
+  return _gxCard('🏮 Lanterna / Azarão', `<div class="rz-rows">${body}</div>
+    <div class="rz-note">${esc(zoneTitle)}. 🏮 <b>${_rzName(last)}</b> fechou a tabela com ${last.pontos||0} pt${(last.pontos||0)!==1?'s':''} — alguém tem que segurar a lanterna! 😅</div>`,
+    'Os últimos colocados do ranking, em tom bem-humorado.');
 }
 
 // ════════════════════════════════════════════
