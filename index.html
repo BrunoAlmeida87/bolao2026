@@ -14487,6 +14487,14 @@ async function publicarCerimonia(on){
 function assistirCerimonia(){
   try { window.__cerNo3D = true; _cer3DLoad = null; } catch(_){}
   _cerimoniaStart({});
+  // Este caminho SEMPRE vem de um toque do usuário (botão "Assistir agora" do
+  // convite, banner do topo ou prévia do admin). Como o gesto já aconteceu,
+  // NÃO mostramos o segundo portão "▶️ Iniciar cerimônia / Toque para liberar o
+  // som": entramos direto na cerimônia aproveitando este mesmo toque para
+  // destravar o áudio. Assim aparece só 1 pop-up (o convite), sem o passo
+  // redundante. O portão continua existindo para o disparo automático ao vivo
+  // (maybeShowCerimonia), onde não há gesto prévio do usuário.
+  try { _cerimoniaBegin(); } catch(_){}
 }
 
 // Convite (pop-up) mostrado ao entrar, no máx. 1× por publicação (rev via localStorage).
