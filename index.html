@@ -3553,7 +3553,11 @@ function computeFinalScenarios(ranking, res, allPals, champPicks, finalists) {
       if (P === 1) { a.p1++; a.champWin.add(champTeam); a.champPod.add(champTeam); }
       else if (P === 2) { a.p2++; a.champPod.add(champTeam); }
       else if (P === 3) { a.p3++; a.champPod.add(champTeam); }
-      if (P <= 3) podium.push({ uid: players[gi].uid, pos: P });
+      if (P <= 3) podium.push({
+        uid: players[gi].uid, pos: P,
+        gain: sorted[r].pontos - players[gi].basePts, // pontos ganhos na final (placar + bônus)
+        champHit: sorted[r].acertou_campeao,           // ganho inclui o bônus de campeão?
+      });
     }
     return podium;
   };
@@ -3572,10 +3576,13 @@ function computeFinalScenarios(ranking, res, allPals, champPicks, finalists) {
         if (!t1) {
           const sig = podium.map(x => x.pos+':'+x.uid).join('|');
           const g = byChamp[champTeam];
-          if (!g.has(sig)) g.set(sig, { podium, scorelines: [], count: 0 });
+          if (!g.has(sig)) g.set(sig, { podium, scorelines: [], count: 0, repr: { h: fin.h, a: fin.a, pens }, reprPens: pens });
           const e = g.get(sig);
           e.count++;
           if (e.scorelines.length < 24) e.scorelines.push({ h: fin.h, a: fin.a, pens });
+          // Exemplo exibido dos pontos: prefere um placar decisivo (não pênaltis)
+          // ao invés de um empate/pênaltis, que é menos intuitivo.
+          if (e.reprPens && !pens) { e.podium = podium; e.repr = { h: fin.h, a: fin.a, pens }; e.reprPens = false; }
         }
       });
     });
@@ -3619,21 +3626,31 @@ function _buildFinalScenarioMapHtml(sc, ranking) {
     const extra = list.length > 4 ? ` <span style="color:var(--text-muted)">+${list.length-4}</span>` : '';
     return ex.join(' · ') + extra;
   };
+  // Mostra "+X" ao lado do nome = pontos ganhos na final (placar + bônus de
+  // campeão) no placar de exemplo daquele grupo. Dourado quando inclui o bônus.
+  const _gainTag = (x) => {
+    if (!x || typeof x.gain !== 'number') return '';
+    const col = x.champHit ? 'var(--gold)' : 'var(--text-muted)';
+    return ` <span style="font-size:0.72rem;font-weight:700;color:${col}">+${x.gain}${x.champHit?' 🏆':''}</span>`;
+  };
   const _podiumLine = (podium) => {
     const med = p => p===1?'🥇':p===2?'🥈':p===3?'🥉':(p+'º');
+    const gmap = {}; podium.forEach(x => { gmap[x.uid] = x; });
     // Agrupa por posição (empates aparecem juntos).
     const byPos = {};
     podium.forEach(x => { (byPos[x.pos] = byPos[x.pos] || []).push(x.uid); });
     return Object.keys(byPos).sort((a,b)=>a-b).map(pos => {
-      const names = byPos[pos].map(uid => `${nm(uid)}${uid===me?' <b style="color:var(--gold)">(você)</b>':''}`).join(' / ');
+      const names = byPos[pos].map(uid => `${nm(uid)}${uid===me?' <b style="color:var(--gold)">(você)</b>':''}${_gainTag(gmap[uid])}`).join(' / ');
       return `<span style="white-space:nowrap"><span style="opacity:.9">${med(+pos)}</span> ${names}</span>`;
     }).join('<span style="color:var(--text-muted);margin:0 6px">·</span>');
   };
+  const _reprTxt = (s) => s ? `${s.h}–${s.a}${s.pens?' (pênaltis)':''}` : '';
 
   // ── Bloco por campeão do mundo ──
   const champBlocks = sc.champSummary.map(cs => {
     if (!cs.principal) return '';
     const flagName = `${teamFlag(cs.team)} ${esc(cs.team)}`;
+    const reprP = _reprTxt(cs.principal.repr);
     const principalHtml = `<div style="font-size:0.86rem;line-height:1.7;margin:4px 0 2px">${_podiumLine(cs.principal.podium)}</div>`;
     let varHtml = '';
     if (cs.variations.length) {
@@ -3650,7 +3667,7 @@ function _buildFinalScenarioMapHtml(sc, ranking) {
       varHtml = `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">✔️ O placar da final não altera essas 3 posições — só quem levanta a taça (bônus de campeão) importa.</div>`;
     }
     const principalScorelines = (!sc.t1Pending && cs.principal.scorelines && cs.principal.scorelines.length)
-      ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">na maioria dos placares (${_fmtScoreList(cs.principal.scorelines)})</div>` : '';
+      ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">na maioria dos placares (${_fmtScoreList(cs.principal.scorelines)})${reprP?` · pontos no exemplo <b>${reprP}</b>`:''}</div>` : '';
     return `<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:10px">
       <div style="font-size:0.8rem;font-weight:700;margin-bottom:4px">🌍 Se <span style="color:var(--white)">${flagName}</span> for campeã do mundo</div>
       ${principalHtml}${principalScorelines}${varHtml}
@@ -3687,6 +3704,9 @@ function _buildFinalScenarioMapHtml(sc, ranking) {
     <div style="margin-top:6px">
       <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">📊 Onde cada um pode terminar (melhor — pior caso)</div>
       ${contRows}${contMore}
+    </div>
+    <div style="font-size:0.68rem;color:var(--text-muted);margin-top:10px;line-height:1.5;border-top:1px solid var(--border);padding-top:8px">
+      <b>+X</b> ao lado do nome = pontos ganhos na final naquele placar (placar exato 15 · vencedor+saldo 10 · só vencedor 7) + <b style="color:var(--gold)">bônus de campeão 🏆 +${sc.champBonus}</b> pra quem cravou o campeão do mundo. Conta exata sobre os palpites travados da galera.
     </div>
   </div>`;
 }
