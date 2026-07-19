@@ -19451,6 +19451,15 @@ function _cerimoniaStart(data){
   ov.classList.remove('hidden');
   _cerSetStageLabel('Cerimônia de encerramento');
   const hasUrl = !!CFG.cerimonia_audio_url;
+  // Pré-carrega a faixa JÁ AQUI (antes do toque) para o áudio estar bufferizado quando o
+  // usuário iniciar. Sem isso, na 1ª vez o <audio> tinha preload="none" e o play() caía
+  // sobre uma faixa ainda não carregada — motivo de o som só vir "na 2ª tentativa".
+  if(hasUrl){
+    try {
+      const _a = document.getElementById('cerimonia-audio');
+      if(_a){ _a.crossOrigin = null; _a.preload = 'auto'; if(_a.src !== CFG.cerimonia_audio_url){ _a.src = CFG.cerimonia_audio_url; } _a.load(); }
+    } catch(_){}
+  }
   const stageEl = document.getElementById('cerimonia-stage');
   stageEl.innerHTML = `<div class="cer-start-card">
     <div style="font-size:3rem">🎬</div>
@@ -19472,15 +19481,20 @@ async function _cerimoniaBegin(){
   _cerAcquireWakeLock(); // gesto do usuário: momento válido p/ manter a tela acesa
   const audio = document.getElementById('cerimonia-audio');
   const url = CFG.cerimonia_audio_url;
+  st.audioArmed = false; // vira true quando a faixa "de verdade" começar (trava a isca)
   if(audio && url){
     try {
       // Sem CORS: o Firebase Storage não devolve Access-Control-Allow-Origin, então
       // crossOrigin precisa ficar nulo — senão o navegador bloqueia o carregamento.
       audio.crossOrigin = null;
-      audio.src = url; audio.currentTime = 0; audio.volume = 1;
-      // Isca silenciosa dentro do gesto: destrava o autoplay sem tocar nada ainda.
-      audio.muted = true;
-      audio.play().then(()=>{ try{ audio.pause(); audio.currentTime = 0; }catch(_){} })
+      if(audio.src !== url){ audio.src = url; } // não recarrega se _cerimoniaStart já pré-carregou
+      audio.currentTime = 0;
+      // Isca dentro do gesto p/ DESTRAVAR o autoplay: precisa ser NÃO-MUDA — um play()
+      // mudo não desbloqueia o áudio no iOS/Safari (só o mudo é sempre permitido, então
+      // não "conta" como gesto de áudio). Tocamos a volume 0 (inaudível, porém não-mudo)
+      // e pausamos em seguida — a menos que a apresentação real já tenha começado.
+      audio.muted = false; audio.volume = 0;
+      audio.play().then(()=>{ try{ if(!st.audioArmed){ audio.pause(); audio.currentTime = 0; } }catch(_){} })
                   .catch(err => console.warn('[cerimonia] áudio não destravou:', err && err.message));
     } catch(_){}
   }
@@ -19492,6 +19506,7 @@ async function _cerimoniaBegin(){
   // Dados prontos: agora sim começa tudo JUNTO, ancorado no instante 0 real da faixa.
   if(audio && url){
     try {
+      st.audioArmed = true; // impede que o .then() da isca pause a faixa "de verdade"
       audio.muted = false; audio.currentTime = 0; audio.volume = 1;
       audio.play().catch(err => console.warn('[cerimonia] áudio não tocou:', err && err.message));
     } catch(_){}
