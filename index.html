@@ -1656,8 +1656,13 @@ body.light-theme .transp-count-box{background:rgba(30,144,255,.08)}
 @keyframes cerFactIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 /* Aviso p/ aumentar o volume (card inicial + roster) */
 .cer-vol-tip{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,140,0,.14);border:1px solid var(--orange);border-radius:14px;padding:10px 14px;margin:0 0 18px;color:var(--orange);font-weight:800;font-size:.9rem}
+/* Banner "aumente o volume" no início da cerimônia (some sozinho após alguns segundos) */
+.cer-vol-banner{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,140,0,.16);border:1px solid var(--orange);border-radius:14px;padding:9px 16px;color:var(--orange);font-weight:800;font-size:.9rem;white-space:nowrap;box-shadow:0 6px 22px rgba(0,0,0,.35);animation:cerVolBannerIn .5s ease both;pointer-events:none}
+.cer-vol-banner.hide{animation:cerVolBannerOut .6s ease forwards}
+@keyframes cerVolBannerIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes cerVolBannerOut{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(-10px)}}
 /* Abertura: trailer cinematográfico (frases de efeito + números animados) */
-.cer-trailer{width:100%;max-width:560px;min-height:40vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.cer-trailer{position:relative;width:100%;max-width:560px;min-height:40vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
 .cer-trailer-beat{animation:cerTrailerIn .6s cubic-bezier(.2,1.1,.35,1) both;width:100%;text-align:center}
 .cer-trailer-trophy{font-size:4rem;line-height:1;filter:drop-shadow(0 6px 18px rgba(255,215,0,.5))}
 .cer-trailer-title{color:var(--gold);font-weight:800;font-size:1.9rem;line-height:1.1;margin-top:10px;text-shadow:0 2px 20px rgba(255,215,0,.4)}
@@ -18190,7 +18195,7 @@ function _celebraLightningCancel(){
   if(_celebraLightningRaf){ cancelAnimationFrame(_celebraLightningRaf); _celebraLightningRaf = null; }
   if(_celebraLightningEl){ try{ _celebraLightningEl.remove(); }catch(_){} _celebraLightningEl = null; }
 }
-function _celebraLightning(cb){
+function _celebraLightning(cb, extraMs){
   _celebraLightningCancel();
   let done = false;
   const finish = ()=>{ if(done) return; done = true; window.removeEventListener('resize', resize); _celebraLightningCancel(); };
@@ -18248,7 +18253,7 @@ function _celebraLightning(cb){
     ctx.shadowBlur = 0;
   };
 
-  const DUR = Math.max(500, Math.round(_cerStormSec() * 1000)); // duração configurável da tempestade
+  const DUR = Math.max(500, Math.round(_cerStormSec() * 1000) + (extraMs || 0)); // duração configurável (+ empurrão opcional de raios na cerimônia)
   const FLASH_FROM = Math.max(200, DUR - 230);                  // último trecho: flash branco que clareia
   const strikes = [];                                           // um raio a cada ~360ms até pouco antes do flash
   for(let t = 140; t < FLASH_FROM - 120; t += 360) strikes.push({ t });
@@ -18328,13 +18333,14 @@ function _celebraStart(data){
     _onResize: ()=>{ if(!_celebraState) return; const d=_celebraSizeCanvas(cv); _celebraState.ctx=d.ctx; _celebraState.w=d.w; _celebraState.h=d.h; } };
   window.addEventListener('resize', _celebraState._onResize);
   // Antes do pódio: tela preta + raios; ao clarear, revela o pódio (2D e 3D juntos).
+  // stormBoostMs (só na cerimônia) alonga a tempestade sem mexer no instante do pódio.
   _celebraLightning(()=>{
     if(!_celebraState) return; // celebração fechada durante a tempestade
     _celebraRevealPodium(top3);
     _celebraSpawnConfetti(_celebraState, 60);
     _celebraState.raf = requestAnimationFrame(_celebraLoop);
     if(data.onReveal){ try{ data.onReveal(); }catch(_){} } // pódio 3D entra junto com a luz
-  });
+  }, data.stormBoostMs || 0);
 }
 
 function _celebraStop(){
@@ -18710,6 +18716,11 @@ function _cerTotalMs(){
 // Editáveis no painel "Linha do tempo & efeitos" do Admin. Ficam aqui (perto de
 // _cerTotalMs) porque são usados tanto pelo runtime quanto pelo editor.
 function _cerStormSec(){    const v = parseFloat(CFG.cerimonia_storm_dur);   return (isFinite(v) && v >= 0)  ? Math.min(8,  v) : 2.2; } // tempestade de raios antes do pódio
+// Empurrão de raios: 0,6s a mais de tempestade, tirados do ÚLTIMO card (o quadro "piores
+// de cada fase" que segura a tela até o pódio). A tempestade começa 0,6s antes e dura 0,6s
+// a mais, então o PÓDIO surge exatamente no mesmo instante da música (fim − (gap − storm)) —
+// só o último card encolhe; a sincronia do pódio com a parte emocional não muda.
+const _CER_RAIO_BOOST_MS = 600;
 function _cerPodiumGapSec(){ const v = parseFloat(CFG.cerimonia_podium_gap); return (isFinite(v) && v >= 1)  ? Math.min(40, v) : 6;   } // reveal ancorado em fim da música − este valor
 function _cerPodiumHoldSec(){ const v = parseFloat(CFG.cerimonia_podium_hold); return (isFinite(v) && v > 0) ? Math.min(60, v) : 10;  } // só o pódio na tela antes das estatísticas
 
@@ -19519,9 +19530,11 @@ async function _cerimoniaBegin(){
   // pódio surge em fim − (gap − storm), caindo na emoção da parte final da música. Ajustável
   // no painel "Linha do tempo & efeitos".
   const podiumAt = Math.max(introMs + 15000, total - Math.round(_cerPodiumGapSec() * 1000));
-  st.podiumAt = podiumAt;
+  st.podiumAt = podiumAt; // janela dos cards continua indo até aqui (só o último card encolhe)
   _cerStageTrailer(d); // abertura acompanha a posição real do áudio e passa p/ os cards no fim
-  _cerAt(podiumAt, ()=>_cerStageReveal(d));
+  // A tempestade de raios começa _CER_RAIO_BOOST_MS antes do pódio (tira esse tempo só do
+  // último card) e dura o mesmo tanto a mais, então o pódio surge no MESMO instante da música.
+  _cerAt(podiumAt - _CER_RAIO_BOOST_MS, ()=>_cerStageReveal(d));
 }
 
 // Estágio de abertura: trailer cinematográfico estilo premiação esportiva — frases de
@@ -19544,7 +19557,14 @@ function _cerStageTrailer(d){
   const gifAtMs = Math.round(gif.at * 1000);
   const gifEndMs = gif.dur > 0 ? gifAtMs + Math.round(gif.dur * 1000) : introEndMs; // dur 0 = até o fim da abertura
 
-  stageEl.innerHTML = `<div class="cer-trailer" id="cer-trailer"><div id="cer-beat"></div><div id="cer-gif" class="cer-open-gif-slot"></div></div>`;
+  const hasAudio = !!CFG.cerimonia_audio_url;
+  stageEl.innerHTML = `<div class="cer-trailer" id="cer-trailer">${hasAudio?'<div id="cer-vol-banner" class="cer-vol-banner">🔊 Aumente o volume do seu aparelho</div>':''}<div id="cer-beat"></div><div id="cer-gif" class="cer-open-gif-slot"></div></div>`;
+  // Aviso p/ aumentar o som logo no início (sobreposto, não empurra as frases): aparece
+  // com a música e some sozinho após alguns segundos, sem atrapalhar a sincronia.
+  if(hasAudio){
+    _cerTimer(()=>{ const b = document.getElementById('cer-vol-banner'); if(b) b.classList.add('hide'); }, 5200);
+    _cerTimer(()=>{ const b = document.getElementById('cer-vol-banner'); if(b) b.remove(); }, 5900);
+  }
 
   const renderBeat = (b)=>{
     const s = _cerimoniaState; if(!s || s.closed || s.revealed) return;
@@ -19712,6 +19732,7 @@ function _cerStageReveal(d){
   // continuous=true: os fogos seguem rolando enquanto o pódio fica na tela.
   // _celebraStart limpa o painel do jogador, então o pódio aparece sozinho primeiro.
   _celebraStart({ top3, continuous:true, championApelido: top3[0] && (top3[0].apelido||top3[0].nome), championPontos: top3[0] && top3[0].pontos,
+    stormBoostMs: _CER_RAIO_BOOST_MS, // +0,6s de raios (compensa o reveal ter começado 0,6s antes)
     onReveal: ()=>_cerFx3DPodium(top3) }); // pódio 3D opcional (blocos + nomes + confete c/ profundidade + raios) entra junto com a luz; no-op se indisponível
   // Só o pódio por um tempo (configurável) p/ apreciar o campeão; depois entram as
   // estatísticas personalizadas de quem assiste.
